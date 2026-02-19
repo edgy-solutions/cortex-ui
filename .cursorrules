@@ -1,0 +1,60 @@
+# The Cortex — Coding Rules
+
+## Language & Framework
+
+- TypeScript strict mode. No `any` types. Use explicit return types on exported functions.
+- React 18+ with functional components only. No class components.
+- Vite 7 as build tool. Config in `vite.config.ts`.
+- Path alias `@/` maps to `src/`. Always use `@/` imports for cross-directory references.
+
+## Styling
+
+- Tailwind CSS v4 with custom `@theme` in `src/index.css`. No separate `tailwind.config` file.
+- Dark mode is the only mode. Background is `bg-surface-dark` (#020617). Panels use `bg-surface-panel` (#0f172a).
+- Use the `.glass-panel` and `.glass-panel-sm` utility classes for translucent containers. Do not recreate backdrop-blur inline.
+- Neon color tokens: `neon-blue`, `neon-purple`, `neon-pink`, `neon-green`, `neon-cyan`. Use with Tailwind opacity modifiers (e.g. `text-neon-blue`, `border-neon-purple/30`, `bg-neon-green/10`).
+- Typography: `font-mono` for data/code/labels, `font-sans` (Inter) for body text.
+- Keep all custom keyframes and CSS utilities in `src/index.css`, not in component files.
+
+## State Management
+
+- Zustand single store in `src/store/useInterviewStore.ts`. No other state libraries.
+- Use selector functions to subscribe to specific slices: `useInterviewStore((s) => s.messages)`.
+- Do not access the store outside React components except via `useInterviewStore.getState()`.
+
+## Animation
+
+- Framer Motion for all entrance/exit/layout animations on React components.
+- Use `motion.div` (or `motion.span`, etc.) with `initial`, `animate`, `exit`, and `transition` props.
+- Prefer spring physics (`type: "spring"`) for interactive/entrance animations.
+- Use CSS keyframe animations (defined in index.css) for continuous ambient effects (pulse, glow, breathe).
+
+## React Flow (Blueprint)
+
+- Custom node components live in `src/components/Blueprint/nodes/`.
+- Custom edge components live in `src/components/Blueprint/edges/`.
+- Node types are registered as a stable object outside the component (not inside render). Same for edge types.
+- Each custom node accepts a `delay` prop in `data` for staggered build-sequence animation.
+- Do not use default React Flow node styling. Override with glassmorphism.
+
+## Component Organization
+
+- Group related components into feature directories: `NeuralStream/`, `HUD/`, `Blueprint/`, `Compilation/`.
+- One component per file. Named exports for components, default export only for `App.tsx`.
+- Hooks go in `src/hooks/`. Store goes in `src/store/`.
+- Prefer `memo()` for React Flow node/edge components.
+
+## Code Style
+
+- Use `const` by default. Use `let` only when reassignment is needed.
+- Arrow functions for inline callbacks. Named `function` declarations for exported components and hooks.
+- Destructure props in function parameters.
+- Keep components under 150 lines. Extract sub-components or hooks if larger.
+- No `console.log` in committed code.
+
+## Do Not
+
+- Do not install additional CSS frameworks (no styled-components, no CSS modules, no Emotion).
+- Do not add a backend or API calls. All data is mocked via hooks.
+- Do not use `useEffect` for state synchronization that can be derived. Use Zustand selectors or `useMemo`.
+- Do not put business logic in components. Extract to hooks or utility functions.

@@ -1,0 +1,92 @@
+# The Cortex — Interrogator Interface
+
+> A cinematic React application for interrogating an autonomous AI Agent mesh.
+> Aesthetic: "Dark Glass & Neon" — deep slate backgrounds, translucent glass panels, electric blue/purple neon accents.
+
+## Tech Stack
+
+- Framework: React 18+ (Vite 7, TypeScript 5.9)
+- Styling: Tailwind CSS v4 (dark mode default, custom @theme neon palette)
+- Animation: Framer Motion (entrance animations, spring physics, typewriter effects)
+- State: Zustand (single store for interview state)
+- Icons: Lucide React
+- Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
+- Fonts: JetBrains Mono (code/data), Inter (UI text)
+
+## Architecture Overview
+
+The app has three main phases, controlled by `InterviewPhase` in the Zustand store:
+
+1. **active** — User chats with the mock agent via the Neural Stream. Ontology terms and data bindings accumulate in the HUD sidebar.
+2. **blueprint** — After 4+ agent responses, the Neural Stream swaps to the Holographic Blueprint (React Flow canvas) showing a node graph of the generated workflow.
+3. **compiling** → **complete** — User clicks "Compile Workflow" triggering a full-screen matrix-style code scroll overlay, ending with a "System Online" success state.
+
+## File Map
+
+```
+src/
+├── main.tsx                          # React entry point
+├── App.tsx                           # Root component, phase-based view switching
+├── index.css                         # Tailwind v4, @theme neon colors, glass utilities, keyframes
+│
+├── store/
+│   └── useInterviewStore.ts          # Zustand store: messages, phase, ontologyTerms, dataBindings
+│
+├── hooks/
+│   ├── useMockAgent.ts               # Simulates streaming agent responses, thinking phases, keyword detection
+│   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
+│
+├── components/
+│   ├── Layout.tsx                    # App shell: header + two-column layout (main + HUD sidebar)
+│   │
+│   ├── NeuralStream/
+│   │   ├── NeuralStream.tsx          # Scrollable message list with auto-scroll
+│   │   ├── MessageBubble.tsx         # User/agent message rendering, typewriter cursor
+│   │   ├── ThinkingCard.tsx          # Holographic card with ontology scan + DataHub query animations
+│   │   └── InputBar.tsx              # Glowing neon input bar with gradient focus ring
+│   │
+│   ├── HUD/
+│   │   ├── HUD.tsx                   # Right sidebar: ontology map + data bindings + compile button
+│   │   ├── OntologyMap.tsx           # Extracted ontology terms as color-coded glowing tags
+│   │   └── DataBindings.tsx          # dbt model list with green/red health status dots
+│   │
+│   ├── Blueprint/
+│   │   ├── WorkflowCanvas.tsx        # React Flow instance with dark dot background, custom controls
+│   │   ├── nodes/
+│   │   │   ├── TriggerNode.tsx       # Circular pulse node (green) — input sources
+│   │   │   ├── LogicNode.tsx         # Diamond-shaped glow node (blue) — ontology checks
+│   │   │   └── ActionNode.tsx        # Rectangular node (purple) — services/actions, glitch on hover
+│   │   └── edges/
+│   │       └── AnimatedEdge.tsx      # Pulsing SVG gradient edge simulating data flow
+│   │
+│   └── Compilation/
+│       ├── CompileButton.tsx         # Gradient-glow button, transitions to "System Online" badge
+│       └── CompilationOverlay.tsx    # Full-screen matrix code scroll with progress bar
+```
+
+## Key Patterns
+
+- **Glass panels**: Use `.glass-panel` or `.glass-panel-sm` CSS classes for translucent containers with backdrop blur.
+- **Neon colors**: Available as Tailwind classes — `text-neon-blue`, `bg-neon-purple/20`, `border-neon-green/30`, etc. Defined in `@theme` block in index.css.
+- **Animations**: Custom Tailwind animations — `animate-pulse-neon`, `animate-glow`, `animate-breathe`. Use Framer Motion for entrance/exit animations on components.
+- **Custom node types**: React Flow nodes are registered as `trigger`, `logic`, `action` in WorkflowCanvas. Each accepts a `delay` data prop for sequential build-sequence animation.
+- **Mock data**: No backend. `useMockAgent` detects keywords (engine, damage, schedule) to return themed responses. `useMockWorkflowBuilder` generates graph from accumulated store state.
+
+## Zustand Store Shape
+
+```
+{
+  messages: Message[]           // Chat history (user + agent)
+  phase: InterviewPhase         // "active" | "blueprint" | "compiling" | "complete"
+  ontologyTerms: OntologyTerm[] // Extracted concepts { category, label }
+  dataBindings: DataBinding[]   // Identified dbt models { model, schema, healthy }
+}
+```
+
+## Running
+
+```bash
+npm install
+npm run dev          # http://localhost:5173
+npm run build        # Production build
+```

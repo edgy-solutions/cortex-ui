@@ -1,0 +1,66 @@
+import { motion } from "framer-motion";
+import { User, Bot } from "lucide-react";
+import type { Message } from "@/store/useInterviewStore";
+import { ThinkingCard } from "./ThinkingCard";
+
+interface MessageBubbleProps {
+  message: Message;
+}
+
+export function MessageBubble({ message }: MessageBubbleProps) {
+  const isUser = message.role === "user";
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+    >
+      {/* Agent avatar */}
+      {!isUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neon-blue/10 border border-neon-blue/30 flex items-center justify-center mt-1">
+          <Bot className="w-4 h-4 text-neon-blue" />
+        </div>
+      )}
+
+      <div
+        className={`max-w-[75%] flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}
+      >
+        {/* Thinking steps (agent only) */}
+        {!isUser && message.thinkingSteps && message.thinkingSteps.length > 0 && (
+          <ThinkingCard steps={message.thinkingSteps} />
+        )}
+
+        {/* Message content */}
+        {(message.content || isUser) && (
+          <div
+            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              isUser
+                ? "bg-neon-purple/15 border border-neon-purple/30 text-slate-200"
+                : "glass-panel-sm text-slate-300"
+            }`}
+          >
+            <span className={!isUser ? "font-mono text-[13px]" : ""}>
+              {message.content}
+            </span>
+
+            {/* Streaming cursor */}
+            {message.isStreaming && message.content && (
+              <span className="inline-block w-2 h-4 ml-0.5 bg-neon-blue animate-pulse-neon align-middle" />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* User avatar */}
+      {isUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neon-purple/10 border border-neon-purple/30 flex items-center justify-center mt-1">
+          <User className="w-4 h-4 text-neon-purple" />
+        </div>
+      )}
+    </motion.div>
+  );
+}
