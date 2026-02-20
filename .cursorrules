@@ -59,14 +59,17 @@
 - Use `useAgent()` hook in components — it auto-detects backend availability and falls back to mock mode.
 - Do not call `fetch()` or `axios` directly in components. Always go through the API client.
 - Stream responses use a custom newline-delimited protocol with special tokens (`<<ONTOLOGY_LOOKUP:...>>`).
-- Environment variables for API URLs are in `.env` with the `VITE_` prefix.
+- The ONLY frontend env var is `VITE_API_URL` — it points at the FastAPI gateway.
 
-## Backend (FastAPI)
+## Backend (FastAPI) — BFF Gateway
 
 - Backend code lives in `backend/`. It is a separate Python service.
+- The backend is the ONLY gateway to internal services. The frontend NEVER calls ontology/DataHub/OpenRouter directly.
 - Streaming endpoint: `POST /interview/stream` returns `StreamingResponse` with special tokens.
 - Compilation endpoint: `POST /workflow/compile` accepts blueprint JSON, returns `run_id`.
+- BFF proxy: `GET /ontology/classes` and `GET /datahub/tables` proxy to internal services.
 - Health check: `GET /health`.
+- Secrets (`OPENROUTER_API_KEY`) and internal URLs (`ONTOLOGY_SERVICE_URL`, `DATAHUB_SERVICE_URL`) live in `backend/.env` only.
 - CORS is enabled for local development. Restrict `allow_origins` in production.
 
 ## Do Not
@@ -76,3 +79,5 @@
 - Do not use `useEffect` for state synchronization that can be derived. Use Zustand selectors or `useMemo`.
 - Do not put business logic in components. Extract to hooks or utility functions.
 - Do not hardcode API URLs. Use environment variables via `import.meta.env`.
+- **NEVER put API keys, secrets, or internal service URLs in the frontend `.env`.** Only `VITE_API_URL` is allowed.
+- **NEVER have the frontend call internal services directly.** All data flows through the FastAPI BFF.

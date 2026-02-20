@@ -86,7 +86,9 @@ src/
 │   └── Compilation/        # Compile button, matrix code overlay
 backend/
 ├── pyproject.toml           # Python deps (managed by uv)
-└── interviewer_agent.py     # FastAPI streaming endpoint
+├── interviewer_agent.py     # FastAPI BFF gateway + streaming endpoint
+├── baml_src/                # BAML definitions (LLM contract + OpenRouter client)
+└── .env                     # Backend secrets (NEVER in frontend .env)
 ```
 
 ## Architecture
@@ -104,13 +106,21 @@ active → blueprint → compiling → complete
 
 The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend on mount. If the backend responds, it uses real HTTP streaming with a custom token protocol. If not, it falls back to an identical mock implementation — same UX either way.
 
+The backend acts as a **BFF (Backend-for-Frontend) gateway** — the frontend only talks to port 8000. All secrets, internal service calls (ontology, DataHub), and LLM API keys stay server-side.
+
 ## Environment Variables
 
-Copy `.env.example` to `.env` and adjust as needed:
-
+**Frontend** (`.env` at project root):
 ```env
+# The ONLY var the frontend needs. No secrets here.
 VITE_API_URL=http://localhost:8000
-VITE_ONTOLOGY_SERVICE_URL=http://localhost:8084
+```
+
+**Backend** (`backend/.env` — server-side only):
+```env
+OPENROUTER_API_KEY=sk-or-...     # Omit for mock mode
+ONTOLOGY_SERVICE_URL=http://localhost:8084
+DATAHUB_SERVICE_URL=http://localhost:8085
 ```
 
 ## Scripts

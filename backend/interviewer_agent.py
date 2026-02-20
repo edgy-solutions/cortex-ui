@@ -21,10 +21,12 @@ Modes:
 """
 
 import asyncio
+import logging
 import os
 import uuid
 from typing import AsyncGenerator
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,10 +34,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 
+logger = logging.getLogger("cortex")
+
 # ── Env ───────────────────────────────────────────────────
 load_dotenv()
 
 _USE_BAML = bool(os.getenv("OPENROUTER_API_KEY"))
+_ONTOLOGY_URL = os.getenv("ONTOLOGY_SERVICE_URL", "http://localhost:8084")
+_DATAHUB_URL = os.getenv("DATAHUB_SERVICE_URL", "http://localhost:8085")
 
 if _USE_BAML:
     from baml_client import b  # type: ignore[import-untyped]
@@ -90,6 +96,49 @@ _session_history: dict[str, list[str]] = {}
 
 
 # ══════════════════════════════════════════════════════════
+# Live Data Layer (server-to-server only)
+# ══════════════════════════════════════════════════════════
+
+_MOCK_ONTOLOGY = (
+    "iof:VisualInspection, iof:UsageBasedMaintenance, iof:Overhaul, "
+    "iof:FailureMode, iof:RotatingEquipment, iof:ImpactDamage, "
+    "iof:MaintenanceSchedule, iof:Asset, iof:InspectionRecord, "
+    "iof:WorkOrder, iof:Sensor"
+)
+_MOCK_DATA_SOURCES = (
+    "dbt.stg_engine_telemetry, dbt.stg_maintenance_logs, "
+    "dbt.stg_sensor_readings, dbt.dim_failure_modes, "
+    "dbt.dim_assets, dbt.fct_work_orders, dbt.fct_inspections"
+)
+
+
+async def get_live_ontology() -> str:
+    """Fetch real ontology classes from the Ontology Microservice.
+    Falls back to mock data when the service is offline."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{_ONTOLOGY_URL}/classes")
+            resp.raise_for_status()
+            return resp.json().get("available_classes", _MOCK_ONTOLOGY)
+    except Exception as exc:
+        logger.warning("Ontology service offline (%s), using mock data", exc)
+        return _MOCK_ONTOLOGY
+
+
+async def get_live_data_sources() -> str:
+    """Fetch real dbt models from the DataHub wrapper service.
+    Falls back to mock data when the service is offline."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{_DATAHUB_URL}/tables")
+            resp.raise_for_status()
+            return resp.json().get("available_tables", _MOCK_DATA_SOURCES)
+    except Exception as exc:
+        logger.warning("DataHub service offline (%s), using mock data", exc)
+        return _MOCK_DATA_SOURCES
+
+
+# ══════════════════════════════════════════════════════════
 # BAML Streaming (real LLM via OpenRouter)
 # ══════════════════════════════════════════════════════════
 
@@ -141,10 +190,18 @@ async def generate_baml_stream(
 
     chat_history = _build_chat_history(session_id)
 
+    # Fetch live grounding data from internal services
+    ontology_classes, data_sources = await asyncio.gather(
+        get_live_ontology(),
+        get_live_data_sources(),
+    )
+
     # ── Stream via BAML ──
     stream = b.stream.ConductInterview(
         chat_history=chat_history,
         user_message=request.message,
+        available_ontology_classes=ontology_classes,
+        available_data_sources=data_sources,
     )
 
     prev_reply = ""
@@ -356,6 +413,25 @@ async def compile_workflow(request: CompileRequest):
         message=f"Pipeline compiled successfully. {len(request.blueprint.nodes)} "
         f"nodes, {len(request.blueprint.edges)} edges. Dagster run initiated.",
     )
+
+
+# ── BFF Proxy Routes ─────────────────────────────────────
+# The frontend NEVER calls internal services directly.
+# These endpoints proxy server-to-server requests.
+
+
+@app.get("/ontology/classes")
+async def proxy_ontology_classes():
+    """BFF proxy: returns available ontology classes from the Ontology Service."""
+    classes = await get_live_ontology()
+    return {"available_classes": classes}
+
+
+@app.get("/datahub/tables")
+async def proxy_datahub_tables():
+    """BFF proxy: returns available dbt models from the DataHub wrapper."""
+    tables = await get_live_data_sources()
+    return {"available_tables": tables}
 
 
 @app.get("/health")

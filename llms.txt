@@ -124,9 +124,26 @@ uv sync
 uv run uvicorn interviewer_agent:app --reload --port 8000
 ```
 
+## Architecture: Backend-for-Frontend (BFF)
+
+The frontend is "dumb" — it only talks to the FastAPI backend on port 8000.
+The backend is "smart" — it holds all secrets, calls internal services, and proxies data.
+
+- Frontend NEVER calls ontology/DataHub services directly.
+- Frontend `.env` contains ONLY `VITE_API_URL`.
+- Backend `.env` contains `OPENROUTER_API_KEY`, `ONTOLOGY_SERVICE_URL`, `DATAHUB_SERVICE_URL`.
+- BFF proxy routes: `GET /ontology/classes`, `GET /datahub/tables`.
+
 ## Environment Variables
 
+Frontend (`.env` at project root — bundled into client JS by Vite):
 ```
-VITE_API_URL=http://localhost:8000           # Backend API URL
-VITE_ONTOLOGY_SERVICE_URL=http://localhost:8084  # Ontology service (future)
+VITE_API_URL=http://localhost:8000
+```
+
+Backend (`backend/.env` — server-side only, NEVER exposed to browser):
+```
+OPENROUTER_API_KEY=sk-or-...
+ONTOLOGY_SERVICE_URL=http://localhost:8084
+DATAHUB_SERVICE_URL=http://localhost:8085
 ```

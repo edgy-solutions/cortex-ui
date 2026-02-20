@@ -18,6 +18,10 @@ __pycache__
 .venv
 *.egg-info
 
+# Environment files with secrets (track .env.example instead)
+.env
+backend/.env
+
 # BAML generated client (regenerate with: baml-cli generate)
 baml_client/
 
