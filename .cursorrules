@@ -52,9 +52,27 @@
 - Keep components under 150 lines. Extract sub-components or hooks if larger.
 - No `console.log` in committed code.
 
+## API Integration
+
+- TanStack Query (React Query) for all async data fetching and mutations.
+- API client lives in `src/api/client.ts`. Types in `src/api/types.ts`.
+- Use `useAgent()` hook in components — it auto-detects backend availability and falls back to mock mode.
+- Do not call `fetch()` or `axios` directly in components. Always go through the API client.
+- Stream responses use a custom newline-delimited protocol with special tokens (`<<ONTOLOGY_LOOKUP:...>>`).
+- Environment variables for API URLs are in `.env` with the `VITE_` prefix.
+
+## Backend (FastAPI)
+
+- Backend code lives in `backend/`. It is a separate Python service.
+- Streaming endpoint: `POST /interview/stream` returns `StreamingResponse` with special tokens.
+- Compilation endpoint: `POST /workflow/compile` accepts blueprint JSON, returns `run_id`.
+- Health check: `GET /health`.
+- CORS is enabled for local development. Restrict `allow_origins` in production.
+
 ## Do Not
 
 - Do not install additional CSS frameworks (no styled-components, no CSS modules, no Emotion).
-- Do not add a backend or API calls. All data is mocked via hooks.
+- Do not call backend APIs directly from components. Use the hooks in `src/hooks/`.
 - Do not use `useEffect` for state synchronization that can be derived. Use Zustand selectors or `useMemo`.
 - Do not put business logic in components. Extract to hooks or utility functions.
+- Do not hardcode API URLs. Use environment variables via `import.meta.env`.

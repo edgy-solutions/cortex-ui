@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It is a frontend-only demo with no backend — all agent behavior is mocked. The aesthetic is "Dark Glass & Neon" (cyberpunk control center).
+The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connects to a FastAPI backend for real-time streaming, but gracefully falls back to mock mode when the backend is unavailable. The aesthetic is "Dark Glass & Neon" (cyberpunk control center).
 
 ## Development Workflow
 
@@ -22,7 +22,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It is a fr
 
 ### Adding new features
 
-- **New chat responses**: Add keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()`.
+- **New chat responses**: Add keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` for offline mode, and in `backend/interviewer_agent.py` → `generate_interview_stream()` for the real backend.
 - **New node types**: Create in `src/components/Blueprint/nodes/`, register in `WorkflowCanvas.tsx` `nodeTypes` object.
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
@@ -32,7 +32,8 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It is a fr
 
 ### Do NOT
 
-- **Do not add a real backend or API calls.** This is a frontend demo. All data flows through `useMockAgent` and `useMockWorkflowBuilder`.
+- **Do not bypass the API layer.** All backend calls go through `src/api/client.ts`. Components use `useAgent()`, not raw fetch/axios.
+- **Do not remove mock fallback.** The `useMockAgent` hook must stay functional for offline demos.
 - **Do not install additional state management libraries.** Zustand is the single source of truth.
 - **Do not modify the build toolchain** (Vite config, TypeScript config) without explicit instruction.
 - **Do not remove the glass-panel aesthetic.** The visual theme is a core requirement — all panels must use glassmorphism (`backdrop-blur`, translucent backgrounds, neon borders).
@@ -50,10 +51,16 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It is a fr
 | Purpose | File |
 |---|---|
 | App state & types | `src/store/useInterviewStore.ts` |
-| Mock agent logic | `src/hooks/useMockAgent.ts` |
+| Unified agent hook | `src/hooks/useAgent.ts` |
+| Real API streaming | `src/hooks/useInterviewAgent.ts` |
+| Mock agent fallback | `src/hooks/useMockAgent.ts` |
+| Compile mutation | `src/hooks/useCompileWorkflow.ts` |
+| API client + stream parser | `src/api/client.ts` |
+| Stream token protocol | `src/api/types.ts` |
 | Workflow graph generation | `src/hooks/useMockWorkflowBuilder.ts` |
 | Phase-based view switching | `src/App.tsx` |
 | Global theme & CSS | `src/index.css` |
+| Backend API | `backend/interviewer_agent.py` |
 
 ## Testing
 
@@ -67,8 +74,14 @@ No test framework is currently set up. Visual testing is done via `npm run dev`.
 ## Commands
 
 ```bash
+# Frontend
 npm run dev        # Start dev server (http://localhost:5173)
 npm run build      # Production build (tsc + vite build)
 npm run preview    # Preview production build
 npx tsc --noEmit   # Type-check without emitting
+
+# Backend (optional)
+cd backend
+uv sync
+uv run uvicorn interviewer_agent:app --reload --port 8000
 ```

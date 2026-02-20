@@ -1,27 +1,135 @@
 # The Cortex — Interrogator Interface
 
-A cinematic "Dark Glass & Neon" React application for interrogating an autonomous AI Agent mesh.
+A cinematic **"Dark Glass & Neon"** control center for interrogating an autonomous AI Agent mesh. Think futuristic mission control — not a corporate dashboard.
 
-## Stack
+The Cortex lets you converse with an AI agent that scans industrial ontologies (IOF-MRO), binds data models from DataHub, and compiles the results into a Dagster/Restate pipeline — all with a cyberpunk aesthetic featuring glassmorphism panels, neon accents, typewriter streaming, and holographic visualizations.
 
-- **React 18+** (Vite + TypeScript)
-- **Tailwind CSS** (Dark Mode, custom neon theme)
-- **Framer Motion** (animations)
-- **Zustand** (state management)
-- **Lucide React** (icons)
+## What It Does
 
-## Getting Started
+**1. Neural Stream** — A streaming chat interface where the agent thinks out loud. Ontology scans and DataHub queries appear as animated holographic cards before the response streams in character-by-character.
+
+**2. Live Context HUD** — A real-time sidebar that accumulates extracted ontology concepts (e.g. `Asset: Engine`, `Concept: iof:ImpactDamage`) and identified data models with health indicators.
+
+**3. Holographic Blueprint** — After enough context is gathered, the UI transitions to an interactive React Flow node graph showing the generated workflow: Trigger nodes → Logic nodes → Action nodes, with animated pulsing edges.
+
+**4. Compilation Sequence** — A full-screen matrix-style code scroll that "generates" the Dagster pipeline, ending with a **SYSTEM ONLINE** success state.
+
+## Quick Start
+
+The frontend works standalone with a built-in mock agent — no backend required.
 
 ```bash
+git clone <repo-url>
+cd process-spawner
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173](http://localhost:5173).
 
-## Demo Flow
+### With the Backend (Optional)
 
-1. Type messages mentioning **engines**, **failures/damage**, or **maintenance schedules** to trigger ontology binding
-2. Watch the agent's **thinking visualizer** (holographic cards) and **typewriter text streaming**
-3. The **Live Context HUD** (right sidebar) updates with extracted ontology terms and data bindings
-4. After 4+ exchanges the **Compile Workflow** button appears — click it for the matrix-style code generation climax
+Start the FastAPI backend to switch from mock mode to real streaming. The UI auto-detects the backend and shows a green wifi icon in the input bar when connected.
+
+```bash
+# Terminal 1 — Backend
+cd backend
+uv sync
+uv run uvicorn interviewer_agent:app --reload --port 8000
+
+# Terminal 2 — Frontend
+npm run dev
+```
+
+## Demo Walkthrough
+
+1. **Type a message** mentioning assets, failures, or schedules:
+   - `"Tell me about engine telemetry"` → binds engine data models
+   - `"What about failure damage?"` → maps iof:ImpactDamage concept
+   - `"Show maintenance schedules"` → links work order tables
+   - Any other text → prompts for more context
+
+2. **Watch the thinking cards** — holographic panels expand showing ontology scans and DataHub queries with loading animations.
+
+3. **Check the HUD** — the right sidebar populates with color-coded ontology tags and data model health indicators in real time.
+
+4. **After 4 exchanges**, the view transitions to the **Holographic Blueprint** — an interactive node graph. Hover over Action nodes for a digital glitch effect.
+
+5. **Click COMPILE WORKFLOW** in the sidebar — a full-screen overlay rapidly scrolls generated Python/Dagster code, then displays **SYSTEM ONLINE**.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | React 18+, Vite 7, TypeScript 5.9 |
+| Styling | Tailwind CSS v4 (custom neon theme) |
+| Animation | Framer Motion |
+| State | Zustand |
+| Data Fetching | TanStack Query + axios |
+| Graph | @xyflow/react (React Flow v12) |
+| Icons | Lucide React |
+| Fonts | JetBrains Mono, Inter |
+| Backend | FastAPI (Python), StreamingResponse |
+| Python Tooling | uv (package manager) |
+
+## Project Structure
+
+```
+src/
+├── api/                    # API client, stream parser, types
+├── store/                  # Zustand store (messages, phase, ontology, bindings)
+├── hooks/                  # useAgent (auto-switches real/mock), useCompileWorkflow
+├── components/
+│   ├── NeuralStream/       # Chat UI: messages, thinking cards, input bar
+│   ├── HUD/                # Sidebar: ontology map, data bindings
+│   ├── Blueprint/          # React Flow: custom nodes, animated edges
+│   └── Compilation/        # Compile button, matrix code overlay
+backend/
+├── pyproject.toml           # Python deps (managed by uv)
+└── interviewer_agent.py     # FastAPI streaming endpoint
+```
+
+## Architecture
+
+The app has four phases controlled by a Zustand store:
+
+```
+active → blueprint → compiling → complete
+```
+
+- **active** — User chats, agent streams responses with thinking visualizations
+- **blueprint** — Interactive node graph of the generated workflow
+- **compiling** — Matrix-style code generation overlay
+- **complete** — System online, pipeline deployed
+
+The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend on mount. If the backend responds, it uses real HTTP streaming with a custom token protocol. If not, it falls back to an identical mock implementation — same UX either way.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_ONTOLOGY_SERVICE_URL=http://localhost:8084
+```
+
+## Scripts
+
+```bash
+npm run dev        # Start dev server
+npm run build      # Production build (tsc + vite)
+npm run preview    # Preview production build
+npx tsc --noEmit   # Type-check only
+```
+
+## AI-Friendly Docs
+
+| File | Purpose |
+|------|---------|
+| `llms.txt` | Full architecture, file map, and patterns for AI assistants |
+| `.cursorrules` | Coding style, tech stack constraints, do/don't rules |
+| `AGENTS.md` | AI agent workflow guide, safety guardrails, extension patterns |
+
+## License
+
+MIT

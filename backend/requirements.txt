@@ -1,0 +1,4 @@
+# Buildpacks shim — dependencies are declared in pyproject.toml.
+# Paketo's pip-install buildpack requires this file for detection.
+# The "." tells pip to install from the local pyproject.toml.
+.

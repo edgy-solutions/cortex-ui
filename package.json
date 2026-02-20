@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "start": "serve dist -s -l ${PORT:-8080}",
     "preview": "vite preview"
   },
   "devDependencies": {
@@ -18,11 +22,14 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "@xyflow/react": "^12.10.0",
+    "axios": "^1.13.5",
     "framer-motion": "^12.34.2",
     "lucide-react": "^0.574.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "serve": "^14.2.5",
     "zustand": "^5.0.11"
   }
 }

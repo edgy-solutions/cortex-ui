@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import { Send, Zap } from "lucide-react";
-import { useMockAgent } from "@/hooks/useMockAgent";
+import { Send, Zap, Wifi, WifiOff } from "lucide-react";
+import { useAgent } from "@/hooks/useAgent";
 import { useInterviewStore } from "@/store/useInterviewStore";
 
 export function InputBar() {
   const [value, setValue] = useState("");
-  const { sendMessage } = useMockAgent();
+  const { sendMessage, isConnected } = useAgent();
   const phase = useInterviewStore((s) => s.phase);
 
   const handleSubmit = (e: FormEvent) => {
@@ -31,6 +31,12 @@ export function InputBar() {
         <div className="absolute -inset-0.5 bg-gradient-to-r from-neon-blue/20 via-neon-purple/20 to-neon-blue/20 rounded-2xl blur-sm" />
 
         <div className="relative glass-panel flex items-center gap-3 p-2 pl-4">
+          {/* Connection status indicator */}
+          {isConnected ? (
+            <Wifi className="w-4 h-4 text-neon-green/70 flex-shrink-0" />
+          ) : (
+            <WifiOff className="w-4 h-4 text-slate-500 flex-shrink-0" />
+          )}
           <Zap className="w-4 h-4 text-neon-blue/50 flex-shrink-0" />
 
           <input
@@ -41,7 +47,9 @@ export function InputBar() {
             placeholder={
               isDisabled
                 ? "Interview complete — compile the workflow"
-                : "Begin interrogation... mention assets, failures, schedules"
+                : isConnected
+                  ? "Connected to mesh — begin interrogation..."
+                  : "Offline mode — begin interrogation..."
             }
             className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 font-mono outline-none disabled:opacity-40"
           />

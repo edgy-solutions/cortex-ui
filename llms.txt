@@ -9,9 +9,12 @@
 - Styling: Tailwind CSS v4 (dark mode default, custom @theme neon palette)
 - Animation: Framer Motion (entrance animations, spring physics, typewriter effects)
 - State: Zustand (single store for interview state)
+- Data Fetching: TanStack Query (React Query) + axios
 - Icons: Lucide React
 - Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
 - Fonts: JetBrains Mono (code/data), Inter (UI text)
+- Backend: FastAPI (Python) with StreamingResponse for SSE-like streaming
+- API Protocol: Chunked HTTP with special tokens (<<ONTOLOGY_LOOKUP>>, <<DATAHUB_QUERY>>, etc.)
 
 ## Architecture Overview
 
@@ -32,8 +35,15 @@ src/
 ├── store/
 │   └── useInterviewStore.ts          # Zustand store: messages, phase, ontologyTerms, dataBindings
 │
+├── api/
+│   ├── types.ts                      # Stream event protocol, request/response types, special tokens
+│   └── client.ts                     # API client: streamInterviewResponse(), compileWorkflow(), healthCheck()
+│
 ├── hooks/
-│   ├── useMockAgent.ts               # Simulates streaming agent responses, thinking phases, keyword detection
+│   ├── useAgent.ts                   # Unified hook: auto-switches between real API and mock based on backend health
+│   ├── useInterviewAgent.ts          # Real API streaming hook (TanStack Query mutation + stream parser)
+│   ├── useCompileWorkflow.ts         # Compilation mutation hook (sends blueprint, gets run_id)
+│   ├── useMockAgent.ts               # Offline fallback: simulates streaming responses locally
 │   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
 │
 ├── components/
@@ -70,7 +80,9 @@ src/
 - **Neon colors**: Available as Tailwind classes — `text-neon-blue`, `bg-neon-purple/20`, `border-neon-green/30`, etc. Defined in `@theme` block in index.css.
 - **Animations**: Custom Tailwind animations — `animate-pulse-neon`, `animate-glow`, `animate-breathe`. Use Framer Motion for entrance/exit animations on components.
 - **Custom node types**: React Flow nodes are registered as `trigger`, `logic`, `action` in WorkflowCanvas. Each accepts a `delay` data prop for sequential build-sequence animation.
-- **Mock data**: No backend. `useMockAgent` detects keywords (engine, damage, schedule) to return themed responses. `useMockWorkflowBuilder` generates graph from accumulated store state.
+- **API integration**: Components use `useAgent()` which auto-detects backend availability. Falls back to `useMockAgent` when offline.
+- **Stream protocol**: Backend sends newline-delimited chunks. Plain text = agent response. `<<TOKEN:args>>` = visual triggers (ontology lookup, DataHub query, etc.).
+- **Mock fallback**: When backend is unavailable, `useMockAgent` provides identical UX with local keyword detection.
 
 ## Zustand Store Shape
 
@@ -83,10 +95,38 @@ src/
 }
 ```
 
+## Stream Event Protocol
+
+The backend sends newline-delimited chunks. Special tokens trigger UI animations:
+
+```
+<<ONTOLOGY_LOOKUP:label>>              → Shows "Scanning..." thinking card
+<<ONTOLOGY_FOUND:category:label>>      → Marks step done, adds HUD tag
+<<DATAHUB_QUERY:model:schema>>         → Shows "Querying..." with loading bar
+<<DATAHUB_RESULT:model:schema:healthy>> → Marks step done, adds data binding
+<<INTERVIEW_COMPLETE>>                 → Transitions to blueprint phase
+<<STREAM_END>>                         → Marks message as done
+```
+
+Plain text between tokens is appended to the agent message (streamed).
+
 ## Running
 
 ```bash
+# Frontend
 npm install
 npm run dev          # http://localhost:5173
 npm run build        # Production build
+
+# Backend (optional — frontend falls back to mock mode)
+cd backend
+uv sync
+uv run uvicorn interviewer_agent:app --reload --port 8000
+```
+
+## Environment Variables
+
+```
+VITE_API_URL=http://localhost:8000           # Backend API URL
+VITE_ONTOLOGY_SERVICE_URL=http://localhost:8084  # Ontology service (future)
 ```
