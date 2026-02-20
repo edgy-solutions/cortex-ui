@@ -18,6 +18,9 @@ __pycache__
 .venv
 *.egg-info
 
+# BAML generated client (regenerate with: baml-cli generate)
+baml_client/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

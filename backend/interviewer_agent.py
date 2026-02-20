@@ -14,20 +14,35 @@ Special Stream Tokens:
   <<DATAHUB_RESULT:model:schema:healthy>>     — DataHub query result
   <<INTERVIEW_COMPLETE>>                      — Signal to transition to blueprint
   <<STREAM_END>>                              — End of stream
+
+Modes:
+  - BAML (real LLM via OpenRouter) — when OPENROUTER_API_KEY is set
+  - Mock (keyword-based)           — when no API key is set
 """
 
 import asyncio
+import os
 import uuid
 from typing import AsyncGenerator
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 
+# ── Env ───────────────────────────────────────────────────
+load_dotenv()
+
+_USE_BAML = bool(os.getenv("OPENROUTER_API_KEY"))
+
+if _USE_BAML:
+    from baml_client import b  # type: ignore[import-untyped]
+
+
 # ── App ───────────────────────────────────────────────────
-app = FastAPI(title="The Cortex — Interrogator Agent", version="1.0.0")
+app = FastAPI(title="The Cortex — Interrogator Agent", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,38 +84,138 @@ class CompileResponse(BaseModel):
     message: str | None = None
 
 
-# ── Helpers ───────────────────────────────────────────────
-# Session counter for triggering INTERVIEW_COMPLETE after enough exchanges
+# ── Session State ─────────────────────────────────────────
 _session_msg_count: dict[str, int] = {}
+_session_history: dict[str, list[str]] = {}
 
 
-async def stream_text(text: str, chunk_size: int = 3, delay: float = 0.02):
+# ══════════════════════════════════════════════════════════
+# BAML Streaming (real LLM via OpenRouter)
+# ══════════════════════════════════════════════════════════
+
+
+def _build_chat_history(session_id: str) -> str:
+    """Format session history as a single string for the BAML prompt."""
+    turns = _session_history.get(session_id, [])
+    return "\n".join(turns) if turns else "(no previous conversation)"
+
+
+def _ontology_category(uri: str) -> str:
+    """Derive a human-readable category from an ontology URI."""
+    lower = uri.lower()
+    if "failure" in lower or "damage" in lower:
+        return "Concept"
+    if "schedule" in lower or "workorder" in lower or "maintenance" in lower:
+        return "Process"
+    if "sensor" in lower or "inspection" in lower:
+        return "Process"
+    return "Asset"
+
+
+def _guess_schema(model_name: str) -> str:
+    """Guess staging/warehouse schema from dbt model naming convention."""
+    if model_name.startswith("stg_"):
+        return "staging"
+    if model_name.startswith("dim_") or model_name.startswith("fct_"):
+        return "warehouse"
+    return "staging"
+
+
+async def generate_baml_stream(
+    request: InterviewRequest,
+) -> AsyncGenerator[str, None]:
+    """
+    Stream an interview response using BAML + OpenRouter.
+
+    Iterates over BAML's partial InterviewState objects, computing deltas
+    and translating them into the <<TOKEN:...>> protocol the frontend expects.
+    """
+    session_id = request.session_id or "default"
+
+    # Track exchanges
+    _session_msg_count[session_id] = _session_msg_count.get(session_id, 0) + 1
+
+    # Append user turn to history
+    history = _session_history.setdefault(session_id, [])
+    history.append(f"User: {request.message}")
+
+    chat_history = _build_chat_history(session_id)
+
+    # ── Stream via BAML ──
+    stream = b.stream.ConductInterview(
+        chat_history=chat_history,
+        user_message=request.message,
+    )
+
+    prev_reply = ""
+    prev_ontology: str | None = None
+    prev_dbt: str | None = None
+    prev_ready = False
+
+    async for partial in stream:
+        # ── Text delta ──
+        current_reply = partial.agent_reply or ""
+        if len(current_reply) > len(prev_reply):
+            delta = current_reply[len(prev_reply) :]
+            yield delta
+            prev_reply = current_reply
+
+        # ── Ontology class transition (None → value) ──
+        current_ontology = partial.ontology_class
+        if current_ontology and current_ontology != prev_ontology:
+            label = current_ontology.split(":")[-1] if ":" in current_ontology else current_ontology
+            category = _ontology_category(current_ontology)
+            yield f"\n<<ONTOLOGY_LOOKUP:{label}>>\n"
+            yield f"<<ONTOLOGY_FOUND:{category}:{current_ontology}>>\n"
+            prev_ontology = current_ontology
+
+        # ── dbt model transition (None → value) ──
+        current_dbt = partial.dbt_model
+        if current_dbt and current_dbt != prev_dbt:
+            schema = _guess_schema(current_dbt)
+            yield f"\n<<DATAHUB_QUERY:{current_dbt}:{schema}>>\n"
+            yield f"<<DATAHUB_RESULT:{current_dbt}:{schema}:true>>\n"
+            prev_dbt = current_dbt
+
+        # ── Ready to compile ──
+        current_ready = partial.is_ready_to_compile or False
+        if current_ready and not prev_ready:
+            yield "\n<<INTERVIEW_COMPLETE>>\n"
+            prev_ready = current_ready
+
+    # Get final response and save assistant turn to history
+    final = await stream.get_final_response()
+    history.append(f"Agent: {final.agent_reply}")
+
+    yield "\n<<STREAM_END>>\n"
+
+
+# ══════════════════════════════════════════════════════════
+# Mock Streaming (keyword-based fallback)
+# ══════════════════════════════════════════════════════════
+
+
+async def _stream_text(text: str, chunk_size: int = 3, delay: float = 0.02):
     """Yield text in small chunks to simulate streaming."""
     for i in range(0, len(text), chunk_size):
         yield text[i : i + chunk_size]
         await asyncio.sleep(delay)
 
 
-async def generate_interview_stream(
+async def generate_mock_stream(
     request: InterviewRequest,
 ) -> AsyncGenerator[str, None]:
     """
-    Generate the interview response stream.
-
-    This is where you would integrate with your actual LLM / ontology service.
-    For now, it uses keyword-based mock logic similar to the frontend mock,
-    but demonstrates the streaming token protocol.
+    Keyword-based mock stream — used when OPENROUTER_API_KEY is not set.
+    Demonstrates the streaming token protocol without an LLM.
     """
     session_id = request.session_id or "default"
     msg = request.message.lower()
 
-    # Track message count per session
     _session_msg_count[session_id] = _session_msg_count.get(session_id, 0) + 1
     msg_count = _session_msg_count[session_id]
 
-    # ── Determine response based on keywords ──
     if "engine" in msg or "turbine" in msg:
-        # Ontology scan
         yield "<<ONTOLOGY_LOOKUP:RotatingEquipment>>\n"
         await asyncio.sleep(0.8)
         yield "<<ONTOLOGY_FOUND:Asset:Engine>>\n"
@@ -108,13 +223,11 @@ async def generate_interview_stream(
         yield "<<ONTOLOGY_FOUND:Concept:iof:RotatingEquipment>>\n"
         await asyncio.sleep(0.5)
 
-        # DataHub query
         yield "<<DATAHUB_QUERY:stg_engine_telemetry:staging>>\n"
         await asyncio.sleep(1.0)
         yield "<<DATAHUB_RESULT:stg_engine_telemetry:staging:true>>\n"
         await asyncio.sleep(0.3)
 
-        # Stream response text
         text = (
             "I've identified the engine as a Rotating Equipment asset in "
             "the IOF-MRO ontology. The telemetry data is available through "
@@ -122,7 +235,7 @@ async def generate_interview_stream(
             "vibration signatures, temperature readings, and RPM data. "
             "Shall I bind this to the workflow?"
         )
-        async for chunk in stream_text(text):
+        async for chunk in _stream_text(text):
             yield chunk
 
     elif "damage" in msg or "failure" in msg:
@@ -149,7 +262,7 @@ async def generate_interview_stream(
             "shows a 98.7% completeness score. Want me to add a failure "
             "prediction node?"
         )
-        async for chunk in stream_text(text):
+        async for chunk in _stream_text(text):
             yield chunk
 
     elif "schedule" in msg or "maintenance" in msg:
@@ -171,7 +284,7 @@ async def generate_interview_stream(
             "vs. actual maintenance windows. The current backlog shows 47 "
             "open work orders. Should I integrate this into the pipeline?"
         )
-        async for chunk in stream_text(text):
+        async for chunk in _stream_text(text):
             yield chunk
 
     else:
@@ -185,27 +298,32 @@ async def generate_interview_stream(
             "turbines), failure modes, or maintenance schedules so I can "
             "bind the correct ontology concepts and data models."
         )
-        async for chunk in stream_text(text):
+        async for chunk in _stream_text(text):
             yield chunk
 
     yield "\n"
 
-    # After 4 exchanges, signal interview complete
     if msg_count >= 4:
         yield "<<INTERVIEW_COMPLETE>>\n"
 
     yield "<<STREAM_END>>\n"
 
 
-# ── Endpoints ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+# Endpoints
+# ══════════════════════════════════════════════════════════
+
+
 @app.post("/interview/stream")
 async def interview_stream(request: InterviewRequest):
     """
     Streaming interview endpoint.
+    Automatically selects BAML (real LLM) or mock based on OPENROUTER_API_KEY.
     Returns a chunked text/event-stream response with embedded special tokens.
     """
+    generator = generate_baml_stream(request) if _USE_BAML else generate_mock_stream(request)
     return StreamingResponse(
-        generate_interview_stream(request),
+        generator,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -231,10 +349,6 @@ async def compile_workflow(request: CompileRequest):
     run_id = str(uuid.uuid4())
     job_name = f"cortex_pipeline_{request.session_id}"
 
-    # TODO: Integrate with Dagster and Restate here
-    # dagster_client.submit_run(...)
-    # restate_client.trigger_agent(...)
-
     return CompileResponse(
         success=True,
         run_id=run_id,
@@ -246,4 +360,8 @@ async def compile_workflow(request: CompileRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "cortex-interrogator"}
+    return {
+        "status": "ok",
+        "service": "cortex-interrogator",
+        "mode": "baml" if _USE_BAML else "mock",
+    }
