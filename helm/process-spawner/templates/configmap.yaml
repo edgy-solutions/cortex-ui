@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-backend-config
+  labels:
+    app.kubernetes.io/name: process-spawner-backend
+data:
+  # ── Determine Base DNS Suffix ──
+  {{- $svcSuffix := "" -}}
+  {{- if .Values.invincibleAgent.namespace -}}
+    {{- $svcSuffix = printf ".%s.svc.cluster.local" .Values.invincibleAgent.namespace -}}
+  {{- end -}}
+
+  # ── Determine Service URLs ──
+  {{- $relName := .Values.invincibleAgent.releaseName -}}
+  
+  # Ontology Engine (engine-o)
+  {{- $ontologyUrl := printf "http://%s-engine-o%s:8084" $relName $svcSuffix -}}
+  {{- if .Values.invincibleAgent.urls.ontologyService -}}
+    {{- $ontologyUrl = .Values.invincibleAgent.urls.ontologyService -}}
+  {{- end -}}
+  ONTOLOGY_SERVICE_URL: {{ $ontologyUrl | quote }}
+
+  # DataHub Wrapper (engine-d)
+  {{- $datahubUrl := printf "http://%s-engine-d%s:8085" $relName $svcSuffix -}}
+  {{- if .Values.invincibleAgent.urls.datahubService -}}
+    {{- $datahubUrl = .Values.invincibleAgent.urls.datahubService -}}
+  {{- end -}}
+  DATAHUB_SERVICE_URL: {{ $datahubUrl | quote }}
+
+  # Dagster Webserver
+  {{- $dagsterUrl := printf "http://%s-dagster-webserver%s:3000" $relName $svcSuffix -}}
+  {{- if .Values.invincibleAgent.urls.dagsterWebserver -}}
+    {{- $dagsterUrl = .Values.invincibleAgent.urls.dagsterWebserver -}}
+  {{- end -}}
+  DAGSTER_WEBSERVER_URL: {{ $dagsterUrl | quote }}
