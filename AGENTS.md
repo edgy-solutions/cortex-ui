@@ -27,6 +27,10 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
 - **New interview phases**: Update `InterviewPhase` type in the store, then update `App.tsx` view switching and `HUD.tsx` conditional rendering.
+- **New BPMN task types**: Add to `BPMNTask.type` union in both `src/api/types.ts` (frontend) and `BPMNTask` Pydantic model in `backend/interviewer_agent.py`. Update the node-to-task mapping in `src/hooks/useCompileWorkflow.ts`.
+- **New gateway types**: Add to `BPMNGateway.type` union in both frontend types and backend Pydantic model.
+- **Database schema changes**: Add a new SQL migration file in `backend/sql/` (numbered sequentially, e.g. `002_*.sql`). Update `backend/models.py` to match. Run the SQL against the `iagent` database.
+- **Boot sequence customization**: Edit `synthesize_boot_sequence()` in `backend/interviewer_agent.py`. Do not hardcode boot log text in frontend components.
 
 ## Safety & Guardrails
 
@@ -57,12 +61,16 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | Real API streaming | `src/hooks/useInterviewAgent.ts` |
 | Mock agent fallback | `src/hooks/useMockAgent.ts` |
 | Compile mutation | `src/hooks/useCompileWorkflow.ts` |
+| BPMN type definitions | `src/api/types.ts` |
 | API client + stream parser | `src/api/client.ts` |
 | Stream token protocol | `src/api/types.ts` |
 | Workflow graph generation | `src/hooks/useMockWorkflowBuilder.ts` |
 | Phase-based view switching | `src/App.tsx` |
 | Global theme & CSS | `src/index.css` |
-| Backend API | `backend/interviewer_agent.py` |
+| Backend API + BPMN routes | `backend/interviewer_agent.py` |
+| Database session layer | `backend/database.py` |
+| BPMN catalog ORM model | `backend/models.py` |
+| Database schema DDL | `backend/sql/001_create_bpmn_catalog.sql` |
 
 ## Testing
 
@@ -86,4 +94,19 @@ npx tsc --noEmit   # Type-check without emitting
 cd backend
 uv sync
 uv run uvicorn interviewer_agent:app --reload --port 8000
+
+# Database (required for BPMN catalog)
+# Ensure PostgreSQL is running with the iagent database:
+psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 ```
+
+## BPMN Workflow Rules
+
+- The compile endpoint (`POST /workflow/compile`) does three things in sequence:
+  1. **Upserts** the BPMN payload to the `bpmn_catalog` Postgres table
+  2. **Reloads** the Dagster workspace via GraphQL (non-fatal on failure)
+  3. **Returns** a `boot_log` terminal string for the CompilationOverlay
+- The `CompilationOverlay` renders the `boot_log` line-by-line with color-coded syntax highlighting. Do not hardcode boot log content in the frontend.
+- React Flow node type `logic` → BPMN gateway. Types `trigger`/`action` → BPMN task. This mapping lives in `useCompileWorkflow.ts`.
+- The `bpmn_catalog` table is shared with the `invincible-agent` Dagster backend. Both services use the same Postgres database (`iagent`). Do not change the schema without coordinating with that project.
+- `DATABASE_URL` and `DAGSTER_WEBSERVER_URL` are configured in `backend/.env`.

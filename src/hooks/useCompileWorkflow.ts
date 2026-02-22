@@ -1,50 +1,77 @@
 import { useMutation } from "@tanstack/react-query";
 import { compileWorkflow } from "@/api/client";
-import type { CompileRequest, CompileResponse } from "@/api/types";
+import type {
+  CompileRequest,
+  CompileResponse,
+  BPMNPayload,
+  BPMNTask,
+  BPMNGateway,
+  BPMNSequenceFlow,
+} from "@/api/types";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useMockWorkflowBuilder } from "./useMockWorkflowBuilder";
 
 /**
  * Hook for compiling the workflow blueprint into a Dagster job.
  *
- * Collects the current interview state (ontology terms, data bindings,
- * and the generated React Flow nodes/edges) and sends it to the backend.
+ * Maps React Flow nodes/edges into a BPMNPayload:
+ *   - `trigger` / `action` nodes → BPMNTask (service_task / user_task)
+ *   - `logic` nodes (diamond/routing) → BPMNGateway (exclusive)
+ *   - edges → BPMNSequenceFlow
  *
- * On success, transitions to the "complete" phase and returns the run_id.
+ * On success, transitions to the "complete" phase and exposes `bootLog`.
  */
 export function useCompileWorkflow() {
-  const ontologyTerms = useInterviewStore((s) => s.ontologyTerms);
-  const dataBindings = useInterviewStore((s) => s.dataBindings);
   const setPhase = useInterviewStore((s) => s.setPhase);
 
-  // Get the current blueprint nodes/edges
+  // Get the current blueprint nodes/edges from the workflow builder
   const { nodes, edges } = useMockWorkflowBuilder();
 
   const mutation = useMutation<CompileResponse, Error, void>({
     mutationFn: async () => {
-      // Build the compile request from current state
+      // ── Classify nodes into BPMN tasks vs gateways ──
+      const tasks: BPMNTask[] = [];
+      const gateways: BPMNGateway[] = [];
+
+      for (const n of nodes) {
+        const label = (n.data as { label?: string }).label ?? n.id;
+
+        if (n.type === "logic") {
+          // Diamond / routing nodes → BPMN gateways
+          gateways.push({
+            id: n.id,
+            name: label,
+            type: "exclusive",
+          });
+        } else {
+          // trigger + action nodes → BPMN tasks
+          const taskType =
+            n.type === "action" ? "user_task" : "service_task";
+          tasks.push({
+            id: n.id,
+            name: label,
+            type: taskType,
+            agent_endpoint: `http://restate-agent-svc:8081/${n.id}`,
+          });
+        }
+      }
+
+      // ── Map edges → BPMN sequence flows ──
+      const sequence_flows: BPMNSequenceFlow[] = edges.map((e, i) => ({
+        id: `flow_${i}`,
+        source_ref: e.source,
+        target_ref: e.target,
+      }));
+
+      const bpmn_payload: BPMNPayload = {
+        tasks,
+        gateways,
+        sequence_flows,
+      };
+
       const request: CompileRequest = {
         session_id: `session-${Date.now()}`,
-        blueprint: {
-          ontology_terms: ontologyTerms.map((t) => ({
-            category: t.category,
-            label: t.label,
-          })),
-          data_bindings: dataBindings.map((b) => ({
-            model: b.model,
-            schema: b.schema,
-            healthy: b.healthy,
-          })),
-          nodes: nodes.map((n) => ({
-            id: n.id,
-            type: n.type ?? "unknown",
-            label: (n.data as { label?: string }).label ?? n.id,
-          })),
-          edges: edges.map((e) => ({
-            source: e.source,
-            target: e.target,
-          })),
-        },
+        bpmn_payload,
       };
 
       return compileWorkflow(request);
@@ -66,5 +93,6 @@ export function useCompileWorkflow() {
     error: mutation.error,
     runId: mutation.data?.run_id,
     dagsterJobName: mutation.data?.dagster_job_name,
+    bootLog: mutation.data?.boot_log,
   };
 }

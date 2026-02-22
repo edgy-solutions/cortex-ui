@@ -39,15 +39,42 @@ export interface InterviewRequest {
   };
 }
 
+// ── BPMN Payload Models ───────────────────────────────────
+
+/** A BPMN task node — the unit of work in a workflow */
+export interface BPMNTask {
+  id: string;
+  name: string;
+  type: "service_task" | "user_task";
+  agent_endpoint: string;
+}
+
+/** A BPMN gateway — routing/branching logic */
+export interface BPMNGateway {
+  id: string;
+  name: string;
+  type: "exclusive";
+}
+
+/** A BPMN sequence flow — an edge connecting two elements */
+export interface BPMNSequenceFlow {
+  id: string;
+  source_ref: string;
+  target_ref: string;
+  condition_expression?: string;
+}
+
+/** The simplified BPMN payload sent to the backend */
+export interface BPMNPayload {
+  tasks: BPMNTask[];
+  gateways: BPMNGateway[];
+  sequence_flows: BPMNSequenceFlow[];
+}
+
 /** Request payload for workflow compilation */
 export interface CompileRequest {
   session_id: string;
-  blueprint: {
-    ontology_terms: Array<{ category: string; label: string }>;
-    data_bindings: Array<{ model: string; schema: string; healthy: boolean }>;
-    nodes: Array<{ id: string; type: string; label: string }>;
-    edges: Array<{ source: string; target: string }>;
-  };
+  bpmn_payload: BPMNPayload;
 }
 
 /** Response from the compile endpoint */
@@ -56,4 +83,5 @@ export interface CompileResponse {
   run_id: string;
   dagster_job_name?: string;
   message?: string;
+  boot_log: string;
 }

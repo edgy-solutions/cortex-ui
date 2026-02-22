@@ -1,101 +1,52 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Code2 } from "lucide-react";
+import { CheckCircle2, Terminal } from "lucide-react";
 import { useInterviewStore } from "@/store/useInterviewStore";
 
 interface CompilationOverlayProps {
   onComplete: () => void;
+  bootLog?: string;
 }
 
-// Mock Dagster / Python pipeline code
-const MOCK_CODE = `
-from dagster import job, op, repository, schedule
-from dagster import AssetIn, asset, AssetOut
-import pandas as pd
+/** Fallback boot log when the backend hasn't returned one yet */
+const FALLBACK_BOOT_LOG = `
+╔══════════════════════════════════════════════════════════╗
+║       C O R T E X  —  C O M P I L E R  v2.0          ║
+╚══════════════════════════════════════════════════════════╝
 
-@asset(
-    description="Ingest engine telemetry from IOT sensors",
-    group_name="staging",
-)
-def stg_engine_telemetry() -> pd.DataFrame:
-    """Load raw engine telemetry data."""
-    return pd.read_parquet("s3://data-lake/raw/engine_telemetry/")
+  [INIT] Compiling workflow...
+  [SYSTEM] Saving BPMN model ...
+  [DONE] Pipeline compiled successfully.
 
-@asset(
-    description="Maintenance logs with IOF-MRO ontology mapping",
-    group_name="staging",
-    ins={"upstream": AssetIn("stg_engine_telemetry")},
-)
-def stg_maintenance_logs(upstream: pd.DataFrame) -> pd.DataFrame:
-    """Clean and map maintenance logs to iof:MaintenanceSchedule."""
-    df = upstream.copy()
-    df["ontology_concept"] = df["event_type"].map(ONTOLOGY_MAP)
-    return df.dropna(subset=["ontology_concept"])
-
-ONTOLOGY_MAP = {
-    "impact": "iof:ImpactDamage",
-    "vibration": "iof:VibrationAnomaly",
-    "thermal": "iof:ThermalDegradation",
-    "wear": "iof:WearPattern",
-}
-
-@asset(
-    description="Failure mode dimension table",
-    group_name="warehouse",
-)
-def dim_failure_modes(stg_maintenance_logs: pd.DataFrame) -> pd.DataFrame:
-    """Build failure mode dimension from maintenance events."""
-    return (
-        stg_maintenance_logs
-        .groupby("ontology_concept")
-        .agg(
-            total_events=("event_id", "count"),
-            avg_severity=("severity_score", "mean"),
-            last_occurrence=("event_timestamp", "max"),
-        )
-        .reset_index()
-    )
-
-@asset(
-    description="Work order fact table",
-    group_name="warehouse",
-)
-def fct_work_orders(
-    stg_maintenance_logs: pd.DataFrame,
-    dim_failure_modes: pd.DataFrame,
-) -> pd.DataFrame:
-    """Generate work orders from failure predictions."""
-    threshold = dim_failure_modes[
-        dim_failure_modes["avg_severity"] > 0.7
-    ]["ontology_concept"].tolist()
-    return stg_maintenance_logs[
-        stg_maintenance_logs["ontology_concept"].isin(threshold)
-    ].assign(work_order_status="PENDING")
-
-@schedule(
-    cron_schedule="0 6 * * *",
-    job_name="cortex_pipeline",
-)
-def daily_cortex_schedule():
-    return {}
-
-@job
-def cortex_pipeline():
-    logs = stg_maintenance_logs(stg_engine_telemetry())
-    modes = dim_failure_modes(logs)
-    fct_work_orders(logs, modes)
-
-@repository
-def cortex_repository():
-    return [cortex_pipeline, daily_cortex_schedule]
+  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ SYSTEM ONLINE
 `.trim();
 
-export function CompilationOverlay({ onComplete }: CompilationOverlayProps) {
+/** Map line prefix tags to neon colors for syntax highlighting */
+function getLineColor(line: string): string {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("╔") || trimmed.startsWith("║") || trimmed.startsWith("╚"))
+    return "text-neon-blue";
+  if (trimmed.startsWith("[INIT]")) return "text-slate-400";
+  if (trimmed.startsWith("[SYSTEM]")) return "text-neon-blue";
+  if (trimmed.startsWith("[AGENT]")) return "text-neon-purple";
+  if (trimmed.startsWith("[GATE]")) return "text-neon-cyan";
+  if (trimmed.startsWith("[LINK]")) return "text-neon-cyan";
+  if (trimmed.startsWith("[SCAN]")) return "text-neon-cyan";
+  if (trimmed.startsWith("[DAGSTER]")) return "text-yellow-400";
+  if (trimmed.startsWith("[DONE]")) return "text-neon-green";
+  if (trimmed.startsWith("[SYNC]")) return "text-neon-blue";
+  if (trimmed.includes("SYSTEM ONLINE")) return "text-neon-green font-bold";
+  if (trimmed.startsWith("──") || trimmed.startsWith("└")) return "text-slate-600";
+  return "text-slate-500";
+}
+
+export function CompilationOverlay({ onComplete, bootLog }: CompilationOverlayProps) {
   const [visibleLines, setVisibleLines] = useState(0);
   const [done, setDone] = useState(false);
   const setPhase = useInterviewStore((s) => s.setPhase);
 
-  const lines = MOCK_CODE.split("\n");
+  const logText = bootLog || FALLBACK_BOOT_LOG;
+  const lines = logText.split("\n");
 
   useEffect(() => {
     if (done) return;
@@ -112,7 +63,7 @@ export function CompilationOverlay({ onComplete }: CompilationOverlayProps) {
         }
         return prev + 1;
       });
-    }, 50);
+    }, 60);
 
     return () => clearInterval(interval);
   }, [done, lines.length, setPhase]);
@@ -134,7 +85,7 @@ export function CompilationOverlay({ onComplete }: CompilationOverlayProps) {
             >
               {/* Header */}
               <div className="flex items-center gap-2 mb-4">
-                <Code2 className="w-5 h-5 text-neon-blue animate-pulse-neon" />
+                <Terminal className="w-5 h-5 text-neon-blue animate-pulse-neon" />
                 <span className="font-mono text-sm text-neon-blue tracking-widest uppercase">
                   Compiling Workflow...
                 </span>
@@ -143,9 +94,9 @@ export function CompilationOverlay({ onComplete }: CompilationOverlayProps) {
                 </span>
               </div>
 
-              {/* Code window */}
+              {/* Boot log terminal */}
               <div className="glass-panel p-4 max-h-[70vh] overflow-hidden neon-glow-blue">
-                <pre className="font-mono text-xs leading-5 text-slate-400">
+                <pre className="font-mono text-xs leading-5">
                   {lines.slice(0, visibleLines).map((line, i) => (
                     <motion.div
                       key={i}
@@ -156,21 +107,7 @@ export function CompilationOverlay({ onComplete }: CompilationOverlayProps) {
                       <span className="w-8 text-right mr-4 text-slate-700 select-none">
                         {i + 1}
                       </span>
-                      <span
-                        className={
-                          line.startsWith("@")
-                            ? "text-neon-purple"
-                            : line.startsWith("def ")
-                              ? "text-neon-blue"
-                              : line.startsWith("class ") ||
-                                  line.startsWith("from ") ||
-                                  line.startsWith("import ")
-                                ? "text-neon-cyan"
-                                : line.includes('"""')
-                                  ? "text-neon-green/60"
-                                  : ""
-                        }
-                      >
+                      <span className={getLineColor(line)}>
                         {line || "\u00A0"}
                       </span>
                     </motion.div>

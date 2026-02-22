@@ -12,7 +12,9 @@ The Cortex lets you converse with an AI agent that scans industrial ontologies (
 
 **3. Holographic Blueprint** — After enough context is gathered, the UI transitions to an interactive React Flow node graph showing the generated workflow: Trigger nodes → Logic nodes → Action nodes, with animated pulsing edges.
 
-**4. Compilation Sequence** — A full-screen matrix-style code scroll that "generates" the Dagster pipeline, ending with a **SYSTEM ONLINE** success state.
+**4. Compilation Sequence** — Clicking "Compile Workflow" sends the React Flow graph to the backend as a BPMN payload (tasks, gateways, sequence flows). The backend upserts it to the `bpmn_catalog` Postgres table, reloads the Dagster workspace, and returns a terminal boot log that plays back in a full-screen overlay — complete with `[AGENT] Provisioning task: ...` lines — ending with **SYSTEM ONLINE**.
+
+**5. BPMN Catalog** — Saved workflows are persisted in PostgreSQL and shared with the `invincible-agent` Dagster backend, which dynamically generates pipeline jobs from the stored BPMN models.
 
 ## Quick Start
 
@@ -55,7 +57,7 @@ npm run dev
 
 4. **After 4 exchanges**, the view transitions to the **Holographic Blueprint** — an interactive node graph. Hover over Action nodes for a digital glitch effect.
 
-5. **Click COMPILE WORKFLOW** in the sidebar — a full-screen overlay rapidly scrolls generated Python/Dagster code, then displays **SYSTEM ONLINE**.
+5. **Click COMPILE WORKFLOW** in the sidebar — the system saves the BPMN model to Postgres, reloads Dagster, and plays a terminal boot sequence overlay showing each provisioned agent task — then displays **SYSTEM ONLINE**.
 
 ## Tech Stack
 
@@ -86,9 +88,14 @@ src/
 │   └── Compilation/        # Compile button, matrix code overlay
 backend/
 ├── pyproject.toml           # Python deps (managed by uv)
-├── interviewer_agent.py     # FastAPI BFF gateway + streaming endpoint
+├── interviewer_agent.py     # FastAPI BFF gateway: streaming, compile (upsert + Dagster reload), BPMN catalog
+├── database.py              # Async SQLAlchemy engine + get_db() dependency
+├── models.py                # SQLAlchemy ORM model for bpmn_catalog table
+├── sql/
+│   └── 001_create_bpmn_catalog.sql  # DDL: bpmn_catalog table + trigger + index
 ├── baml_src/                # BAML definitions (LLM contract + OpenRouter client)
-└── .env                     # Backend secrets (NEVER in frontend .env)
+├── .env                     # Backend secrets + DATABASE_URL + DAGSTER_WEBSERVER_URL
+└── .env.example             # Template for backend env vars
 ```
 
 ## Architecture
@@ -121,6 +128,22 @@ VITE_API_URL=http://localhost:8000
 OPENROUTER_API_KEY=sk-or-...     # Omit for mock mode
 ONTOLOGY_SERVICE_URL=http://localhost:8084
 DATAHUB_SERVICE_URL=http://localhost:8085
+DATABASE_URL=postgresql+asyncpg://iagent:iagent@localhost:5432/iagent
+DAGSTER_WEBSERVER_URL=http://localhost:3000
+```
+
+### Database Setup (for BPMN Catalog)
+
+The BPMN catalog requires a PostgreSQL database. The default connection matches the `invincible-agent` Dagster backend:
+
+```bash
+# Create the database and user (if not already done)
+createdb -U postgres iagent
+psql -U postgres -d iagent -c "CREATE USER iagent WITH PASSWORD 'iagent';"
+psql -U postgres -d iagent -c "GRANT ALL PRIVILEGES ON DATABASE iagent TO iagent;"
+
+# Create the bpmn_catalog table
+psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 ```
 
 ## Scripts

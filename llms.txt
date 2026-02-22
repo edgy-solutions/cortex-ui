@@ -36,13 +36,13 @@ src/
 │   └── useInterviewStore.ts          # Zustand store: messages, phase, ontologyTerms, dataBindings
 │
 ├── api/
-│   ├── types.ts                      # Stream event protocol, request/response types, special tokens
+│   ├── types.ts                      # Stream event protocol, BPMN payload models (BPMNTask, BPMNGateway, BPMNSequenceFlow, BPMNPayload), CompileRequest/Response
 │   └── client.ts                     # API client: streamInterviewResponse(), compileWorkflow(), healthCheck()
 │
 ├── hooks/
 │   ├── useAgent.ts                   # Unified hook: auto-switches between real API and mock based on backend health
 │   ├── useInterviewAgent.ts          # Real API streaming hook (TanStack Query mutation + stream parser)
-│   ├── useCompileWorkflow.ts         # Compilation mutation hook (sends blueprint, gets run_id)
+│   ├── useCompileWorkflow.ts         # Compilation mutation hook: maps React Flow nodes → BPMNPayload, exposes bootLog
 │   ├── useMockAgent.ts               # Offline fallback: simulates streaming responses locally
 │   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
 │
@@ -70,8 +70,19 @@ src/
 │   │       └── AnimatedEdge.tsx      # Pulsing SVG gradient edge simulating data flow
 │   │
 │   └── Compilation/
-│       ├── CompileButton.tsx         # Gradient-glow button, transitions to "System Online" badge
-│       └── CompilationOverlay.tsx    # Full-screen matrix code scroll with progress bar
+│       ├── CompileButton.tsx         # Gradient-glow button, calls compile hook, passes bootLog to overlay
+│       └── CompilationOverlay.tsx    # Full-screen terminal boot sequence with color-coded line rendering
+
+backend/
+├── interviewer_agent.py              # FastAPI BFF gateway: streaming, /workflow/compile (upsert + Dagster reload), /bpmn/*
+├── database.py                       # Async SQLAlchemy engine + get_db() FastAPI dependency
+├── models.py                         # SQLAlchemy ORM model for bpmn_catalog table
+├── pyproject.toml                    # Python deps (fastapi, sqlalchemy, asyncpg, httpx, etc.)
+├── baml_src/                         # BAML definitions (LLM contract + OpenRouter client)
+├── sql/
+│   └── 001_create_bpmn_catalog.sql   # DDL: bpmn_catalog table + trigger + index
+├── .env                              # Backend secrets + DATABASE_URL + DAGSTER_WEBSERVER_URL
+└── .env.example                      # Template for backend env vars
 ```
 
 ## Key Patterns
@@ -146,4 +157,22 @@ Backend (`backend/.env` — server-side only, NEVER exposed to browser):
 OPENROUTER_API_KEY=sk-or-...
 ONTOLOGY_SERVICE_URL=http://localhost:8084
 DATAHUB_SERVICE_URL=http://localhost:8085
+DATABASE_URL=postgresql+asyncpg://iagent:iagent@localhost:5432/iagent
+DAGSTER_WEBSERVER_URL=http://localhost:3000
 ```
+
+## BPMN Catalog Integration
+
+The backend shares the `bpmn_catalog` PostgreSQL table with the `invincible-agent` Dagster backend.
+
+- `POST /workflow/compile` — Accepts a `BPMNPayload` (tasks, gateways, sequence_flows), upserts to Postgres, triggers Dagster workspace reload via GraphQL, and returns a `boot_log` terminal string.
+- `POST /bpmn/save` — Direct BPMN upsert + boot sequence (Phase 1 endpoint).
+- `GET /bpmn/catalog` — Lists all active workflows.
+- `synthesize_boot_sequence()` — Generates a multi-line terminal boot log with per-task `[AGENT]` provisioning lines.
+- `_reload_dagster_workspace()` — Async GraphQL POST to Dagster Webserver's `reloadRepositoryLocation` mutation. Non-fatal on failure.
+
+The React Flow → BPMN mapping in `useCompileWorkflow.ts`:
+- `trigger` nodes → `BPMNTask` (service_task)
+- `logic` nodes → `BPMNGateway` (exclusive)
+- `action` nodes → `BPMNTask` (user_task)
+- edges → `BPMNSequenceFlow`

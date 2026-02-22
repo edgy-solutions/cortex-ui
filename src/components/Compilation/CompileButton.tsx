@@ -2,16 +2,20 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Play, CheckCircle2 } from "lucide-react";
 import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCompileWorkflow } from "@/hooks/useCompileWorkflow";
 import { CompilationOverlay } from "./CompilationOverlay";
 
 export function CompileButton() {
   const [showOverlay, setShowOverlay] = useState(false);
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
+  const { compile, bootLog } = useCompileWorkflow();
 
   const handleCompile = () => {
     setPhase("compiling");
     setShowOverlay(true);
+    // Fire the real compile mutation (backend upsert + Dagster reload)
+    compile();
   };
 
   if (phase === "complete") {
@@ -45,7 +49,10 @@ export function CompileButton() {
       </motion.button>
 
       {showOverlay && (
-        <CompilationOverlay onComplete={() => setShowOverlay(false)} />
+        <CompilationOverlay
+          onComplete={() => setShowOverlay(false)}
+          bootLog={bootLog}
+        />
       )}
     </>
   );
