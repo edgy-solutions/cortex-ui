@@ -1,12 +1,16 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { motion } from "framer-motion";
-import { Cpu } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Cpu, Database, BookOpen } from "lucide-react";
 
 export interface ActionNodeData {
   label: string;
   subtitle?: string;
   delay?: number;
+  /** IOF-MRO ontology URI (for semantic HUD tooltip) */
+  ontologyClass?: string;
+  /** DataHub/dbt model name (for semantic HUD tooltip) */
+  dataSource?: string;
 }
 
 export const ActionNode = memo(function ActionNode({
@@ -14,6 +18,7 @@ export const ActionNode = memo(function ActionNode({
 }: NodeProps & { data: ActionNodeData }) {
   const delay = data.delay ?? 0;
   const [hovered, setHovered] = useState(false);
+  const hasSemanticData = data.ontologyClass || data.dataSource;
 
   return (
     <motion.div
@@ -71,10 +76,45 @@ export const ActionNode = memo(function ActionNode({
         <div className="mt-2 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-neon-purple animate-pulse-neon" />
           <span className="font-mono text-[8px] text-slate-600 uppercase tracking-wider">
-            Ready
+            {hasSemanticData ? "Grounded" : "Ready"}
           </span>
         </div>
       </div>
+
+      {/* Semantic HUD Tooltip — glassmorphism panel on hover */}
+      <AnimatePresence>
+        {hovered && hasSemanticData && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-full left-0 mt-2 w-56 z-50"
+          >
+            <div className="glass-panel rounded-lg px-3 py-2.5 border border-neon-cyan/20 shadow-[0_0_20px_rgba(0,212,255,0.15),0_4px_30px_rgba(0,0,0,0.5)]">
+              <span className="font-mono text-[8px] text-neon-cyan/60 uppercase tracking-[0.15em] block mb-1.5">
+                Semantic Grounding
+              </span>
+              {data.ontologyClass && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <BookOpen className="w-3 h-3 text-neon-green flex-shrink-0" />
+                  <span className="font-mono text-[9px] text-neon-green truncate">
+                    {data.ontologyClass}
+                  </span>
+                </div>
+              )}
+              {data.dataSource && (
+                <div className="flex items-center gap-1.5">
+                  <Database className="w-3 h-3 text-neon-blue flex-shrink-0" />
+                  <span className="font-mono text-[9px] text-neon-blue truncate">
+                    {data.dataSource}
+                  </span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Handles */}
       <Handle

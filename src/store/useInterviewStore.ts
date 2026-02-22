@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { BPMNGraphUpdate } from "@/api/types";
 
 // ── Types ──────────────────────────────────────────────────
 export type MessageRole = "user" | "agent";
@@ -39,6 +40,10 @@ interface InterviewState {
   phase: InterviewPhase;
   ontologyTerms: OntologyTerm[];
   dataBindings: DataBinding[];
+  /** Live BPMN graph state from the backend stream */
+  liveBpmnGraph: BPMNGraphUpdate | null;
+  /** Dead-end paths requiring user resolution */
+  unresolvedPaths: string[];
 
   // Actions
   addMessage: (msg: Message) => void;
@@ -46,6 +51,8 @@ interface InterviewState {
   setPhase: (phase: InterviewPhase) => void;
   addOntologyTerm: (term: OntologyTerm) => void;
   addDataBinding: (binding: DataBinding) => void;
+  setLiveBpmnGraph: (graph: BPMNGraphUpdate | null) => void;
+  setUnresolvedPaths: (paths: string[]) => void;
   reset: () => void;
 }
 
@@ -54,6 +61,8 @@ const initialState = {
   phase: "active" as InterviewPhase,
   ontologyTerms: [] as OntologyTerm[],
   dataBindings: [] as DataBinding[],
+  liveBpmnGraph: null as BPMNGraphUpdate | null,
+  unresolvedPaths: [] as string[],
 };
 
 export const useInterviewStore = create<InterviewState>((set) => ({
@@ -84,6 +93,10 @@ export const useInterviewStore = create<InterviewState>((set) => ({
         return state;
       return { dataBindings: [...state.dataBindings, binding] };
     }),
+
+  setLiveBpmnGraph: (graph) => set({ liveBpmnGraph: graph }),
+
+  setUnresolvedPaths: (paths) => set({ unresolvedPaths: paths }),
 
   reset: () => set(initialState),
 }));

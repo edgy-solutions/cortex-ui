@@ -1,7 +1,6 @@
-// ── Stream Event Protocol ─────────────────────────────────
-// The backend sends a chunked HTTP response. Each chunk is a line of text.
-// Normal text chunks are the agent's response (streamed character-by-character).
-// Special tokens trigger UI events (thinking cards, ontology lookups, etc).
+// ── Stream Event Protocol (SSE) ─────────────────────────────────
+// The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
+// Event types: text, ontology, datahub, graph_update, interview_complete, stream_end
 
 /** Special tokens the backend injects into the stream */
 export const StreamTokens = {
@@ -13,6 +12,8 @@ export const StreamTokens = {
   DATAHUB_QUERY: "<<DATAHUB_QUERY",
   /** DataHub query result: <<DATAHUB_RESULT:model:schema:healthy>> */
   DATAHUB_RESULT: "<<DATAHUB_RESULT",
+  /** Full BPMN graph update: <<GRAPH_UPDATE:json>> */
+  GRAPH_UPDATE: "<<GRAPH_UPDATE",
   /** Interview complete signal: <<INTERVIEW_COMPLETE>> */
   INTERVIEW_COMPLETE: "<<INTERVIEW_COMPLETE>>",
   /** Stream end signal: <<STREAM_END>> */
@@ -26,13 +27,24 @@ export type StreamEvent =
   | { type: "ontology_found"; category: string; label: string }
   | { type: "datahub_query"; model: string; schema: string }
   | { type: "datahub_result"; model: string; schema: string; healthy: boolean }
+  | { type: "graph_update"; graph: BPMNGraphUpdate }
   | { type: "interview_complete" }
   | { type: "stream_end" };
+
+/** BPMN graph state emitted by the backend on each turn */
+export interface BPMNGraphUpdate {
+  tasks: BPMNTask[];
+  gateways: BPMNGateway[];
+  sequence_flows: BPMNSequenceFlow[];
+  unresolved_paths: string[];
+  is_ready_to_compile: boolean;
+}
 
 /** Request payload for the interview stream endpoint */
 export interface InterviewRequest {
   message: string;
   session_id?: string;
+  current_graph_json?: string;
   context?: {
     ontology_terms: Array<{ category: string; label: string }>;
     data_bindings: Array<{ model: string; schema: string }>;
@@ -45,8 +57,12 @@ export interface InterviewRequest {
 export interface BPMNTask {
   id: string;
   name: string;
-  type: "service_task" | "user_task";
+  type: "service_task" | "user_task" | "timer_event";
   agent_endpoint: string;
+  /** IOF-MRO ontology URI grounding this task (required for service_task) */
+  ontology_class?: string;
+  /** DataHub/dbt model name grounding this task (required for service_task) */
+  data_source?: string;
 }
 
 /** A BPMN gateway — routing/branching logic */

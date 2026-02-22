@@ -21,6 +21,7 @@ Modes:
 """
 
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -91,7 +92,7 @@ class InterviewRequest(BaseModel):
     message: str
     session_id: str | None = None
     context: InterviewContext | None = None
-
+    current_graph_json: str | None = None  # Frontend sends graph state each turn
 
 
 class BPMNTask(BaseModel):
@@ -133,7 +134,7 @@ class CompileResponse(BaseModel):
     boot_log: str = ""
 
 
-# ── Session State ─────────────────────────────────────────
+# ── Session State (chat history only — graph state is frontend-owned) ──
 _session_msg_count: dict[str, int] = {}
 _session_history: dict[str, list[str]] = {}
 
@@ -213,14 +214,74 @@ def _guess_schema(model_name: str) -> str:
     return "staging"
 
 
-async def generate_baml_stream(
+def _sse(event: str, data: str) -> str:
+    """Format a Server-Sent Event line pair."""
+    return f"event: {event}\ndata: {data}\n\n"
+
+
+def _baml_graph_to_catalog(nodes: list, edges: list) -> dict:
+    """Convert BAML BPMNInterviewState nodes/edges to the BPMNPayload
+    schema used by the bpmn_catalog table (tasks, gateways, sequence_flows).
+    This ensures compilation works directly from the graph output."""
+    tasks = []
+    gateways = []
+    for n in (nodes or []):
+        node_type = n.node_type.value if hasattr(n.node_type, "value") else str(n.node_type)
+        if node_type in ("ServiceTask", "UserTask"):
+            catalog_type = "service_task" if node_type == "ServiceTask" else "user_task"
+            tasks.append({
+                "id": n.id,
+                "name": n.name,
+                "type": catalog_type,
+                "agent_endpoint": f"http://restate-agent-svc:8081/{n.id}",
+                "ontology_class": n.ontology_class,
+                "data_source": n.data_source,
+            })
+        elif node_type == "ExclusiveGateway":
+            gateways.append({
+                "id": n.id,
+                "name": n.name,
+                "type": "exclusive",
+            })
+        elif node_type == "TimerEvent":
+            tasks.append({
+                "id": n.id,
+                "name": n.name,
+                "type": "timer_event",
+                "agent_endpoint": "",
+            })
+
+    sequence_flows = [
+        {
+            "id": f"flow_{i}",
+            "source_ref": e.source_id,
+            "target_ref": e.target_id,
+            "condition_expression": e.condition_expression,
+        }
+        for i, e in enumerate(edges or [])
+    ]
+
+    return {
+        "tasks": tasks,
+        "gateways": gateways,
+        "sequence_flows": sequence_flows,
+    }
+
+
+async def generate_bpmn_baml_stream(
     request: InterviewRequest,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream an interview response using BAML + OpenRouter.
+    Stream a BPMN interview response using BAML + OpenRouter.
 
-    Iterates over BAML's partial InterviewState objects, computing deltas
-    and translating them into the <<TOKEN:...>> protocol the frontend expects.
+    Calls IterateBPMNGraph on each turn, using the frontend-provided graph state.
+    Emits SSE events:
+      event: text         — agent_reply deltas (typewriter)
+      event: ontology     — {"action": "lookup"|"found", ...}
+      event: datahub      — {"action": "query"|"result", ...}
+      event: graph_update  — full BPMNPayload-compatible graph
+      event: interview_complete
+      event: stream_end
     """
     session_id = request.session_id or "default"
 
@@ -233,6 +294,9 @@ async def generate_baml_stream(
 
     chat_history = _build_chat_history(session_id)
 
+    # Graph state from frontend (empty on first turn)
+    current_graph_json = request.current_graph_json or json.dumps({"nodes": [], "edges": []})
+
     # Fetch live grounding data from internal services
     ontology_classes, data_sources = await asyncio.gather(
         get_live_ontology(),
@@ -240,54 +304,60 @@ async def generate_baml_stream(
     )
 
     # ── Stream via BAML ──
-    stream = b.stream.ConductInterview(
+    stream = b.stream.IterateBPMNGraph(
         chat_history=chat_history,
         user_message=request.message,
+        current_graph_json=current_graph_json,
         available_ontology_classes=ontology_classes,
         available_data_sources=data_sources,
     )
 
     prev_reply = ""
-    prev_ontology: str | None = None
-    prev_dbt: str | None = None
     prev_ready = False
+    emitted_ontology: set[str] = set()
+    emitted_dbt: set[str] = set()
 
     async for partial in stream:
         # ── Text delta ──
         current_reply = partial.agent_reply or ""
         if len(current_reply) > len(prev_reply):
-            delta = current_reply[len(prev_reply) :]
-            yield delta
+            delta = current_reply[len(prev_reply):]
+            yield _sse("text", json.dumps({"content": delta}))
             prev_reply = current_reply
 
-        # ── Ontology class transition (None → value) ──
-        current_ontology = partial.ontology_class
-        if current_ontology and current_ontology != prev_ontology:
-            label = current_ontology.split(":")[-1] if ":" in current_ontology else current_ontology
-            category = _ontology_category(current_ontology)
-            yield f"\n<<ONTOLOGY_LOOKUP:{label}>>\n"
-            yield f"<<ONTOLOGY_FOUND:{category}:{current_ontology}>>\n"
-            prev_ontology = current_ontology
+        # ── Emit ontology/datahub events for NEW nodes ──
+        for node in (partial.nodes or []):
+            if node.ontology_class and node.ontology_class not in emitted_ontology:
+                label = node.ontology_class.split(":")[-1] if ":" in node.ontology_class else node.ontology_class
+                category = _ontology_category(node.ontology_class)
+                yield _sse("ontology", json.dumps({"action": "lookup", "label": label}))
+                yield _sse("ontology", json.dumps({"action": "found", "category": category, "label": node.ontology_class}))
+                emitted_ontology.add(node.ontology_class)
 
-        # ── dbt model transition (None → value) ──
-        current_dbt = partial.dbt_model
-        if current_dbt and current_dbt != prev_dbt:
-            schema = _guess_schema(current_dbt)
-            yield f"\n<<DATAHUB_QUERY:{current_dbt}:{schema}>>\n"
-            yield f"<<DATAHUB_RESULT:{current_dbt}:{schema}:true>>\n"
-            prev_dbt = current_dbt
+            if node.data_source and node.data_source not in emitted_dbt:
+                model_name = node.data_source.replace("dbt.", "")
+                schema = _guess_schema(model_name)
+                yield _sse("datahub", json.dumps({"action": "query", "model": model_name, "schema": schema}))
+                yield _sse("datahub", json.dumps({"action": "result", "model": model_name, "schema": schema, "healthy": True}))
+                emitted_dbt.add(node.data_source)
 
         # ── Ready to compile ──
         current_ready = partial.is_ready_to_compile or False
         if current_ready and not prev_ready:
-            yield "\n<<INTERVIEW_COMPLETE>>\n"
+            yield _sse("interview_complete", "{}")
             prev_ready = current_ready
 
-    # Get final response and save assistant turn to history
+    # Get final response
     final = await stream.get_final_response()
     history.append(f"Agent: {final.agent_reply}")
 
-    yield "\n<<STREAM_END>>\n"
+    # ── Convert to catalog-compatible schema and emit ──
+    graph_payload = _baml_graph_to_catalog(final.nodes, final.edges)
+    graph_payload["unresolved_paths"] = list(final.unresolved_paths or [])
+    graph_payload["is_ready_to_compile"] = final.is_ready_to_compile or False
+    yield _sse("graph_update", json.dumps(graph_payload))
+
+    yield _sse("stream_end", "{}")
 
 
 # ══════════════════════════════════════════════════════════
@@ -403,10 +473,30 @@ async def generate_mock_stream(
 
     yield "\n"
 
-    if msg_count >= 4:
-        yield "<<INTERVIEW_COMPLETE>>\n"
+    # ── Build mock graph matching catalog schema ──
+    mock_graph: dict = {
+        "tasks": [],
+        "gateways": [],
+        "sequence_flows": [],
+        "unresolved_paths": [],
+        "is_ready_to_compile": msg_count >= 4,
+    }
+    if "engine" in msg:
+        mock_graph["tasks"].append({"id": "task_1", "name": "Ingest Engine Telemetry", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_1", "ontology_class": "iof:RotatingEquipment", "data_source": "dbt.stg_engine_telemetry"})
+    if "damage" in msg or "failure" in msg:
+        mock_graph["tasks"].append({"id": "task_2", "name": "Analyze Failure Modes", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_2", "ontology_class": "iof:ImpactDamage", "data_source": "dbt.dim_failure_modes"})
+    if "schedule" in msg or "maintenance" in msg:
+        mock_graph["tasks"].append({"id": "task_3", "name": "Generate Work Orders", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_3", "ontology_class": "iof:MaintenanceSchedule", "data_source": "dbt.fct_work_orders"})
+    if len(mock_graph["tasks"]) >= 2:
+        for i in range(len(mock_graph["tasks"]) - 1):
+            mock_graph["sequence_flows"].append({"id": f"flow_{i}", "source_ref": mock_graph["tasks"][i]["id"], "target_ref": mock_graph["tasks"][i + 1]["id"]})
 
-    yield "<<STREAM_END>>\n"
+    yield _sse("graph_update", json.dumps(mock_graph))
+
+    if msg_count >= 4:
+        yield _sse("interview_complete", "{}")
+
+    yield _sse("stream_end", "{}")
 
 
 # ══════════════════════════════════════════════════════════
@@ -421,7 +511,7 @@ async def interview_stream(request: InterviewRequest):
     Automatically selects BAML (real LLM) or mock based on OPENROUTER_API_KEY.
     Returns a chunked text/event-stream response with embedded special tokens.
     """
-    generator = generate_baml_stream(request) if _USE_BAML else generate_mock_stream(request)
+    generator = generate_bpmn_baml_stream(request) if _USE_BAML else generate_mock_stream(request)
     return StreamingResponse(
         generator,
         media_type="text/event-stream",

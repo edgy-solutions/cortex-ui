@@ -15,6 +15,7 @@ import { TriggerNode } from "./nodes/TriggerNode";
 import { LogicNode } from "./nodes/LogicNode";
 import { ActionNode } from "./nodes/ActionNode";
 import { AnimatedEdge } from "./edges/AnimatedEdge";
+import { useLiveBpmnGraph } from "@/hooks/useLiveBpmnGraph";
 import { useMockWorkflowBuilder } from "@/hooks/useMockWorkflowBuilder";
 
 // Register custom types (stable references)
@@ -29,7 +30,10 @@ const edgeTypes: EdgeTypes = {
 };
 
 export function WorkflowCanvas() {
-  const { nodes, edges } = useMockWorkflowBuilder();
+  // Use live BPMN graph from the backend stream, fall back to mock
+  const liveGraph = useLiveBpmnGraph();
+  const mockGraph = useMockWorkflowBuilder();
+  const { nodes, edges } = liveGraph ?? mockGraph;
 
   // Default viewport centers the graph
   const defaultViewport = useMemo(
@@ -53,7 +57,7 @@ export function WorkflowCanvas() {
       >
         <GitBranch className="w-4 h-4 text-neon-blue" />
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-neon-blue/70">
-          Holographic Blueprint
+          {liveGraph ? "Live BPMN Blueprint" : "Holographic Blueprint"}
         </span>
       </motion.div>
 
@@ -65,7 +69,7 @@ export function WorkflowCanvas() {
         defaultViewport={defaultViewport}
         nodesDraggable={true}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable={true}
         panOnScroll
         zoomOnScroll
         fitView={false}

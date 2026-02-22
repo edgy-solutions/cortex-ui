@@ -2,7 +2,9 @@
 
 A cinematic **"Dark Glass & Neon"** control center for interrogating an autonomous AI Agent mesh. Think futuristic mission control — not a corporate dashboard.
 
-The Cortex lets you converse with an AI agent that scans industrial ontologies (IOF-MRO), binds data models from DataHub, and compiles the results into a Dagster/Restate pipeline — all with a cyberpunk aesthetic featuring glassmorphism panels, neon accents, typewriter streaming, and holographic visualizations.
+The Cortex lets you converse with an AI agent that iteratively builds a BPMN workflow graph through Socratic questioning. The agent scans industrial ontologies (IOF-MRO), binds data models from DataHub, and compiles the results into a Dagster/Restate pipeline — all with a cyberpunk aesthetic featuring glassmorphism panels, neon accents, typewriter streaming, and holographic visualizations.
+
+The interview is driven by a [BAML contract](backend/baml_src/bpmn_interview.baml) (`IterateBPMNGraph`) that enforces semantic grounding: every automated step (ServiceTask) must be linked to a real ontology class and data source.
 
 ## What It Does
 
@@ -72,6 +74,7 @@ npm run dev
 | Icons | Lucide React |
 | Fonts | JetBrains Mono, Inter |
 | Backend | FastAPI (Python), StreamingResponse |
+| LLM Contract | BAML (`bpmn_interview.baml`) via OpenRouter |
 | Python Tooling | uv (package manager) |
 
 ## Project Structure

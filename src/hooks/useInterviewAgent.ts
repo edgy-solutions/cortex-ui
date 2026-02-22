@@ -27,10 +27,13 @@ export function useInterviewAgent() {
     messages,
     ontologyTerms,
     dataBindings,
+    liveBpmnGraph,
     addMessage,
     updateMessage,
     addOntologyTerm,
     addDataBinding,
+    setLiveBpmnGraph,
+    setUnresolvedPaths,
     setPhase,
   } = useInterviewStore();
 
@@ -146,6 +149,17 @@ export function useInterviewAgent() {
           break;
         }
 
+        case "graph_update": {
+          // Update the live BPMN graph in the store
+          setLiveBpmnGraph(event.graph);
+          setUnresolvedPaths(event.graph.unresolved_paths ?? []);
+          // Auto-transition to blueprint when graph is ready to compile
+          if (event.graph.is_ready_to_compile) {
+            setPhase("blueprint");
+          }
+          break;
+        }
+
         case "stream_end": {
           // Mark the agent message as no longer streaming
           if (agentId) {
@@ -157,7 +171,7 @@ export function useInterviewAgent() {
         }
       }
     },
-    [messages, addOntologyTerm, addDataBinding, updateMessage, setPhase]
+    [messages, addOntologyTerm, addDataBinding, updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths]
   );
 
   // Main mutation that handles the streaming request
@@ -192,10 +206,11 @@ export function useInterviewAgent() {
       };
       addMessage(agentMsg);
 
-      // Build request
+      // Build request with current graph state
       const request: InterviewRequest = {
         message: userInput,
         session_id: sessionId,
+        current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         context: buildContext(),
       };
 

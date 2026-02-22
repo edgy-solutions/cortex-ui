@@ -66,6 +66,7 @@
 - Backend code lives in `backend/`. It is a separate Python service.
 - The backend is the ONLY gateway to internal services. The frontend NEVER calls ontology/DataHub/OpenRouter directly.
 - Streaming endpoint: `POST /interview/stream` returns `StreamingResponse` with special tokens.
+- BAML contract: `bpmn_interview.baml` defines `IterateBPMNGraph`. The old `ConductInterview` / `interviewer.baml` has been removed.
 - Compilation endpoint: `POST /workflow/compile` accepts `BPMNPayload` JSON, upserts to Postgres, reloads Dagster, returns `boot_log` + `run_id`.
 - BPMN endpoints: `POST /bpmn/save`, `GET /bpmn/catalog`.
 - BFF proxy: `GET /ontology/classes` and `GET /datahub/tables` proxy to internal services.
@@ -93,3 +94,8 @@
 - React Flow node type `logic` maps to BPMN gateways. Node types `trigger` and `action` map to BPMN tasks.
 - `synthesize_boot_sequence()` generates terminal boot logs — do not hardcode UI strings in frontend components, use backend-generated `boot_log` responses.
 - Dagster workspace reloads are fire-and-forget. Failures are logged, not raised.
+- The BAML contract enforces semantic grounding: every `ServiceTask` MUST have `ontology_class` + `data_source` from the injected lists. Do not relax this constraint.
+- The backend is stateless for graph state. The frontend sends `current_graph_json` each turn and receives `graph_update` SSE events back.
+- The `<<GRAPH_UPDATE:json>>` stream token carries the full graph state. Frontend should parse this to update the React Flow canvas.
+- The canvas uses `useLiveBpmnGraph` hook (falls back to `useMockWorkflowBuilder` when no live graph exists). Node type mapping: `service_task`/`user_task` → `action`, `exclusive` → `logic`, `timer_event` → `trigger`.
+- `ActionNode` displays a glassmorphism semantic HUD tooltip on hover showing `ontology_class` + `data_source` when available.

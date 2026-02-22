@@ -22,7 +22,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 
 ### Adding new features
 
-- **New chat responses**: Add keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` for offline mode, and in `backend/interviewer_agent.py` → `generate_interview_stream()` for the real backend.
+- **New chat responses**: Add keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` for offline mode. In BAML mode, all responses flow through `IterateBPMNGraph` in `backend/baml_src/bpmn_interview.baml`.
 - **New node types**: Create in `src/components/Blueprint/nodes/`, register in `WorkflowCanvas.tsx` `nodeTypes` object.
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
@@ -68,6 +68,8 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | Phase-based view switching | `src/App.tsx` |
 | Global theme & CSS | `src/index.css` |
 | Backend API + BPMN routes | `backend/interviewer_agent.py` |
+| BAML BPMN contract | `backend/baml_src/bpmn_interview.baml` |
+| Live BPMN → React Flow hook | `src/hooks/useLiveBpmnGraph.ts` |
 | Database session layer | `backend/database.py` |
 | BPMN catalog ORM model | `backend/models.py` |
 | Database schema DDL | `backend/sql/001_create_bpmn_catalog.sql` |
@@ -110,3 +112,12 @@ psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 - React Flow node type `logic` → BPMN gateway. Types `trigger`/`action` → BPMN task. This mapping lives in `useCompileWorkflow.ts`.
 - The `bpmn_catalog` table is shared with the `invincible-agent` Dagster backend. Both services use the same Postgres database (`iagent`). Do not change the schema without coordinating with that project.
 - `DATABASE_URL` and `DAGSTER_WEBSERVER_URL` are configured in `backend/.env`.
+
+## BAML Contract Rules
+
+- The BAML contract is `bpmn_interview.baml` → `IterateBPMNGraph`. The old `interviewer.baml` / `ConductInterview` has been removed.
+- `IterateBPMNGraph` receives: `chat_history`, `user_message`, `current_graph_json`, `available_ontology_classes`, `available_data_sources`
+- It returns `BPMNInterviewState`: `nodes[]`, `edges[]`, `unresolved_paths[]`, `is_ready_to_compile`, `agent_reply`
+- **Strict semantic grounding**: Every `ServiceTask` must have `ontology_class` AND `data_source` from injected lists.
+- The graph state is persisted per session in `_session_graph` and passed back each turn.
+- A `<<GRAPH_UPDATE:json>>` token is emitted at the end of each turn with the full graph.

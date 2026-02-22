@@ -14,7 +14,9 @@
 - Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
 - Fonts: JetBrains Mono (code/data), Inter (UI text)
 - Backend: FastAPI (Python) with StreamingResponse for SSE-like streaming
-- API Protocol: Chunked HTTP with special tokens (<<ONTOLOGY_LOOKUP>>, <<DATAHUB_QUERY>>, etc.)
+- BAML: Contract-driven LLM interaction (bpmn_interview.baml → IterateBPMNGraph)
+- API Protocol: Server-Sent Events (SSE) with typed events (text, ontology, datahub, graph_update, etc.)
+- Live Canvas: `useLiveBpmnGraph` hook maps SSE graph_update → React Flow nodes/edges in real time
 
 ## Architecture Overview
 
@@ -108,18 +110,20 @@ backend/
 
 ## Stream Event Protocol
 
-The backend sends newline-delimited chunks. Special tokens trigger UI animations:
+The backend sends **Server-Sent Events** (SSE) — each event has `event: <type>` and `data: <json>`.
 
 ```
-<<ONTOLOGY_LOOKUP:label>>              → Shows "Scanning..." thinking card
-<<ONTOLOGY_FOUND:category:label>>      → Marks step done, adds HUD tag
-<<DATAHUB_QUERY:model:schema>>         → Shows "Querying..." with loading bar
-<<DATAHUB_RESULT:model:schema:healthy>> → Marks step done, adds data binding
-<<INTERVIEW_COMPLETE>>                 → Transitions to blueprint phase
-<<STREAM_END>>                         → Marks message as done
+event: text               data: {"content": "..."}
+event: ontology           data: {"action": "lookup", "label": "..."}
+event: ontology           data: {"action": "found", "category": "...", "label": "..."}
+event: datahub            data: {"action": "query", "model": "...", "schema": "..."}
+event: datahub            data: {"action": "result", "model": "...", "schema": "...", "healthy": true}
+event: graph_update       data: {"tasks":[], "gateways":[], "sequence_flows":[], "unresolved_paths":[], "is_ready_to_compile": false}
+event: interview_complete data: {}
+event: stream_end         data: {}
 ```
 
-Plain text between tokens is appended to the agent message (streamed).
+The `graph_update` event carries a `BPMNPayload`-compatible payload (tasks/gateways/sequence_flows) plus `unresolved_paths` and `is_ready_to_compile`. This aligns directly with the `bpmn_catalog` schema for seamless compilation.
 
 ## Running
 
@@ -165,6 +169,15 @@ DAGSTER_WEBSERVER_URL=http://localhost:3000
 
 The backend shares the `bpmn_catalog` PostgreSQL table with the `invincible-agent` Dagster backend.
 
+### BAML Contract: `bpmn_interview.baml`
+
+The LLM contract uses `IterateBPMNGraph` (replaces the old `ConductInterview`):
+- Accepts: `chat_history`, `user_message`, `current_graph_json`, `available_ontology_classes`, `available_data_sources`
+- Returns: `BPMNInterviewState` { nodes[], edges[], unresolved_paths[], is_ready_to_compile, agent_reply }
+- **Strict Rule**: Every `ServiceTask` node MUST have `ontology_class` + `data_source` from the injected lists
+- Session graph stored in-memory per `session_id` and passed back each turn as `current_graph_json`
+
+### Endpoints
 - `POST /workflow/compile` — Accepts a `BPMNPayload` (tasks, gateways, sequence_flows), upserts to Postgres, triggers Dagster workspace reload via GraphQL, and returns a `boot_log` terminal string.
 - `POST /bpmn/save` — Direct BPMN upsert + boot sequence (Phase 1 endpoint).
 - `GET /bpmn/catalog` — Lists all active workflows.

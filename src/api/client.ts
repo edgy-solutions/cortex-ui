@@ -1,6 +1,5 @@
 import axios from "axios";
 import {
-  StreamTokens,
   type StreamEvent,
   type InterviewRequest,
   type CompileRequest,
@@ -15,68 +14,72 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Stream Parser ─────────────────────────────────────────
+// ── SSE Stream Parser ─────────────────────────────────────
 /**
- * Parses a raw chunk from the backend stream into a StreamEvent.
- * The backend sends lines in one of two forms:
- *   1) Plain text — forwarded as `{ type: "text", content: "..." }`
- *   2) Token lines — `<<TOKEN:arg1:arg2>>` parsed into structured events
+ * Parses a single SSE block (event + data) into a StreamEvent.
+ * SSE format: "event: <type>\ndata: <json>\n\n"
  */
-function parseStreamChunk(raw: string): StreamEvent | null {
-  const line = raw.trim();
-  if (!line) return null;
+function parseSSE(block: string): StreamEvent | null {
+  let eventType = "";
+  let dataStr = "";
 
-  // ── Special tokens ──
-  if (line === StreamTokens.INTERVIEW_COMPLETE) {
-    return { type: "interview_complete" };
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event: ")) {
+      eventType = line.slice(7).trim();
+    } else if (line.startsWith("data: ")) {
+      dataStr = line.slice(6);
+    }
   }
 
-  if (line === StreamTokens.STREAM_END) {
-    return { type: "stream_end" };
-  }
+  if (!eventType) return null;
 
-  if (line.startsWith(StreamTokens.ONTOLOGY_LOOKUP)) {
-    // <<ONTOLOGY_LOOKUP:iof:RotatingEquipment>>
-    const inner = line.slice(StreamTokens.ONTOLOGY_LOOKUP.length + 1, -2);
-    return { type: "ontology_lookup", label: inner };
+  try {
+    switch (eventType) {
+      case "text": {
+        const parsed = JSON.parse(dataStr);
+        return { type: "text", content: parsed.content ?? "" };
+      }
+      case "ontology": {
+        const parsed = JSON.parse(dataStr);
+        if (parsed.action === "lookup") {
+          return { type: "ontology_lookup", label: parsed.label };
+        }
+        if (parsed.action === "found") {
+          return { type: "ontology_found", category: parsed.category, label: parsed.label };
+        }
+        return null;
+      }
+      case "datahub": {
+        const parsed = JSON.parse(dataStr);
+        if (parsed.action === "query") {
+          return { type: "datahub_query", model: parsed.model, schema: parsed.schema };
+        }
+        if (parsed.action === "result") {
+          return { type: "datahub_result", model: parsed.model, schema: parsed.schema, healthy: parsed.healthy };
+        }
+        return null;
+      }
+      case "graph_update": {
+        const graph = JSON.parse(dataStr);
+        return { type: "graph_update", graph };
+      }
+      case "interview_complete":
+        return { type: "interview_complete" };
+      case "stream_end":
+        return { type: "stream_end" };
+      default:
+        return null;
+    }
+  } catch (e) {
+    console.warn("Failed to parse SSE data:", eventType, dataStr, e);
+    return null;
   }
-
-  if (line.startsWith(StreamTokens.ONTOLOGY_FOUND)) {
-    // <<ONTOLOGY_FOUND:Concept:iof:ImpactDamage>>
-    const inner = line.slice(StreamTokens.ONTOLOGY_FOUND.length + 1, -2);
-    const sepIdx = inner.indexOf(":");
-    const category = inner.slice(0, sepIdx);
-    const label = inner.slice(sepIdx + 1);
-    return { type: "ontology_found", category, label };
-  }
-
-  if (line.startsWith(StreamTokens.DATAHUB_QUERY)) {
-    // <<DATAHUB_QUERY:stg_maintenance_logs:staging>>
-    const inner = line.slice(StreamTokens.DATAHUB_QUERY.length + 1, -2);
-    const [model, schema] = inner.split(":");
-    return { type: "datahub_query", model, schema };
-  }
-
-  if (line.startsWith(StreamTokens.DATAHUB_RESULT)) {
-    // <<DATAHUB_RESULT:stg_maintenance_logs:staging:true>>
-    const inner = line.slice(StreamTokens.DATAHUB_RESULT.length + 1, -2);
-    const parts = inner.split(":");
-    return {
-      type: "datahub_result",
-      model: parts[0],
-      schema: parts[1],
-      healthy: parts[2] === "true",
-    };
-  }
-
-  // ── Plain text ──
-  return { type: "text", content: raw };
 }
 
 // ── Streaming Interview ───────────────────────────────────
 /**
  * Connects to POST /interview/stream and yields parsed StreamEvents.
- * Uses the Fetch API (not axios) for ReadableStream support.
+ * The backend sends Server-Sent Events (SSE) format.
  *
  * @param request - The interview request payload
  * @param onEvent - Callback fired for each parsed stream event
@@ -113,13 +116,15 @@ export async function streamInterviewResponse(
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Process complete lines (delimited by newline)
-      const lines = buffer.split("\n");
-      // Keep the last incomplete fragment in the buffer
-      buffer = lines.pop() ?? "";
+      // SSE blocks are separated by double newlines
+      const blocks = buffer.split("\n\n");
+      // Keep the last incomplete block in the buffer
+      buffer = blocks.pop() ?? "";
 
-      for (const line of lines) {
-        const event = parseStreamChunk(line);
+      for (const block of blocks) {
+        const trimmed = block.trim();
+        if (!trimmed) continue;
+        const event = parseSSE(trimmed);
         if (event) {
           onEvent(event);
           if (event.type === "stream_end") return;
@@ -129,7 +134,7 @@ export async function streamInterviewResponse(
 
     // Process any remaining buffer
     if (buffer.trim()) {
-      const event = parseStreamChunk(buffer);
+      const event = parseSSE(buffer.trim());
       if (event) onEvent(event);
     }
   } finally {

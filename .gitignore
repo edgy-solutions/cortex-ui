@@ -23,7 +23,7 @@ __pycache__
 backend/.env
 
 # BAML generated client (regenerate with: baml-cli generate)
-baml_client/
+#baml_client/
 
 # Editor directories and files
 .vscode/*
