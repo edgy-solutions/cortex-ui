@@ -22,3 +22,11 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
 ]
+
+# Prevent setuptools from auto-discovering sql/, baml_src/, baml_client/ as packages
+[tool.setuptools]
+py-modules = ["interviewer_agent", "database", "models"]
+
+[tool.setuptools.packages]
+find = {exclude = ["sql", "baml_src", "baml_client"]}
+
