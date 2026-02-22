@@ -11,10 +11,10 @@ name: Build Containers
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   REGISTRY: ghcr.io
@@ -63,7 +63,7 @@ jobs:
             --publish=${{ github.event_name != 'pull_request' }}
 
       - name: Tag latest
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }}
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }} \
@@ -107,7 +107,7 @@ jobs:
             --publish=${{ github.event_name != 'pull_request' }}
 
       - name: Tag latest
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend:${{ steps.tag.outputs.tag }}
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend:${{ steps.tag.outputs.tag }} \
