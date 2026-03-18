@@ -48,8 +48,8 @@ logger = logging.getLogger("cortex")
 load_dotenv()
 
 _DAGSTER_WEBSERVER_URL = os.getenv("DAGSTER_WEBSERVER_URL", "http://localhost:3000")
-_DAGSTER_REPOSITORY = "iagent"
-_DAGSTER_LOCATION = "iagent"
+_DAGSTER_REPOSITORY = os.getenv("DAGSTER_REPOSITORY", "__repository__")
+_DAGSTER_LOCATION = os.getenv("DAGSTER_LOCATION", "iagent.definitions")
 
 # ── Lifespan ──────────────────────────────────────────────
 
@@ -130,33 +130,29 @@ def _sse(event: str, data: str) -> str:
 # Dagster GraphQL Orchestration
 # ══════════════════════════════════════════════════════════
 
-async def _launch_supervisor_job(query: str, thread_id: str) -> str | None:
+async def _launch_supervisor_job(query: str, thread_id: str, persona: str = "PROCESS_ENGINEER") -> str | None:
     """Launch the supervisor_query_job on Dagster."""
     mutation = """
-    mutation LaunchSupervisor($userQuery: String!, $threadId: String!) {
+    mutation LaunchSupervisor($repo: String!, $loc: String!, $runConfig: RunConfigData!) {
       launchRun(
         executionParams: {
           selector: {
-            repositoryName: "iagent"
-            repositoryLocationName: "iagent"
+            repositoryName: $repo
+            repositoryLocationName: $loc
             jobName: "supervisor_query_job"
           }
-          runConfigData: {
-            ops: {
-              create_task_plan: {
-                config: {
-                  user_query: $userQuery
-                  thread_id: $threadId
-                }
-              }
-            }
-          }
+          runConfigData: $runConfig
         }
       ) {
         __typename
         ... on LaunchRunSuccess {
           run {
             runId
+          }
+        }
+        ... on RunConfigValidationInvalid {
+          errors {
+            message
           }
         }
         ... on PythonError {
@@ -166,13 +162,44 @@ async def _launch_supervisor_job(query: str, thread_id: str) -> str | None:
       }
     }
     """
+    
+    run_config = {
+        "ops": {
+            "create_task_plan": {
+                "config": {
+                    "user_query": query,
+                    "thread_id": thread_id,
+                    "persona": persona
+                }
+            },
+            "synthesize_stateful": {
+                "config": {
+                    "user_query": query,
+                    "thread_id": thread_id,
+                    "persona": persona
+                }
+            },
+            "generate_ui_payload": {
+                "config": {
+                    "user_query": query,
+                    "thread_id": thread_id,
+                    "persona": persona
+                }
+            }
+        }
+    }
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 f"{_DAGSTER_WEBSERVER_URL}/graphql",
                 json={
                     "query": mutation,
-                    "variables": {"userQuery": query, "threadId": thread_id},
+                    "variables": {
+                        "repo": _DAGSTER_REPOSITORY,
+                        "loc": _DAGSTER_LOCATION,
+                        "runConfig": run_config,
+                    },
                 },
             )
             resp.raise_for_status()
