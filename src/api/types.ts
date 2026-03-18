@@ -2,6 +2,17 @@
 // The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
 // Event types: status, final_payload, stream_end
 
+export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT';
+export type SeverityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
+
+export interface SemanticUIContainer {
+  archetype: SemanticArchetype;
+  subject_concept: string;
+  severity?: SeverityLevel;
+  entities: string; // stringified JSON
+  relationships?: string; // stringified JSON
+}
+
 /** Parsed stream event types */
 export type StreamEvent =
   | { 
@@ -10,7 +21,7 @@ export type StreamEvent =
       category?: "Concept" | "Process" | "Asset"; 
       label: string;
     }
-  | { type: "final_payload"; payload: any }
+  | { type: "final_payload"; payload: SemanticUIContainer }
   | { type: "stream_end" };
 
 /** BPMN graph state emitted by the backend on each turn */

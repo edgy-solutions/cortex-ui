@@ -3,6 +3,7 @@ import { User, Bot } from "lucide-react";
 import type { Message } from "@/store/useInterviewStore";
 import { ThinkingCard } from "./ThinkingCard";
 import { WarningCard } from "./WarningCard";
+import { SemanticInterpreter } from "../registry/SemanticInterpreter";
 
 interface MessageBubbleProps {
   message: Message;
@@ -55,15 +56,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* Error state */}
-        {!isUser && message.error && (
+        {/* Error state (Legacy API Error) */}
+        {!isUser && message.error && !message.payload && (
           <WarningCard 
             error={message.error} 
             onRetry={() => {
               // Extract the last user message to retry
-              // This is a bit of a shortcut, ideally we'd pass the retry handler down
             }} 
           />
+        )}
+
+        {/* Semantic Intent Rendering */}
+        {!isUser && message.payload && (
+          <div className="w-full mt-2">
+            <SemanticInterpreter payload={message.payload} />
+          </div>
         )}
       </div>
 

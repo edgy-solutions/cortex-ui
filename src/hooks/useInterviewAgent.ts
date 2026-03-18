@@ -83,12 +83,13 @@ export function useInterviewAgent() {
         }
 
         case "final_payload": {
-          // Engine F has returned the final orchestrated state.
-          // We treat the React Flow Canvas as a dumb renderer for this BPMN model.
-          setLiveBpmnGraph(event.payload);
-          setUnresolvedPaths(event.payload.unresolved_paths ?? []);
+          // Engine F has returned the final orchestrated semantic payload.
+          // We update the agent message so the SemanticInterpreter can render it.
+          if (agentId) {
+            updateMessage(agentId, { payload: event.payload, isStreaming: false });
+          }
           
-          // Force transition to blueprint phase to show the results
+          // Transition to blueprint phase to show the results
           setPhase("blueprint");
           break;
         }
