@@ -12,19 +12,17 @@
 - Data Fetching: TanStack Query (React Query) + axios
 - Icons: Lucide React
 - Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
-- Fonts: JetBrains Mono (code/data), Inter (UI text)
-- Backend: FastAPI (Python) with StreamingResponse for SSE-like streaming
-- BAML: Contract-driven LLM interaction (bpmn_interview.baml → IterateBPMNGraph)
-- API Protocol: Server-Sent Events (SSE) with typed events (text, ontology, datahub, graph_update, etc.)
-- Live Canvas: `useLiveBpmnGraph` hook maps SSE graph_update → React Flow nodes/edges in real time
+- Fonts: JetBrains Mono (code/data), Inter (UI tex- Backend: FastAPI (Python) with StreamingResponse for Dagster polling
+- API Protocol: Server-Sent Events (SSE) with typed events (status, final_payload, stream_end)
+- Live Canvas: `useLiveBpmnGraph` hook acts as a dumb renderer for pre-laid out mesh payloads
 
 ## Architecture Overview
 
 The app has three main phases, controlled by `InterviewPhase` in the Zustand store:
 
-1. **active** — User chats with the mock agent via the Neural Stream. Ontology terms and data bindings accumulate in the HUD sidebar.
-2. **blueprint** — After 4+ agent responses, the Neural Stream swaps to the Holographic Blueprint (React Flow canvas) showing a node graph of the generated workflow.
-3. **compiling** → **complete** — User clicks "Compile Workflow" triggering a full-screen matrix-style code scroll overlay, ending with a "System Online" success state.
+1. **active** — UI proxies user prompts to the Dagster `supervisor_query_job`. Real-time "Thinking Cards" are driven by SSE status events polled from Dagster's `stepStats`.
+2. **blueprint** — Upon job completion, the backend streams a `final_payload` containing the orchestrated UI state (BPMN graph). The canvas renders this as a Passive Renderer.
+3. **compiling** → **complete** — User clicks "Compile Workflow" triggering the final deployment sequence to Restate.
 
 ## File Map
 
@@ -35,153 +33,80 @@ src/
 ├── index.css                         # Tailwind v4, @theme neon colors, glass utilities, keyframes
 │
 ├── store/
-│   └── useInterviewStore.ts          # Zustand store: messages, phase, ontologyTerms, dataBindings
+│   └── useInterviewStore.ts          # Zustand store: messages, phase, telemetry
 │
 ├── api/
-│   ├── types.ts                      # Stream event protocol, BPMN payload models (BPMNTask, BPMNGateway, BPMNSequenceFlow, BPMNPayload), CompileRequest/Response
-│   └── client.ts                     # API client: streamInterviewResponse(), compileWorkflow(), healthCheck()
+│   ├── types.ts                      # Proxy SSE protocol, BPMN models, CompileRequest/Response
+│   └── client.ts                     # API client: SSE parser, healthCheck()
 │
 ├── hooks/
-│   ├── useAgent.ts                   # Unified hook: auto-switches between real API and mock based on backend health
-│   ├── useInterviewAgent.ts          # Real API streaming hook (TanStack Query mutation + stream parser)
-│   ├── useCompileWorkflow.ts         # Compilation mutation hook: maps React Flow nodes → BPMNPayload, exposes bootLog
+│   ├── useAgent.ts                   # Gateway hook: switches between real Mesh and mock fallback
+│   ├── useInterviewAgent.ts          # Mesh proxy hook (SSE polling consumer)
+│   ├── useCompileWorkflow.ts         # Final deployment mutation
 │   ├── useMockAgent.ts               # Offline fallback: simulates streaming responses locally
 │   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
 │
 ├── components/
-│   ├── Layout.tsx                    # App shell: header + two-column layout (main + HUD sidebar)
+│   ├── Layout.tsx                    # App shell: header + two-column layout
 │   │
 │   ├── NeuralStream/
-│   │   ├── NeuralStream.tsx          # Scrollable message list with auto-scroll
-│   │   ├── MessageBubble.tsx         # User/agent message rendering, typewriter cursor
-│   │   ├── ThinkingCard.tsx          # Holographic card with ontology scan + DataHub query animations
-│   │   └── InputBar.tsx              # Glowing neon input bar with gradient focus ring
+│   │   ├── NeuralStream.tsx          # Scrollable Message list
+│   │   ├── MessageBubble.tsx         # User/agent bubble, warning card for failures
+│   │   ├── ThinkingCard.tsx          # Dynamic card reflecting Dagster step statuses
+│   │   └── WarningCard.tsx           # Critical failure visualization
 │   │
 │   ├── HUD/
-│   │   ├── HUD.tsx                   # Right sidebar: ontology map + data bindings + compile button
-│   │   ├── OntologyMap.tsx           # Extracted ontology terms as color-coded glowing tags
-│   │   └── DataBindings.tsx          # dbt model list with green/red health status dots
+│   │   ├── HUD.tsx                   # Right sidebar: ontology + bindings + compile
 │   │
 │   ├── Blueprint/
-│   │   ├── WorkflowCanvas.tsx        # React Flow instance with dark dot background, custom controls
-│   │   ├── nodes/
-│   │   │   ├── TriggerNode.tsx       # Circular pulse node (green) — input sources
-│   │   │   ├── LogicNode.tsx         # Diamond-shaped glow node (blue) — ontology checks
-│   │   │   └── ActionNode.tsx        # Rectangular node (purple) — services/actions, glitch on hover
-│   │   └── edges/
-│   │       └── AnimatedEdge.tsx      # Pulsing SVG gradient edge simulating data flow
+│   │   ├── WorkflowCanvas.tsx        # React Flow Dumb Renderer instance
 │   │
 │   └── Compilation/
-│       ├── CompileButton.tsx         # Gradient-glow button, calls compile hook, passes bootLog to overlay
-│       └── CompilationOverlay.tsx    # Full-screen terminal boot sequence with color-coded line rendering
-
+│       ├── CompileButton.tsx         # Triggers final mesh compilation
+│       └── CompilationOverlay.tsx    # Terminal boot sequence playback
+│
 backend/
-├── interviewer_agent.py              # FastAPI BFF gateway: streaming, /workflow/compile (upsert + Dagster reload), /bpmn/*
-├── database.py                       # Async SQLAlchemy engine + get_db() FastAPI dependency
-├── models.py                         # SQLAlchemy ORM model for bpmn_catalog table
-├── pyproject.toml                    # Python deps (fastapi, sqlalchemy, asyncpg, httpx, etc.)
-├── baml_src/                         # BAML definitions (LLM contract + OpenRouter client)
+├── interviewer_agent.py              # Dagster Proxy BFF: GraphQL polling loop + SSE generator
+├── database.py                       # SQLAlchemy session layer
+├── models.py                         # BPMN Catalog ORM
+├── pyproject.toml                    # Python deps (httpx, sqlalchemy, etc.)
 ├── sql/
-│   └── 001_create_bpmn_catalog.sql   # DDL: bpmn_catalog table + trigger + index
-├── .env                              # Backend secrets + DATABASE_URL + DAGSTER_WEBSERVER_URL
-└── .env.example                      # Template for backend env vars
+│   └── 001_create_bpmn_catalog.sql   # Shared schema with Dagster
+└── .env                              # DATABASE_URL + DAGSTER_WEBSERVER_URL
 ```
 
 ## Key Patterns
 
-- **Glass panels**: Use `.glass-panel` or `.glass-panel-sm` CSS classes for translucent containers with backdrop blur.
-- **Neon colors**: Available as Tailwind classes — `text-neon-blue`, `bg-neon-purple/20`, `border-neon-green/30`, etc. Defined in `@theme` block in index.css.
-- **Animations**: Custom Tailwind animations — `animate-pulse-neon`, `animate-glow`, `animate-breathe`. Use Framer Motion for entrance/exit animations on components.
-- **Custom node types**: React Flow nodes are registered as `trigger`, `logic`, `action` in WorkflowCanvas. Each accepts a `delay` data prop for sequential build-sequence animation.
-- **API integration**: Components use `useAgent()` which auto-detects backend availability. Falls back to `useMockAgent` when offline.
-- **Stream protocol**: Backend sends newline-delimited chunks. Plain text = agent response. `<<TOKEN:args>>` = visual triggers (ontology lookup, DataHub query, etc.).
-- **Mock fallback**: When backend is unavailable, `useMockAgent` provides identical UX with local keyword detection.
+- **API integration**: Components use `useAgent()` which auto-detects backend availability.
+- **Stream protocol**: Backend sends newline-delimited SSE chunks. `event: status` = thinking card progress. `event: final_payload` = full server-driven UI state.
+- **Mock fallback**: `useMockAgent` provide identical layout for offline demos.
 
 ## Zustand Store Shape
 
 ```
 {
-  messages: Message[]           // Chat history (user + agent)
+  messages: Message[]           // Chat history with failure tracking
   phase: InterviewPhase         // "active" | "blueprint" | "compiling" | "complete"
-  ontologyTerms: OntologyTerm[] // Extracted concepts { category, label }
-  dataBindings: DataBinding[]   // Identified dbt models { model, schema, healthy }
+  liveBpmnGraph: BPMNGraph      // Orchestrated state from Engine F
 }
 ```
 
 ## Stream Event Protocol
 
-The backend sends **Server-Sent Events** (SSE) — each event has `event: <type>` and `data: <json>`.
+The backend proxies the Dagster supervisor job and emits the following SSE events:
 
-```
-event: text               data: {"content": "..."}
-event: ontology           data: {"action": "lookup", "label": "..."}
-event: ontology           data: {"action": "found", "category": "...", "label": "..."}
-event: datahub            data: {"action": "query", "model": "...", "schema": "..."}
-event: datahub            data: {"action": "result", "model": "...", "schema": "...", "healthy": true}
-event: graph_update       data: {"tasks":[], "gateways":[], "sequence_flows":[], "unresolved_paths":[], "is_ready_to_compile": false}
-event: interview_complete data: {}
-event: stream_end         data: {}
-```
+- `event: status`           data: `{"action": "think|found|error", "label": "..."}`
+- `event: final_payload`    data: `{...BPMN Graph UI State...}`
+- `event: stream_end`       data: `{}`
 
-The `graph_update` event carries a `BPMNPayload`-compatible payload (tasks/gateways/sequence_flows) plus `unresolved_paths` and `is_ready_to_compile`. This aligns directly with the `bpmn_catalog` schema for seamless compilation.
+## Architecture: Dagster Proxy (Polyglot Mesh)
 
-## Running
+The frontend is a **Dumb Passive Renderer**. It never makes decisions about orchestration.
+The backend is an **Orchestrator Proxy** — it triggers Dagster, polls for status, and streams the results.
 
-```bash
-# Frontend
-npm install
-npm run dev          # http://localhost:5173
-npm run build        # Production build
-
-# Backend (optional — frontend falls back to mock mode)
-cd backend
-uv sync
-uv run uvicorn interviewer_agent:app --reload --port 8000
-```
-
-## Architecture: Backend-for-Frontend (BFF)
-
-The frontend is "dumb" — it only talks to the FastAPI backend on port 8000.
-The backend is "smart" — it holds all secrets, calls internal services, and proxies data.
-
-- Frontend NEVER calls ontology/DataHub services directly.
-- Frontend `.env` contains ONLY `VITE_API_URL`.
-- Backend `.env` contains `OPENROUTER_API_KEY`, `ONTOLOGY_SERVICE_URL`, `DATAHUB_SERVICE_URL`.
-- BFF proxy routes: `GET /ontology/classes`, `GET /datahub/tables`.
-
-## Environment Variables
-
-Frontend (`.env` at project root — bundled into client JS by Vite):
-```
-VITE_API_URL=http://localhost:8000
-```
-
-Backend (`backend/.env` — server-side only, NEVER exposed to browser):
-```
-OPENROUTER_API_KEY=sk-or-...
-ONTOLOGY_SERVICE_URL=http://localhost:8084
-DATAHUB_SERVICE_URL=http://localhost:8085
-DATABASE_URL=postgresql+asyncpg://iagent:iagent@localhost:5432/iagent
-DAGSTER_WEBSERVER_URL=http://localhost:3000
-```
-
-## BPMN Catalog Integration
-
-The backend shares the `bpmn_catalog` PostgreSQL table with the `invincible-agent` Dagster backend.
-
-### BAML Contract: `bpmn_interview.baml`
-
-The LLM contract uses `IterateBPMNGraph` (replaces the old `ConductInterview`):
-- Accepts: `chat_history`, `user_message`, `current_graph_json`, `available_ontology_classes`, `available_data_sources`
-- Returns: `BPMNInterviewState` { nodes[], edges[], unresolved_paths[], is_ready_to_compile, agent_reply }
-- **Strict Rule**: Every `ServiceTask` node MUST have `ontology_class` + `data_source` from the injected lists
-- Session graph stored in-memory per `session_id` and passed back each turn as `current_graph_json`
-
-### Endpoints
-- `POST /workflow/compile` — Accepts a `BPMNPayload` (tasks, gateways, sequence_flows), upserts to Postgres, triggers Dagster workspace reload via GraphQL, and returns a `boot_log` terminal string.
-- `POST /bpmn/save` — Direct BPMN upsert + boot sequence (Phase 1 endpoint).
-- `GET /bpmn/catalog` — Lists all active workflows.
-- `synthesize_boot_sequence()` — Generates a multi-line terminal boot log with per-task `[AGENT]` provisioning lines.
+- Backend `.env` requires `DAGSTER_WEBSERVER_URL` and `DATABASE_URL`.
+- The `bpmn_catalog` database is the source of truth shared between this BFF and the Agent Mesh.
+multi-line terminal boot log with per-task `[AGENT]` provisioning lines.
 - `_reload_dagster_workspace()` — Async GraphQL POST to Dagster Webserver's `reloadRepositoryLocation` mutation. Non-fatal on failure.
 
 The React Flow → BPMN mapping in `useCompileWorkflow.ts`:

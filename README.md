@@ -2,13 +2,11 @@
 
 A cinematic **"Dark Glass & Neon"** control center for interrogating an autonomous AI Agent mesh. Think futuristic mission control — not a corporate dashboard.
 
-The Cortex lets you converse with an AI agent that iteratively builds a BPMN workflow graph through Socratic questioning. The agent scans industrial ontologies (IOF-MRO), binds data models from DataHub, and compiles the results into a Dagster/Restate pipeline — all with a cyberpunk aesthetic featuring glassmorphism panels, neon accents, typewriter streaming, and holographic visualizations.
-
-The interview is driven by a [BAML contract](backend/baml_src/bpmn_interview.baml) (`IterateBPMNGraph`) that enforces semantic grounding: every automated step (ServiceTask) must be linked to a real ontology class and data source.
+The Cortex lets you converse with an AI agent mesh that iteratively builds a BPMN workflow graph. The system delegates orchestration to a Dagster-driven Polyglot Mesh, which scans industrial ontologies (IOF-MRO), binds data models, and compiles results into a scalable pipeline — all with a cyberpunk aesthetic featuring glassmorphism panels, neon accents, typewriter streaming, and holographic visualizations.
 
 ## What It Does
 
-**1. Neural Stream** — A streaming chat interface where the agent thinks out loud. Ontology scans and DataHub queries appear as animated holographic cards before the response streams in character-by-character.
+**1. Neural Stream** — A streaming chat interface that proxies a Dagster/Mesh fleet. real-time "Thinking Cards" reflect the actual execution stages of the backend agents (Engine O, Engine E, Engine F).
 
 **2. Live Context HUD** — A real-time sidebar that accumulates extracted ontology concepts (e.g. `Asset: Engine`, `Concept: iof:ImpactDamage`) and identified data models with health indicators.
 
@@ -74,8 +72,8 @@ npm run dev
 | Icons | Lucide React |
 | Fonts | JetBrains Mono, Inter |
 | Backend | FastAPI (Python), StreamingResponse |
-| LLM Contract | BAML (`bpmn_interview.baml`) via OpenRouter |
-| Python Tooling | uv (package manager) |
+| LLM Orchestration | Dagster / Polyglot Mesh |
+| Python Tooling | uv (package manager), httpx, FastAPI |
 
 ## Project Structure
 
@@ -101,22 +99,19 @@ backend/
 └── .env.example             # Template for backend env vars
 ```
 
-## Architecture
-
-The app has four phases controlled by a Zustand store:
+The app has three primary phases controlled by a Zustand store:
 
 ```
-active → blueprint → compiling → complete
+active → blueprint → complete
 ```
 
-- **active** — User chats, agent streams responses with thinking visualizations
-- **blueprint** — Interactive node graph of the generated workflow
-- **compiling** — Matrix-style code generation overlay
-- **complete** — System online, pipeline deployed
+- **active** — Application proxies prompts to the Dagster `supervisor_query_job`. Real-time SSE status events drive the thinking visualizations.
+- **blueprint** — Passive Renderer phase. Displays the orchestrated UI state (React Flow graph) provided by the Mesh.
+- **complete** — Final deployment and system online state.
 
-The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend on mount. If the backend responds, it uses real HTTP streaming with a custom token protocol. If not, it falls back to an identical mock implementation — same UX either way.
+The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend gateway. If the mesh is online, it uses live SSE streaming. If not, it falls back to a mock implementation for demo consistency.
 
-The backend acts as a **BFF (Backend-for-Frontend) gateway** — the frontend only talks to port 8000. All secrets, internal service calls (ontology, DataHub), and LLM API keys stay server-side.
+The backend acts as a **Dagster Proxy (BFF)** — it triggers the supervisor job, polls for step stats, and transforms internal mesh signals into frontend-ready SSE events.
 
 ## Environment Variables
 

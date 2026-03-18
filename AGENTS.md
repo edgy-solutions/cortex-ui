@@ -20,9 +20,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 4. Keep all styling in Tailwind classes or `src/index.css`. Do not create new CSS files.
 5. When adding new components, place them in the appropriate feature directory under `src/components/`.
 
-### Adding new features
-
-- **New chat responses**: Add keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` for offline mode. In BAML mode, all responses flow through `IterateBPMNGraph` in `backend/baml_src/bpmn_interview.baml`.
+- **New chat responses**: Responses no longer flow through BAML. The `interviewer_agent.py` acts as a proxy to the Dagster `supervisor_query_job`. In offline mode, keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` are still utilized.
 - **New node types**: Create in `src/components/Blueprint/nodes/`, register in `WorkflowCanvas.tsx` `nodeTypes` object.
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
@@ -52,24 +50,21 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 - **Zustand store updates during streaming**: The mock agent updates the store rapidly during character-by-character streaming. Ensure new subscribers use selectors to avoid unnecessary re-renders.
 - **React Flow re-renders**: Node and edge type objects must be defined outside components (module-level `const`) to prevent React Flow from re-mounting nodes on every render.
 
-## Key Files to Understand
-
 | Purpose | File |
 |---|---|
 | App state & types | `src/store/useInterviewStore.ts` |
 | Unified agent hook | `src/hooks/useAgent.ts` |
-| Real API streaming | `src/hooks/useInterviewAgent.ts` |
+| Real API proxy/stream | `src/hooks/useInterviewAgent.ts` |
 | Mock agent fallback | `src/hooks/useMockAgent.ts` |
 | Compile mutation | `src/hooks/useCompileWorkflow.ts` |
 | BPMN type definitions | `src/api/types.ts` |
-| API client + stream parser | `src/api/client.ts` |
-| Stream token protocol | `src/api/types.ts` |
+| API client + SSE parser | `src/api/client.ts` |
+| SSE event protocol | `src/api/types.ts` |
 | Workflow graph generation | `src/hooks/useMockWorkflowBuilder.ts` |
 | Phase-based view switching | `src/App.tsx` |
 | Global theme & CSS | `src/index.css` |
-| Backend API + BPMN routes | `backend/interviewer_agent.py` |
-| BAML BPMN contract | `backend/baml_src/bpmn_interview.baml` |
-| Live BPMN → React Flow hook | `src/hooks/useLiveBpmnGraph.ts` |
+| Backend Orchestrator Proxy | `backend/interviewer_agent.py` |
+| Live Bpmn → React Flow hook | `src/hooks/useLiveBpmnGraph.ts` |
 | Database session layer | `backend/database.py` |
 | BPMN catalog ORM model | `backend/models.py` |
 | Database schema DDL | `backend/sql/001_create_bpmn_catalog.sql` |
@@ -102,22 +97,20 @@ uv run uvicorn interviewer_agent:app --reload --port 8000
 psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 ```
 
-## BPMN Workflow Rules
-
 - The compile endpoint (`POST /workflow/compile`) does three things in sequence:
   1. **Upserts** the BPMN payload to the `bpmn_catalog` Postgres table
   2. **Reloads** the Dagster workspace via GraphQL (non-fatal on failure)
   3. **Returns** a `boot_log` terminal string for the CompilationOverlay
 - The `CompilationOverlay` renders the `boot_log` line-by-line with color-coded syntax highlighting. Do not hardcode boot log content in the frontend.
-- React Flow node type `logic` → BPMN gateway. Types `trigger`/`action` → BPMN task. This mapping lives in `useCompileWorkflow.ts`.
+- React Flow's `WorkflowCanvas.tsx` acts as a **Dumb Renderer** for the final Agent Mesh instructions. It either renders BPMN domain data mapped via `useLiveBpmnGraph.ts` or raw React Flow nodes/edges if provided directly by Engine F.
 - The `bpmn_catalog` table is shared with the `invincible-agent` Dagster backend. Both services use the same Postgres database (`iagent`). Do not change the schema without coordinating with that project.
 - `DATABASE_URL` and `DAGSTER_WEBSERVER_URL` are configured in `backend/.env`.
 
-## BAML Contract Rules
+## SSE Stream Protocol
 
-- The BAML contract is `bpmn_interview.baml` → `IterateBPMNGraph`. The old `interviewer.baml` / `ConductInterview` has been removed.
-- `IterateBPMNGraph` receives: `chat_history`, `user_message`, `current_graph_json`, `available_ontology_classes`, `available_data_sources`
-- It returns `BPMNInterviewState`: `nodes[]`, `edges[]`, `unresolved_paths[]`, `is_ready_to_compile`, `agent_reply`
-- **Strict semantic grounding**: Every `ServiceTask` must have `ontology_class` AND `data_source` from injected lists.
-- The graph state is persisted per session in `_session_graph` and passed back each turn.
-- A `<<GRAPH_UPDATE:json>>` token is emitted at the end of each turn with the full graph.
+- The backend (`interviewer_agent.py`) proxies the Dagster `supervisor_query_job`.
+- It streams real-time `status` events derived from Dagster `stepStats`. These drive the **Holographic Thinking Cards** on the frontend.
+- `action: "think"` → Displays a loading card with the provided `label`.
+- `action: "found"` → Marks the loading card as 'Done' and updates the `label` with the result.
+- `action: "error"` → Displays a `WarningCard` in the stream.
+- Upon successful execution of the Agent Mesh, a `final_payload` event carries the full UI state (BPMN graph) for rendering.
