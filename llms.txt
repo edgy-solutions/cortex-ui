@@ -12,7 +12,8 @@
 - Data Fetching: TanStack Query (React Query) + axios
 - Icons: Lucide React
 - Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
-- Fonts: JetBrains Mono (code/data), Inter (UI tex- Backend: FastAPI (Python) with StreamingResponse for Dagster polling
+- Fonts: JetBrains Mono (code/data), Inter (UI text)
+- Backend: FastAPI (Python) with StreamingResponse for Dagster polling
 - API Protocol: Server-Sent Events (SSE) with typed events (status, final_payload, stream_end)
 - Live Canvas: `useLiveBpmnGraph` hook acts as a dumb renderer for pre-laid out mesh payloads
 

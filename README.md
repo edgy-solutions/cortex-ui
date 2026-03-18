@@ -94,7 +94,6 @@ backend/
 ├── models.py                # SQLAlchemy ORM model for bpmn_catalog table
 ├── sql/
 │   └── 001_create_bpmn_catalog.sql  # DDL: bpmn_catalog table + trigger + index
-├── baml_src/                # BAML definitions (LLM contract + OpenRouter client)
 ├── .env                     # Backend secrets + DATABASE_URL + DAGSTER_WEBSERVER_URL
 └── .env.example             # Template for backend env vars
 ```
@@ -123,9 +122,6 @@ VITE_API_URL=http://localhost:8000
 
 **Backend** (`backend/.env` — server-side only):
 ```env
-OPENROUTER_API_KEY=sk-or-...     # Omit for mock mode
-ONTOLOGY_SERVICE_URL=http://localhost:8084
-DATAHUB_SERVICE_URL=http://localhost:8085
 DATABASE_URL=postgresql+asyncpg://iagent:iagent@localhost:5432/iagent
 DAGSTER_WEBSERVER_URL=http://localhost:3000
 ```
