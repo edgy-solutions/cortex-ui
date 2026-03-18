@@ -96,8 +96,14 @@ backend/
 The backend proxies the Dagster supervisor job and emits the following SSE events:
 
 - `event: status`           data: `{"action": "think|found|error", "label": "..."}`
-- `event: final_payload`    data: `{...BPMN Graph UI State...}`
+- `event: final_payload`    data: `{ archetype: "...", entities: "...", ... }`
 - `event: stream_end`       data: `{}`
+
+### Semantic Archetypes
+- `PROCESS_TOPOLOGY`: Orchestrated React Flow graphs.
+- `HAZARD_DECLARATION`: Risk/hazard alerts with criticality weighting.
+- `ASSET_STATE_METRIC`: Telemetry tables.
+- `KNOWLEDGE_DOCUMENT`: Markdown documentation.
 
 ## Architecture: Dagster Proxy (Polyglot Mesh)
 

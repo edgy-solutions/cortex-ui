@@ -106,7 +106,7 @@ active → blueprint → complete
 ```
 
 - **active** — Application proxies prompts to the Dagster `supervisor_query_job`. Real-time SSE status events drive the thinking visualizations.
-- **blueprint** — Passive Renderer phase. Displays the orchestrated UI state (React Flow graph) provided by the Mesh.
+- **blueprint** — **Semantic Interpreter** phase. The frontend decodes the backend's "Semantic Intent" payload (Archetypes: Topology, Hazards, Metrics, Docs) into high-fidelity React components.
 - **complete** — Final deployment and system online state.
 
 The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend gateway. If the mesh is online, it uses live SSE streaming. If not, it falls back to a mock implementation for demo consistency.

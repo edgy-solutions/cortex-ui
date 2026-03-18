@@ -20,7 +20,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 4. Keep all styling in Tailwind classes or `src/index.css`. Do not create new CSS files.
 5. When adding new components, place them in the appropriate feature directory under `src/components/`.
 
-- **New chat responses**: Responses no longer flow through BAML. The `interviewer_agent.py` acts as a proxy to the Dagster `supervisor_query_job`. In offline mode, keyword patterns in `src/hooks/useMockAgent.ts` → `getResponseForInput()` are still utilized.
+- **New chat responses**: Responses no longer flow through BAML. The `interviewer_agent.py` acts as a proxy to the Dagster `supervisor_query_job`. The UI uses a `SemanticInterpreter` to decode "Semantic Intent" payloads (`SemanticUIContainer`) into high-fidelity components.
 - **New node types**: Create in `src/components/Blueprint/nodes/`, register in `WorkflowCanvas.tsx` `nodeTypes` object.
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
@@ -59,6 +59,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | Compile mutation | `src/hooks/useCompileWorkflow.ts` |
 | BPMN type definitions | `src/api/types.ts` |
 | API client + SSE parser | `src/api/client.ts` |
+| Semantic Interpreter | `src/components/registry/SemanticInterpreter.tsx` |
 | SSE event protocol | `src/api/types.ts` |
 | Workflow graph generation | `src/hooks/useMockWorkflowBuilder.ts` |
 | Phase-based view switching | `src/App.tsx` |
@@ -113,4 +114,9 @@ psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 - `action: "think"` → Displays a loading card with the provided `label`.
 - `action: "found"` → Marks the loading card as 'Done' and updates the `label` with the result.
 - `action: "error"` → Displays a `WarningCard` in the stream.
-- Upon successful execution of the Agent Mesh, a `final_payload` event carries the full UI state (BPMN graph) for rendering.
+- Upon successful execution of the Agent Mesh, a `final_payload` event carries a `SemanticUIContainer`.
+- **Archetypes**:
+  - `PROCESS_TOPOLOGY`: BPMN workflow graph.
+  - `HAZARD_DECLARATION`: Risk metrics and hazard lists.
+  - `ASSET_STATE_METRIC`: Telemetry and state tables.
+  - `KNOWLEDGE_DOCUMENT`: Markdown documentation.
