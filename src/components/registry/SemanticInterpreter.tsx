@@ -67,10 +67,8 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                   {payload.subject_concept}
                 </span>
              </div>
-             {/* Note: In a real app, WorkflowCanvas would be updated to take nodes/edges as props 
-                 or we'd sync them to the store here. For this refactor, we assume store-sync 
-                 is handled by the caller or we provide a specialized version. */}
-             <WorkflowCanvas />
+             {/* Orchestrated BPMN Rendering */}
+             <WorkflowCanvas nodes={nodes} edges={edges} />
           </div>
         );
       }

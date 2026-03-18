@@ -4,6 +4,8 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  type Node,
+  type Edge,
   type NodeTypes,
   type EdgeTypes,
 } from "@xyflow/react";
@@ -29,11 +31,19 @@ const edgeTypes: EdgeTypes = {
   animated: AnimatedEdge as unknown as EdgeTypes["animated"],
 };
 
-export function WorkflowCanvas() {
+interface WorkflowCanvasProps {
+  nodes?: Node[];
+  edges?: Edge[];
+}
+
+export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowCanvasProps) {
   // Use live BPMN graph from the backend stream, fall back to mock
   const liveGraph = useLiveBpmnGraph();
   const mockGraph = useMockWorkflowBuilder();
-  const { nodes, edges } = liveGraph ?? mockGraph;
+  
+  // Routing Logic: Prefer Props -> then Live Store -> then Mock
+  const activeNodes = propNodes || liveGraph?.nodes || mockGraph.nodes;
+  const activeEdges = propEdges || liveGraph?.edges || mockGraph.edges;
 
   // Default viewport centers the graph
   const defaultViewport = useMemo(
@@ -62,8 +72,8 @@ export function WorkflowCanvas() {
       </motion.div>
 
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={activeNodes}
+        edges={activeEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultViewport={defaultViewport}
