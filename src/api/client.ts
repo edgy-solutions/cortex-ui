@@ -14,7 +14,6 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── SSE Stream Parser ─────────────────────────────────────
 /**
  * Parses a single SSE block (event + data) into a StreamEvent.
  * SSE format: "event: <type>\ndata: <json>\n\n"
@@ -34,37 +33,19 @@ function parseSSE(block: string): StreamEvent | null {
   if (!eventType) return null;
 
   try {
+    const parsed = dataStr ? JSON.parse(dataStr) : {};
     switch (eventType) {
-      case "text": {
-        const parsed = JSON.parse(dataStr);
-        return { type: "text", content: parsed.content ?? "" };
+      case "status": {
+        return {
+          type: "status",
+          action: parsed.action,
+          category: parsed.category,
+          label: parsed.label,
+        };
       }
-      case "ontology": {
-        const parsed = JSON.parse(dataStr);
-        if (parsed.action === "lookup") {
-          return { type: "ontology_lookup", label: parsed.label };
-        }
-        if (parsed.action === "found") {
-          return { type: "ontology_found", category: parsed.category, label: parsed.label };
-        }
-        return null;
+      case "final_payload": {
+        return { type: "final_payload", payload: parsed };
       }
-      case "datahub": {
-        const parsed = JSON.parse(dataStr);
-        if (parsed.action === "query") {
-          return { type: "datahub_query", model: parsed.model, schema: parsed.schema };
-        }
-        if (parsed.action === "result") {
-          return { type: "datahub_result", model: parsed.model, schema: parsed.schema, healthy: parsed.healthy };
-        }
-        return null;
-      }
-      case "graph_update": {
-        const graph = JSON.parse(dataStr);
-        return { type: "graph_update", graph };
-      }
-      case "interview_complete":
-        return { type: "interview_complete" };
       case "stream_end":
         return { type: "stream_end" };
       default:

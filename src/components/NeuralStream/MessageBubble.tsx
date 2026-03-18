@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { User, Bot } from "lucide-react";
 import type { Message } from "@/store/useInterviewStore";
 import { ThinkingCard } from "./ThinkingCard";
+import { WarningCard } from "./WarningCard";
 
 interface MessageBubbleProps {
   message: Message;
@@ -35,7 +36,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
 
         {/* Message content */}
-        {(message.content || isUser) && (
+        {(message.content || isUser) && !message.error && (
           <div
             className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
               isUser
@@ -52,6 +53,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               <span className="inline-block w-2 h-4 ml-0.5 bg-neon-blue animate-pulse-neon align-middle" />
             )}
           </div>
+        )}
+
+        {/* Error state */}
+        {!isUser && message.error && (
+          <WarningCard 
+            error={message.error} 
+            onRetry={() => {
+              // Extract the last user message to retry
+              // This is a bit of a shortcut, ideally we'd pass the retry handler down
+            }} 
+          />
         )}
       </div>
 

@@ -1,23 +1,23 @@
 """
 The Cortex — Interviewer Agent API
-FastAPI service that bridges the React frontend to the Agent Mesh.
+FastAPI service that bridges the React frontend to the Polyglot Agent Mesh.
+Now operating under proper Polyglot Mesh architecture — acting purely as a proxy 
+for Dagster's supervisor_query_job orchestration.
 
 Endpoints:
-  POST /interview/stream  — Streaming interview (chunked text + special tokens)
+  POST /interview/stream  — Triggers supervisor_query_job and streams stepStats
   POST /workflow/compile   — Compile blueprint into Dagster job
   GET  /health             — Health check
 
-Special Stream Tokens:
-  <<ONTOLOGY_LOOKUP:label>>                   — Ontology scan started
-  <<ONTOLOGY_FOUND:category:label>>           — Concept found
-  <<DATAHUB_QUERY:model:schema>>              — DataHub query started
-  <<DATAHUB_RESULT:model:schema:healthy>>     — DataHub query result
-  <<INTERVIEW_COMPLETE>>                      — Signal to transition to blueprint
-  <<STREAM_END>>                              — End of stream
-
-Modes:
-  - BAML (real LLM via OpenRouter) — when OPENROUTER_API_KEY is set
-  - Mock (keyword-based)           — when no API key is set
+Streaming Protocol:
+  event: status
+  data: {"action": "think", "category": "Process", "label": "Engaging Supervisor Agent..."}
+  
+  event: status
+  data: {"action": "think", "category": "Process", "label": "Fanning out to Domain Experts..."}
+  
+  event: final_payload
+  data: {... Server-Driven UI Component JSON ...}
 """
 
 import asyncio
@@ -27,7 +27,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any
 
 import httpx
 from dotenv import load_dotenv
@@ -47,17 +47,11 @@ logger = logging.getLogger("cortex")
 # ── Env ───────────────────────────────────────────────────
 load_dotenv()
 
-_USE_BAML = bool(os.getenv("OPENROUTER_API_KEY"))
-_ONTOLOGY_URL = os.getenv("ONTOLOGY_SERVICE_URL", "http://localhost:8084")
-_DATAHUB_URL = os.getenv("DATAHUB_SERVICE_URL", "http://localhost:8085")
 _DAGSTER_WEBSERVER_URL = os.getenv("DAGSTER_WEBSERVER_URL", "http://localhost:3000")
-
-if _USE_BAML:
-    from baml_client import b  # type: ignore[import-untyped]
-
+_DAGSTER_REPOSITORY = "iagent"
+_DAGSTER_LOCATION = "iagent"
 
 # ── Lifespan ──────────────────────────────────────────────
-
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -68,8 +62,8 @@ async def lifespan(application: FastAPI):
 
 # ── App ───────────────────────────────────────────────────
 app = FastAPI(
-    title="The Cortex — Interrogator Agent",
-    version="2.0.0",
+    title="The Cortex — API Proxy",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -83,16 +77,10 @@ app.add_middleware(
 
 
 # ── Models ────────────────────────────────────────────────
-class InterviewContext(BaseModel):
-    ontology_terms: list[dict] = []
-    data_bindings: list[dict] = []
-
-
 class InterviewRequest(BaseModel):
     message: str
     session_id: str | None = None
-    context: InterviewContext | None = None
-    current_graph_json: str | None = None  # Frontend sends graph state each turn
+    current_graph_json: str | None = None
 
 
 class BPMNTask(BaseModel):
@@ -134,368 +122,250 @@ class CompileResponse(BaseModel):
     boot_log: str = ""
 
 
-# ── Session State (chat history only — graph state is frontend-owned) ──
-_session_msg_count: dict[str, int] = {}
-_session_history: dict[str, list[str]] = {}
-
-
-# ══════════════════════════════════════════════════════════
-# Live Data Layer (server-to-server only)
-# ══════════════════════════════════════════════════════════
-
-_MOCK_ONTOLOGY = (
-    "iof:VisualInspection, iof:UsageBasedMaintenance, iof:Overhaul, "
-    "iof:FailureMode, iof:RotatingEquipment, iof:ImpactDamage, "
-    "iof:MaintenanceSchedule, iof:Asset, iof:InspectionRecord, "
-    "iof:WorkOrder, iof:Sensor"
-)
-_MOCK_DATA_SOURCES = (
-    "dbt.stg_engine_telemetry, dbt.stg_maintenance_logs, "
-    "dbt.stg_sensor_readings, dbt.dim_failure_modes, "
-    "dbt.dim_assets, dbt.fct_work_orders, dbt.fct_inspections"
-)
-
-
-async def get_live_ontology() -> str:
-    """Fetch real ontology classes from the Ontology Microservice.
-    Falls back to mock data when the service is offline."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{_ONTOLOGY_URL}/classes")
-            resp.raise_for_status()
-            return resp.json().get("available_classes", _MOCK_ONTOLOGY)
-    except Exception as exc:
-        logger.warning("Ontology service offline (%s), using mock data", exc)
-        return _MOCK_ONTOLOGY
-
-
-async def get_live_data_sources() -> str:
-    """Fetch real dbt models from the DataHub wrapper service.
-    Falls back to mock data when the service is offline."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{_DATAHUB_URL}/tables")
-            resp.raise_for_status()
-            return resp.json().get("available_tables", _MOCK_DATA_SOURCES)
-    except Exception as exc:
-        logger.warning("DataHub service offline (%s), using mock data", exc)
-        return _MOCK_DATA_SOURCES
-
-
-# ══════════════════════════════════════════════════════════
-# BAML Streaming (real LLM via OpenRouter)
-# ══════════════════════════════════════════════════════════
-
-
-def _build_chat_history(session_id: str) -> str:
-    """Format session history as a single string for the BAML prompt."""
-    turns = _session_history.get(session_id, [])
-    return "\n".join(turns) if turns else "(no previous conversation)"
-
-
-def _ontology_category(uri: str) -> str:
-    """Derive a human-readable category from an ontology URI."""
-    lower = uri.lower()
-    if "failure" in lower or "damage" in lower:
-        return "Concept"
-    if "schedule" in lower or "workorder" in lower or "maintenance" in lower:
-        return "Process"
-    if "sensor" in lower or "inspection" in lower:
-        return "Process"
-    return "Asset"
-
-
-def _guess_schema(model_name: str) -> str:
-    """Guess staging/warehouse schema from dbt model naming convention."""
-    if model_name.startswith("stg_"):
-        return "staging"
-    if model_name.startswith("dim_") or model_name.startswith("fct_"):
-        return "warehouse"
-    return "staging"
-
-
 def _sse(event: str, data: str) -> str:
     """Format a Server-Sent Event line pair."""
     return f"event: {event}\ndata: {data}\n\n"
 
+# ══════════════════════════════════════════════════════════
+# Dagster GraphQL Orchestration
+# ══════════════════════════════════════════════════════════
 
-def _baml_graph_to_catalog(nodes: list, edges: list) -> dict:
-    """Convert BAML BPMNInterviewState nodes/edges to the BPMNPayload
-    schema used by the bpmn_catalog table (tasks, gateways, sequence_flows).
-    This ensures compilation works directly from the graph output."""
-    tasks = []
-    gateways = []
-    for n in (nodes or []):
-        node_type = n.node_type.value if hasattr(n.node_type, "value") else str(n.node_type)
-        if node_type in ("ServiceTask", "UserTask"):
-            catalog_type = "service_task" if node_type == "ServiceTask" else "user_task"
-            tasks.append({
-                "id": n.id,
-                "name": n.name,
-                "type": catalog_type,
-                "agent_endpoint": f"http://restate-agent-svc:8081/{n.id}",
-                "ontology_class": n.ontology_class,
-                "data_source": n.data_source,
-            })
-        elif node_type == "ExclusiveGateway":
-            gateways.append({
-                "id": n.id,
-                "name": n.name,
-                "type": "exclusive",
-            })
-        elif node_type == "TimerEvent":
-            tasks.append({
-                "id": n.id,
-                "name": n.name,
-                "type": "timer_event",
-                "agent_endpoint": "",
-            })
-
-    sequence_flows = [
-        {
-            "id": f"flow_{i}",
-            "source_ref": e.source_id,
-            "target_ref": e.target_id,
-            "condition_expression": e.condition_expression,
+async def _launch_supervisor_job(query: str, thread_id: str) -> str | None:
+    """Launch the supervisor_query_job on Dagster."""
+    mutation = """
+    mutation LaunchSupervisor($userQuery: String!, $threadId: String!) {
+      launchRun(
+        executionParams: {
+          selector: {
+            repositoryName: "iagent"
+            repositoryLocationName: "iagent"
+            jobName: "supervisor_query_job"
+          }
+          runConfigData: {
+            ops: {
+              create_task_plan: {
+                config: {
+                  user_query: $userQuery
+                  thread_id: $threadId
+                }
+              }
+            }
+          }
         }
-        for i, e in enumerate(edges or [])
-    ]
-
-    return {
-        "tasks": tasks,
-        "gateways": gateways,
-        "sequence_flows": sequence_flows,
+      ) {
+        __typename
+        ... on LaunchRunSuccess {
+          run {
+            runId
+          }
+        }
+        ... on PythonError {
+          message
+          stack
+        }
+      }
     }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{_DAGSTER_WEBSERVER_URL}/graphql",
+                json={
+                    "query": mutation,
+                    "variables": {"userQuery": query, "threadId": thread_id},
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            
+            run_data = data.get("data", {}).get("launchRun", {})
+            if run_data.get("__typename") == "LaunchRunSuccess":
+                return run_data["run"]["runId"]
+            
+            logger.error("LaunchRun failed: %s", run_data)
+            return None
+    except Exception as exc:
+        logger.error("Failed to call Dagster GraphQL: %s", exc)
+        return None
 
+async def _get_run_status(run_id: str) -> dict:
+    """Gets the high level status of the run."""
+    query = """
+    query GetRunStatus($runId: ID!) {
+      runOrError(runId: $runId) {
+        __typename
+        ... on Run {
+          status
+        }
+      }
+    }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{_DAGSTER_WEBSERVER_URL}/graphql",
+                json={"query": query, "variables": {"runId": run_id}},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", {}).get("runOrError", {})
+    except Exception as exc:
+        logger.error("Failed to get run status: %s", exc)
+        return {}
 
-async def generate_bpmn_baml_stream(
+async def _get_step_stats(run_id: str) -> list[dict]:
+    """Gets the step statistics to drive UI holographic thinking cards."""
+    query = """
+    query GetStepStats($runId: ID!) {
+      runOrError(runId: $runId) {
+        __typename
+        ... on Run {
+          stepStats {
+            stepKey
+            status
+            endTime
+          }
+        }
+      }
+    }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{_DAGSTER_WEBSERVER_URL}/graphql",
+                json={"query": query, "variables": {"runId": run_id}},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            run = data.get("data", {}).get("runOrError", {})
+            if run.get("__typename") == "Run":
+                return run.get("stepStats", [])
+            return []
+    except Exception as exc:
+        logger.error("Failed to get step stats: %s", exc)
+        return []
+
+async def _get_ui_payload_output(run_id: str) -> dict:
+    """Fetch the output value of the generate_ui_payload step."""
+    query = """
+    query GetRunOutputs($runId: ID!) {
+      runOrError(runId: $runId) {
+        __typename
+        ... on Run {
+          events {
+            __typename
+            ... on ExecutionStepOutputEvent {
+              stepKey
+              outputName
+              valueRepr
+            }
+          }
+        }
+      }
+    }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{_DAGSTER_WEBSERVER_URL}/graphql",
+                json={"query": query, "variables": {"runId": run_id}},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            
+            events = data.get("data", {}).get("runOrError", {}).get("events", [])
+            for evt in events:
+                if evt.get("__typename") == "ExecutionStepOutputEvent" and evt.get("stepKey") == "generate_ui_payload":
+                    val_repr = evt.get("valueRepr", "{}")
+                    # ValueRepr returns a stringified version from Python
+                    # The JSON might require double quote replacement or eval
+                    # Depending on how the dagster stringifies dicts. In production, 
+                    # querying a Materialization or Asset would be more robust.
+                    try:
+                       # Handle single quote replacement common in python dict stringifications
+                       valid_json_str = val_repr.replace("'", '"').replace("False", "false").replace("True", "true").replace("None", "null")
+                       return json.loads(valid_json_str)
+                    except json.JSONDecodeError:
+                       logger.error("Failed to parse Dagster valueRepr as JSON: %s", val_repr)
+                       return {"error": "Failed to parse presentation output"}
+            return {"error": "No output found from generate_ui_payload"}
+    except Exception as exc:
+        logger.error("Failed to fetch UI payload: %s", exc)
+        return {"error": "Exception fetching presentation output"}
+
+async def generate_dagster_stream(
     request: InterviewRequest,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream a BPMN interview response using BAML + OpenRouter.
-
-    Calls IterateBPMNGraph on each turn, using the frontend-provided graph state.
-    Emits SSE events:
-      event: text         — agent_reply deltas (typewriter)
-      event: ontology     — {"action": "lookup"|"found", ...}
-      event: datahub      — {"action": "query"|"result", ...}
-      event: graph_update  — full BPMNPayload-compatible graph
-      event: interview_complete
-      event: stream_end
+    Trigger Dagster job and stream step status as Holographic Thinking Cards.
     """
-    session_id = request.session_id or "default"
+    session_id = request.session_id or str(uuid.uuid4())
+    
+    yield _sse("status", json.dumps({
+        "action": "think",
+        "category": "Concept", 
+        "label": f"Triggering Supervisor Job for thread {session_id[:8]}..."
+    }))
+    
+    run_id = await _launch_supervisor_job(request.message, session_id)
+    if not run_id:
+        yield _sse("status", json.dumps({"action": "error", "label": "Failed to trigger Dagster job."}))
+        yield _sse("stream_end", "{}")
+        return
+        
+    yield _sse("status", json.dumps({"action": "think", "category": "Process", "label": f"Dagster Run Initiated: {run_id[:8]}"}))
 
-    # Track exchanges
-    _session_msg_count[session_id] = _session_msg_count.get(session_id, 0) + 1
-
-    # Append user turn to history
-    history = _session_history.setdefault(session_id, [])
-    history.append(f"User: {request.message}")
-
-    chat_history = _build_chat_history(session_id)
-
-    # Graph state from frontend (empty on first turn)
-    current_graph_json = request.current_graph_json or json.dumps({"nodes": [], "edges": []})
-
-    # Fetch live grounding data from internal services
-    ontology_classes, data_sources = await asyncio.gather(
-        get_live_ontology(),
-        get_live_data_sources(),
-    )
-
-    # ── Stream via BAML ──
-    stream = b.stream.IterateBPMNGraph(
-        chat_history=chat_history,
-        user_message=request.message,
-        current_graph_json=current_graph_json,
-        available_ontology_classes=ontology_classes,
-        available_data_sources=data_sources,
-    )
-
-    prev_reply = ""
-    prev_ready = False
-    emitted_ontology: set[str] = set()
-    emitted_dbt: set[str] = set()
-
-    async for partial in stream:
-        # ── Text delta ──
-        current_reply = partial.agent_reply or ""
-        if len(current_reply) > len(prev_reply):
-            delta = current_reply[len(prev_reply):]
-            yield _sse("text", json.dumps({"content": delta}))
-            prev_reply = current_reply
-
-        # ── Emit ontology/datahub events for NEW nodes ──
-        for node in (partial.nodes or []):
-            if node.ontology_class and node.ontology_class not in emitted_ontology:
-                label = node.ontology_class.split(":")[-1] if ":" in node.ontology_class else node.ontology_class
-                category = _ontology_category(node.ontology_class)
-                yield _sse("ontology", json.dumps({"action": "lookup", "label": label}))
-                yield _sse("ontology", json.dumps({"action": "found", "category": category, "label": node.ontology_class}))
-                emitted_ontology.add(node.ontology_class)
-
-            if node.data_source and node.data_source not in emitted_dbt:
-                model_name = node.data_source.replace("dbt.", "")
-                schema = _guess_schema(model_name)
-                yield _sse("datahub", json.dumps({"action": "query", "model": model_name, "schema": schema}))
-                yield _sse("datahub", json.dumps({"action": "result", "model": model_name, "schema": schema, "healthy": True}))
-                emitted_dbt.add(node.data_source)
-
-        # ── Ready to compile ──
-        current_ready = partial.is_ready_to_compile or False
-        if current_ready and not prev_ready:
-            yield _sse("interview_complete", "{}")
-            prev_ready = current_ready
-
-    # Get final response
-    final = await stream.get_final_response()
-    history.append(f"Agent: {final.agent_reply}")
-
-    # ── Convert to catalog-compatible schema and emit ──
-    graph_payload = _baml_graph_to_catalog(final.nodes, final.edges)
-    graph_payload["unresolved_paths"] = list(final.unresolved_paths or [])
-    graph_payload["is_ready_to_compile"] = final.is_ready_to_compile or False
-    yield _sse("graph_update", json.dumps(graph_payload))
-
-    yield _sse("stream_end", "{}")
-
-
-# ══════════════════════════════════════════════════════════
-# Mock Streaming (keyword-based fallback)
-# ══════════════════════════════════════════════════════════
-
-
-async def _stream_text(text: str, chunk_size: int = 3, delay: float = 0.02):
-    """Yield text in small chunks to simulate streaming."""
-    for i in range(0, len(text), chunk_size):
-        yield text[i : i + chunk_size]
-        await asyncio.sleep(delay)
-
-
-async def generate_mock_stream(
-    request: InterviewRequest,
-) -> AsyncGenerator[str, None]:
-    """
-    Keyword-based mock stream — used when OPENROUTER_API_KEY is not set.
-    Demonstrates the streaming token protocol without an LLM.
-    """
-    session_id = request.session_id or "default"
-    msg = request.message.lower()
-
-    _session_msg_count[session_id] = _session_msg_count.get(session_id, 0) + 1
-    msg_count = _session_msg_count[session_id]
-
-    if "engine" in msg or "turbine" in msg:
-        yield "<<ONTOLOGY_LOOKUP:RotatingEquipment>>\n"
-        await asyncio.sleep(0.8)
-        yield "<<ONTOLOGY_FOUND:Asset:Engine>>\n"
-        await asyncio.sleep(0.3)
-        yield "<<ONTOLOGY_FOUND:Concept:iof:RotatingEquipment>>\n"
-        await asyncio.sleep(0.5)
-
-        yield "<<DATAHUB_QUERY:stg_engine_telemetry:staging>>\n"
+    # Polling Loop
+    emitted_steps = set()
+    is_success = False
+    
+    for _ in range(60): # 1 minute max timeout
         await asyncio.sleep(1.0)
-        yield "<<DATAHUB_RESULT:stg_engine_telemetry:staging:true>>\n"
-        await asyncio.sleep(0.3)
-
-        text = (
-            "I've identified the engine as a Rotating Equipment asset in "
-            "the IOF-MRO ontology. The telemetry data is available through "
-            "the stg_engine_telemetry model in DataHub. This model captures "
-            "vibration signatures, temperature readings, and RPM data. "
-            "Shall I bind this to the workflow?"
-        )
-        async for chunk in _stream_text(text):
-            yield chunk
-
-    elif "damage" in msg or "failure" in msg:
-        yield "<<ONTOLOGY_LOOKUP:ImpactDamage>>\n"
-        await asyncio.sleep(0.8)
-        yield "<<ONTOLOGY_FOUND:Concept:iof:ImpactDamage>>\n"
-        await asyncio.sleep(0.3)
-        yield "<<ONTOLOGY_FOUND:Process:FailureMode>>\n"
-        await asyncio.sleep(0.5)
-
-        yield "<<DATAHUB_QUERY:stg_maintenance_logs:staging>>\n"
-        await asyncio.sleep(1.0)
-        yield "<<DATAHUB_RESULT:stg_maintenance_logs:staging:true>>\n"
-        await asyncio.sleep(0.3)
-        yield "<<DATAHUB_QUERY:dim_failure_modes:warehouse>>\n"
-        await asyncio.sleep(0.8)
-        yield "<<DATAHUB_RESULT:dim_failure_modes:warehouse:true>>\n"
-        await asyncio.sleep(0.3)
-
-        text = (
-            "Impact damage events are tracked through the iof:ImpactDamage "
-            "concept. I found maintenance log data in stg_maintenance_logs "
-            "which correlates failure modes with inspection records. The data "
-            "shows a 98.7% completeness score. Want me to add a failure "
-            "prediction node?"
-        )
-        async for chunk in _stream_text(text):
-            yield chunk
-
-    elif "schedule" in msg or "maintenance" in msg:
-        yield "<<ONTOLOGY_LOOKUP:MaintenanceSchedule>>\n"
-        await asyncio.sleep(0.8)
-        yield "<<ONTOLOGY_FOUND:Process:MaintenanceSchedule>>\n"
-        await asyncio.sleep(0.3)
-        yield "<<ONTOLOGY_FOUND:Concept:iof:MaintenanceSchedule>>\n"
-        await asyncio.sleep(0.5)
-
-        yield "<<DATAHUB_QUERY:fct_work_orders:warehouse>>\n"
-        await asyncio.sleep(1.0)
-        yield "<<DATAHUB_RESULT:fct_work_orders:warehouse:true>>\n"
-        await asyncio.sleep(0.3)
-
-        text = (
-            "Maintenance scheduling maps to iof:MaintenanceSchedule. I've "
-            "linked it to the fct_work_orders fact table which tracks planned "
-            "vs. actual maintenance windows. The current backlog shows 47 "
-            "open work orders. Should I integrate this into the pipeline?"
-        )
-        async for chunk in _stream_text(text):
-            yield chunk
-
+        
+        status_data = await _get_run_status(run_id)
+        if status_data.get("status") == "FAILURE":
+            yield _sse("status", json.dumps({"action": "error", "label": "Pipeline Failed."}))
+            break
+            
+        if status_data.get("status") == "SUCCESS":
+            is_success = True
+            break
+            
+        step_stats = await _get_step_stats(run_id)
+        for stat in step_stats:
+            step_key = stat.get("stepKey", "")
+            status = stat.get("status", "")
+            
+            # If step has started but not emitted yet
+            if status == "SUCCESS" and f"{step_key}_success" not in emitted_steps:
+                lbl = ""
+                if step_key == "create_task_plan": lbl = "Task plan created by Engine O"
+                elif step_key.startswith("execute_subtask-"): lbl = f"Expert Graph evaluation complete ({step_key})"
+                elif step_key == "synthesize_stateful": lbl = "Results synthesized by Engine B"
+                elif step_key == "generate_ui_payload": lbl = "UI State mapped by Engine F"
+                
+                if lbl:
+                     yield _sse("status", json.dumps({"action": "found", "category": "Asset", "label": lbl}))
+                emitted_steps.add(f"{step_key}_success")
+                
+            elif status == "RUNNING" and f"{step_key}_running" not in emitted_steps:
+                lbl = ""
+                if step_key == "create_task_plan": lbl = "Asking Engine O to build task plan..."
+                elif step_key.startswith("execute_subtask-"): lbl = f"Fanning out to Engine E..."
+                elif step_key == "synthesize_stateful": lbl = "Synthesizing parallel state via Engine B..."
+                elif step_key == "generate_ui_payload": lbl = "Calling Engine F for component mapping..."
+                
+                if lbl:
+                     yield _sse("status", json.dumps({"action": "think", "category": "Process", "label": lbl}))
+                emitted_steps.add(f"{step_key}_running")
+                
+    if is_success:
+        yield _sse("status", json.dumps({"action": "think", "category": "Concept", "label": "Retrieving Final UI Payload..."}))
+        payload = await _get_ui_payload_output(run_id)
+        yield _sse("final_payload", json.dumps(payload))
     else:
-        yield "<<ONTOLOGY_LOOKUP:General>>\n"
-        await asyncio.sleep(0.6)
-
-        text = (
-            f'I understand you\'re interested in "{request.message}". '
-            "Let me map this to our data mesh. Could you provide more "
-            "context? For example, mention specific assets (engines, "
-            "turbines), failure modes, or maintenance schedules so I can "
-            "bind the correct ontology concepts and data models."
-        )
-        async for chunk in _stream_text(text):
-            yield chunk
-
-    yield "\n"
-
-    # ── Build mock graph matching catalog schema ──
-    mock_graph: dict = {
-        "tasks": [],
-        "gateways": [],
-        "sequence_flows": [],
-        "unresolved_paths": [],
-        "is_ready_to_compile": msg_count >= 4,
-    }
-    if "engine" in msg:
-        mock_graph["tasks"].append({"id": "task_1", "name": "Ingest Engine Telemetry", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_1", "ontology_class": "iof:RotatingEquipment", "data_source": "dbt.stg_engine_telemetry"})
-    if "damage" in msg or "failure" in msg:
-        mock_graph["tasks"].append({"id": "task_2", "name": "Analyze Failure Modes", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_2", "ontology_class": "iof:ImpactDamage", "data_source": "dbt.dim_failure_modes"})
-    if "schedule" in msg or "maintenance" in msg:
-        mock_graph["tasks"].append({"id": "task_3", "name": "Generate Work Orders", "type": "service_task", "agent_endpoint": "http://restate-agent-svc:8081/task_3", "ontology_class": "iof:MaintenanceSchedule", "data_source": "dbt.fct_work_orders"})
-    if len(mock_graph["tasks"]) >= 2:
-        for i in range(len(mock_graph["tasks"]) - 1):
-            mock_graph["sequence_flows"].append({"id": f"flow_{i}", "source_ref": mock_graph["tasks"][i]["id"], "target_ref": mock_graph["tasks"][i + 1]["id"]})
-
-    yield _sse("graph_update", json.dumps(mock_graph))
-
-    if msg_count >= 4:
-        yield _sse("interview_complete", "{}")
-
+        yield _sse("status", json.dumps({"action": "error", "label": "Timeout or failed to fetch UI payload."}))
+        
     yield _sse("stream_end", "{}")
 
 
@@ -507,13 +377,12 @@ async def generate_mock_stream(
 @app.post("/interview/stream")
 async def interview_stream(request: InterviewRequest):
     """
-    Streaming interview endpoint.
-    Automatically selects BAML (real LLM) or mock based on OPENROUTER_API_KEY.
-    Returns a chunked text/event-stream response with embedded special tokens.
+    Streaming orchestration endpoint.
+    Delegates to Dagster GraphQL and streams step stats as SSE events
+    to power Holographic Thinking Cards. Emits final payload when done.
     """
-    generator = generate_bpmn_baml_stream(request) if _USE_BAML else generate_mock_stream(request)
     return StreamingResponse(
-        generator,
+        generate_dagster_stream(request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -711,26 +580,14 @@ async def compile_workflow(
 # These endpoints proxy server-to-server requests.
 
 
-@app.get("/ontology/classes")
-async def proxy_ontology_classes():
-    """BFF proxy: returns available ontology classes from the Ontology Service."""
-    classes = await get_live_ontology()
-    return {"available_classes": classes}
-
-
-@app.get("/datahub/tables")
-async def proxy_datahub_tables():
-    """BFF proxy: returns available dbt models from the DataHub wrapper."""
-    tables = await get_live_data_sources()
-    return {"available_tables": tables}
+# Removed BFF Mock Routes (no longer used)
 
 
 @app.get("/health")
 async def health():
     return {
         "status": "ok",
-        "service": "cortex-interrogator",
-        "mode": "baml" if _USE_BAML else "mock",
+        "service": "cortex-orchestrator-proxy",
     }
 
 

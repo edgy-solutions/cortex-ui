@@ -19,6 +19,8 @@ export interface Message {
   isStreaming: boolean;
   /** Optional thinking steps shown before the message body */
   thinkingSteps?: ThinkingStep[];
+  /** Optional network or backend error message */
+  error?: string;
   timestamp: number;
 }
 

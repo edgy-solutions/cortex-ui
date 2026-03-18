@@ -1,34 +1,16 @@
 // ── Stream Event Protocol (SSE) ─────────────────────────────────
 // The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
-// Event types: text, ontology, datahub, graph_update, interview_complete, stream_end
-
-/** Special tokens the backend injects into the stream */
-export const StreamTokens = {
-  /** Ontology lookup started: <<ONTOLOGY_LOOKUP:label>> */
-  ONTOLOGY_LOOKUP: "<<ONTOLOGY_LOOKUP",
-  /** Ontology result found: <<ONTOLOGY_FOUND:category:label>> */
-  ONTOLOGY_FOUND: "<<ONTOLOGY_FOUND",
-  /** DataHub query started: <<DATAHUB_QUERY:model:schema>> */
-  DATAHUB_QUERY: "<<DATAHUB_QUERY",
-  /** DataHub query result: <<DATAHUB_RESULT:model:schema:healthy>> */
-  DATAHUB_RESULT: "<<DATAHUB_RESULT",
-  /** Full BPMN graph update: <<GRAPH_UPDATE:json>> */
-  GRAPH_UPDATE: "<<GRAPH_UPDATE",
-  /** Interview complete signal: <<INTERVIEW_COMPLETE>> */
-  INTERVIEW_COMPLETE: "<<INTERVIEW_COMPLETE>>",
-  /** Stream end signal: <<STREAM_END>> */
-  STREAM_END: "<<STREAM_END>>",
-} as const;
+// Event types: status, final_payload, stream_end
 
 /** Parsed stream event types */
 export type StreamEvent =
-  | { type: "text"; content: string }
-  | { type: "ontology_lookup"; label: string }
-  | { type: "ontology_found"; category: string; label: string }
-  | { type: "datahub_query"; model: string; schema: string }
-  | { type: "datahub_result"; model: string; schema: string; healthy: boolean }
-  | { type: "graph_update"; graph: BPMNGraphUpdate }
-  | { type: "interview_complete" }
+  | { 
+      type: "status"; 
+      action: "think" | "found" | "error"; 
+      category?: "Concept" | "Process" | "Asset"; 
+      label: string;
+    }
+  | { type: "final_payload"; payload: any }
   | { type: "stream_end" };
 
 /** BPMN graph state emitted by the backend on each turn */
@@ -45,10 +27,6 @@ export interface InterviewRequest {
   message: string;
   session_id?: string;
   current_graph_json?: string;
-  context?: {
-    ontology_terms: Array<{ category: string; label: string }>;
-    data_bindings: Array<{ model: string; schema: string }>;
-  };
 }
 
 // ── BPMN Payload Models ───────────────────────────────────

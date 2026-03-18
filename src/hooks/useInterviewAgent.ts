@@ -24,14 +24,9 @@ const uid = () => `msg-${++_id}-${Date.now()}`;
  */
 export function useInterviewAgent() {
   const {
-    messages,
-    ontologyTerms,
-    dataBindings,
     liveBpmnGraph,
     addMessage,
     updateMessage,
-    addOntologyTerm,
-    addDataBinding,
     setLiveBpmnGraph,
     setUnresolvedPaths,
     setPhase,
@@ -42,121 +37,59 @@ export function useInterviewAgent() {
   const currentAgentMsgId = useRef<string | null>(null);
   const thinkingSteps = useRef<ThinkingStep[]>([]);
 
-  // Build context from current store state
-  const buildContext = useCallback(
-    () => ({
-      ontology_terms: ontologyTerms.map((t) => ({
-        category: t.category,
-        label: t.label,
-      })),
-      data_bindings: dataBindings.map((b) => ({
-        model: b.model,
-        schema: b.schema,
-      })),
-    }),
-    [ontologyTerms, dataBindings]
-  );
 
   // Handle individual stream events
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
-      if (!agentId && event.type !== "interview_complete" && event.type !== "stream_end") {
+      if (!agentId && event.type !== "status" && event.type !== "final_payload" && event.type !== "stream_end") {
         return;
       }
 
       switch (event.type) {
-        case "text": {
-          // Append text to the current agent message
-          const currentMsg = messages.find((m) => m.id === agentId);
-          const newContent = (currentMsg?.content ?? "") + event.content;
-          updateMessage(agentId!, { content: newContent });
-          break;
-        }
-
-        case "ontology_lookup": {
-          // Add a "loading" thinking step
-          const step: ThinkingStep = {
-            id: `think-${thinkingSteps.current.length}`,
-            label: `Scanning IOF-MRO Ontology for ${event.label}...`,
-            status: "loading",
-          };
-          thinkingSteps.current = [...thinkingSteps.current, step];
-          updateMessage(agentId!, { thinkingSteps: [...thinkingSteps.current] });
-          break;
-        }
-
-        case "ontology_found": {
-          // Mark the last thinking step as done, add the result
+        case "status": {
           const steps = [...thinkingSteps.current];
-          if (steps.length > 0) {
-            steps[steps.length - 1] = {
-              ...steps[steps.length - 1],
-              status: "done",
-              label: `Found Concept: ${event.label}`,
-            };
+          
+          if (event.action === "think") {
+             // If there was a previous loading step, mark it as done (sequential flow)
+             if (steps.length > 0 && steps[steps.length - 1].status === "loading") {
+               steps[steps.length - 1] = { ...steps[steps.length - 1], status: "done" };
+             }
+             // Add new loading step
+             const step: ThinkingStep = {
+               id: `think-${steps.length}`,
+               label: event.label,
+               status: "loading",
+             };
+             steps.push(step);
+          } else if (event.action === "found") {
+             // Mark last step as'done' and update its label to the result
+             if (steps.length > 0) {
+               steps[steps.length - 1] = {
+                 ...steps[steps.length - 1],
+                 status: "done",
+                 label: event.label,
+               };
+             }
+          } else if (event.action === "error") {
+             if (steps.length > 0) {
+              steps[steps.length - 1] = { ...steps[steps.length - 1], status: "error", label: event.label };
+             }
           }
+
           thinkingSteps.current = steps;
           updateMessage(agentId!, { thinkingSteps: [...steps] });
-
-          // Add to ontology terms
-          addOntologyTerm({
-            id: uid(),
-            category: event.category,
-            label: event.label,
-          });
           break;
         }
 
-        case "datahub_query": {
-          // Add a "querying" thinking step
-          const step: ThinkingStep = {
-            id: `think-${thinkingSteps.current.length}`,
-            label: `Querying DataHub for ${event.model}...`,
-            status: "loading",
-          };
-          thinkingSteps.current = [...thinkingSteps.current, step];
-          updateMessage(agentId!, { thinkingSteps: [...thinkingSteps.current] });
-          break;
-        }
-
-        case "datahub_result": {
-          // Mark the last thinking step as done
-          const steps = [...thinkingSteps.current];
-          if (steps.length > 0) {
-            steps[steps.length - 1] = {
-              ...steps[steps.length - 1],
-              status: "done",
-              label: `Bound: ${event.model} (${event.schema})`,
-            };
-          }
-          thinkingSteps.current = steps;
-          updateMessage(agentId!, { thinkingSteps: [...steps] });
-
-          // Add to data bindings
-          addDataBinding({
-            id: uid(),
-            model: event.model,
-            schema: event.schema,
-            healthy: event.healthy,
-          });
-          break;
-        }
-
-        case "interview_complete": {
-          // Transition to blueprint phase
+        case "final_payload": {
+          // Engine F has returned the final orchestrated state.
+          // We treat the React Flow Canvas as a dumb renderer for this BPMN model.
+          setLiveBpmnGraph(event.payload);
+          setUnresolvedPaths(event.payload.unresolved_paths ?? []);
+          
+          // Force transition to blueprint phase to show the results
           setPhase("blueprint");
-          break;
-        }
-
-        case "graph_update": {
-          // Update the live BPMN graph in the store
-          setLiveBpmnGraph(event.graph);
-          setUnresolvedPaths(event.graph.unresolved_paths ?? []);
-          // Auto-transition to blueprint when graph is ready to compile
-          if (event.graph.is_ready_to_compile) {
-            setPhase("blueprint");
-          }
           break;
         }
 
@@ -171,7 +104,7 @@ export function useInterviewAgent() {
         }
       }
     },
-    [messages, addOntologyTerm, addDataBinding, updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths]
+    [updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths]
   );
 
   // Main mutation that handles the streaming request
@@ -211,7 +144,6 @@ export function useInterviewAgent() {
         message: userInput,
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
-        context: buildContext(),
       };
 
       // Stream the response
@@ -221,16 +153,13 @@ export function useInterviewAgent() {
         abortController.current.signal
       );
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Interview stream error:", error);
-      // Mark the message as done even on error
+      // Mark the message as failed with a specific error
       if (currentAgentMsgId.current) {
         updateMessage(currentAgentMsgId.current, {
           isStreaming: false,
-          content:
-            useInterviewStore.getState().messages.find(
-              (m) => m.id === currentAgentMsgId.current
-            )?.content + "\n\n[Connection error - please try again]",
+          error: error.message || "NETWORK_OR_BACKEND_UNREACHABLE",
         });
       }
       currentAgentMsgId.current = null;
