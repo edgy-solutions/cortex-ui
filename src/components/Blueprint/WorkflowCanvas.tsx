@@ -4,21 +4,18 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  type Node,
-  type Edge,
   type NodeTypes,
   type EdgeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { motion } from "framer-motion";
-import { GitBranch } from "lucide-react";
+import { GitBranch, Loader2 } from "lucide-react";
 
 import { TriggerNode } from "./nodes/TriggerNode";
 import { LogicNode } from "./nodes/LogicNode";
 import { ActionNode } from "./nodes/ActionNode";
 import { AnimatedEdge } from "./edges/AnimatedEdge";
 import { useLiveBpmnGraph } from "@/hooks/useLiveBpmnGraph";
-import { useMockWorkflowBuilder } from "@/hooks/useMockWorkflowBuilder";
 
 // Register custom types (stable references)
 const nodeTypes: NodeTypes = {
@@ -32,24 +29,42 @@ const edgeTypes: EdgeTypes = {
 };
 
 interface WorkflowCanvasProps {
-  nodes?: Node[];
-  edges?: Edge[];
+  nodes?: any[];
+  edges?: any[];
 }
 
 export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowCanvasProps) {
-  // Use live BPMN graph from the backend stream, fall back to mock
+  // Use live BPMN graph from the backend stream — NO mock fallback
   const liveGraph = useLiveBpmnGraph();
-  const mockGraph = useMockWorkflowBuilder();
-  
-  // Routing Logic: Prefer Props -> then Live Store -> then Mock
-  const activeNodes = propNodes || liveGraph?.nodes || mockGraph.nodes;
-  const activeEdges = propEdges || liveGraph?.edges || mockGraph.edges;
+
+  // Routing: Props first, then live store. No mock.
+  const activeNodes = propNodes || liveGraph?.nodes;
+  const activeEdges = propEdges || liveGraph?.edges;
 
   // Default viewport centers the graph
   const defaultViewport = useMemo(
     () => ({ x: 200, y: 350, zoom: 0.85 }),
     []
   );
+
+  // Empty state: no data from the mesh yet
+  if (!activeNodes || activeNodes.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="h-full w-full flex flex-col items-center justify-center"
+      >
+        <Loader2 className="w-8 h-8 text-neon-blue/50 animate-spin mb-3" />
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-500">
+          Awaiting Mesh Output...
+        </p>
+        <p className="text-slate-600 text-xs mt-1">
+          Send a query to generate a live blueprint from the Agent Fleet.
+        </p>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -67,13 +82,13 @@ export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowC
       >
         <GitBranch className="w-4 h-4 text-neon-blue" />
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-neon-blue/70">
-          {liveGraph ? "Live BPMN Blueprint" : "Holographic Blueprint"}
+          Live BPMN Blueprint
         </span>
       </motion.div>
 
       <ReactFlow
         nodes={activeNodes}
-        edges={activeEdges}
+        edges={activeEdges || []}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultViewport={defaultViewport}
@@ -99,3 +114,4 @@ export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowC
     </motion.div>
   );
 }
+

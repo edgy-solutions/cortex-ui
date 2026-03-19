@@ -1,13 +1,38 @@
 import React from "react";
 import type { SemanticUIContainer } from "@/api/types";
-import { AlertCircle, FileText, Share2 } from "lucide-react";
+import { AlertCircle, FileText, Share2, Activity } from "lucide-react";
 
 // Lazy-loaded or imported directly for interpretation
 import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
-import { SupplyTable } from "./SupplyTable";
 
 // Mock/Placeholder components for missing types
+const SupplyTable = ({ data }: { data: any[] }) => (
+  <div className="glass-panel p-4 border-neon-blue/20">
+    <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
+      <Activity className="w-4 h-4 text-neon-blue" />
+      <span className="font-mono text-[10px] text-slate-400 tracking-wider">ASSET_STATE_METRICS</span>
+    </div>
+    <table className="w-full text-left font-mono text-[11px]">
+      <thead>
+        <tr className="text-slate-500">
+          <th className="pb-2">ENTITY</th>
+          <th className="pb-2">METRIC</th>
+          <th className="pb-2 text-right">VALUE</th>
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((row, i) => (
+          <tr key={i} className="text-slate-300 border-t border-white/5">
+            <td className="py-2">{row.entity || row.name}</td>
+            <td className="py-2 text-slate-500">{row.metric || "STATE"}</td>
+            <td className="py-2 text-right text-neon-blue">{row.value || "OK"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 
 const MarkdownRenderer = ({ content }: { content: string }) => (
   <div className="prose prose-invert prose-slate max-w-none font-sans text-sm leading-relaxed text-slate-300">
@@ -27,9 +52,9 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
   try {
     switch (payload.archetype) {
       case "PROCESS_TOPOLOGY": {
-        // Expected format: entities = nodes array, relationships = edges array
-        const nodes = JSON.parse(payload.entities);
-        const edges = payload.relationships ? JSON.parse(payload.relationships) : [];
+        // Payload is now natively parsed by the BFF, no JSON.parse needed
+        const nodes = Array.isArray(payload.entities) ? payload.entities : [];
+        const edges = payload.relationships || [];
         
         // TODO: Pass actual nodes/edges to WorkflowCanvas or sync to store
         console.debug("SemanticInterpreter: PROCESS_TOPOLOGY", { nodes, edges });
@@ -49,7 +74,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
       }
 
       case "HAZARD_DECLARATION": {
-        const hazards = JSON.parse(payload.entities);
+        const hazards = Array.isArray(payload.entities) ? payload.entities : [];
         return (
           <WarningCard 
             error={payload.subject_concept}
@@ -60,12 +85,14 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
       }
 
       case "ASSET_STATE_METRIC": {
-        const metrics = JSON.parse(payload.entities);
+        const metrics = Array.isArray(payload.entities) ? payload.entities : [];
         return <SupplyTable data={metrics} />;
       }
 
       case "KNOWLEDGE_DOCUMENT": {
-        return <MarkdownRenderer content={payload.entities} />;
+        // For KNOWLEDGE_DOCUMENT, entities is expected to be a string (markdown)
+        const content = typeof payload.entities === "string" ? payload.entities : JSON.stringify(payload.entities);
+        return <MarkdownRenderer content={content} />;
       }
 
       default:

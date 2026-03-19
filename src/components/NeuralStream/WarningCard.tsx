@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, RefreshCcw } from "lucide-react";
 
 interface WarningCardProps {
   error: string;
-  hazards?: string[];
+  hazards?: any[];
   isCritical?: boolean;
   onRetry?: () => void;
 }
@@ -32,27 +32,45 @@ export function WarningCard({ error, hazards, isCritical = true, onRetry }: Warn
           
           <div className="flex-1 space-y-2">
             <h3 className={`font-mono text-sm font-bold text-${themeColor}-500 uppercase tracking-wider`}>
-              {isCritical ? "System Interface Failure" : "Hazard Declaration"}
+              {isCritical ? "Structural Risk Alert" : "Safety Constraint"}
             </h3>
             <p className="font-mono text-[11px] text-slate-400 leading-relaxed text-wrap">
               {isCritical 
-                ? "The Agent Mesh is unreachable. This may be due to a network timeout or the backend orchestrator being offline."
-                : "The reasoning mesh has identified potential constraints or risks dynamic to this concept."}
+                ? "Critical safety constraints or catastrophic failure modes identified in the physical topology."
+                : "The reasoning mesh has identified potential operational constraints or safety risks."}
             </p>
             
             <div className="pt-3 flex flex-col gap-2">
               <div className={`px-3 py-2 bg-black/40 border border-${themeColor}-950 rounded font-mono text-[9px] text-${themeColor}-400/80 break-all`}>
-                {isCritical ? `ERR_CODE: ${error}` : `CONCEPT: ${error}`}
+                {isCritical ? `FAILURE_MODE: ${error}` : `SUBJECT_CONCEPT: ${error}`}
               </div>
 
-              {hazards && hazards.length > 0 && (
+              {hazards && (
                 <ul className="mt-2 space-y-1">
-                  {hazards.map((h, i) => (
-                    <li key={i} className="flex items-center gap-2 font-mono text-[10px] text-slate-300">
-                      <div className={`w-1 h-1 rounded-full bg-${themeColor}-500`} />
-                      {h}
-                    </li>
-                  ))}
+                  {(() => {
+                    // normalize hazards to an array of strings
+                    let items: string[] = [];
+                    if (Array.isArray(hazards)) {
+                      items = hazards.map(h => typeof h === 'string' ? h : JSON.stringify(h));
+                    } else if (typeof hazards === 'object' && hazards !== null) {
+                      // LLM might have nested it under a key
+                      const nested = (hazards as any).hazards || (hazards as any).findings || (hazards as any).items;
+                      if (Array.isArray(nested)) {
+                        items = nested.map(h => typeof h === 'string' ? h : JSON.stringify(h));
+                      } else {
+                        items = [JSON.stringify(hazards)];
+                      }
+                    } else if (typeof hazards === 'string') {
+                      items = [hazards];
+                    }
+
+                    return items.map((h, i) => (
+                      <li key={i} className="flex items-center gap-2 font-mono text-[10px] text-slate-300">
+                        <div className={`w-1 h-1 rounded-full bg-${themeColor}-500`} />
+                        {h}
+                      </li>
+                    ));
+                  })()}
                 </ul>
               )}
               

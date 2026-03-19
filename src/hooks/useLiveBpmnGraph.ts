@@ -63,11 +63,14 @@ export function useLiveBpmnGraph(): { nodes: Node[]; edges: Edge[] } | null {
 
     return useMemo(() => {
         if (!liveBpmnGraph) return null;
+        
+        // Ensure liveBpmnGraph is an object before using 'in' operator
+        const isObject = typeof liveBpmnGraph === 'object' && liveBpmnGraph !== null && !Array.isArray(liveBpmnGraph);
 
         // ── DUMB RENDERER MODE ──
         // If the backend (Engine F) provides pre-laid out React Flow nodes/edges,
         // we use them directly. This makes the frontend a pure renderer.
-        if ("nodes" in liveBpmnGraph && "edges" in liveBpmnGraph) {
+        if (isObject && "nodes" in liveBpmnGraph && "edges" in liveBpmnGraph) {
             return {
                 nodes: liveBpmnGraph.nodes as Node[],
                 edges: liveBpmnGraph.edges as Edge[],

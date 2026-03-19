@@ -86,18 +86,36 @@ export function useInterviewAgent() {
           // Engine F has returned the final orchestrated semantic payload.
           // We update the agent message so the SemanticInterpreter can render it.
           if (agentId) {
-            updateMessage(agentId, { payload: event.payload, isStreaming: false });
+             // Ensure all thinking steps are marked as done
+             const steps = thinkingSteps.current.map(s => ({ ...s, status: s.status === "loading" ? "done" : s.status }));
+             thinkingSteps.current = steps;
+             updateMessage(agentId, { payload: event.payload, thinkingSteps: steps, isStreaming: false });
           }
           
-          // Transition to blueprint phase to show the results
-          setPhase("blueprint");
+          // Only switch to blueprint phase for PROCESS_TOPOLOGY (BPMN graph).
+          // All other archetypes (HAZARD_DECLARATION, ASSET_STATE_METRIC, etc.)
+          // render as inline semantic cards in the NeuralStream chat.
+          if (event.payload?.archetype === "PROCESS_TOPOLOGY") {
+            // Set the live BPMN graph for WorkflowCanvas
+            if (event.payload?.entities) {
+              try {
+                const graphData = typeof event.payload.entities === "string"
+                  ? JSON.parse(event.payload.entities)
+                  : event.payload.entities;
+                setLiveBpmnGraph(graphData);
+              } catch (e) {
+                console.warn("Failed to parse BPMN graph data:", e);
+              }
+            }
+            setPhase("blueprint");
+          }
           break;
         }
 
         case "stream_end": {
           // Mark the agent message as no longer streaming
           if (agentId) {
-            updateMessage(agentId, { isStreaming: false });
+            updateMessage(agentId, { isStreaming: false, thinkingSteps: [...thinkingSteps.current] });
           }
           currentAgentMsgId.current = null;
           thinkingSteps.current = [];
@@ -114,6 +132,10 @@ export function useInterviewAgent() {
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
+
+      // Reset state for the new turn
+      setPhase("active");
+      setLiveBpmnGraph(null);
 
       // Add user message
       const userMsg: Message = {

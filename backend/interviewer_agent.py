@@ -190,7 +190,7 @@ async def _launch_supervisor_job(query: str, thread_id: str, persona: str = "PRO
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{_DAGSTER_WEBSERVER_URL}/graphql",
                 json={
@@ -198,7 +198,7 @@ async def _launch_supervisor_job(query: str, thread_id: str, persona: str = "PRO
                     "variables": {
                         "repo": _DAGSTER_REPOSITORY,
                         "loc": _DAGSTER_LOCATION,
-                        "runConfig": run_config,
+                        "runConfig": json.dumps(run_config),
                     },
                 },
             )
@@ -228,7 +228,7 @@ async def _get_run_status(run_id: str) -> dict:
     }
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{_DAGSTER_WEBSERVER_URL}/graphql",
                 json={"query": query, "variables": {"runId": run_id}},
@@ -257,7 +257,7 @@ async def _get_step_stats(run_id: str) -> list[dict]:
     }
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{_DAGSTER_WEBSERVER_URL}/graphql",
                 json={"query": query, "variables": {"runId": run_id}},
@@ -273,18 +273,44 @@ async def _get_step_stats(run_id: str) -> list[dict]:
         return []
 
 async def _get_ui_payload_output(run_id: str) -> dict:
-    """Fetch the output value of the generate_ui_payload step."""
+    """Fetch the output value of the generate_ui_payload step via Metadata.
+
+    Uses Run.eventConnection (Dagster 1.12.x schema) — NOT Run.events.
+    Schema verified via live GraphQL introspection.
+    """
     query = """
     query GetRunOutputs($runId: ID!) {
       runOrError(runId: $runId) {
         __typename
         ... on Run {
-          events {
-            __typename
-            ... on ExecutionStepOutputEvent {
-              stepKey
-              outputName
-              valueRepr
+          eventConnection {
+            events {
+              __typename
+              ... on HandledOutputEvent {
+                stepKey
+                metadataEntries {
+                  label
+                  ... on JsonMetadataEntry {
+                    jsonString
+                  }
+                  ... on TextMetadataEntry {
+                    text
+                  }
+                }
+              }
+              ... on ExecutionStepOutputEvent {
+                stepKey
+                outputName
+                metadataEntries {
+                  label
+                  ... on JsonMetadataEntry {
+                    jsonString
+                  }
+                  ... on TextMetadataEntry {
+                    text
+                  }
+                }
+              }
             }
           }
         }
@@ -292,30 +318,60 @@ async def _get_ui_payload_output(run_id: str) -> dict:
     }
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{_DAGSTER_WEBSERVER_URL}/graphql",
                 json={"query": query, "variables": {"runId": run_id}},
             )
             resp.raise_for_status()
             data = resp.json()
+
+            # Catch and log exact GraphQL schema errors if they happen
+            if "errors" in data:
+                logger.error("GraphQL Errors: %s", data["errors"])
+                return {"error": "GraphQL Query Error"}
+
+            run = data.get("data", {}).get("runOrError", {})
+
+            # Dagster 1.12.x: Run.eventConnection.events (flat list)
+            events = run.get("eventConnection", {}).get("events", [])
             
-            events = data.get("data", {}).get("runOrError", {}).get("events", [])
+            logger.info("Retrieved %d events for run %s", len(events), run_id)
+
+            # 1. Search for a specific stepKey FIRST
             for evt in events:
-                if evt.get("__typename") == "ExecutionStepOutputEvent" and evt.get("stepKey") == "generate_ui_payload":
-                    val_repr = evt.get("valueRepr", "{}")
-                    # ValueRepr returns a stringified version from Python
-                    # The JSON might require double quote replacement or eval
-                    # Depending on how the dagster stringifies dicts. In production, 
-                    # querying a Materialization or Asset would be more robust.
-                    try:
-                       # Handle single quote replacement common in python dict stringifications
-                       valid_json_str = val_repr.replace("'", '"').replace("False", "false").replace("True", "true").replace("None", "null")
-                       return json.loads(valid_json_str)
-                    except json.JSONDecodeError:
-                       logger.error("Failed to parse Dagster valueRepr as JSON: %s", val_repr)
-                       return {"error": "Failed to parse presentation output"}
-            return {"error": "No output found from generate_ui_payload"}
+                typename = evt.get("__typename")
+                step_key = evt.get("stepKey")
+                if typename == "HandledOutputEvent" and step_key == "generate_ui_payload":
+                    for meta in evt.get("metadataEntries", []):
+                        if meta.get("label") in ["ui_json_payload", "json", "UI Payload", "presentation_payload"]:
+                            json_str = meta.get("jsonString") or meta.get("text")
+                            if json_str:
+                                try:
+                                    payload = json.loads(json_str)
+                                    logger.info("Successfully extracted payload (exact step match) for archetype: %s", payload.get("archetype"))
+                                    return payload
+                                except json.JSONDecodeError:
+                                    pass
+
+            # 2. FUZZY FALLBACK: Search ALL steps for ANY metadata label matching our contract
+            for evt in events:
+                typename = evt.get("__typename")
+                if typename in ["HandledOutputEvent", "ExecutionStepOutputEvent"]:
+                    for meta in evt.get("metadataEntries", []):
+                        if meta.get("label") in ["ui_json_payload", "json", "UI Payload", "presentation_payload"]:
+                            logger.info("Fuzzy match: found metadata label '%s' in step '%s'", meta.get("label"), evt.get("stepKey"))
+                            json_str = meta.get("jsonString") or meta.get("text")
+                            if json_str:
+                                try:
+                                    payload = json.loads(json_str)
+                                    logger.info("Successfully extracted fuzzy payload for archetype: %s", payload.get("archetype"))
+                                    return payload
+                                except json.JSONDecodeError:
+                                    pass
+
+            logger.warning("No valid output payload found after checking %d events", len(events))
+            return {"error": "No UI payload found in Dagster metadata. Check Engine F logs."}
     except Exception as exc:
         logger.error("Failed to fetch UI payload: %s", exc)
         return {"error": "Exception fetching presentation output"}
@@ -346,7 +402,7 @@ async def generate_dagster_stream(
     emitted_steps = set()
     is_success = False
     
-    for _ in range(60): # 1 minute max timeout
+    for _ in range(300): # 5 minute max timeout (aligns with Agent Mesh standard)
         await asyncio.sleep(1.0)
         
         status_data = await _get_run_status(run_id)
@@ -389,7 +445,14 @@ async def generate_dagster_stream(
     if is_success:
         yield _sse("status", json.dumps({"action": "think", "category": "Concept", "label": "Retrieving Final UI Payload..."}))
         payload = await _get_ui_payload_output(run_id)
-        yield _sse("final_payload", json.dumps(payload))
+        
+        if "error" in payload:
+            logger.error("BFF Error: %s", payload["error"])
+            yield _sse("status", json.dumps({"action": "error", "label": payload["error"]}))
+        else:
+            # Mark the retrieval step as done before sending the payload
+            yield _sse("status", json.dumps({"action": "found", "category": "Asset", "label": "UI Payload Retrieved"}))
+            yield _sse("final_payload", json.dumps(payload))
     else:
         yield _sse("status", json.dumps({"action": "error", "label": "Timeout or failed to fetch UI payload."}))
         

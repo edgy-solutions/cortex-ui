@@ -5,12 +5,26 @@
 export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT';
 export type SeverityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
 
+export interface UIEntity {
+  id: string;
+  name?: string;
+  type?: string;
+  description?: string;
+}
+
+export interface UIRelation {
+  source: string;
+  target: string;
+  relation?: string;
+  predicate?: string;
+}
+
 export interface SemanticUIContainer {
   archetype: SemanticArchetype;
   subject_concept: string;
   severity?: SeverityLevel;
-  entities: string; // stringified JSON
-  relationships?: string; // stringified JSON
+  entities: string | UIEntity[]; 
+  relationships?: UIRelation[];
 }
 
 /** Parsed stream event types */
