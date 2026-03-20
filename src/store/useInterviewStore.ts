@@ -45,9 +45,12 @@ interface InterviewState {
   ontologyTerms: OntologyTerm[];
   dataBindings: DataBinding[];
   /** Live BPMN graph state from the backend stream */
-  liveBpmnGraph: BPMNGraphUpdate | null;
+  liveBpmnGraph: BPMNGraphUpdate | SemanticUIContainer | null;
   /** Dead-end paths requiring user resolution */
   unresolvedPaths: string[];
+  /** Personas currently active in the Mesh reasoning plan */
+  activePersonas: string[];
+  isProcessing: boolean;
 
   // Actions
   addMessage: (msg: Message) => void;
@@ -55,8 +58,10 @@ interface InterviewState {
   setPhase: (phase: InterviewPhase) => void;
   addOntologyTerm: (term: OntologyTerm) => void;
   addDataBinding: (binding: DataBinding) => void;
-  setLiveBpmnGraph: (graph: BPMNGraphUpdate | null) => void;
+  setLiveBpmnGraph: (graph: BPMNGraphUpdate | SemanticUIContainer | null) => void;
   setUnresolvedPaths: (paths: string[]) => void;
+  setActivePersonas: (personas: string[]) => void;
+  setIsProcessing: (isProcessing: boolean) => void;
   reset: () => void;
 }
 
@@ -65,8 +70,10 @@ const initialState = {
   phase: "active" as InterviewPhase,
   ontologyTerms: [] as OntologyTerm[],
   dataBindings: [] as DataBinding[],
-  liveBpmnGraph: null as BPMNGraphUpdate | null,
+  liveBpmnGraph: null as BPMNGraphUpdate | SemanticUIContainer | null,
   unresolvedPaths: [] as string[],
+  activePersonas: [] as string[],
+  isProcessing: false,
 };
 
 export const useInterviewStore = create<InterviewState>((set) => ({
@@ -101,6 +108,10 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   setLiveBpmnGraph: (graph) => set({ liveBpmnGraph: graph }),
 
   setUnresolvedPaths: (paths) => set({ unresolvedPaths: paths }),
+
+  setActivePersonas: (personas) => set({ activePersonas: personas }),
+
+  setIsProcessing: (isProcessing) => set({ isProcessing }),
 
   reset: () => set(initialState),
 }));

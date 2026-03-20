@@ -1,95 +1,72 @@
-import { motion } from "framer-motion";
-import { AlertCircle, AlertTriangle, RefreshCcw } from "lucide-react";
+import React from "react";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+
+interface HazardEntity {
+  id: string;
+  name?: string;
+  type?: string;
+  description?: string;
+}
 
 interface WarningCardProps {
   error: string;
-  hazards?: any[];
-  isCritical?: boolean;
-  onRetry?: () => void;
+  hazards: HazardEntity[];
+  isCritical: boolean;
 }
 
-export function WarningCard({ error, hazards, isCritical = true, onRetry }: WarningCardProps) {
-  const themeColor = isCritical ? "red" : "amber";
-  const Icon = isCritical ? AlertCircle : AlertTriangle;
-
+export const WarningCard: React.FC<WarningCardProps> = ({ error, hazards, isCritical }) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className={`max-w-md w-full glass-panel border-${themeColor}-500/30 overflow-hidden relative group`}
-    >
-      {/* Background Glow */}
-      <div className={`absolute inset-0 bg-${themeColor}-500/5 pointer-events-none`} />
-      
-      {/* Pulse Edge */}
-      <div className={`absolute inset-0 border border-${themeColor}-500/20 group-hover:border-${themeColor}-500/40 transition-colors duration-500`} />
-      
-      <div className="p-6 relative z-10">
-        <div className="flex items-start gap-4">
-          <div className={`p-2 bg-${themeColor}-500/10 border border-${themeColor}-500/20 rounded-lg`}>
-            <Icon className={`w-5 h-5 text-${themeColor}-500`} />
-          </div>
-          
-          <div className="flex-1 space-y-2">
-            <h3 className={`font-mono text-sm font-bold text-${themeColor}-500 uppercase tracking-wider`}>
-              {isCritical ? "Structural Risk Alert" : "Safety Constraint"}
-            </h3>
-            <p className="font-mono text-[11px] text-slate-400 leading-relaxed text-wrap">
-              {isCritical 
-                ? "Critical safety constraints or catastrophic failure modes identified in the physical topology."
-                : "The reasoning mesh has identified potential operational constraints or safety risks."}
-            </p>
-            
-            <div className="pt-3 flex flex-col gap-2">
-              <div className={`px-3 py-2 bg-black/40 border border-${themeColor}-950 rounded font-mono text-[9px] text-${themeColor}-400/80 break-all`}>
-                {isCritical ? `FAILURE_MODE: ${error}` : `SUBJECT_CONCEPT: ${error}`}
-              </div>
-
-              {hazards && (
-                <ul className="mt-2 space-y-1">
-                  {(() => {
-                    // normalize hazards to an array of strings
-                    let items: string[] = [];
-                    if (Array.isArray(hazards)) {
-                      items = hazards.map(h => typeof h === 'string' ? h : JSON.stringify(h));
-                    } else if (typeof hazards === 'object' && hazards !== null) {
-                      // LLM might have nested it under a key
-                      const nested = (hazards as any).hazards || (hazards as any).findings || (hazards as any).items;
-                      if (Array.isArray(nested)) {
-                        items = nested.map(h => typeof h === 'string' ? h : JSON.stringify(h));
-                      } else {
-                        items = [JSON.stringify(hazards)];
-                      }
-                    } else if (typeof hazards === 'string') {
-                      items = [hazards];
-                    }
-
-                    return items.map((h, i) => (
-                      <li key={i} className="flex items-center gap-2 font-mono text-[10px] text-slate-300">
-                        <div className={`w-1 h-1 rounded-full bg-${themeColor}-500`} />
-                        {h}
-                      </li>
-                    ));
-                  })()}
-                </ul>
-              )}
-              
-              {onRetry && (
-                <button
-                  onClick={onRetry}
-                  className={`flex items-center justify-center gap-2 px-4 py-2 bg-${themeColor}-500/10 hover:bg-${themeColor}-500/20 border border-${themeColor}-500/30 rounded font-mono text-[10px] text-${themeColor}-500 transition-all group/btn`}
-                >
-                  <RefreshCcw className="w-3 h-3 group-hover/btn:rotate-180 transition-transform duration-500" />
-                  INITIATE RECONNECT
-                </button>
-              )}
-            </div>
-          </div>
+    <div className={`w-full p-5 rounded-xl border backdrop-blur-md ${
+      isCritical 
+        ? "bg-red-950/40 border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.15)]" 
+        : "bg-amber-950/40 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.15)]"
+    }`}>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4 border-b border-white/10 pb-3">
+        {isCritical ? (
+          <ShieldAlert className="w-6 h-6 text-red-500 animate-pulse" />
+        ) : (
+          <AlertTriangle className="w-6 h-6 text-amber-500" />
+        )}
+        <div>
+          <h3 className={`font-mono text-sm font-bold tracking-wider uppercase ${isCritical ? "text-red-500" : "text-amber-500"}`}>
+            {isCritical ? "Structural Risk Alert" : "Safety Constraint"}
+          </h3>
+          <p className="text-[10px] text-slate-400 font-mono break-all">
+            SUBJECT_CONCEPT: {error}
+          </p>
         </div>
       </div>
-      
-      {/* Scanning line animation */}
-      <div className={`absolute top-0 left-0 w-full h-[1px] bg-${themeColor}-500/20 animate-scan pointer-events-none`} />
-    </motion.div>
+
+      {/* Hazards List */}
+      {hazards && hazards.length > 0 ? (
+        <div className="space-y-3">
+          {hazards.map((hazard, index) => (
+            <div key={hazard.id || index} className="p-3 bg-black/40 rounded-lg border border-white/5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`w-2 h-2 rounded-full ${isCritical ? "bg-red-500" : "bg-amber-500"}`} />
+                <span className="font-mono text-xs text-white font-semibold uppercase tracking-wider">
+                  {hazard.name || "Unknown Hazard"}
+                </span>
+                {hazard.type && (
+                  <span className="ml-auto text-[9px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded">
+                    {hazard.type}
+                  </span>
+                )}
+              </div>
+              {hazard.description && (
+                <p className="text-sm text-slate-300 pl-4 border-l-2 border-white/10 ml-1 mt-2">
+                  {hazard.description}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-4 text-center font-mono text-xs text-slate-500 bg-black/20 rounded-lg">
+          No specific hazard telemetry extracted from the mesh.
+        </div>
+      )}
+    </div>
   );
-}
+};

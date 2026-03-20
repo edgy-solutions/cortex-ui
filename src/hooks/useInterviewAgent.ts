@@ -29,6 +29,8 @@ export function useInterviewAgent() {
     updateMessage,
     setLiveBpmnGraph,
     setUnresolvedPaths,
+    setActivePersonas,
+    setIsProcessing,
     setPhase,
   } = useInterviewStore();
 
@@ -79,6 +81,10 @@ export function useInterviewAgent() {
 
           thinkingSteps.current = steps;
           updateMessage(agentId!, { thinkingSteps: [...steps] });
+
+          if (event.action === "plan" && event.personas) {
+            setActivePersonas(event.personas);
+          }
           break;
         }
 
@@ -97,17 +103,9 @@ export function useInterviewAgent() {
           // render as inline semantic cards in the NeuralStream chat.
           if (event.payload?.archetype === "PROCESS_TOPOLOGY") {
             // Set the live BPMN graph for WorkflowCanvas
-            if (event.payload?.entities) {
-              try {
-                const graphData = typeof event.payload.entities === "string"
-                  ? JSON.parse(event.payload.entities)
-                  : event.payload.entities;
-                setLiveBpmnGraph(graphData);
-              } catch (e) {
-                console.warn("Failed to parse BPMN graph data:", e);
-              }
-            }
+            setLiveBpmnGraph(event.payload);
             setPhase("blueprint");
+            setActivePersonas([]); // Clear assembly icons
           }
           break;
         }
@@ -134,8 +132,10 @@ export function useInterviewAgent() {
       abortController.current = new AbortController();
 
       // Reset state for the new turn
+      setIsProcessing(true);
       setPhase("active");
       setLiveBpmnGraph(null);
+      setActivePersonas([]);
 
       // Add user message
       const userMsg: Message = {
@@ -175,8 +175,10 @@ export function useInterviewAgent() {
         handleStreamEvent,
         abortController.current.signal
       );
+      setIsProcessing(false);
     },
     onError: (error: any) => {
+      setIsProcessing(false);
       console.error("Interview stream error:", error);
       // Mark the message as failed with a specific error
       if (currentAgentMsgId.current) {

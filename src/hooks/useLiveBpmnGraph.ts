@@ -65,43 +65,30 @@ export function useLiveBpmnGraph(): { nodes: Node[]; edges: Edge[] } | null {
         if (!liveBpmnGraph) return null;
         
         // Ensure liveBpmnGraph is an object before using 'in' operator
-        const isObject = typeof liveBpmnGraph === 'object' && liveBpmnGraph !== null && !Array.isArray(liveBpmnGraph);
+        
 
-        // ── DUMB RENDERER MODE ──
-        // If the backend (Engine F) provides pre-laid out React Flow nodes/edges,
-        // we use them directly. This makes the frontend a pure renderer.
-        if (isObject && "nodes" in liveBpmnGraph && "edges" in liveBpmnGraph) {
-            return {
-                nodes: liveBpmnGraph.nodes as Node[],
-                edges: liveBpmnGraph.edges as Edge[],
-            };
-        }
+        // ── UNIFIED ELEMENT EXTRACTION ──
+        // Support both legacy BPMN updates (tasks/gateways) and new Archetype payloads (nodes/edges)
+        const rawTasks = (liveBpmnGraph as any).tasks || (liveBpmnGraph as any).nodes || [];
+        const rawGateways = (liveBpmnGraph as any).gateways || [];
+        const rawFlows = (liveBpmnGraph as any).sequence_flows || (liveBpmnGraph as any).edges || [];
 
-        // ── LEGACY BPMN MAPPING MODE ──
-        // (Fall back to mapping BPMN tasks/gateways if only domain data is provided)
-        const {
-            tasks = [],
-            gateways = [],
-            sequence_flows = [],
-        } = liveBpmnGraph as any;
-
-        // Collect all BPMN elements for layout
         const allElements = [
-            ...tasks.map((t: any) => ({
+            ...rawTasks.map((t: any) => ({
                 id: t.id,
-                name: t.name,
-                bpmnType: t.type,
-                ontologyClass: t.ontology_class,
+                name: t.name || t.label || t.id,
+                bpmnType: t.type || (t.archetype === 'HAZARD_DECLARATION' ? 'exclusive' : 'service_task'),
+                ontologyClass: t.ontology_class || t.subject_concept,
                 dataSource: t.data_source,
             })),
-            ...gateways.map((g: any) => ({
+            ...rawGateways.map((g: any) => ({
                 id: g.id,
-                name: g.name,
-                bpmnType: g.type,
-                ontologyClass: undefined as string | undefined,
-                dataSource: undefined as string | undefined,
+                name: g.name || g.id,
+                bpmnType: g.type || 'exclusive',
             })),
         ];
+
+        if (allElements.length === 0) return null;
 
         if (allElements.length === 0) return null;
 
@@ -152,13 +139,13 @@ export function useLiveBpmnGraph(): { nodes: Node[]; edges: Edge[] } | null {
             });
         });
 
-        // Map sequence flows to edges
-        const edges: Edge[] = sequence_flows.map((sf: any) => ({
-            id: sf.id || `e-${sf.source_ref}-${sf.target_ref}`,
-            source: sf.source_ref,
-            target: sf.target_ref,
+        // Map sequence flows/edges to React Flow edges
+        const edges: Edge[] = rawFlows.map((sf: any) => ({
+            id: sf.id || `e-${sf.source_ref || sf.source}-${sf.target_ref || sf.target}`,
+            source: sf.source_ref || sf.source,
+            target: sf.target_ref || sf.target,
             type: "animated",
-            label: sf.condition_expression || undefined,
+            label: sf.condition_expression || sf.relation || sf.predicate || undefined,
         }));
 
         return { nodes, edges };

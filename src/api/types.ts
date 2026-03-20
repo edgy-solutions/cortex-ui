@@ -19,21 +19,21 @@ export interface UIRelation {
   predicate?: string;
 }
 
-export interface SemanticUIContainer {
-  archetype: SemanticArchetype;
-  subject_concept: string;
-  severity?: SeverityLevel;
-  entities: string | UIEntity[]; 
-  relationships?: UIRelation[];
-}
+export type TopologyUI = { archetype: 'PROCESS_TOPOLOGY'; subject_concept: string; nodes: UIEntity[]; edges: UIRelation[] };
+export type HazardUI = { archetype: 'HAZARD_DECLARATION'; subject_concept: string; severity: SeverityLevel; hazards: UIEntity[] };
+export type MetricUI = { archetype: 'ASSET_STATE_METRIC'; subject_concept: string; metrics: UIEntity[] };
+export type DocumentUI = { archetype: 'KNOWLEDGE_DOCUMENT'; subject_concept: string; markdown_content: string };
+
+export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI;
 
 /** Parsed stream event types */
 export type StreamEvent =
   | { 
       type: "status"; 
-      action: "think" | "found" | "error"; 
+      action: "think" | "found" | "error" | "plan"; 
       category?: "Concept" | "Process" | "Asset"; 
       label: string;
+      personas?: string[];
     }
   | { type: "final_payload"; payload: SemanticUIContainer }
   | { type: "stream_end" };

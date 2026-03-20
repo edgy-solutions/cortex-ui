@@ -41,6 +41,7 @@ function parseSSE(block: string): StreamEvent | null {
           action: parsed.action,
           category: parsed.category,
           label: parsed.label,
+          personas: parsed.personas,
         };
       }
       case "final_payload": {

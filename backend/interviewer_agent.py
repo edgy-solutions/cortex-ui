@@ -240,6 +240,92 @@ async def _get_run_status(run_id: str) -> dict:
         logger.error("Failed to get run status: %s", exc)
         return {}
 
+async def _get_run_events(run_id: str) -> list:
+    """Fetches materializations via both eventConnection (real-time) and stepStats (aggregated)."""
+    
+    query = """
+    query RunEventsQuery($runId: ID!) {
+      runOrError(runId: $runId) {
+        ... on Run {
+          eventConnection {
+            events {
+              __typename
+              ... on MaterializationEvent {
+                assetKey { path }
+                metadataEntries {
+                  label
+                  ... on TextMetadataEntry { text }
+                  ... on JsonMetadataEntry { jsonString }
+                }
+              }
+            }
+          }
+          stepStats {
+            materializations {
+              assetKey { path }
+            }
+          }
+        }
+      }
+    }
+    """
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{_DAGSTER_WEBSERVER_URL}/graphql",
+                json={"query": query, "variables": {"runId": run_id}},
+                timeout=10.0
+            )
+            
+            if response.status_code != 200:
+                logger.error("GraphQL Error [%s]: %s", response.status_code, response.text)
+                return []
+                
+            data = response.json()
+            if "errors" in data:
+                logger.error("GraphQL Logic Error: %s", data["errors"])
+                return []
+            
+            run_data = data.get("data", {}).get("runOrError", {})
+            if not run_data or run_data.get("__typename") != "Run":
+                return []
+                
+            all_mats = []
+            
+            # 1. Check eventConnection (Real-time stream)
+            events = run_data.get("eventConnection", {}).get("events", [])
+            for evt in events:
+                typename = evt.get("__typename")
+                if typename == "MaterializationEvent":
+                    # Strictly flattened structure supported in this version
+                    asset_key = evt.get("assetKey")
+                    metadata = evt.get("metadataEntries")
+                    
+                    if asset_key:
+                        all_mats.append({
+                            "assetKey": asset_key,
+                            "metadataEntries": metadata or []
+                        })
+                elif typename == "AssetMaterializationPlannedEvent":
+                    pass
+            
+            # 2. Check stepStats (Fallback/Aggregated)
+            for stat in run_data.get("stepStats", []):
+                for mat in stat.get("materializations", []):
+                    if mat and mat not in all_mats:
+                        all_mats.append(mat)
+            
+            if all_mats:
+                # Log the paths of found materializations for debugging
+                paths = [str(m.get("assetKey", {}).get("path")) for m in all_mats]
+                logger.info("Captured %d materializations for run %s. Paths: %s", len(all_mats), run_id, ", ".join(paths))
+            return all_mats
+            
+    except Exception as e:
+        logger.error("Error fetching materializations: %s", e)
+        return []
+
 async def _get_step_stats(run_id: str) -> list[dict]:
     """Gets the step statistics to drive UI holographic thinking cards."""
     query = """
@@ -402,8 +488,17 @@ async def generate_dagster_stream(
     emitted_steps = set()
     is_success = False
     
-    for _ in range(300): # 5 minute max timeout (aligns with Agent Mesh standard)
+    for idx in range(300): # 5 minute max timeout (aligns with Agent Mesh standard)
         await asyncio.sleep(1.0)
+        
+        # 🛑 THE FIX: Keep-Alive Heartbeat (Fires every 10 seconds)
+        if idx > 0 and idx % 10 == 0:
+            heartbeat_payload = json.dumps({
+                "action": "think", 
+                "category": "Process", 
+                "label": f"Agents are reasoning (Elapsed: {idx}s)..."
+            })
+            yield _sse("status", heartbeat_payload)
         
         status_data = await _get_run_status(run_id)
         if status_data.get("status") == "FAILURE":
@@ -414,6 +509,30 @@ async def generate_dagster_stream(
             is_success = True
             break
             
+        # 🛑 GET INTERMEDIATE EVENTS (Personas)
+        mats = await _get_run_events(run_id)
+        for mat in mats:
+            # Check for the active_agent_roster asset
+            path = mat.get("assetKey", {}).get("path")
+            if path == ["active_agent_roster"] and "plan_emitted" not in emitted_steps:
+                for meta in mat.get("metadataEntries", []):
+                    if meta.get("label") == "personas":
+                        try:
+                            # Support both Text and Json Metadata
+                            json_str = meta.get("text") or meta.get("jsonString") or "[]"
+                            personas_list = json.loads(json_str)
+                            
+                            logger.info("📡 Emitting SSE 'plan' with personas: %s", personas_list)
+                            yield _sse("status", json.dumps({
+                                "action": "plan",
+                                "personas": personas_list,
+                                "label": "Summoning specialized graph agents..."
+                            }))
+                            emitted_steps.add("plan_emitted")
+                            logger.info("✅ Plan emission confirmed for run %s", run_id)
+                        except Exception as parse_err:
+                            logger.error("Failed to parse persona metadata: %s", parse_err)
+
         step_stats = await _get_step_stats(run_id)
         for stat in step_stats:
             step_key = stat.get("stepKey", "")
