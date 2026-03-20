@@ -20,7 +20,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 4. Keep all styling in Tailwind classes or `src/index.css`. Do not create new CSS files.
 5. When adding new components, place them in the appropriate feature directory under `src/components/`.
 
-- **New chat responses**: Responses no longer flow through BAML. The `interviewer_agent.py` acts as a proxy to the Dagster `supervisor_query_job`. The UI uses a `SemanticInterpreter` to decode "Semantic Intent" payloads (`SemanticUIContainer`) into high-fidelity components.
+- **New chat responses**: Responses no longer flow through BAML. The `interviewer_agent.py` acts as a proxy to the Dagster `supervisor_query_job`. The UI uses a `SemanticInterpreter` to decode `DashboardUI` payloads (containing an array of `SemanticUIContainer` components) into high-fidelity composite dashboards.
 - **New node types**: Create in `src/components/Blueprint/nodes/`, register in `WorkflowCanvas.tsx` `nodeTypes` object.
 - **New edge types**: Create in `src/components/Blueprint/edges/`, register in `WorkflowCanvas.tsx` `edgeTypes` object.
 - **New HUD sections**: Add as a component in `src/components/HUD/` and render in `HUD.tsx`.
@@ -60,6 +60,8 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | BPMN type definitions | `src/api/types.ts` |
 | API client + SSE parser | `src/api/client.ts` |
 | Semantic Interpreter | `src/components/registry/SemanticInterpreter.tsx` |
+| Radar Reveal Animation | `src/components/NeuralStream/RadarReveal.tsx` |
+| Agent Team Loader | `src/components/NeuralStream/AgentTeamLoader.tsx` |
 | SSE event protocol | `src/api/types.ts` |
 | Workflow graph generation | `src/hooks/useMockWorkflowBuilder.ts` |
 | Phase-based view switching | `src/App.tsx` |
@@ -113,10 +115,37 @@ psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 - It streams real-time `status` events derived from Dagster `stepStats`. These drive the **Holographic Thinking Cards** on the frontend.
 - `action: "think"` → Displays a loading card with the provided `label`.
 - `action: "found"` → Marks the loading card as 'Done' and updates the `label` with the result.
+- `action: "plan"` → Carries a `personas` array. Triggers the **Agent Team Loader** (animated persona icons during fan-out).
 - `action: "error"` → Displays a `WarningCard` in the stream.
-- Upon successful execution of the Agent Mesh, a `final_payload` event carries a `SemanticUIContainer`.
-- **Archetypes**:
-  - `PROCESS_TOPOLOGY`: BPMN workflow graph.
-  - `HAZARD_DECLARATION`: Risk metrics and hazard lists.
-  - `ASSET_STATE_METRIC`: Telemetry and state tables.
-  - `KNOWLEDGE_DOCUMENT`: Markdown documentation.
+- Upon successful execution of the Agent Mesh, a `final_payload` event carries a `DashboardUI` object.
+
+## Composite Dashboard (`DashboardUI`)
+
+The `final_payload` is a `DashboardUI` object: `{ components: SemanticUIContainer[] }`.
+The `SemanticInterpreter` iterates over `components`, rendering each with a staggered `RadarReveal` animation in a CSS Grid.
+
+**Layout Rules:**
+- `PROCESS_TOPOLOGY` and `KNOWLEDGE_DOCUMENT` → `col-span-full` (full width).
+- `HAZARD_DECLARATION` and `ASSET_STATE_METRIC` → `col-span-1` (inline, 2-col grid on md+).
+
+**RadarReveal Animation (3 phases):**
+1. Horizontal neon scan line expands from center.
+2. Container height expands via CSS Grid `grid-rows-[1fr]`.
+3. Content fades in with upward translate.
+Each component is staggered by `index * 400ms`.
+
+## Archetypes
+- **`PROCESS_TOPOLOGY`**: Full-width React Flow graph (nodes + edges). Triggers `blueprint` phase.
+- **`HAZARD_DECLARATION`**: Inline `WarningCard` with severity badges and hazard entity lists.
+- **`ASSET_STATE_METRIC`**: Inline `SupplyTable` showing Entity/Type/Detail columns (maps `UIEntity.name`, `.type`, `.description`).
+- **`KNOWLEDGE_DOCUMENT`**: Full-width Markdown rendered via `react-markdown`.
+
+## Personas
+
+The backend broadcasts active personas during Dagster fan-out via `AssetMaterialization`. The frontend displays animated persona icons in the `AgentTeamLoader` component.
+
+- **MECHANIC** — Wrench icon (amber). Safety hazards, tool requirements.
+- **TECH_WRITER** — BookOpen icon (blue). Technical procedure documentation.
+- **LOGISTICS** — Truck icon (emerald). Supply chain and platform impact.
+- **AUDITOR** — ShieldCheck icon (red). Compliance violations, audit reports.
+- **PROCESS_ENGINEER** — Network icon (purple). Workflow graphs, process steps.

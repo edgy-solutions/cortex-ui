@@ -31,9 +31,11 @@ const edgeTypes: EdgeTypes = {
 interface WorkflowCanvasProps {
   nodes?: any[];
   edges?: any[];
+  /** Hide the built-in "Live BPMN Blueprint" header badge (e.g. when embedded in SemanticInterpreter) */
+  hideHeader?: boolean;
 }
 
-export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowCanvasProps) {
+export function WorkflowCanvas({ nodes: propNodes, edges: propEdges, hideHeader }: WorkflowCanvasProps) {
   // Use live BPMN graph from the backend stream — NO mock fallback
   const liveGraph = useLiveBpmnGraph();
 
@@ -74,17 +76,19 @@ export function WorkflowCanvas({ nodes: propNodes, edges: propEdges }: WorkflowC
       className="h-full w-full relative"
     >
       {/* Header badge */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.4 }}
-        className="absolute top-4 left-4 z-10 flex items-center gap-2"
-      >
-        <GitBranch className="w-4 h-4 text-neon-blue" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-neon-blue/70">
-          Live BPMN Blueprint
-        </span>
-      </motion.div>
+      {!hideHeader && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
+          className="absolute top-4 left-4 z-10 flex items-center gap-2"
+        >
+          <GitBranch className="w-4 h-4 text-neon-blue" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-neon-blue/70">
+            Live BPMN Blueprint
+          </span>
+        </motion.div>
+      )}
 
       <ReactFlow
         nodes={activeNodes}

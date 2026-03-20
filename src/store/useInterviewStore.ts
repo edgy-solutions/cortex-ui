@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { BPMNGraphUpdate, SemanticUIContainer } from "@/api/types";
+import type { BPMNGraphUpdate, SemanticUIContainer, DashboardUI } from "@/api/types";
 
 // ── Types ──────────────────────────────────────────────────
 export type MessageRole = "user" | "agent";
@@ -22,7 +22,7 @@ export interface Message {
   /** Optional network or backend error message */
   error?: string;
   /** Schema-driven semantic payload for high-fidelity rendering */
-  payload?: SemanticUIContainer;
+  payload?: DashboardUI;
   timestamp: number;
 }
 

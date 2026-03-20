@@ -54,7 +54,9 @@ src/
 │   │   ├── NeuralStream.tsx          # Scrollable Message list
 │   │   ├── MessageBubble.tsx         # User/agent bubble, warning card for failures
 │   │   ├── ThinkingCard.tsx          # Dynamic card reflecting Dagster step statuses
-│   │   └── WarningCard.tsx           # Critical failure visualization
+│   │   ├── WarningCard.tsx           # Critical failure visualization
+│   │   ├── AgentTeamLoader.tsx       # Animated persona icons during fan-out ("Agents Assembling")
+│   │   └── RadarReveal.tsx           # 3-phase reveal animation for dashboard sections
 │   │
 │   ├── HUD/
 │   │   ├── HUD.tsx                   # Right sidebar: ontology + bindings + compile
@@ -96,15 +98,27 @@ backend/
 
 The backend proxies the Dagster supervisor job and emits the following SSE events:
 
-- `event: status`           data: `{"action": "think|found|error", "label": "..."}`
-- `event: final_payload`    data: `{ archetype: "...", entities: "...", ... }`
+- `event: status`           data: `{"action": "think|found|error|plan", "label": "...", "personas?": [...]}`
+- `event: final_payload`    data: `{ components: [...] }` (DashboardUI shape)
 - `event: stream_end`       data: `{}`
 
-### Semantic Archetypes
-- `PROCESS_TOPOLOGY`: Orchestrated React Flow graphs.
-- `HAZARD_DECLARATION`: Risk/hazard alerts with criticality weighting.
-- `ASSET_STATE_METRIC`: Telemetry tables.
-- `KNOWLEDGE_DOCUMENT`: Markdown documentation.
+### Semantic Archetypes (DashboardUI.components)
+- `PROCESS_TOPOLOGY`: Full-width React Flow graph. Triggers blueprint phase.
+- `HAZARD_DECLARATION`: Inline risk/hazard card with severity badges.
+- `ASSET_STATE_METRIC`: Inline Entity/Type/Detail table.
+- `KNOWLEDGE_DOCUMENT`: Full-width Markdown (react-markdown).
+
+### Personas (displayed in AgentTeamLoader during fan-out)
+- **MECHANIC** — Wrench icon (amber). Safety, tools, procedures.
+- **TECH_WRITER** — BookOpen icon (blue). Documentation, manuals.
+- **LOGISTICS** — Truck icon (emerald). Supply chain, platforms.
+- **AUDITOR** — ShieldCheck icon (red). Compliance, regulations.
+- **PROCESS_ENGINEER** — Network icon (purple). Workflow graphs.
+
+### Composite Dashboard Layout
+- `PROCESS_TOPOLOGY` / `KNOWLEDGE_DOCUMENT` → `col-span-full` (full width)
+- `HAZARD_DECLARATION` / `ASSET_STATE_METRIC` → `col-span-1` (inline 2-col grid)
+- Each section wrapped in `RadarReveal` (neon scan → expand → fade-in), staggered by 400ms.
 
 ## Architecture: Dagster Proxy (Polyglot Mesh)
 

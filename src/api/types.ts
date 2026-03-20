@@ -26,6 +26,11 @@ export type DocumentUI = { archetype: 'KNOWLEDGE_DOCUMENT'; subject_concept: str
 
 export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI;
 
+// Composite Dashboard wrapper (multiple components per screen)
+export type DashboardUI = {
+  components: SemanticUIContainer[];
+};
+
 /** Parsed stream event types */
 export type StreamEvent =
   | { 
@@ -35,7 +40,7 @@ export type StreamEvent =
       label: string;
       personas?: string[];
     }
-  | { type: "final_payload"; payload: SemanticUIContainer }
+  | { type: "final_payload"; payload: DashboardUI }
   | { type: "stream_end" };
 
 /** BPMN graph state emitted by the backend on each turn */

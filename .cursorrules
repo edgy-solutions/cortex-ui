@@ -74,6 +74,23 @@
 - Secrets (`OPENROUTER_API_KEY`), internal URLs (`ONTOLOGY_SERVICE_URL`, `DATAHUB_SERVICE_URL`), database (`DATABASE_URL`), and Dagster (`DAGSTER_WEBSERVER_URL`) live in `backend/.env` only.
 - CORS is enabled for local development. Restrict `allow_origins` in production.
 
+## Composite Dashboard (`DashboardUI`)
+
+- The `final_payload` SSE event carries a `DashboardUI`: `{ components: SemanticUIContainer[] }`.
+- `SemanticInterpreter` iterates `payload.components`, rendering each archetype with `RadarReveal`.
+- Layout uses CSS Grid: `PROCESS_TOPOLOGY` / `KNOWLEDGE_DOCUMENT` = `col-span-full`. Cards = `col-span-1` in 2-col grid.
+- `RadarReveal` animates in 3 phases: neon scan line → vertical expand → content fade-in. Stagger: `delayMs={index * 400}`.
+- `SupplyTable` maps BAML `UIEntity` fields: `name`, `type`, `description`. NOT `entity`/`metric`/`value`.
+- `MarkdownRenderer` uses `react-markdown` (≠ raw text dump).
+
+## Personas & Agent Team Loader
+
+- The SSE `action: "plan"` event carries a `personas: string[]` array.
+- `useInterviewAgent` calls `setActivePersonas(event.personas)` on this event.
+- `AgentTeamLoader` renders animated persona icons during the fan-out phase.
+- Config in `PersonaConfig`: MECHANIC (Wrench/amber), TECH_WRITER (BookOpen/blue), LOGISTICS (Truck/emerald), AUDITOR (ShieldCheck/red), PROCESS_ENGINEER (Network/purple).
+- The loader shows when `isProcessing && activePersonas.length > 0 && !messages.some(m => m.role === 'agent' && m.content)`.
+
 ## Do Not
 
 - Do not install additional CSS frameworks (no styled-components, no CSS modules, no Emotion).

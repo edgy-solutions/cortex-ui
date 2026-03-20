@@ -98,15 +98,11 @@ export function useInterviewAgent() {
              updateMessage(agentId, { payload: event.payload, thinkingSteps: steps, isStreaming: false });
           }
           
-          // Only switch to blueprint phase for PROCESS_TOPOLOGY (BPMN graph).
-          // All other archetypes (HAZARD_DECLARATION, ASSET_STATE_METRIC, etc.)
-          // render as inline semantic cards in the NeuralStream chat.
-          if (event.payload?.archetype === "PROCESS_TOPOLOGY") {
-            // Set the live BPMN graph for WorkflowCanvas
-            setLiveBpmnGraph(event.payload);
-            setPhase("blueprint");
-            setActivePersonas([]); // Clear assembly icons
-          }
+          // All DashboardUI payloads render inline in the NeuralStream chat
+          // via the SemanticInterpreter. We no longer switch to the blueprint
+          // phase automatically — the composite dashboard handles all archetypes
+          // including PROCESS_TOPOLOGY within the chat stream.
+          setActivePersonas([]); // Clear assembly icons
           break;
         }
 

@@ -1,9 +1,11 @@
 import React from "react";
 import { AlertCircle, FileText, Share2, Activity } from "lucide-react";
+import Markdown from "react-markdown";
 
 // Lazy-loaded or imported directly for interpretation
 import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
+import { RadarReveal } from "../NeuralStream/RadarReveal";
 
 // Mock/Placeholder components for missing types
 const SupplyTable = ({ data }: { data: any[] }) => (
@@ -16,16 +18,16 @@ const SupplyTable = ({ data }: { data: any[] }) => (
       <thead>
         <tr className="text-slate-500">
           <th className="pb-2">ENTITY</th>
-          <th className="pb-2">METRIC</th>
-          <th className="pb-2 text-right">VALUE</th>
+          <th className="pb-2">TYPE</th>
+          <th className="pb-2 text-right">DETAIL</th>
         </tr>
       </thead>
       <tbody>
         {data.map((row, i) => (
           <tr key={i} className="text-slate-300 border-t border-white/5">
-            <td className="py-2">{row.entity || row.name}</td>
-            <td className="py-2 text-slate-500">{row.metric || "STATE"}</td>
-            <td className="py-2 text-right text-neon-blue">{row.value || "OK"}</td>
+            <td className="py-2">{row.name || row.id}</td>
+            <td className="py-2 text-slate-500">{row.type || "—"}</td>
+            <td className="py-2 text-right text-neon-blue">{row.description || "—"}</td>
           </tr>
         ))}
       </tbody>
@@ -39,83 +41,69 @@ const MarkdownRenderer = ({ content }: { content: string }) => (
       <FileText className="w-4 h-4 text-neon-purple" />
       <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">Knowledge_Doc</span>
     </div>
-    {content}
+    <Markdown>{content}</Markdown>
   </div>
 );
 
-// 1. Define the strictly typed union matching BAML
-type TopologyUI = { archetype: "PROCESS_TOPOLOGY"; subject_concept: string; nodes: any[]; edges: any[] };
-type HazardUI = { archetype: "HAZARD_DECLARATION"; subject_concept: string; severity: string; hazards: any[] };
-type MetricUI = { archetype: "ASSET_STATE_METRIC"; subject_concept: string; metrics: any[] };
-type DocumentUI = { archetype: "KNOWLEDGE_DOCUMENT"; subject_concept: string; markdown_content: string };
-
-export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI;
+// Re-export the canonical type from api/types
+export type { SemanticUIContainer } from "@/api/types";
 
 interface SemanticInterpreterProps {
-  payload: SemanticUIContainer;
+  payload: { components: any[] }; // DashboardUI shape
 }
 
-export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
-  // 2. No more try/catch parsing block needed! BAML guarantees structure.
-  switch (payload.archetype) {
+// Render a single semantic component by archetype
+const renderComponent = (comp: any) => {
+  switch (comp.archetype) {
     case "PROCESS_TOPOLOGY": {
-      // 1. Map abstract semantic nodes into visual UI nodes (Auto-layout vertically)
-      const visualNodes = payload.nodes.map((node: any, index: number) => ({
+      // Map semantic nodes to custom glassmorphism node types.
+      // First node = trigger (green circle), rest = action (purple rectangle).
+      const visualNodes = comp.nodes.map((node: any, index: number) => ({
         id: node.id,
-        position: { x: 250, y: index * 120 + 50 }, // Vertical spacing
-        data: { 
-          label: (
-            <div className="flex flex-col text-center">
-              <span className="font-bold text-xs text-neon-blue">{node.name || node.id}</span>
-              {node.type && <span className="text-[9px] text-slate-400 mt-1">{node.type}</span>}
-            </div>
-          ) 
+        position: { x: 250, y: index * 160 + 50 },
+        data: {
+          label: node.name || node.id,
+          subtitle: node.type || node.description || undefined,
+          delay: index * 0.15,
         },
-        type: 'default' 
+        type: index === 0 ? 'trigger' : 'action',
       }));
 
-      // 2. Map abstract semantic edges into visual UI edges
-      const visualEdges = payload.edges.map((edge: any, index: number) => ({
+      const visualEdges = comp.edges.map((edge: any, index: number) => ({
         id: `e-${edge.source}-${edge.target}-${index}`,
         source: edge.source,
         target: edge.target,
         label: edge.relation || edge.predicate || "",
-        animated: true, 
-        style: { stroke: '#00f0ff' }
+        type: 'animated',
       }));
 
       return (
-        <div className="w-full h-[500px] relative rounded-xl overflow-hidden border border-white/5 bg-slate-950/50">
-           <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 glass-panel-sm border-neon-green/30">
-              <Share2 className="w-3 h-3 text-neon-green" />
-              <span className="font-mono text-[9px] text-neon-green uppercase tracking-tighter">
-                {payload.subject_concept}
-              </span>
-           </div>
-           
-           {/* Pass the newly mapped visual arrays to the canvas */}
-           <WorkflowCanvas nodes={visualNodes} edges={visualEdges} />
+        <div className="w-full h-[600px] relative rounded-xl overflow-hidden border border-white/5 bg-slate-950/50">
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 glass-panel-sm border-neon-green/30">
+            <Share2 className="w-3 h-3 text-neon-green" />
+            <span className="font-mono text-[9px] text-neon-green uppercase tracking-tighter">
+              {comp.subject_concept}
+            </span>
+          </div>
+          <WorkflowCanvas nodes={visualNodes} edges={visualEdges} hideHeader />
         </div>
       );
     }
 
-    case "HAZARD_DECLARATION": {
+    case "HAZARD_DECLARATION":
       return (
-        <WarningCard 
-          error={payload.subject_concept}
-          hazards={payload.hazards}
-          isCritical={payload.severity === "CRITICAL"}
+        <WarningCard
+          error={comp.subject_concept}
+          hazards={comp.hazards}
+          isCritical={comp.severity === "CRITICAL"}
         />
       );
-    }
 
-    case "ASSET_STATE_METRIC": {
-      return <SupplyTable data={payload.metrics} />;
-    }
+    case "ASSET_STATE_METRIC":
+      return <SupplyTable data={comp.metrics} />;
 
-    case "KNOWLEDGE_DOCUMENT": {
-      return <MarkdownRenderer content={payload.markdown_content} />;
-    }
+    case "KNOWLEDGE_DOCUMENT":
+      return <MarkdownRenderer content={comp.markdown_content} />;
 
     default:
       return (
@@ -130,4 +118,29 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
         </div>
       );
   }
+};
+
+// Graphs and documents span full width; cards flow inline in a 2-col grid
+const isFullWidth = (archetype: string) =>
+  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT";
+
+export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
+  if (!payload || !payload.components || !Array.isArray(payload.components)) {
+    return null;
+  }
+
+  return (
+    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+      {payload.components.map((comp, index) => (
+        <div
+          key={index}
+          className={isFullWidth(comp.archetype) ? "col-span-full" : "col-span-1"}
+        >
+          <RadarReveal delayMs={index * 400}>
+            {renderComponent(comp)}
+          </RadarReveal>
+        </div>
+      ))}
+    </div>
+  );
 };

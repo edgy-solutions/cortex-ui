@@ -69,6 +69,7 @@ npm run dev
 | State | Zustand |
 | Data Fetching | TanStack Query + axios |
 | Graph | @xyflow/react (React Flow v12) |
+| Markdown | react-markdown |
 | Icons | Lucide React |
 | Fonts | JetBrains Mono, Inter |
 | Backend | FastAPI (Python), StreamingResponse |
@@ -83,7 +84,7 @@ src/
 ├── store/                  # Zustand store (messages, phase, ontology, bindings)
 ├── hooks/                  # useAgent (auto-switches real/mock), useCompileWorkflow
 ├── components/
-│   ├── NeuralStream/       # Chat UI: messages, thinking cards, input bar
+│   ├── NeuralStream/       # Chat UI: messages, thinking cards, RadarReveal, AgentTeamLoader
 │   ├── HUD/                # Sidebar: ontology map, data bindings
 │   ├── Blueprint/          # React Flow: custom nodes, animated edges
 │   └── Compilation/        # Compile button, matrix code overlay
@@ -104,8 +105,8 @@ The app has three primary phases controlled by a Zustand store:
 active → blueprint → complete
 ```
 
-- **active** — Application proxies prompts to the Dagster `supervisor_query_job`. Real-time SSE status events drive the thinking visualizations.
-- **blueprint** — **Semantic Interpreter** phase. The frontend decodes the backend's "Semantic Intent" payload (Archetypes: Topology, Hazards, Metrics, Docs) into high-fidelity React components.
+- **active** — Application proxies prompts to the Dagster `supervisor_query_job`. Real-time SSE status events drive Thinking Cards. Animated persona icons appear during fan-out ("Agents Assembling").
+- **blueprint** — **Composite Dashboard** phase. Engine F returns a `DashboardUI` with multiple components. The `SemanticInterpreter` renders each with staggered `RadarReveal` animations in a responsive CSS Grid. Graphs and docs span full width; cards flow inline.
 - **complete** — Final deployment and system online state.
 
 The frontend uses a **facade pattern** (`useAgent`) that health-checks the backend gateway. If the mesh is online, it uses live SSE streaming. If not, it falls back to a mock implementation for demo consistency.
