@@ -246,6 +246,7 @@ async def _get_run_events(run_id: str) -> list:
     query = """
     query RunEventsQuery($runId: ID!) {
       runOrError(runId: $runId) {
+        __typename
         ... on Run {
           eventConnection {
             events {
@@ -263,6 +264,15 @@ async def _get_run_events(run_id: str) -> list:
           stepStats {
             materializations {
               assetKey { path }
+              metadataEntries {
+                label
+                ... on TextMetadataEntry {
+                  text
+                }
+                ... on JsonMetadataEntry {
+                  jsonString
+                }
+              }
             }
           }
         }
