@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Brain } from "lucide-react";
+import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
 
 interface LayoutProps {
   stream: ReactNode;
@@ -54,9 +55,11 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex-1 h-full min-w-0"
+          className="flex-1 h-full min-w-0 relative overflow-hidden"
         >
           {canvas}
+          {/* The sliding inspector overlay */}
+          <NodeInspector />
         </motion.section>
 
         {/* Right HUD Sidebar */}

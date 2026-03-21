@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from neo4j import GraphDatabase
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +67,13 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+
+# Neo4j Driver Setup
+_NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+_NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+_NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "changeme")
+
+neo4j_driver = GraphDatabase.driver(_NEO4J_URI, auth=(_NEO4J_USERNAME, _NEO4J_PASSWORD))
 
 app.add_middleware(
     CORSMiddleware,
@@ -838,6 +846,52 @@ async def health():
         "status": "ok",
         "service": "cortex-orchestrator-proxy",
     }
+
+
+# ══════════════════════════════════════════════════════════
+# Deep Inspection (Neo4j Proxy)
+# ══════════════════════════════════════════════════════════
+
+@app.get("/graph/node/{node_id}")
+async def get_graph_node(node_id: str):
+    """
+    Directly query the Neo4j Graph Database for a specific node ID.
+    Used by the frontend NodeInspector to prove data provenance.
+    """
+    try:
+        # Some Data bindings might be S1000D Data Modules or normal graph IDs
+        with neo4j_driver.session() as session:
+            # We search for any node where id = node_id, or name = node_id
+            query = """
+            MATCH (n) 
+            WHERE n.id = $node_id OR n.name = $node_id OR n.partNumber = $node_id
+            RETURN labels(n) as labels, properties(n) as properties
+            LIMIT 1
+            """
+            result = session.run(query, node_id=node_id)
+            record = result.single()
+
+            if not record:
+                return {
+                    "_metadata": {"uri": node_id, "status": "NOT_FOUND"},
+                    "error": "No matching node found in the graph database for this identifier."
+                }
+
+            return {
+                "_metadata": {
+                    "uri": node_id,
+                    "type": "Neo4j Node",
+                    "retrieved_at": datetime.now(timezone.utc).isoformat()
+                },
+                "labels": record["labels"],
+                "properties": record["properties"]
+            }
+    except Exception as exc:
+        logger.error("Failed to query Neo4j: %s", exc)
+        return {
+            "_metadata": {"uri": node_id, "status": "ERROR"},
+            "error": str(exc)
+        }
 
 
 # ══════════════════════════════════════════════════════════

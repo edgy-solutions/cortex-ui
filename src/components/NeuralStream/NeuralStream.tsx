@@ -20,8 +20,10 @@ export function NeuralStream() {
   }, [messages, isProcessing, activePersonas]);
 
   // Determine if we are in the "Agent Assembling" phase
-  // We show the loader if we are processing AND we have personas but the agent hasn't started talking yet
-  const at_planning_phase = isProcessing && activePersonas.length > 0 && !messages.some(m => m.role === 'agent' && m.content);
+  // We show the loader if we are processing AND we have personas but the CURRENT agent response hasn't started talking yet.
+  // Look at the last message in the array (which during processing is the pending agent message).
+  const lastMessage = messages[messages.length - 1];
+  const at_planning_phase = isProcessing && activePersonas.length > 0 && lastMessage?.role === 'agent' && !lastMessage.content;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">

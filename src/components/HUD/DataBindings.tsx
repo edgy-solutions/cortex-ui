@@ -1,9 +1,11 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Database } from "lucide-react";
 import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
 
 export function DataBindings() {
   const bindings = useInterviewStore((s) => s.dataBindings);
+  const { openInspector } = useCanvasStore();
 
   return (
     <div className="glass-panel-sm p-3">
@@ -33,7 +35,8 @@ export function DataBindings() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.3 }}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-900/50 border border-slate-800/50"
+                onClick={() => openInspector(binding.model)}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-900/50 border border-slate-800/50 cursor-pointer hover:border-neon-cyan/50 hover:bg-neon-cyan/5 transition-all duration-200 group"
               >
                 {/* Health indicator */}
                 <span
@@ -45,7 +48,7 @@ export function DataBindings() {
                 />
 
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs text-slate-300 truncate">
+                  <p className="font-mono text-xs text-slate-300 group-hover:text-neon-cyan transition-colors truncate">
                     {binding.model}
                   </p>
                   <p className="font-mono text-[10px] text-slate-600">
