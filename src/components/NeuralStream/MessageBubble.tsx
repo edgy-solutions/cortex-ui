@@ -43,15 +43,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 isUser
                   ? "bg-neon-purple/15 border border-neon-purple/30 text-slate-200"
+                  : message.isReceipt
+                  ? "glass-panel border-neon-green/30 text-neon-green font-mono text-[10px] tracking-wider uppercase"
                   : "glass-panel-sm text-slate-300"
               }`}
             >
-              <span className={!isUser ? "font-mono text-[13px]" : ""}>
+              <span className={!isUser && !message.isReceipt ? "font-mono text-[13px]" : ""}>
                 {message.content}
               </span>
 
               {/* Streaming cursor */}
-              {message.isStreaming && message.content && (
+              {message.isStreaming && message.content && !message.isReceipt && (
                 <span className="inline-block w-2 h-4 ml-0.5 bg-neon-blue animate-pulse-neon align-middle" />
               )}
             </div>

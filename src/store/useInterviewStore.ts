@@ -23,6 +23,8 @@ export interface Message {
   error?: string;
   /** Schema-driven semantic payload for high-fidelity rendering */
   payload?: DashboardUI;
+  /** True if this message should render as a subtle receipt card */
+  isReceipt?: boolean;
   timestamp: number;
 }
 

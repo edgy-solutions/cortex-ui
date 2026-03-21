@@ -8,6 +8,8 @@ import {
   type ThinkingStep,
 } from "@/store/useInterviewStore";
 
+import { useCanvasStore } from "@/store/useCanvasStore";
+
 // ── Helpers ───────────────────────────────────────────────
 let _id = 0;
 const uid = () => `msg-${++_id}-${Date.now()}`;
@@ -90,18 +92,25 @@ export function useInterviewAgent() {
 
         case "final_payload": {
           // Engine F has returned the final orchestrated semantic payload.
-          // We update the agent message so the SemanticInterpreter can render it.
           if (agentId) {
              // Ensure all thinking steps are marked as done
              const steps = thinkingSteps.current.map(s => ({ ...s, status: s.status === "loading" ? "done" : s.status }));
              thinkingSteps.current = steps;
-             updateMessage(agentId, { payload: event.payload, thinkingSteps: steps, isStreaming: false });
+             
+             // Dispatch to Canvas Store
+             if (event.payload?.components) {
+               useCanvasStore.getState().setCanvasContent(event.payload.components);
+             }
+
+             // Update chat message with a receipt instead of the full payload
+             updateMessage(agentId, { 
+               content: `Artifacts generated: ${event.payload?.components?.length || 0} modules deployed to Canvas.`,
+               isReceipt: true,
+               thinkingSteps: steps, 
+               isStreaming: false 
+             });
           }
           
-          // All DashboardUI payloads render inline in the NeuralStream chat
-          // via the SemanticInterpreter. We no longer switch to the blueprint
-          // phase automatically — the composite dashboard handles all archetypes
-          // including PROCESS_TOPOLOGY within the chat stream.
           setActivePersonas([]); // Clear assembly icons
           break;
         }

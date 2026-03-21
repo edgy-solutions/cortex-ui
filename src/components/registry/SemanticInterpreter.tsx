@@ -1,11 +1,13 @@
 import React from "react";
 import { AlertCircle, FileText, Share2, Activity } from "lucide-react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // Lazy-loaded or imported directly for interpretation
 import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
+import { PersonaConfig } from "../NeuralStream/AgentTeamLoader";
 
 // Mock/Placeholder components for missing types
 const SupplyTable = ({ data }: { data: any[] }) => (
@@ -36,12 +38,12 @@ const SupplyTable = ({ data }: { data: any[] }) => (
 );
 
 const MarkdownRenderer = ({ content }: { content: string }) => (
-  <div className="prose prose-invert prose-slate max-w-none font-sans text-sm leading-relaxed text-slate-300">
+  <div className="prose prose-invert prose-slate max-w-none font-sans text-sm leading-relaxed text-slate-300 prose-table:font-mono prose-table:text-[11px] prose-th:text-slate-400 prose-th:border-b prose-th:border-white/10 prose-th:pb-2 prose-td:py-1.5 prose-td:border-t prose-td:border-white/5 prose-td:text-slate-300">
     <div className="flex items-center gap-2 mb-4">
       <FileText className="w-4 h-4 text-neon-purple" />
       <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">Knowledge_Doc</span>
     </div>
-    <Markdown>{content}</Markdown>
+    <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
   </div>
 );
 
@@ -131,16 +133,31 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
 
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-      {payload.components.map((comp, index) => (
-        <div
-          key={index}
-          className={isFullWidth(comp.archetype) ? "col-span-full" : "col-span-1"}
-        >
-          <RadarReveal delayMs={index * 400}>
-            {renderComponent(comp)}
-          </RadarReveal>
-        </div>
-      ))}
+      {payload.components.map((comp, index) => {
+        const persona = comp.source_persona as keyof typeof PersonaConfig | undefined;
+        const pCfg = persona ? PersonaConfig[persona] : null;
+
+        // Use a stable key based on the component data if possible, else fallback to index + archetype
+        const stableKey = `${comp.archetype}-${comp.subject_concept}-${index}`;
+
+        return (
+          <div
+            key={stableKey}
+            className={isFullWidth(comp.archetype) ? "col-span-full" : "col-span-1"}
+          >
+            <RadarReveal delayMs={index * 400}>
+              {/* Persona attribution badge */}
+              {pCfg && (
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-md border text-[10px] font-mono font-bold uppercase tracking-wider ${pCfg.bg} ${pCfg.color}`}>
+                  {pCfg.icon}
+                  {pCfg.label}
+                </div>
+              )}
+              {renderComponent(comp)}
+            </RadarReveal>
+          </div>
+        );
+      })}
     </div>
   );
 };

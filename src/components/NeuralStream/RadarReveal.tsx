@@ -1,45 +1,40 @@
 import React, { useState, useEffect } from 'react';
 
-interface RadarRevealProps {
-  children: React.ReactNode;
-  delayMs?: number;
-}
-
-export const RadarReveal: React.FC<RadarRevealProps> = ({ children, delayMs = 0 }) => {
+export const RadarReveal = ({ children, delayMs = 0 }: { children: React.ReactNode; delayMs?: number }) => {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
-    // Start animation sequence
-    const t1 = setTimeout(() => setPhase(1), delayMs);       // Draw line outward
-    const t2 = setTimeout(() => setPhase(2), delayMs + 300); // Expand vertical box
-    const t3 = setTimeout(() => setPhase(3), delayMs + 600); // Fade in content
+    setPhase(0);
+    const t1 = setTimeout(() => setPhase(1), 100 + delayMs); // Phase 1: Draw horizontal line
+    const t2 = setTimeout(() => setPhase(2), 600 + delayMs); // Phase 2: Expand vertically
+    const t3 = setTimeout(() => setPhase(3), 1100 + delayMs); // Phase 3: Fade content in
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, [delayMs]);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [delayMs]); // Only re-run if delayMs changes (or component remounts)
 
   return (
-    <div className="w-full flex flex-col items-center justify-center my-2 relative">
-      {/* Phase 1: The horizontal radar line */}
+    <div className="relative w-full flex flex-col items-center justify-center my-4">
+      {/* Phase 1: The glowing radar line */}
       <div 
-        className={`absolute top-1/2 -translate-y-1/2 h-[2px] bg-neon-blue shadow-[0_0_15px_#00f0ff] transition-all duration-500 ease-out z-10
-          ${phase === 1 ? 'w-full opacity-100' : 'w-0 opacity-0'}
-          ${phase >= 2 ? 'opacity-0 hidden' : ''}
+        className={`absolute top-1/2 -translate-y-1/2 h-[2px] bg-[#00f0ff] shadow-[0_0_15px_#00f0ff] transition-transform duration-500 ease-out z-10 origin-center
+          ${phase >= 1 ? 'scale-x-100' : 'scale-x-0'}
+          ${phase >= 2 ? 'opacity-0 transition-opacity duration-300' : 'opacity-100'}
         `}
+        style={{ width: '100%' }}
       />
       
-      {/* Phase 2 & 3: The vertical expansion and content reveal */}
+      {/* Phase 2 & 3: Vertical Expansion and Content Fade */}
       <div 
-        className={`w-full transition-all duration-700 ease-in-out
-          ${phase >= 2 ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}
-          overflow-hidden
+        className={`w-full transition-[grid-template-rows] duration-700 ease-in-out grid
+          ${phase >= 2 ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}
         `}
       >
-        <div className={`transition-opacity duration-500 transform ${phase === 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          {children}
+        <div className="overflow-hidden">
+          <div className={`transition-all duration-500 transform
+            ${phase === 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+          `}>
+            {children}
+          </div>
         </div>
       </div>
     </div>

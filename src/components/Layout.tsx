@@ -4,10 +4,11 @@ import { Brain } from "lucide-react";
 
 interface LayoutProps {
   stream: ReactNode;
+  canvas: ReactNode;
   hud: ReactNode;
 }
 
-export function Layout({ stream, hud }: LayoutProps) {
+export function Layout({ stream, canvas, hud }: LayoutProps) {
   return (
     <div className="h-full w-full flex flex-col bg-surface-dark overflow-hidden">
       {/* ── Header ──────────────────────────────────────── */}
@@ -38,22 +39,32 @@ export function Layout({ stream, hud }: LayoutProps) {
 
       {/* ── Main Grid ──────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Central Neural Stream */}
+        {/* Control Stream (Left Pane) - 30% width */}
         <motion.main
           initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="flex-1 flex flex-col min-w-0"
+          className="w-[30%] min-w-[350px] max-w-[450px] h-full flex flex-col border-r border-glass-border"
         >
           {stream}
         </motion.main>
+
+        {/* Active Canvas (Middle Pane) - Flex width */}
+        <motion.section
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="flex-1 h-full min-w-0"
+        >
+          {canvas}
+        </motion.section>
 
         {/* Right HUD Sidebar */}
         <motion.aside
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="w-80 border-l border-glass-border flex flex-col overflow-hidden"
+          className="w-80 border-l border-glass-border flex flex-col overflow-hidden shrink-0"
         >
           {hud}
         </motion.aside>
