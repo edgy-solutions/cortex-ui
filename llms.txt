@@ -13,17 +13,15 @@
 - Icons: Lucide React
 - Graph: @xyflow/react (React Flow v12) for node-based workflow visualization
 - Fonts: JetBrains Mono (code/data), Inter (UI text)
-- Backend: FastAPI (Python) with StreamingResponse for Dagster polling
-- API Protocol: Server-Sent Events (SSE) with typed events (status, final_payload, stream_end)
-- Live Canvas: `useLiveBpmnGraph` hook acts as a dumb renderer for pre-laid out mesh payloads
+- Mock Mode: Built-in local streaming simulation for development and demos.
 
 ## Architecture Overview
 
-The app has three main phases, controlled by `InterviewPhase` in the Zustand store:
+The app is a standalone React application with three main phases, controlled by `InterviewPhase` in the Zustand store:
 
-1. **active** — UI proxies user prompts to the Dagster `supervisor_query_job`. Real-time "Thinking Cards" are driven by SSE status events polled from Dagster's `stepStats`.
-2. **blueprint** — Upon job completion, the backend streams a `final_payload` containing the orchestrated UI state (BPMN graph). The canvas renders this as a Passive Renderer.
-3. **compiling** → **complete** — User clicks "Compile Workflow" triggering the final deployment sequence to Restate.
+1. **active** — UI simulates a conversation with an AI agent mesh. Real-time "Thinking Cards" are driven by internal mock events.
+2. **blueprint** — Upon transition, the UI renders a `DashboardUI` containing the orchestrated state (BPMN graph).
+3. **compiling** → **complete** — User clicks "Compile Workflow" triggering a simulated deployment sequence.
 
 ## File Map
 
@@ -41,10 +39,10 @@ src/
 │   └── client.ts                     # API client: SSE parser, healthCheck()
 │
 ├── hooks/
-│   ├── useAgent.ts                   # Gateway hook: switches between real Mesh and mock fallback
-│   ├── useInterviewAgent.ts          # Mesh proxy hook (SSE polling consumer)
-│   ├── useCompileWorkflow.ts         # Final deployment mutation
-│   ├── useMockAgent.ts               # Offline fallback: simulates streaming responses locally
+│   ├── useAgent.ts                   # Gateway hook: handles mock fallback logic
+│   ├── useInterviewAgent.ts          # Agent interface hook
+│   ├── useCompileWorkflow.ts         # Simulated deployment mutation
+│   ├── useMockAgent.ts               # Local fallback: simulates streaming responses
 │   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
 │
 ├── components/
@@ -53,9 +51,9 @@ src/
 │   ├── NeuralStream/
 │   │   ├── NeuralStream.tsx          # Scrollable Message list
 │   │   ├── MessageBubble.tsx         # User/agent bubble, warning card for failures
-│   │   ├── ThinkingCard.tsx          # Dynamic card reflecting Dagster step statuses
+│   │   ├── ThinkingCard.tsx          # Dynamic card reflecting task statuses
 │   │   ├── WarningCard.tsx           # Critical failure visualization
-│   │   ├── AgentTeamLoader.tsx       # Animated persona icons during fan-out ("Agents Assembling")
+│   │   ├── AgentTeamLoader.tsx       # Animated persona icons ("Agents Assembling")
 │   │   └── RadarReveal.tsx           # 3-phase reveal animation for dashboard sections
 │   │
 │   ├── HUD/
@@ -67,22 +65,12 @@ src/
 │   └── Compilation/
 │       ├── CompileButton.tsx         # Triggers final mesh compilation
 │       └── CompilationOverlay.tsx    # Terminal boot sequence playback
-│
-backend/
-├── interviewer_agent.py              # Dagster Proxy BFF: GraphQL polling loop + SSE generator
-├── database.py                       # SQLAlchemy session layer
-├── models.py                         # BPMN Catalog ORM
-├── pyproject.toml                    # Python deps (httpx, sqlalchemy, etc.)
-├── sql/
-│   └── 001_create_bpmn_catalog.sql   # Shared schema with Dagster
-└── .env                              # DATABASE_URL + DAGSTER_WEBSERVER_URL
 ```
 
 ## Key Patterns
 
-- **API integration**: Components use `useAgent()` which auto-detects backend availability.
-- **Stream protocol**: Backend sends newline-delimited SSE chunks. `event: status` = thinking card progress. `event: final_payload` = full server-driven UI state.
-- **Mock fallback**: `useMockAgent` provide identical layout for offline demos.
+- **API abstraction**: Components use `useAgent()` which defaults to mock mode.
+- **Stream simulation**: `useMockAgent` provides newline-delimited SSE chunks for consistent UI behavior.
 
 ## Zustand Store Shape
 
@@ -90,17 +78,9 @@ backend/
 {
   messages: Message[]           // Chat history with failure tracking
   phase: InterviewPhase         // "active" | "blueprint" | "compiling" | "complete"
-  liveBpmnGraph: BPMNGraph      // Orchestrated state from Engine F
+  liveBpmnGraph: BPMNGraph      // Orchestrated state
 }
 ```
-
-## Stream Event Protocol
-
-The backend proxies the Dagster supervisor job and emits the following SSE events:
-
-- `event: status`           data: `{"action": "think|found|error|plan", "label": "...", "personas?": [...]}`
-- `event: final_payload`    data: `{ components: [...] }` (DashboardUI shape)
-- `event: stream_end`       data: `{}`
 
 ### Semantic Archetypes (DashboardUI.components)
 - `PROCESS_TOPOLOGY`: Full-width React Flow graph. Triggers blueprint phase.
@@ -109,29 +89,17 @@ The backend proxies the Dagster supervisor job and emits the following SSE event
 - `KNOWLEDGE_DOCUMENT`: Full-width Markdown (react-markdown).
 
 ### Personas (displayed in AgentTeamLoader during fan-out)
-- **MECHANIC** — Wrench icon (amber). Safety, tools, procedures.
-- **TECH_WRITER** — BookOpen icon (blue). Documentation, manuals.
-- **LOGISTICS** — Truck icon (emerald). Supply chain, platforms.
-- **AUDITOR** — ShieldCheck icon (red). Compliance, regulations.
-- **PROCESS_ENGINEER** — Network icon (purple). Workflow graphs.
+- **MECHANIC** — Wrench icon (amber).
+- **TECH_WRITER** — BookOpen icon (blue).
+- **LOGISTICS** — Truck icon (emerald).
+- **AUDITOR** — ShieldCheck icon (red).
+- **PROCESS_ENGINEER** — Network icon (purple).
 
 ### Composite Dashboard Layout
 - `PROCESS_TOPOLOGY` / `KNOWLEDGE_DOCUMENT` → `col-span-full` (full width)
 - `HAZARD_DECLARATION` / `ASSET_STATE_METRIC` → `col-span-1` (inline 2-col grid)
 - Each section wrapped in `RadarReveal` (neon scan → expand → fade-in), staggered by 400ms.
 
-## Architecture: Dagster Proxy (Polyglot Mesh)
+### Simulated Compilation
+The app plays a multi-line terminal boot log with per-task `[AGENT]` provisioning lines when "Compile" is clicked, transitioning the phase to `complete`.
 
-The frontend is a **Dumb Passive Renderer**. It never makes decisions about orchestration.
-The backend is an **Orchestrator Proxy** — it triggers Dagster, polls for status, and streams the results.
-
-- Backend `.env` requires `DAGSTER_WEBSERVER_URL` and `DATABASE_URL`.
-- The `bpmn_catalog` database is the source of truth shared between this BFF and the Agent Mesh.
-multi-line terminal boot log with per-task `[AGENT]` provisioning lines.
-- `_reload_dagster_workspace()` — Async GraphQL POST to Dagster Webserver's `reloadRepositoryLocation` mutation. Non-fatal on failure.
-
-The React Flow → BPMN mapping in `useCompileWorkflow.ts`:
-- `trigger` nodes → `BPMNTask` (service_task)
-- `logic` nodes → `BPMNGateway` (exclusive)
-- `action` nodes → `BPMNTask` (user_task)
-- edges → `BPMNSequenceFlow`
