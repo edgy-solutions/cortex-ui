@@ -40,6 +40,7 @@ export type StreamEvent =
       label: string;
       personas?: string[];
     }
+  | { type: "context_update"; contextType: "ontology" | "bindings"; data: string[] }
   | { type: "final_payload"; payload: DashboardUI }
   | { type: "stream_end" };
 

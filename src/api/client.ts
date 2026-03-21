@@ -44,6 +44,13 @@ function parseSSE(block: string): StreamEvent | null {
           personas: parsed.personas,
         };
       }
+      case "context_update": {
+        return {
+          type: "context_update",
+          contextType: parsed.type,
+          data: parsed.data || [],
+        };
+      }
       case "final_payload": {
         return { type: "final_payload", payload: parsed };
       }

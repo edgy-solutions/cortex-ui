@@ -34,6 +34,8 @@ export function useInterviewAgent() {
     setActivePersonas,
     setIsProcessing,
     setPhase,
+    addOntologyTerm,
+    addDataBinding,
   } = useInterviewStore();
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
@@ -46,11 +48,33 @@ export function useInterviewAgent() {
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
-      if (!agentId && event.type !== "status" && event.type !== "final_payload" && event.type !== "stream_end") {
+      if (!agentId && event.type !== "status" && event.type !== "context_update" && event.type !== "final_payload" && event.type !== "stream_end") {
         return;
       }
 
       switch (event.type) {
+        case "context_update": {
+          if (event.contextType === "ontology") {
+            event.data.forEach((concept, i) => {
+              addOntologyTerm({
+                id: `concept-${Date.now()}-${i}`,
+                category: "Concept",
+                label: concept,
+              });
+            });
+          } else if (event.contextType === "bindings") {
+            event.data.forEach((uri, i) => {
+              addDataBinding({
+                id: `binding-${Date.now()}-${i}`,
+                model: uri,
+                schema: "Verified",
+                healthy: true,
+              });
+            });
+          }
+          break;
+        }
+
         case "status": {
           const steps = [...thinkingSteps.current];
           
@@ -126,7 +150,7 @@ export function useInterviewAgent() {
         }
       }
     },
-    [updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths]
+    [updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths, addOntologyTerm, addDataBinding]
   );
 
   // Main mutation that handles the streaming request

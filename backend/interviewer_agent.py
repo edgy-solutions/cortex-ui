@@ -422,33 +422,40 @@ async def _get_ui_payload_output(run_id: str) -> dict:
             resp.raise_for_status()
             data = resp.json()
 
-            # Catch and log exact GraphQL schema errors if they happen
             if "errors" in data:
                 logger.error("GraphQL Errors: %s", data["errors"])
                 return {"error": "GraphQL Query Error"}
 
             run = data.get("data", {}).get("runOrError", {})
-
-            # Dagster 1.12.x: Run.eventConnection.events (flat list)
             events = run.get("eventConnection", {}).get("events", [])
             
             logger.info("Retrieved %d events for run %s", len(events), run_id)
 
-            # 1. Search for a specific stepKey FIRST
+            payload = None
+            referenced_uris = []
+
             for evt in events:
                 typename = evt.get("__typename")
                 step_key = evt.get("stepKey")
-                if typename == "HandledOutputEvent" and step_key == "generate_ui_payload":
+                if typename in ["HandledOutputEvent", "ExecutionStepOutputEvent"] and step_key == "generate_ui_payload":
                     for meta in evt.get("metadataEntries", []):
                         if meta.get("label") in ["ui_json_payload", "json", "UI Payload", "presentation_payload"]:
                             json_str = meta.get("jsonString") or meta.get("text")
                             if json_str:
                                 try:
                                     payload = json.loads(json_str)
-                                    logger.info("Successfully extracted payload (exact step match) for archetype: %s", payload.get("archetype"))
-                                    return payload
                                 except json.JSONDecodeError:
                                     pass
+                        elif meta.get("label") == "referenced_uris":
+                            json_str = meta.get("jsonString") or meta.get("text")
+                            if json_str:
+                                try:
+                                    referenced_uris = json.loads(json_str)
+                                except json.JSONDecodeError:
+                                    pass
+
+            if payload:
+                return {"payload": payload, "referenced_uris": referenced_uris}
 
             # 2. FUZZY FALLBACK: Search ALL steps for ANY metadata label matching our contract
             for evt in events:
@@ -461,8 +468,9 @@ async def _get_ui_payload_output(run_id: str) -> dict:
                             if json_str:
                                 try:
                                     payload = json.loads(json_str)
-                                    logger.info("Successfully extracted fuzzy payload for archetype: %s", payload.get("archetype"))
-                                    return payload
+                                    # If fuzzy matched, we might not have referenced_uris in the same event, 
+                                    # but we return what we have
+                                    return {"payload": payload, "referenced_uris": referenced_uris}
                                 except json.JSONDecodeError:
                                     pass
 
@@ -519,29 +527,44 @@ async def generate_dagster_stream(
             is_success = True
             break
             
-        # 🛑 GET INTERMEDIATE EVENTS (Personas)
+        # 🛑 GET INTERMEDIATE EVENTS (Personas & Concepts)
         mats = await _get_run_events(run_id)
         for mat in mats:
             # Check for the active_agent_roster asset
             path = mat.get("assetKey", {}).get("path")
             if path == ["active_agent_roster"] and "plan_emitted" not in emitted_steps:
+                personas_list = []
+                concepts_list = []
                 for meta in mat.get("metadataEntries", []):
                     if meta.get("label") == "personas":
                         try:
-                            # Support both Text and Json Metadata
                             json_str = meta.get("text") or meta.get("jsonString") or "[]"
                             personas_list = json.loads(json_str)
-                            
-                            logger.info("📡 Emitting SSE 'plan' with personas: %s", personas_list)
-                            yield _sse("status", json.dumps({
-                                "action": "plan",
-                                "personas": personas_list,
-                                "label": "Summoning specialized graph agents..."
-                            }))
-                            emitted_steps.add("plan_emitted")
-                            logger.info("✅ Plan emission confirmed for run %s", run_id)
                         except Exception as parse_err:
                             logger.error("Failed to parse persona metadata: %s", parse_err)
+                    elif meta.get("label") == "extracted_concepts":
+                        try:
+                            json_str = meta.get("text") or meta.get("jsonString") or "[]"
+                            concepts_list = json.loads(json_str)
+                        except Exception as parse_err:
+                            logger.error("Failed to parse concepts metadata: %s", parse_err)
+                            
+                if personas_list:
+                    logger.info("📡 Emitting SSE 'plan' with personas: %s", personas_list)
+                    yield _sse("status", json.dumps({
+                        "action": "plan",
+                        "personas": personas_list,
+                        "label": "Summoning specialized graph agents..."
+                    }))
+                if concepts_list:
+                    logger.info("📡 Emitting SSE 'context_update' with ontology concepts: %s", concepts_list)
+                    yield _sse("context_update", json.dumps({
+                        "type": "ontology",
+                        "data": concepts_list
+                    }))
+                    
+                emitted_steps.add("plan_emitted")
+                logger.info("✅ Plan emission confirmed for run %s", run_id)
 
         step_stats = await _get_step_stats(run_id)
         for stat in step_stats:
@@ -573,15 +596,22 @@ async def generate_dagster_stream(
                 
     if is_success:
         yield _sse("status", json.dumps({"action": "think", "category": "Concept", "label": "Retrieving Final UI Payload..."}))
-        payload = await _get_ui_payload_output(run_id)
+        result = await _get_ui_payload_output(run_id)
         
-        if "error" in payload:
-            logger.error("BFF Error: %s", payload["error"])
-            yield _sse("status", json.dumps({"action": "error", "label": payload["error"]}))
+        if "error" in result:
+            logger.error("BFF Error: %s", result["error"])
+            yield _sse("status", json.dumps({"action": "error", "label": result["error"]}))
         else:
+            # Emit data bindings to the HUD
+            if result.get("referenced_uris"):
+                yield _sse("context_update", json.dumps({
+                    "type": "bindings",
+                    "data": result["referenced_uris"]
+                }))
+                
             # Mark the retrieval step as done before sending the payload
             yield _sse("status", json.dumps({"action": "found", "category": "Asset", "label": "UI Payload Retrieved"}))
-            yield _sse("final_payload", json.dumps(payload))
+            yield _sse("final_payload", json.dumps(result["payload"]))
     else:
         yield _sse("status", json.dumps({"action": "error", "label": "Timeout or failed to fetch UI payload."}))
         
