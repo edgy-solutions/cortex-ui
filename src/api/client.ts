@@ -54,6 +54,12 @@ function parseSSE(block: string): StreamEvent | null {
       case "final_payload": {
         return { type: "final_payload", payload: parsed };
       }
+      case "ui_payload": {
+        return { type: "ui_payload", payload: parsed };
+      }
+      case "chat_message": {
+        return { type: "chat_message", data: parsed };
+      }
       case "stream_end":
         return { type: "stream_end" };
       default:

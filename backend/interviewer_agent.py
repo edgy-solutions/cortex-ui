@@ -495,13 +495,82 @@ async def generate_dagster_stream(
     Trigger Dagster job and stream step status as Holographic Thinking Cards.
     """
     session_id = request.session_id or str(uuid.uuid4())
+    user_query = request.message
     
+    yield _sse("status", json.dumps({
+        "action": "think",
+        "category": "Process", 
+        "label": "Analyzing intent..."
+    }))
+
+    # 0. Check if there is an active Process Creation Interview in Restate
+    is_interview_active = False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                f"http://restate:8080/ProcessInterviewer/{session_id}/get_status",
+                json={}
+            )
+            if res.status_code == 200:
+                is_interview_active = res.json().get("is_active", False)
+    except Exception as e:
+        logger.warning(f"Failed to check Restate status: {e}")
+
+    if is_interview_active:
+        intent = "PROCESS_CREATION"
+        decision = {}
+    else:
+        # 1. Call Engine O to get the Intent
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    "http://ontology-service:8084/route_and_plan",
+                    json={"query": user_query}
+                )
+                resp.raise_for_status()
+                decision = resp.json()
+        except Exception as exc:
+            logger.error("Failed to route query: %s", exc)
+            yield _sse("status", json.dumps({"action": "error", "label": "Failed to determine execution intent."}))
+            yield _sse("stream_end", "{}")
+            return
+
+        intent = decision.get("intent")
+    
+    if intent == "PROCESS_CREATION":
+        # 🔵 THE INTERVIEW PATH (RESTATE)
+        yield _sse("status", json.dumps({"action": "think", "category": "Process", "label": "Process Engineer is reviewing requirements..."}))
+        
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                restate_response = await client.post(
+                    f"http://restate:8080/ProcessInterviewer/{session_id}/process_message",
+                    json={"user_query": user_query}
+                )
+                restate_response.raise_for_status()
+                data = restate_response.json()
+                
+                yield _sse(data.get("action", "error"), json.dumps(data.get("payload", {})))
+                
+        except Exception as exc:
+            logger.error("Failed to call Restate Interviewer: %s", exc)
+            yield _sse("status", json.dumps({"action": "error", "label": "Failed to reach Process Engineer."}))
+            
+        yield _sse("stream_end", "{}")
+        return
+
+    # 🟢 THE GRAPH PATH (DAGSTER)
+    yield _sse("status", json.dumps({
+        "action": "plan",
+        "category": "Process",
+        "label": "Engine O Planning Complete..."
+    }))
+
     yield _sse("status", json.dumps({
         "action": "think",
         "category": "Concept", 
         "label": f"Triggering Supervisor Job for thread {session_id[:8]}..."
     }))
-    
     run_id = await _launch_supervisor_job(request.message, session_id)
     if not run_id:
         yield _sse("status", json.dumps({"action": "error", "label": "Failed to trigger Dagster job."}))

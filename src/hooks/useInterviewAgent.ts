@@ -48,7 +48,7 @@ export function useInterviewAgent() {
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
-      if (!agentId && event.type !== "status" && event.type !== "context_update" && event.type !== "final_payload" && event.type !== "stream_end") {
+      if (!agentId && event.type !== "status" && event.type !== "context_update" && event.type !== "final_payload" && event.type !== "ui_payload" && event.type !== "chat_message" && event.type !== "stream_end") {
         return;
       }
 
@@ -114,6 +114,21 @@ export function useInterviewAgent() {
           break;
         }
 
+        case "chat_message": {
+          if (agentId && event.data) {
+             const steps = thinkingSteps.current.map(s => ({ ...s, status: s.status === "loading" ? "done" : s.status }));
+             thinkingSteps.current = steps;
+             
+             updateMessage(agentId, { 
+               content: event.data.content,
+               thinkingSteps: steps, 
+               isStreaming: false 
+             });
+          }
+          break;
+        }
+
+        case "ui_payload":
         case "final_payload": {
           // Engine F has returned the final orchestrated semantic payload.
           if (agentId) {

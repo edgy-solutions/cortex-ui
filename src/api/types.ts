@@ -41,6 +41,8 @@ export type StreamEvent =
       personas?: string[];
     }
   | { type: "context_update"; contextType: "ontology" | "bindings"; data: string[] }
+  | { type: "chat_message"; data: { role: string; content: string } }
+  | { type: "ui_payload"; payload: DashboardUI }
   | { type: "final_payload"; payload: DashboardUI }
   | { type: "stream_end" };
 
