@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Database } from 'lucide-react';
 import { useCanvasStore } from '../../store/useCanvasStore';
 

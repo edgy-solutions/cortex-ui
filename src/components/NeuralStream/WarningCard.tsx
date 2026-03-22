@@ -10,8 +10,8 @@ interface HazardEntity {
 
 interface WarningCardProps {
   error: string;
-  hazards: HazardEntity[];
-  isCritical: boolean;
+  hazards?: HazardEntity[];
+  isCritical?: boolean;
 }
 
 export const WarningCard: React.FC<WarningCardProps> = ({ error, hazards, isCritical }) => {

@@ -27,7 +27,7 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           THE CORTEX
         </h1>
         <span className="ml-2 text-xs font-mono text-slate-500 tracking-widest uppercase">
-          Interrogator Interface v1.0
+          Agent Mesh Interface v2.0
         </span>
 
         <div className="ml-auto flex items-center gap-2">

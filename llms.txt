@@ -1,4 +1,4 @@
-# The Cortex — Interrogator Interface
+# The Cortex — Agent Mesh Interface
 
 > A cinematic React application for interrogating an autonomous AI Agent mesh.
 > Aesthetic: "Dark Glass & Neon" — deep slate backgrounds, translucent glass panels, electric blue/purple neon accents.

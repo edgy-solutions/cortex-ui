@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { PersonaConfig } from '../NeuralStream/AgentTeamLoader';

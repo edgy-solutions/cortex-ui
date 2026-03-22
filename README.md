@@ -1,4 +1,4 @@
-# The Cortex — Interrogator Interface
+# The Cortex — Agent Mesh Interface
 
 A cinematic **"Dark Glass & Neon"** control center for interrogating an autonomous AI Agent mesh. Think futuristic mission control — not a corporate dashboard.
 

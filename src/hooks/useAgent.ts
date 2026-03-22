@@ -10,7 +10,7 @@ import { useInterviewAgent } from "./useInterviewAgent";
  * Dagster orchestration output instead of falling back to mock data.
  */
 export function useAgent() {
-  const { data: backendAvailable = false, isLoading: isCheckingBackend } =
+  const { isLoading: isCheckingBackend } =
     useQuery({
       queryKey: ["backend-health"],
       queryFn: healthCheck,

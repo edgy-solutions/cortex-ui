@@ -63,9 +63,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {!isUser && message.error && !message.payload && (
             <WarningCard 
               error={message.error} 
-              onRetry={() => {
-                // Extract the last user message to retry
-              }} 
             />
           )}
         </div>
