@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-backend-config
   labels:
-    app.kubernetes.io/name: process-spawner-backend
+    app.kubernetes.io/name: cortex-ui-backend
 data:
   # ── Determine Base DNS Suffix ──
   {{- $svcSuffix := "" -}}

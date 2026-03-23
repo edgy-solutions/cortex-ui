@@ -4,7 +4,7 @@ kind: Ingress
 metadata:
   name: {{ .Release.Name }}-frontend
   labels:
-    app.kubernetes.io/name: process-spawner-frontend
+    app.kubernetes.io/name: cortex-ui-frontend
     app.kubernetes.io/instance: {{ .Release.Name }}
   {{- with .Values.frontend.ingress.annotations }}
   annotations:

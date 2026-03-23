@@ -20,7 +20,7 @@ The frontend works standalone with a built-in mock agent.
 
 ```bash
 git clone <repo-url>
-cd process-spawner
+cd cortex-ui
 npm install
 npm run dev
 ```
