@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, FileText, Share2, Activity, Database } from "lucide-react";
+import { AlertCircle, FileText, Share2, Database } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
-import { PersonaConfig } from "../NeuralStream/AgentTeamLoader";
+import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
 
 // Mock/Placeholder components for missing types
 const SupplyTable = ({ data }: { data: any[] }) => (
@@ -126,13 +126,18 @@ const renderComponent = (comp: any) => {
 
     default:
       return (
-        <div className="p-4 glass-panel border-red-500/30 flex items-start gap-3">
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-mono text-xs text-red-500 font-bold">UNKNOWN_ARCHETYPE</p>
-            <p className="font-mono text-[10px] text-slate-500">
-              The mesh returned an unrecognized UI component.
-            </p>
+        <div className="p-4 glass-panel border-amber-500/30 flex flex-col gap-3">
+          <div className="flex items-start gap-3 border-b border-amber-500/20 pb-3">
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-mono text-xs text-amber-500 font-bold">UI COMPONENT NOT FOUND: {comp.archetype}</p>
+              <p className="font-mono text-[10px] text-slate-400">
+                The mesh returned a new UI widget type. Raw data payload is displayed below:
+              </p>
+            </div>
+          </div>
+          <div className="bg-black/50 p-3 rounded text-[10px] font-mono text-slate-300 overflow-x-auto max-h-60 overflow-y-auto">
+            <pre>{JSON.stringify(comp, null, 2)}</pre>
           </div>
         </div>
       );
@@ -144,6 +149,8 @@ const isFullWidth = (archetype: string) =>
   archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
+  const { personaConfig } = useMeshConfig();
+
   if (!payload || !payload.components || !Array.isArray(payload.components)) {
     return null;
   }
@@ -151,8 +158,8 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
       {payload.components.map((comp, index) => {
-        const persona = comp.source_persona as keyof typeof PersonaConfig | undefined;
-        const pCfg = persona ? PersonaConfig[persona] : null;
+        const persona = comp.source_persona;
+        const pCfg = persona ? personaConfig[persona] : null;
 
         // Use a stable key based on the component data if possible, else fallback to index + archetype
         const stableKey = `${comp.archetype}-${comp.subject_concept}-${index}`;
@@ -166,7 +173,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
               {/* Persona attribution badge */}
               {pCfg && (
                 <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-md border text-[10px] font-mono font-bold uppercase tracking-wider ${pCfg.bg} ${pCfg.color}`}>
-                  {pCfg.icon}
+                  <DynamicIcon name={pCfg.icon} className="w-3 h-3" />
                   {pCfg.label}
                 </div>
               )}
