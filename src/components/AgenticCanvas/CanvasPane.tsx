@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
-import { PersonaConfig } from '../NeuralStream/AgentTeamLoader';
+import { useMeshConfig, DynamicIcon } from '../NeuralStream/AgentTeamLoader';
 import { Layers } from 'lucide-react';
 
 export const CanvasPane = () => {
+  const { personaConfig } = useMeshConfig();
   const { activeComponents, activeTab, setActiveTab } = useCanvasStore();
 
   // 1. Extract unique personas from the results (Must be above early return)
@@ -49,7 +50,7 @@ export const CanvasPane = () => {
           
           {/* Persona Tabs */}
           {uniquePersonas.map(personaKey => {
-            const config = PersonaConfig[personaKey as keyof typeof PersonaConfig];
+            const config = personaConfig[personaKey];
             if (!config) return null;
             const isActive = activeTab === personaKey;
             
@@ -62,7 +63,7 @@ export const CanvasPane = () => {
                     ? `border-current ${config.color} ${config.bg}` 
                     : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"}`}
               >
-                {config.icon}
+                <DynamicIcon name={config.icon} className="w-4 h-4" />
                 {config.label}
               </button>
             );
