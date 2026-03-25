@@ -1,11 +1,12 @@
-import { Wrench, BookOpen, Truck, ShieldCheck, Network } from "lucide-react";
+import { Wrench, BookOpen, Truck, ShieldCheck, Network, Database } from "lucide-react";
 
 export const PersonaConfig = {
   MECHANIC: { label: "Line Mechanic", icon: <Wrench className="w-4 h-4" />, color: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/30" },
   TECH_WRITER: { label: "Tech Writer", icon: <BookOpen className="w-4 h-4" />, color: "text-blue-400", bg: "bg-blue-400/10 border-blue-400/30" },
   LOGISTICS: { label: "Logistics", icon: <Truck className="w-4 h-4" />, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/30" },
   AUDITOR: { label: "Auditor", icon: <ShieldCheck className="w-4 h-4" />, color: "text-red-400", bg: "bg-red-400/10 border-red-400/30" },
-  PROCESS_ENGINEER: { label: "Process Engineer", icon: <Network className="w-4 h-4" />, color: "text-purple-500", bg: "bg-purple-500/10 border-purple-500/30" }
+  PROCESS_ENGINEER: { label: "Process Engineer", icon: <Network className="w-4 h-4" />, color: "text-purple-500", bg: "bg-purple-500/10 border-purple-500/30" },
+  DATA_STEWARD: { label: "Data Steward", icon: <Database className="w-4 h-4" />, color: "text-cyan-400", bg: "bg-cyan-400/10 border-cyan-400/30" }
 };
 
 export const AgentTeamLoader = ({ activePersonas }: { activePersonas: string[] }) => {

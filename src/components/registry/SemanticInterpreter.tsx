@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, FileText, Share2, Activity } from "lucide-react";
+import { AlertCircle, FileText, Share2, Activity, Database } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -11,29 +11,46 @@ import { PersonaConfig } from "../NeuralStream/AgentTeamLoader";
 
 // Mock/Placeholder components for missing types
 const SupplyTable = ({ data }: { data: any[] }) => (
-  <div className="glass-panel p-4 border-neon-blue/20">
-    <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
-      <Activity className="w-4 h-4 text-neon-blue" />
-      <span className="font-mono text-[10px] text-slate-400 tracking-wider">ASSET_STATE_METRICS</span>
+  <div className="glass-panel overflow-hidden border-cyan-500/10">
+    <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/5 border-b border-white/5">
+      <div className="flex items-center gap-2">
+        <Database className="w-4 h-4 text-cyan-400" />
+        <span className="font-mono text-[10px] text-cyan-400/80 font-bold tracking-widest uppercase">Asset_State_Registry</span>
+      </div>
+      <div className="flex gap-1">
+        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30 animate-pulse" />
+        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/20" />
+      </div>
     </div>
-    <table className="w-full text-left font-mono text-[11px]">
-      <thead>
-        <tr className="text-slate-500">
-          <th className="pb-2">ENTITY</th>
-          <th className="pb-2">TYPE</th>
-          <th className="pb-2 text-right">DETAIL</th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((row, i) => (
-          <tr key={i} className="text-slate-300 border-t border-white/5">
-            <td className="py-2">{row.name || row.id}</td>
-            <td className="py-2 text-slate-500">{row.type || "—"}</td>
-            <td className="py-2 text-right text-neon-blue">{row.description || "—"}</td>
+    <div className="p-0">
+      <table className="w-full text-left font-mono text-[11px] border-collapse">
+        <thead>
+          <tr className="text-slate-500 bg-slate-900/40">
+            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">DATASET_IDENTIFIER</th>
+            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">TYPE_TAG</th>
+            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter text-right">METADATA_EXTRACT</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {data.map((row, i) => (
+            <tr key={i} className="group hover:bg-cyan-500/5 transition-colors">
+              <td className="px-4 py-3 text-slate-200">
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] mr-2 border border-white/10 uppercase">{row.id?.slice(0, 4) || "DSET"}</span>
+                {row.name || row.id}
+              </td>
+              <td className="px-4 py-3">
+                <span className="text-slate-500 italic lowercase">{row.type || "unknown"}</span>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className="text-cyan-400 group-hover:text-cyan-300 transition-colors uppercase text-[9px] font-bold tracking-tight">
+                  {row.description || "NO_DESCRIPTION_PROVIDED"}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   </div>
 );
 
