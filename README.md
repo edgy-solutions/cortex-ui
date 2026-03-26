@@ -87,8 +87,16 @@ The frontend uses a **facade pattern** (`useAgent`) that currently defaults to a
 **Frontend** (`.env` at project root):
 ```env
 # The ONLY var the frontend needs. No secrets here.
-VITE_API_URL=
+VITE_API_URL=http://localhost:8000
 ```
+
+## API & Backend Integration
+
+The React app communicates with the FastAPI BFF through three primary endpoints:
+
+1. **`GET /health`**: System connectivity check used by `useAgent` to monitor backend health.
+2. **`POST /interview/stream`**: Long-lived **Server-Sent Events (SSE)** stream for real-time agent responses (thinking cards, persona reveals, and final dashboard delivery).
+3. **`POST /workflow/compile`**: REST endpoint used to submit the generated BPMN mesh for deployment and cataloging.
 
 ## Scripts
 

@@ -71,6 +71,15 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | Database session layer | `backend/database.py` |
 | BPMN catalog ORM model | `backend/models.py` |
 | Database schema DDL | `backend/sql/001_create_bpmn_catalog.sql` |
+| API Interface | `src/api/client.ts` |
+
+## API Layer
+
+The React app communicates with the FastAPI BFF (port 8000) through three primary interfaces:
+
+- **`GET /health`**: Connectivity check for monitoring backend availability and switching between Real/Mock modes.
+- **`POST /interview/stream`**: Long-lived SSE stream for real-time agent responses and context updates.
+- **`POST /workflow/compile`**: Standard REST endpoint for submitting the final BPMN blueprint.
 
 ## Testing
 
@@ -109,7 +118,7 @@ psql -h localhost -U iagent -d iagent -f backend/sql/001_create_bpmn_catalog.sql
 - The `bpmn_catalog` table is shared with the `invincible-agent` Dagster backend. Both services use the same Postgres database (`iagent`). Do not change the schema without coordinating with that project.
 - `DATABASE_URL` and `DAGSTER_WEBSERVER_URL` are configured in `backend/.env`.
 
-## SSE Stream Protocol
+## SSE Stream Protocol (`POST /interview/stream`)
 
 - The backend (`interviewer_agent.py`) proxies the Dagster `supervisor_query_job`.
 - It streams real-time `status` events derived from Dagster `stepStats`. These drive the **Holographic Thinking Cards** on the frontend.

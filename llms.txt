@@ -36,12 +36,12 @@ src/
 │
 ├── api/
 │   ├── types.ts                      # Proxy SSE protocol, BPMN models, CompileRequest/Response
-│   └── client.ts                     # API client: SSE parser, healthCheck()
+│   └── client.ts                     # API client: SSE parser, healthCheck() (/health), streamInterviewResponse() (/interview/stream)
 │
 ├── hooks/
 │   ├── useAgent.ts                   # Gateway hook: handles mock fallback logic
 │   ├── useInterviewAgent.ts          # Agent interface hook
-│   ├── useCompileWorkflow.ts         # Simulated deployment mutation
+│   ├── useCompileWorkflow.ts         # Mutation for POST /workflow/compile
 │   ├── useMockAgent.ts               # Local fallback: simulates streaming responses
 │   └── useMockWorkflowBuilder.ts     # Generates React Flow nodes/edges from interview state
 │
