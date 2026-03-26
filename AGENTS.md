@@ -34,6 +34,7 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 
 ### Do NOT
 
+- **Do not bypass the Auth layer.** All UI access requires SSO unless `VITE_NO_AUTH=true` is set.
 - **Do not bypass the API layer.** All backend calls go through `src/api/client.ts`. Components use `useAgent()`, not raw fetch/axios.
 - **Do not expose secrets to the frontend.** API keys, internal service URLs, and credentials belong ONLY in `backend/.env`. The frontend `.env` must contain nothing but `VITE_API_URL`.
 - **Do not call internal services from the frontend.** The React app talks ONLY to the FastAPI BFF (port 8000). If the frontend needs data from the ontology service or DataHub, add a BFF proxy route in the backend.
@@ -72,6 +73,8 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 | BPMN catalog ORM model | `backend/models.py` |
 | Database schema DDL | `backend/sql/001_create_bpmn_catalog.sql` |
 | API Interface | `src/api/client.ts` |
+| Auth Provider | `src/auth/AuthProvider.tsx` |
+| Auth Guard | `src/auth/RequireAuth.tsx` |
 
 ## API Layer
 

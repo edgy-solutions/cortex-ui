@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Brain } from "lucide-react";
 import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
+import { UserMenu } from "@/components/UserMenu";
 
 interface LayoutProps {
   stream: ReactNode;
@@ -30,11 +31,17 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           Agent Mesh Interface v2.0
         </span>
 
-        <div className="ml-auto flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse-neon" />
-          <span className="text-xs font-mono text-neon-green/80">
-            MESH ONLINE
-          </span>
+        <div className="ml-auto flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse-neon" />
+            <span className="text-xs font-mono text-neon-green/80 uppercase tracking-widest">
+              MESH ONLINE
+            </span>
+          </div>
+          
+          <div className="h-8 w-[1px] bg-glass-border" />
+          
+          <UserMenu />
         </div>
       </motion.header>
 

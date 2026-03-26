@@ -88,15 +88,17 @@ The frontend uses a **facade pattern** (`useAgent`) that currently defaults to a
 ```env
 # The ONLY var the frontend needs. No secrets here.
 VITE_API_URL=http://localhost:8000
+VITE_KEYCLOAK_REALM_URL=http://localhost:8080/realms/cortex
+VITE_KEYCLOAK_CLIENT_ID=cortex-ui
+VITE_NO_AUTH=false
 ```
 
-## API & Backend Integration
+## Authentication
 
-The React app communicates with the FastAPI BFF through three primary endpoints:
-
-1. **`GET /health`**: System connectivity check used by `useAgent` to monitor backend health.
-2. **`POST /interview/stream`**: Long-lived **Server-Sent Events (SSE)** stream for real-time agent responses (thinking cards, persona reveals, and final dashboard delivery).
-3. **`POST /workflow/compile`**: REST endpoint used to submit the generated BPMN mesh for deployment and cataloging.
+The Cortex uses **OpenID Connect (OIDC)** via Keycloak for secure access.
+- **`RequireAuth`**: Wraps the application to ensure only authenticated users can access the interface.
+- **Bearer Tokens**: JWT tokens are automatically attached to all REST and SSE (via `@microsoft/fetch-event-source`) requests.
+- **Bypass**: For local development or offline demos, set `VITE_NO_AUTH=true` in your `.env`.
 
 ## Scripts
 

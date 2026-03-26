@@ -10,49 +10,52 @@ import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
 
 // Mock/Placeholder components for missing types
-const SupplyTable = ({ data }: { data: any[] }) => (
-  <div className="glass-panel overflow-hidden border-cyan-500/10">
-    <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/5 border-b border-white/5">
-      <div className="flex items-center gap-2">
-        <Database className="w-4 h-4 text-cyan-400" />
-        <span className="font-mono text-[10px] text-cyan-400/80 font-bold tracking-widest uppercase">Asset_State_Registry</span>
+const SupplyTable = ({ data }: { data: any[] }) => {
+  if (!data || !Array.isArray(data)) return null;
+  return (
+    <div className="glass-panel overflow-hidden border-cyan-500/10">
+      <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/5 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-cyan-400" />
+          <span className="font-mono text-[10px] text-cyan-400/80 font-bold tracking-widest uppercase">Asset_State_Registry</span>
+        </div>
+        <div className="flex gap-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30 animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/20" />
+        </div>
       </div>
-      <div className="flex gap-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30 animate-pulse" />
-        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/20" />
-      </div>
-    </div>
-    <div className="p-0">
-      <table className="w-full text-left font-mono text-[11px] border-collapse">
-        <thead>
-          <tr className="text-slate-500 bg-slate-900/40">
-            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">DATASET_IDENTIFIER</th>
-            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">TYPE_TAG</th>
-            <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter text-right">METADATA_EXTRACT</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {data.map((row, i) => (
-            <tr key={i} className="group hover:bg-cyan-500/5 transition-colors">
-              <td className="px-4 py-3 text-slate-200">
-                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] mr-2 border border-white/10 uppercase">{row.id?.slice(0, 4) || "DSET"}</span>
-                {row.name || row.id}
-              </td>
-              <td className="px-4 py-3">
-                <span className="text-slate-500 italic lowercase">{row.type || "unknown"}</span>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <span className="text-cyan-400 group-hover:text-cyan-300 transition-colors uppercase text-[9px] font-bold tracking-tight">
-                  {row.description || "NO_DESCRIPTION_PROVIDED"}
-                </span>
-              </td>
+      <div className="p-0">
+        <table className="w-full text-left font-mono text-[11px] border-collapse">
+          <thead>
+            <tr className="text-slate-500 bg-slate-900/40">
+              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">DATASET_IDENTIFIER</th>
+              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">TYPE_TAG</th>
+              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter text-right">METADATA_EXTRACT</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {data.map((row, i) => (
+              <tr key={i} className="group hover:bg-cyan-500/5 transition-colors">
+                <td className="px-4 py-3 text-slate-200">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] mr-2 border border-white/10 uppercase">{row.id?.slice(0, 4) || "DSET"}</span>
+                  {row.name || row.id}
+                </td>
+                <td className="px-4 py-3">
+                  <span className="text-slate-500 italic lowercase">{row.type || "unknown"}</span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className="text-cyan-400 group-hover:text-cyan-300 transition-colors uppercase text-[9px] font-bold tracking-tight">
+                    {row.description || "NO_DESCRIPTION_PROVIDED"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const MarkdownRenderer = ({ content }: { content: string }) => (
   <div className="prose prose-invert prose-slate max-w-none font-sans text-sm leading-relaxed text-slate-300 prose-table:font-mono prose-table:text-[11px] prose-th:text-slate-400 prose-th:border-b prose-th:border-white/10 prose-th:pb-2 prose-td:py-1.5 prose-td:border-t prose-td:border-white/5 prose-td:text-slate-300">

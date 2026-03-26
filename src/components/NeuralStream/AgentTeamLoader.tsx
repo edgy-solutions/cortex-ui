@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as LucideIcons from "lucide-react";
+import { getMeshConfig } from "@/api/client";
 
 export const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.HelpCircle;
@@ -10,9 +11,7 @@ export const useMeshConfig = () => {
   const [personaConfig, setPersonaConfig] = useState<Record<string, any>>({});
   
   useEffect(() => {
-    // Adjust URL to match your gateway.py host/port
-    fetch("http://localhost:8000/mesh/config")
-      .then(res => res.json())
+    getMeshConfig()
       .then(data => { if (data.personas) setPersonaConfig(data.personas); })
       .catch(err => console.error("Config load failed:", err));
   }, []);
