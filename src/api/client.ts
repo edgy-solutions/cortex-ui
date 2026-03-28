@@ -1,5 +1,6 @@
 import axios from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { config } from "@/config";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -13,12 +14,7 @@ import {
  * Matches the React OIDC Context storage pattern.
  */
 function getOidcToken(): string | null {
-  const authority =
-    import.meta.env.VITE_KEYCLOAK_REALM_URL ||
-    "http://localhost:8080/realms/cortex";
-  const clientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || "cortex-ui";
-
-  const storageKey = `oidc.user:${authority}:${clientId}`;
+  const storageKey = `oidc.user:${config.VITE_KEYCLOAK_REALM_URL}:${config.VITE_KEYCLOAK_CLIENT_ID}`;
   const oidcStorage = sessionStorage.getItem(storageKey);
 
   if (oidcStorage) {
@@ -33,7 +29,7 @@ function getOidcToken(): string | null {
 }
 
 // ── Config ────────────────────────────────────────────────
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const API_URL = config.VITE_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -41,12 +37,12 @@ const api = axios.create({
 });
 
 // Attach Bearer token to all REST requests
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((cfg) => {
   const token = getOidcToken();
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    cfg.headers.Authorization = `Bearer ${token}`;
   }
-  return config;
+  return cfg;
 });
 
 /**

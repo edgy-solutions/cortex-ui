@@ -36,7 +36,8 @@ The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connect
 
 - **Do not bypass the Auth layer.** All UI access requires SSO unless `VITE_NO_AUTH=true` is set.
 - **Do not bypass the API layer.** All backend calls go through `src/api/client.ts`. Components use `useAgent()`, not raw fetch/axios.
-- **Do not expose secrets to the frontend.** API keys, internal service URLs, and credentials belong ONLY in `backend/.env`. The frontend `.env` must contain nothing but `VITE_API_URL`.
+- **Do not use `import.meta.env` directly in components.** Vite bakes these at build time. Use the centralized `src/config.ts` module which reads from `window.__RUNTIME_CONFIG__` injected safely at container boot.
+- **Do not expose secrets to the frontend.** API keys, internal service URLs, and credentials belong ONLY in `backend/.env`. The frontend `.env` must contain nothing but `VITE_API_URL` and Keycloak vars.
 - **Do not call internal services from the frontend.** The React app talks ONLY to the FastAPI BFF (port 8000). If the frontend needs data from the ontology service or DataHub, add a BFF proxy route in the backend.
 - **Do not remove mock fallback.** The `useMockAgent` hook must stay functional for offline demos.
 - **Do not install additional state management libraries.** Zustand is the single source of truth.

@@ -1,12 +1,11 @@
 import React from "react";
 import { AuthProvider as OidcProvider } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
+import { config } from "@/config";
 
 const oidcConfig = {
-  authority:
-    import.meta.env.VITE_KEYCLOAK_REALM_URL ||
-    "http://localhost:8080/realms/cortex",
-  client_id: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || "cortex-ui",
+  authority: config.VITE_KEYCLOAK_REALM_URL,
+  client_id: config.VITE_KEYCLOAK_CLIENT_ID,
   redirect_uri: window.location.origin,
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   onSigninCallback: () => {

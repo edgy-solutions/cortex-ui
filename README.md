@@ -93,6 +93,14 @@ VITE_KEYCLOAK_CLIENT_ID=cortex-ui
 VITE_NO_AUTH=false
 ```
 
+### Runtime Configuration Injection
+Because Vite bakes `import.meta.env` variables into the static JS bundle at build time, placing these inside a Kubernetes Deployment using standard `env` properties has no effect.
+To solve this, the application uses a **Runtime Config Injection** pattern:
+1. An `initContainer` in the Helm deployment reads the Kubernetes environment variables.
+2. It generates a `/workspace/dist/config.js` file that sets `window.__RUNTIME_CONFIG__`.
+3. `index.html` loads this script before the main app.
+4. `src/config.ts` acts as the central router, preferring the runtime config over the build-time static config, ensuring the exact same Docker image can be deployed across multiple environments (dev, sandbox, production) simply by changing the Helm values.
+
 ## Authentication
 
 The Cortex uses **OpenID Connect (OIDC)** via Keycloak for secure access.

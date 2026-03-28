@@ -2,6 +2,7 @@ import { useAuth } from "react-oidc-context";
 import { LogOut, User as UserIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { config } from "@/config";
 
 /**
  * UserMenu component for the Header.
@@ -10,7 +11,7 @@ import { useState } from "react";
 export function UserMenu() {
   const auth = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const disableAuth = import.meta.env.VITE_NO_AUTH === "true";
+  const disableAuth = config.VITE_NO_AUTH === "true";
 
   if (disableAuth) {
     return (

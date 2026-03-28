@@ -1,6 +1,7 @@
 import React from "react";
 import { useAuth } from "react-oidc-context";
 import { LogIn, ShieldAlert } from "lucide-react";
+import { config } from "@/config";
 
 /**
  * RequireAuth guard component.
@@ -9,7 +10,7 @@ import { LogIn, ShieldAlert } from "lucide-react";
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
-  const disableAuth = import.meta.env.VITE_NO_AUTH === "true";
+  const disableAuth = config.VITE_NO_AUTH === "true";
 
   if (disableAuth) {
     return <>{children}</>;
