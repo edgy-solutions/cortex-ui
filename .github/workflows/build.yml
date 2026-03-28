@@ -52,13 +52,12 @@ jobs:
             echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build frontend image
-        run: |
-          pack build ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }} \
-            --builder paketobuildpacks/builder-jammy-base \
-            --path . \
-            --env "VITE_API_URL=" \
-            --publish=${{ github.event_name != 'pull_request' }}
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }}
 
       - name: Tag latest
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
