@@ -8,6 +8,9 @@ import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
+import { ChartWidget } from "../mesh/ChartWidget";
+import { publishToSuperset } from "@/api/client";
+import { toast } from "sonner";
 
 // Mock/Placeholder components for missing types
 const SupplyTable = ({ data }: { data: any[] }) => {
@@ -75,7 +78,7 @@ interface SemanticInterpreterProps {
 }
 
 // Render a single semantic component by archetype
-const renderComponent = (comp: any) => {
+const renderComponent = (comp: any, onPublish: (sql: string, title: string) => void) => {
   switch (comp.archetype) {
     case "PROCESS_TOPOLOGY": {
       // Map semantic nodes to custom glassmorphism node types.
@@ -127,6 +130,17 @@ const renderComponent = (comp: any) => {
     case "KNOWLEDGE_DOCUMENT":
       return <MarkdownRenderer content={comp.markdown_content} />;
 
+    case "CHART_WIDGET":
+      return (
+        <ChartWidget
+          data={comp.data_payload}
+          type={comp.chart_type}
+          subject={comp.subject_concept}
+          sql={comp.sql_query}
+          onPublish={onPublish}
+        />
+      );
+
     default:
       return (
         <div className="p-4 glass-panel border-amber-500/30 flex flex-col gap-3">
@@ -149,10 +163,28 @@ const renderComponent = (comp: any) => {
 
 // Graphs and documents span full width; cards flow inline in a 2-col grid
 const isFullWidth = (archetype: string) =>
-  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT";
+  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT" || archetype === "CHART_WIDGET";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();
+
+  const handlePublish = async (sql: string, title: string) => {
+    const toastId = toast.loading("Publishing to Superset...");
+    try {
+      const result = await publishToSuperset(sql, title);
+      toast.success("Chart Published!", {
+        id: toastId,
+        description: `View at: ${result.summary}`,
+        duration: 5000,
+      });
+    } catch (err) {
+      console.error("Failed to publish chart:", err);
+      toast.error("Publication failed", {
+        id: toastId,
+        description: "The Analyst Service is currently unreachable.",
+      });
+    }
+  };
 
   if (!payload || !payload.components || !Array.isArray(payload.components)) {
     return null;
@@ -180,7 +212,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                   {pCfg.label}
                 </div>
               )}
-              {renderComponent(comp)}
+              {renderComponent(comp, handlePublish)}
             </RadarReveal>
           </div>
         );

@@ -150,3 +150,19 @@ body,
 .react-flow__handle:hover {
   opacity: 1;
 }
+
+/* ── Chart & Analyst UI ─────────────────────────────────── */
+.btn-publish {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
+  transition: all 0.3s ease;
+  @apply px-6 py-2 rounded-lg font-mono text-[11px] font-bold tracking-widest uppercase text-cyan-400 cursor-pointer;
+}
+
+.btn-publish:hover {
+  background: rgba(6, 182, 212, 0.2);
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.4);
+  @apply text-cyan-300 border-cyan-400/60;
+}

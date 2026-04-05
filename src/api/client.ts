@@ -161,3 +161,25 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+// ── Analyst / Superset ───────────────────────────────────
+/**
+ * Publishes a SQL-backed chart to Apache Superset.
+ * Targets Engine A (Analyst Service) via the BFF.
+ */
+export async function publishToSuperset(
+  sql: string,
+  title: string
+): Promise<{ summary: string }> {
+  const taskPayload = {
+    task_description: `Publish the chart '${title}' to Superset.`,
+    custom_payload: {
+      action: "publish",
+      sql_query: sql,
+      chart_title: title,
+    },
+  };
+
+  const { data } = await api.post<{ summary: string }>("/analyze", taskPayload);
+  return data;
+}

@@ -7,12 +7,23 @@ import { CompilationOverlay } from "@/components/Compilation/CompilationOverlay"
 import { RequireAuth } from "@/auth/RequireAuth";
 import { CanvasPane } from "@/components/AgenticCanvas/CanvasPane";
 
+import { Toaster } from "sonner";
+
 export default function App() {
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
 
   return (
     <RequireAuth>
+      <Toaster 
+        theme="dark" 
+        position="top-center" 
+        expand={false} 
+        richColors 
+        toastOptions={{
+          className: "glass-panel-sm border-neon-blue/20 bg-slate-950/90 text-slate-200",
+        }}
+      />
       <Layout
         stream={<NeuralStream />}
         canvas={

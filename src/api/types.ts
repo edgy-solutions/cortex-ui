@@ -2,7 +2,7 @@
 // The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
 // Event types: status, final_payload, stream_end
 
-export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT';
+export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT' | 'CHART_WIDGET';
 export type SeverityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
 
 export interface UIEntity {
@@ -23,8 +23,16 @@ export type TopologyUI = { archetype: 'PROCESS_TOPOLOGY'; subject_concept: strin
 export type HazardUI = { archetype: 'HAZARD_DECLARATION'; subject_concept: string; severity: SeverityLevel; hazards: UIEntity[] };
 export type MetricUI = { archetype: 'ASSET_STATE_METRIC'; subject_concept: string; metrics: UIEntity[] };
 export type DocumentUI = { archetype: 'KNOWLEDGE_DOCUMENT'; subject_concept: string; markdown_content: string };
+export type ChartUI = {
+  archetype: 'CHART_WIDGET';
+  subject_concept: string;
+  chart_type: 'BAR' | 'LINE' | 'PIE';
+  data_payload: string; // JSON string from Engine A
+  sql_query: string;
+  source_persona?: string;
+};
 
-export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI;
+export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI | ChartUI;
 
 // Composite Dashboard wrapper (multiple components per screen)
 export type DashboardUI = {
