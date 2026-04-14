@@ -118,6 +118,13 @@ export async function streamInterviewResponse(
     },
     body: JSON.stringify(request),
     signal: ctrl.signal,
+    async onopen(response) {
+      if (response.ok && response.headers.get('content-type')?.startsWith('text/event-stream')) {
+        return; // everything's good
+      }
+      // Throw the response so the onerror handler can intercept HTTP errors (like 401)
+      throw response;
+    },
     onmessage(msg) {
       if (msg.event === "stream_end") {
         onEvent({ type: "stream_end" });
@@ -136,7 +143,15 @@ export async function streamInterviewResponse(
     },
     onerror(err) {
       console.error("SSE Stream Error:", err);
-      // Re-throw to let fetch-event-source handle retry logic or fail
+      
+      // If the BFF throws a 401, tell the user to log in again!
+      if (err instanceof Response && err.status === 401) {
+          alert("Your session has expired. Please log in again.");
+          window.location.href = "/"; // Redirect to root/login
+          throw err;
+      }
+      
+      // Re-throw for all other network errors
       throw err;
     },
   });
