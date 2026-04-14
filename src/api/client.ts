@@ -105,6 +105,11 @@ export async function streamInterviewResponse(
 ): Promise<void> {
   const token = getOidcToken();
 
+  const ctrl = new AbortController();
+  if (signal) {
+    signal.addEventListener("abort", () => ctrl.abort());
+  }
+
   await fetchEventSource(`${API_URL}/interview/stream`, {
     method: "POST",
     headers: {
@@ -112,16 +117,22 @@ export async function streamInterviewResponse(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(request),
-    signal,
+    signal: ctrl.signal,
     onmessage(msg) {
       if (msg.event === "stream_end") {
         onEvent({ type: "stream_end" });
+        ctrl.abort(); // Prevent fetchEventSource from retrying
         return;
       }
       const event = parseSSE(msg.event, msg.data);
       if (event) {
         onEvent(event);
       }
+    },
+    onclose() {
+      // If the server closes the connection cleanly but we haven't aborted,
+      // do NOT retry. This is a POST request that triggers a new job.
+      throw new Error("Server closed the connection unexpectedly.");
     },
     onerror(err) {
       console.error("SSE Stream Error:", err);
