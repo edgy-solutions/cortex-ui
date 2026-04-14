@@ -27,9 +27,11 @@ export type ChartUI = {
   archetype: 'CHART_WIDGET';
   subject_concept: string;
   chart_type: 'BAR' | 'LINE' | 'PIE';
-  data_payload: string; // JSON string from Engine A
+  chart_data: string; // JSON string from Engine A
   sql_query: string;
   source_persona?: string;
+  superset_dataset_name?: string;
+  is_published?: boolean;
 };
 
 export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI | ChartUI;

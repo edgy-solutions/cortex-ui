@@ -133,7 +133,7 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
     case "CHART_WIDGET":
       return (
         <ChartWidget
-          data={comp.data_payload}
+          data={comp.chart_data}
           type={comp.chart_type}
           subject={comp.subject_concept}
           sql={comp.sql_query}
