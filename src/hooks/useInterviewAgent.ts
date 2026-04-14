@@ -221,6 +221,7 @@ export function useInterviewAgent() {
       );
       setIsProcessing(false);
     },
+    retry: false,
     onError: (error: any) => {
       setIsProcessing(false);
       console.error("Interview stream error:", error);
