@@ -70,7 +70,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => (
     <Markdown 
       remarkPlugins={[remarkGfm]}
       components={{
-        img: ({ node, src, alt }) => (
+        img: ({ src, alt }) => (
           <div className="my-6 rounded-xl overflow-hidden border border-white/10 bg-black/50 p-2">
             <FederatedImage 
               src={src || ""} 
