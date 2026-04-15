@@ -9,6 +9,7 @@ import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
 import { ChartWidget } from "../mesh/ChartWidget";
+import { FederatedImage } from "../mesh/FederatedImage";
 import { publishToSuperset } from "@/api/client";
 import { toast } from "sonner";
 
@@ -66,7 +67,27 @@ const MarkdownRenderer = ({ content }: { content: string }) => (
       <FileText className="w-4 h-4 text-neon-purple" />
       <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">Knowledge_Doc</span>
     </div>
-    <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+    <Markdown 
+      remarkPlugins={[remarkGfm]}
+      components={{
+        img: ({ node, src, alt, ...props }) => (
+          <div className="my-6 rounded-xl overflow-hidden border border-white/10 bg-black/50 p-2">
+            <FederatedImage 
+              src={src || ""} 
+              alt={alt} 
+              className="w-full max-h-[500px] object-contain rounded-lg opacity-90 hover:opacity-100 transition-opacity" 
+            />
+            {alt && (
+              <p className="text-center mt-2 font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                {alt}
+              </p>
+            )}
+          </div>
+        )
+      }}
+    >
+      {content}
+    </Markdown>
   </div>
 );
 
