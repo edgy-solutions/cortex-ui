@@ -28,6 +28,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1030.0",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-query": "^5.90.21",
+    "@types/three": "^0.184.0",
     "@xyflow/react": "^12.10.0",
     "axios": "^1.13.5",
     "framer-motion": "^12.34.2",
@@ -41,6 +42,7 @@
     "remark-gfm": "^4.0.1",
     "serve": "^14.2.5",
     "sonner": "^2.0.7",
+    "three": "^0.184.0",
     "zustand": "^5.0.11"
   }
 }

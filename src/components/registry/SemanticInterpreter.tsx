@@ -10,6 +10,7 @@ import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
+import { DigitalTwinWidget } from "../mesh/DigitalTwinWidget";
 import { publishToSuperset } from "@/api/client";
 import { toast } from "sonner";
 
@@ -162,6 +163,9 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
         />
       );
 
+    case "DIGITAL_TWIN_3D":
+      return <DigitalTwinWidget {...comp} />;
+
     default:
       return (
         <div className="p-4 glass-panel border-amber-500/30 flex flex-col gap-3">
@@ -184,7 +188,7 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
 
 // Graphs and documents span full width; cards flow inline in a 2-col grid
 const isFullWidth = (archetype: string) =>
-  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT" || archetype === "CHART_WIDGET";
+  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT" || archetype === "CHART_WIDGET" || archetype === "DIGITAL_TWIN_3D";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();
