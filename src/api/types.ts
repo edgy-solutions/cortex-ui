@@ -2,7 +2,7 @@
 // The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
 // Event types: status, final_payload, stream_end
 
-export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT' | 'CHART_WIDGET';
+export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT' | 'CHART_WIDGET' | 'DIGITAL_TWIN_3D';
 export type SeverityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
 
 export interface UIEntity {
@@ -34,7 +34,21 @@ export type ChartUI = {
   is_published?: boolean;
 };
 
-export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI | ChartUI;
+export interface DigitalTwinUI {
+  archetype: 'DIGITAL_TWIN_3D';
+  source_persona?: string;
+  subject_concept?: string;
+  device_id: string;
+  core_temp: number;
+  uptime_hours: number;
+  anomalies: {
+    element_id: string;
+    temp: number;
+    status: 'DEGRADED' | 'CRITICAL_FAILURE';
+  }[];
+}
+
+export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI | ChartUI | DigitalTwinUI;
 
 // Composite Dashboard wrapper (multiple components per screen)
 export type DashboardUI = {
