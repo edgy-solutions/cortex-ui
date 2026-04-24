@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { DigitalTwinUI } from '@/api/types';
+import type { DigitalTwinUI } from '@/api/types';
 
 export const DigitalTwinWidget: React.FC<DigitalTwinUI> = (props) => {
   const mountRef = useRef<HTMLDivElement>(null);
