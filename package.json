@@ -27,7 +27,7 @@
     "@aws-sdk/credential-providers": "^3.1030.0",
     "@aws-sdk/s3-request-presigner": "^3.1030.0",
     "@microsoft/fetch-event-source": "^2.0.1",
-    "@platform/iagent-contracts": "git+https://github.com/edgy-solutions/invincible-agent.git#main",
+    "@platform/iagent-contracts": "git+https://github.com/edgy-solutions/invincible-agent.git#master",
     "@tanstack/react-query": "^5.90.21",
     "@types/three": "^0.184.0",
     "@xyflow/react": "^12.10.0",
