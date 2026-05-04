@@ -1,59 +1,38 @@
 // ── Stream Event Protocol (SSE) ─────────────────────────────────
-// The backend sends Server-Sent Events: event: <type>\ndata: <json>\n\n
-// Event types: status, final_payload, stream_end
+export { 
+  SemanticArchetype, 
+  SeverityLevel,
+  ChartType,
+  MoodType,
+} from '@platform/iagent-contracts';
 
-export type SemanticArchetype = 'PROCESS_TOPOLOGY' | 'HAZARD_DECLARATION' | 'ASSET_STATE_METRIC' | 'KNOWLEDGE_DOCUMENT' | 'CHART_WIDGET' | 'DIGITAL_TWIN_3D';
-export type SeverityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
+import type {
+  DashboardUI,
+  TopologyUI,
+  HazardUI,
+  MetricUI,
+  DocumentUI,
+  ChartUI,
+  DigitalTwinUI,
+  UIEntity,
+  UIRelation,
+  AnomalyNode
+} from '@platform/iagent-contracts';
 
-export interface UIEntity {
-  id: string;
-  name?: string;
-  type?: string;
-  description?: string;
-}
-
-export interface UIRelation {
-  source: string;
-  target: string;
-  relation?: string;
-  predicate?: string;
-}
-
-export type TopologyUI = { archetype: 'PROCESS_TOPOLOGY'; subject_concept: string; nodes: UIEntity[]; edges: UIRelation[] };
-export type HazardUI = { archetype: 'HAZARD_DECLARATION'; subject_concept: string; severity: SeverityLevel; hazards: UIEntity[] };
-export type MetricUI = { archetype: 'ASSET_STATE_METRIC'; subject_concept: string; metrics: UIEntity[] };
-export type DocumentUI = { archetype: 'KNOWLEDGE_DOCUMENT'; subject_concept: string; markdown_content: string };
-export type ChartUI = {
-  archetype: 'CHART_WIDGET';
-  subject_concept: string;
-  chart_type: 'BAR' | 'LINE' | 'PIE';
-  chart_data: string; // JSON string from Engine A
-  sql_query: string;
-  source_persona?: string;
-  superset_dataset_name?: string;
-  is_published?: boolean;
+export type {
+  DashboardUI,
+  TopologyUI,
+  HazardUI,
+  MetricUI,
+  DocumentUI,
+  ChartUI,
+  DigitalTwinUI,
+  UIEntity,
+  UIRelation,
+  AnomalyNode
 };
-
-export interface DigitalTwinUI {
-  archetype: 'DIGITAL_TWIN_3D';
-  source_persona?: string;
-  subject_concept?: string;
-  device_id: string;
-  core_temp: number;
-  uptime_hours: number;
-  anomalies: {
-    element_id: string;
-    temp: number;
-    status: 'DEGRADED' | 'CRITICAL_FAILURE';
-  }[];
-}
 
 export type SemanticUIContainer = TopologyUI | HazardUI | MetricUI | DocumentUI | ChartUI | DigitalTwinUI;
-
-// Composite Dashboard wrapper (multiple components per screen)
-export type DashboardUI = {
-  components: SemanticUIContainer[];
-};
 
 /** Parsed stream event types */
 export type StreamEvent =
