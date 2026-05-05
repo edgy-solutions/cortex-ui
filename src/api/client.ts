@@ -36,12 +36,14 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach Bearer token to all REST requests
+// Attach Bearer token and Trace ID to all REST requests
 api.interceptors.request.use((cfg) => {
   const token = getOidcToken();
   if (token) {
     cfg.headers.Authorization = `Bearer ${token}`;
   }
+  // Generate a unique trace ID for each request to link frontend actions to backend logs
+  cfg.headers["X-Trace-Id"] = crypto.randomUUID();
   return cfg;
 });
 
@@ -114,6 +116,7 @@ export async function streamInterviewResponse(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Trace-Id": crypto.randomUUID(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(request),
