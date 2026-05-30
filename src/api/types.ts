@@ -61,7 +61,10 @@ export interface BPMNGraphUpdate {
 /** Request payload for the interview stream endpoint */
 export interface InterviewRequest {
   message: string;
-  session_id?: string;
+  // Required: identifies the chat thread / DagsterRunTracker key on the
+  // backend. Omitting it used to cause the gateway to mint a fresh UUID
+  // per request, defeating dedup and launching duplicate Dagster runs.
+  session_id: string;
   current_graph_json?: string;
 }
 

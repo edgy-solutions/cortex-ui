@@ -6,17 +6,21 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 
 export function InputBar() {
   const [value, setValue] = useState("");
-  const { sendMessage, isConnected } = useAgent();
+  const { sendMessage, isConnected, isProcessing } = useAgent();
   const phase = useInterviewStore((s) => s.phase);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!value.trim() || phase !== "active") return;
+    if (!value.trim() || phase !== "active" || isProcessing) return;
     sendMessage(value.trim());
     setValue("");
   };
 
-  const isDisabled = phase !== "active";
+  // Disable while a stream is in flight to prevent spam-submits. The deeper
+  // mutation guard in useInterviewAgent will silently no-op duplicates, but
+  // surfacing the disabled state here makes the rate-limit visible to the
+  // user instead of a button that looks active but does nothing.
+  const isDisabled = phase !== "active" || isProcessing;
 
   return (
     <div className="px-6 pb-5 pt-2">
@@ -45,11 +49,13 @@ export function InputBar() {
             onChange={(e) => setValue(e.target.value)}
             disabled={isDisabled}
             placeholder={
-              isDisabled
-                ? "Interview complete — compile the workflow"
-                : isConnected
-                  ? "Connected to mesh — begin interrogation..."
-                  : "Offline mode — begin interrogation..."
+              isProcessing
+                ? "Streaming response — please wait..."
+                : phase !== "active"
+                  ? "Interview complete — compile the workflow"
+                  : isConnected
+                    ? "Connected to mesh — begin interrogation..."
+                    : "Offline mode — begin interrogation..."
             }
             className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 font-mono outline-none disabled:opacity-40"
           />
