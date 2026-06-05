@@ -116,6 +116,20 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     persona_fit: ["DATA_STEWARD"],
     domain_fit: ["DATA_ENGINEERING"],
   },
+  // Engine A's mesh:enumerateCatalog verb (flat catalog listing).
+  // Renders as KNOWLEDGE_DOCUMENT/MarkdownRenderer, NOT WorkflowCanvas
+  // — see ADR-0017 §1 and the run 5fee663d post-mortem for why a
+  // catalog enumeration must not route through the topology canvas.
+  {
+    subject_uri: "mesh:CatalogListing",
+    object_uri: "mesh:KnowledgeDocument",
+    archetype: "KNOWLEDGE_DOCUMENT",
+    component: "MarkdownRenderer",
+    layout: "full-width",
+    expected_fields: ["scope", "tables", "asset_count"],
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+  },
   // Engine DA — DatasetAnalysisReport renders as chart.
   {
     subject_uri: "mesh:DatasetAnalysisReport",
