@@ -35,6 +35,19 @@ jobs:
       - name: Set up pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.7.4
 
+      # ── Multi-arch enablement ──
+      # The arm64 k3s sandbox at home wouldn't pull the previous amd64-
+      # only image, so the cluster's helm values had `cortexUi.enabled:
+      # false`. QEMU + Buildx makes one image that runs on both arm64
+      # and amd64. The build images (node:20-alpine, nginx:1.25-alpine)
+      # are already multi-arch on Docker Hub so the build itself "just
+      # works" once buildx is told to produce both.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -43,26 +56,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine image tag
+      - name: Determine image tags
         id: tag
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            PRIMARY="${{ github.ref_name }}"
           else
-            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            PRIMARY="${{ github.sha }}"
           fi
+          {
+            echo "tag=${PRIMARY}"
+            # On master, also tag :latest in the same buildx run.
+            # Single-step tagging produces a proper multi-arch
+            # manifest; the old "pull-then-retag-then-push" pattern
+            # doesn't work for multi-arch — it would have collapsed
+            # the manifest list to whichever arch the runner is on.
+            if [[ "${{ github.ref }}" == "refs/heads/master" && "${{ github.event_name }}" != "pull_request" ]]; then
+              echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${PRIMARY},${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:latest"
+            else
+              echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${PRIMARY}"
+            fi
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push frontend image
+      - name: Build and push frontend image (multi-arch)
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }}
-
-      - name: Tag latest
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }}
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ steps.tag.outputs.tag }} \
-                     ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:latest
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tag.outputs.tags }}
