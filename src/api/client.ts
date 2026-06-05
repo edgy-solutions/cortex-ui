@@ -205,6 +205,35 @@ export async function getMeshConfig(): Promise<any> {
   return data;
 }
 
+// ── ADR-0017 frontend self-registration ──────────────────
+/**
+ * Advertise this frontend's presentation capabilities to cortex-bff.
+ *
+ * Best-effort: if the call fails (network, server not yet upgraded,
+ * etc.) we log + swallow. Engine F's in-memory default table covers the
+ * same archetypes today, so a failed registration degrades to "Engine F
+ * speaks for cortex-ui" — exactly the state we're trying to retire.
+ */
+export interface FrontendCapabilityPayload {
+  subject_uri: string;
+  object_uri: string;
+  archetype: string;
+  component?: string;
+  layout?: string;
+  expected_fields?: string[];
+  persona_fit?: string[];
+  domain_fit?: string[];
+}
+
+export async function registerFrontendCapabilities(payload: {
+  frontend_id: string;
+  frontend_version: string;
+  capabilities: FrontendCapabilityPayload[];
+}): Promise<{ accepted: number; frontend_id: string }> {
+  const { data } = await api.post("/register_frontend_capabilities", payload);
+  return data;
+}
+
 // ── Health Check ─────────────────────────────────────────
 export async function healthCheck(): Promise<boolean> {
   try {
