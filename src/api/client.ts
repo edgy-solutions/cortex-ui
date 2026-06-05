@@ -121,6 +121,30 @@ export async function streamInterviewResponse(
     },
     body: JSON.stringify(request),
     signal: ctrl.signal,
+    // CRITICAL: @microsoft/fetch-event-source by default binds a
+    // visibilitychange listener that ABORTS the active SSE connection
+    // when the tab loses focus and CREATES a brand new one when the
+    // tab is shown again (see node_modules/@microsoft/fetch-event-source
+    // /lib/esm/fetch.js, function onVisibilityChange).
+    //
+    // For a regular GET-based EventSource that pattern is fine because
+    // the server replays from `Last-Event-ID`. For OUR endpoint,
+    // /interview/stream is a POST that LAUNCHES a Dagster supervisor
+    // job — so each lib-driven "reopen" produces a brand new POST that
+    // either triggers a NEW Dagster run (when session_id happens to
+    // change across reopens) or re-renders the early status events
+    // (when DagsterRunTracker dedups). The user-visible "Analyzing
+    // intent... / Analyzing intent..." loop with the elapsed counter
+    // reset is exactly this: the user switched tabs (to look at
+    // Dagster, the response, etc.) and on return the lib silently
+    // reopened the connection.
+    //
+    // openWhenHidden: true tells the lib NOT to bind the
+    // visibilitychange listener at all. The in-flight stream survives
+    // tab switches. This is the correct setting for any POST-based SSE
+    // that triggers stateful backend work — losing the connection
+    // mid-orchestration cannot be made cheap by replay.
+    openWhenHidden: true,
     async onopen(response) {
       if (response.ok && response.headers.get('content-type')?.startsWith('text/event-stream')) {
         return; // everything's good
