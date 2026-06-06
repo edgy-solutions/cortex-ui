@@ -1,9 +1,25 @@
+/**
+ * FederatedImage — render an image whose `src` is an `s3://bucket/key`
+ * URI (typically emitted by Engine E when a Neo4j node has an attached
+ * procedure diagram extracted by doc-tools).
+ *
+ * Architecture (Option A): the s3:// URI is forwarded to cortex-bff's
+ * GET /federated_image?src=... endpoint. The bff enforces the same JWT
+ * + entitled_domains gate the rest of the data path uses, fetches the
+ * object from MinIO with its own static credentials, and streams it
+ * back. The browser never speaks to MinIO directly — same authz
+ * surface as the text answer path.
+ *
+ * Implementation note: a plain `<img src="/federated_image?src=...">`
+ * tag does NOT send the Authorization: Bearer header — we have to
+ * `fetch` the image (which DOES carry the header via interceptors) and
+ * then convert the response to an object URL the <img> can render.
+ *
+ * Non-s3:// `src` values (http(s):, data:, blob:) pass through unchanged.
+ */
 import React, { useEffect, useState } from "react";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { fromWebToken } from "@aws-sdk/credential-providers";
-import { useAuth } from "react-oidc-context";
 import { AlertCircle } from "lucide-react";
+import { useAuth } from "react-oidc-context";
 import { config } from "@/config";
 
 interface FederatedImageProps {
@@ -14,107 +30,80 @@ interface FederatedImageProps {
 
 export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, className }) => {
   const auth = useAuth();
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<boolean>(false);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    // Non-s3 sources pass through with no fetch indirection.
+    if (!src || !src.startsWith("s3://")) {
+      setObjectUrl(src || null);
+      setError(src ? null : "no src");
+      return;
+    }
 
-    const fetchPresignedUrl = async () => {
+    let cancelled = false;
+    let createdObjectUrl: string | null = null;
+
+    const fetchImage = async () => {
       try {
-        if (!src.startsWith("s3://")) {
-          // Not an S3 URI, just pass it through
-          if (isMounted) setUrl(src);
+        const token = auth.user?.access_token;
+        if (!token) {
+          setError("not authenticated");
           return;
         }
-
-        if (!auth.user?.access_token) {
-          if (isMounted) setError(true);
+        const resp = await fetch(
+          `${config.VITE_API_URL}/federated_image?src=${encodeURIComponent(src)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!resp.ok) {
+          setError(resp.status === 403 ? "not entitled" : `bff ${resp.status}`);
           return;
         }
-
-        // S3Client construction notes for MinIO compatibility:
-        //
-        // - `endpoint` MUST be set when the cluster's object store is
-        //   MinIO (sandbox + most prod setups) instead of real AWS S3.
-        //   Without it the AWS SDK defaults to
-        //   `https://s3.{region}.amazonaws.com` and the request never
-        //   reaches MinIO. Sourced from VITE_AWS_S3_ENDPOINT so the
-        //   value is operator-tunable per environment.
-        //
-        // - `forcePathStyle: true` is required by MinIO — it speaks
-        //   bucket/path style only, not the virtual-hosted style AWS
-        //   uses by default (`{bucket}.s3.amazonaws.com`). Without
-        //   this the SDK will compose URLs MinIO rejects.
-        //
-        // - The STS web-identity flow (`fromWebToken`) requires MinIO
-        //   to be configured as an OIDC relying party for the same
-        //   Keycloak realm that issued `auth.user.access_token`. See
-        //   the MinIO + Keycloak setup notes in the deploy docs;
-        //   if STS isn't configured MinIO will reject the AssumeRole
-        //   call with a 400 and the image renders "Image Not Authorized".
-        const s3Endpoint = config.VITE_AWS_S3_ENDPOINT;
-        const s3Client = new S3Client({
-          region: config.VITE_AWS_REGION || "us-east-1",
-          endpoint: s3Endpoint || undefined,
-          forcePathStyle: !!s3Endpoint, // path-style is MinIO's only mode
-          credentials: fromWebToken({
-            roleArn: config.VITE_AWS_ROLE_ARN || "arn:aws:iam::123456789012:role/KeycloakS3Reader",
-            webIdentityToken: auth.user.access_token,
-            // The STS call ALSO needs to be routed to MinIO, not AWS.
-            // The default fromWebToken provider's clientConfig is used
-            // to construct the STS client.
-            clientConfig: s3Endpoint ? {
-              region: config.VITE_AWS_REGION || "us-east-1",
-              endpoint: s3Endpoint,
-            } : undefined,
-          })
-        });
-
-        // Parse s3://bucket/key
-        const s3Match = src.match(/^s3:\/\/([^\/]+)\/(.+)$/);
-        if (!s3Match) {
-          if (isMounted) setUrl(src);
-          return;
+        const blob = await resp.blob();
+        createdObjectUrl = URL.createObjectURL(blob);
+        if (!cancelled) {
+          setObjectUrl(createdObjectUrl);
+          setError(null);
+        } else {
+          // Component unmounted before we set state — release the URL now.
+          URL.revokeObjectURL(createdObjectUrl);
         }
-
-        const bucket = s3Match[1];
-        const key = s3Match[2];
-
-        const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-        const presigned = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-        
-        if (isMounted) {
-          setUrl(presigned);
-          setError(false);
-        }
-      } catch (err) {
-        console.error("Failed to load federated image:", err);
-        if (isMounted) {
-          setError(true);
-        }
+      } catch (e) {
+        console.error("FederatedImage fetch failed:", e);
+        if (!cancelled) setError("fetch failed");
       }
     };
 
-    fetchPresignedUrl();
+    fetchImage();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
+      if (createdObjectUrl) URL.revokeObjectURL(createdObjectUrl);
     };
   }, [src, auth.user?.access_token]);
 
   if (error) {
     return (
-      <div className={`flex flex-col items-center justify-center bg-black/50 border border-red-500/30 rounded-lg p-4 text-slate-400 ${className}`} style={{ minHeight: '200px' }}>
+      <div
+        className={`flex flex-col items-center justify-center bg-black/50 border border-red-500/30 rounded-lg p-4 text-slate-400 ${className}`}
+        style={{ minHeight: "200px" }}
+      >
         <AlertCircle className="w-8 h-8 text-red-500/50 mb-2" />
-        <span className="text-xs font-mono">Image Not Authorized</span>
+        <span className="text-xs font-mono">
+          {error === "not entitled" ? "Not Entitled" : "Image Unavailable"}
+        </span>
       </div>
     );
   }
 
-  if (!url) {
-    return <div className={`animate-pulse bg-white/10 rounded-lg ${className}`} style={{ minHeight: '200px' }} />;
+  if (!objectUrl) {
+    return (
+      <div
+        className={`animate-pulse bg-white/10 rounded-lg ${className}`}
+        style={{ minHeight: "200px" }}
+      />
+    );
   }
 
-  return <img src={url} alt={alt} className={className} loading="lazy" />;
+  return <img src={objectUrl} alt={alt} className={className} loading="lazy" />;
 };
