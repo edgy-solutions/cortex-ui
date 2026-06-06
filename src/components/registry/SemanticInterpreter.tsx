@@ -42,7 +42,16 @@ const SupplyTable = ({ data }: { data: any[] }) => {
             {data.map((row, i) => (
               <tr key={i} className="group hover:bg-cyan-500/5 transition-colors">
                 <td className="px-4 py-3 text-slate-200">
-                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] mr-2 border border-white/10 uppercase">{row.id?.slice(0, 4) || "DSET"}</span>
+                  {/* Tier badge removed: `id.slice(0,4)` was meant as a
+                      tier hint for medallion datasets (gold/silv/bron),
+                      but it (1) failed visually for "orders_raw" /
+                      "customers_raw" (showed "ORDE" / "CUST" — nonsense)
+                      and (2) rendered without enough visual separation
+                      so the badge + name read as "goldgold.sales..." in
+                      practice. The dataset id is already informative on
+                      its own; if we want a tier indicator later, derive
+                      it from the dot-separated namespace (`gold.sales.x`
+                      → "GOLD") and only show when present. */}
                   {row.name || row.id}
                 </td>
                 <td className="px-4 py-3">
