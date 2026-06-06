@@ -4,6 +4,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { fromWebToken } from "@aws-sdk/credential-providers";
 import { useAuth } from "react-oidc-context";
 import { AlertCircle } from "lucide-react";
+import { config } from "@/config";
 
 interface FederatedImageProps {
   src: string;
@@ -32,11 +33,41 @@ export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, classN
           return;
         }
 
+        // S3Client construction notes for MinIO compatibility:
+        //
+        // - `endpoint` MUST be set when the cluster's object store is
+        //   MinIO (sandbox + most prod setups) instead of real AWS S3.
+        //   Without it the AWS SDK defaults to
+        //   `https://s3.{region}.amazonaws.com` and the request never
+        //   reaches MinIO. Sourced from VITE_AWS_S3_ENDPOINT so the
+        //   value is operator-tunable per environment.
+        //
+        // - `forcePathStyle: true` is required by MinIO — it speaks
+        //   bucket/path style only, not the virtual-hosted style AWS
+        //   uses by default (`{bucket}.s3.amazonaws.com`). Without
+        //   this the SDK will compose URLs MinIO rejects.
+        //
+        // - The STS web-identity flow (`fromWebToken`) requires MinIO
+        //   to be configured as an OIDC relying party for the same
+        //   Keycloak realm that issued `auth.user.access_token`. See
+        //   the MinIO + Keycloak setup notes in the deploy docs;
+        //   if STS isn't configured MinIO will reject the AssumeRole
+        //   call with a 400 and the image renders "Image Not Authorized".
+        const s3Endpoint = config.VITE_AWS_S3_ENDPOINT;
         const s3Client = new S3Client({
-          region: import.meta.env.VITE_AWS_REGION || "us-east-1",
+          region: config.VITE_AWS_REGION || "us-east-1",
+          endpoint: s3Endpoint || undefined,
+          forcePathStyle: !!s3Endpoint, // path-style is MinIO's only mode
           credentials: fromWebToken({
-            roleArn: import.meta.env.VITE_AWS_ROLE_ARN || "arn:aws:iam::123456789012:role/KeycloakS3Reader",
-            webIdentityToken: auth.user.access_token
+            roleArn: config.VITE_AWS_ROLE_ARN || "arn:aws:iam::123456789012:role/KeycloakS3Reader",
+            webIdentityToken: auth.user.access_token,
+            // The STS call ALSO needs to be routed to MinIO, not AWS.
+            // The default fromWebToken provider's clientConfig is used
+            // to construct the STS client.
+            clientConfig: s3Endpoint ? {
+              region: config.VITE_AWS_REGION || "us-east-1",
+              endpoint: s3Endpoint,
+            } : undefined,
           })
         });
 
