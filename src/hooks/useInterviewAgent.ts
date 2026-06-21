@@ -1,18 +1,51 @@
 import { useCallback, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { streamInterviewResponse } from "@/api/client";
-import type { StreamEvent, InterviewRequest } from "@/api/types";
+import type {
+  StreamEvent,
+  InterviewRequest,
+  PipelineStageKind,
+} from "@/api/types";
 import {
   useInterviewStore,
   type Message,
-  type ThinkingStep,
 } from "@/store/useInterviewStore";
 
 import { useCanvasStore } from "@/store/useCanvasStore";
+import {
+  isMockGroundingEnabled,
+  runMockGroundingFor,
+  type MockHandle,
+} from "@/lib/mockGroundingEmitter";
 
 // ── Helpers ───────────────────────────────────────────────
 let _id = 0;
 const uid = () => `msg-${++_id}-${Date.now()}`;
+
+/**
+ * Map an existing untyped "status / think" label to a PipelineStageKind
+ * when possible. This is a transitional bridge — the gateway today
+ * emits free-text labels; later we'll receive typed `pipeline_stage`
+ * events directly. Until then, we still want the dedup property:
+ * recurring "Agent reasoning…" labels MUST collapse to a single row,
+ * not accumulate. This map turns the most common labels into stable
+ * kinds so the upsert dedups them.
+ */
+function classifyLegacyLabel(label: string): PipelineStageKind | "agent_reasoning" | null {
+  const s = label.toLowerCase();
+  if (s.includes("agent") && s.includes("reasoning")) return "agent_reasoning";
+  if (s.includes("smolagent")) return "agent_reasoning";
+  if (s.includes("plan")) return "understanding";
+  if (s.includes("resolv") || s.includes("subject") || s.includes("understand"))
+    return "locating";
+  if (s.includes("verb") || s.includes("classif") || s.includes("action"))
+    return "choosing_action";
+  if (s.includes("query") || s.includes("retriev") || s.includes("search"))
+    return "retrieving";
+  if (s.includes("compos") || s.includes("respons") || s.includes("answer"))
+    return "composing";
+  return null;
+}
 
 /**
  * The real interview hook that connects to the backend streaming API.
@@ -30,27 +63,68 @@ export function useInterviewAgent() {
     addMessage,
     updateMessage,
     setLiveBpmnGraph,
-    setUnresolvedPaths,
     setActivePersonas,
     setIsProcessing,
     setPhase,
     addOntologyTerm,
     addDataBinding,
+    upsertThinkingStep,
+    primePipelineStages,
+    setRouteDecision,
+    setSources,
+    setGraphTrace,
+    resetTurnGrounding,
   } = useInterviewStore();
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const abortController = useRef<AbortController | null>(null);
   const currentAgentMsgId = useRef<string | null>(null);
-  const thinkingSteps = useRef<ThinkingStep[]>([]);
+  const mockGroundingHandle = useRef<MockHandle | null>(null);
 
+
+  /**
+   * Helper used by `stream_end` and payload events to mark every still-
+   * loading step as `done` without disturbing kind / startedAt. We read
+   * the latest thinkingSteps off the store (not a ref) so we never drift.
+   */
+  const markAllStepsDone = useCallback(
+    (agentMsgId: string) => {
+      const msg = useInterviewStore
+        .getState()
+        .messages.find((m) => m.id === agentMsgId);
+      const steps = msg?.thinkingSteps ?? [];
+      steps.forEach((s) => {
+        if (s.status === "loading" || s.status === "pending") {
+          upsertThinkingStep(agentMsgId, {
+            kind: s.kind,
+            label: s.label,
+            status: "done",
+          });
+        }
+      });
+    },
+    [upsertThinkingStep]
+  );
 
   // Handle individual stream events
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
-      if (!agentId && event.type !== "status" && event.type !== "context_update" && event.type !== "final_payload" && event.type !== "ui_payload" && event.type !== "chat_message" && event.type !== "stream_end") {
-        return;
-      }
+      // Allow context updates and the new typed grounding events to flow
+      // even before an agent message exists (the gateway may emit them
+      // out-of-order; we tolerate that rather than dropping signal).
+      const isAlwaysAllowed =
+        event.type === "status" ||
+        event.type === "context_update" ||
+        event.type === "final_payload" ||
+        event.type === "ui_payload" ||
+        event.type === "chat_message" ||
+        event.type === "stream_end" ||
+        event.type === "pipeline_stage" ||
+        event.type === "route_decision" ||
+        event.type === "sources" ||
+        event.type === "graph_trace";
+      if (!agentId && !isAlwaysAllowed) return;
 
       switch (event.type) {
         case "context_update": {
@@ -76,54 +150,89 @@ export function useInterviewAgent() {
         }
 
         case "status": {
-          const steps = [...thinkingSteps.current];
-          
+          if (!agentId) break;
+          // Phase 0 dedup: route legacy "think" labels through the
+          // upsert-by-kind dispatch. Recurring labels (e.g. "Agent
+          // reasoning time 10s / 20s / 30s") now collapse to ONE row
+          // whose label updates in place — NEVER accumulate.
+          const kind =
+            classifyLegacyLabel(event.label) ?? ("legacy" as const);
           if (event.action === "think") {
-             // If there was a previous loading step, mark it as done (sequential flow)
-             if (steps.length > 0 && steps[steps.length - 1].status === "loading") {
-               steps[steps.length - 1] = { ...steps[steps.length - 1], status: "done" };
-             }
-             // Add new loading step
-             const step: ThinkingStep = {
-               id: `think-${steps.length}`,
-               label: event.label,
-               status: "loading",
-             };
-             steps.push(step);
+            upsertThinkingStep(agentId, {
+              kind,
+              label: event.label,
+              status: "loading",
+            });
           } else if (event.action === "found") {
-             // Mark last step as'done' and update its label to the result
-             if (steps.length > 0) {
-               steps[steps.length - 1] = {
-                 ...steps[steps.length - 1],
-                 status: "done",
-                 label: event.label,
-               };
-             }
+            upsertThinkingStep(agentId, {
+              kind,
+              label: event.label,
+              status: "done",
+            });
           } else if (event.action === "error") {
-             if (steps.length > 0) {
-              steps[steps.length - 1] = { ...steps[steps.length - 1], status: "error", label: event.label };
-             }
-          }
-
-          thinkingSteps.current = steps;
-          updateMessage(agentId!, { thinkingSteps: [...steps] });
-
-          if (event.action === "plan" && event.personas) {
+            upsertThinkingStep(agentId, {
+              kind,
+              label: event.label,
+              status: "error",
+            });
+          } else if (event.action === "plan" && event.personas) {
             setActivePersonas(event.personas);
           }
           break;
         }
 
+        case "pipeline_stage": {
+          // New typed grounding-panel event. Maps 1:1 to a known
+          // pipeline kind; the upsert collapses repeated `started`
+          // events (e.g. retries) to a single row.
+          if (!agentId) break;
+          const status =
+            event.status === "completed"
+              ? ("done" as const)
+              : event.status === "failed"
+              ? ("error" as const)
+              : ("loading" as const);
+          // Friendly label from PIPELINE_STAGES; the typed event itself
+          // doesn't carry a label, by design (label is UI concern,
+          // event is contract concern).
+          const stageLabel =
+            event.kind === "understanding"
+              ? "Understanding your question"
+              : event.kind === "locating"
+              ? "Locating the subject"
+              : event.kind === "choosing_action"
+              ? "Choosing how to answer"
+              : event.kind === "retrieving"
+              ? "Retrieving evidence"
+              : "Composing the answer";
+          upsertThinkingStep(agentId, {
+            kind: event.kind,
+            label: stageLabel,
+            status,
+            elapsedMs: event.elapsed_ms,
+          });
+          break;
+        }
+
+        case "route_decision":
+          setRouteDecision(event.decision);
+          break;
+
+        case "sources":
+          setSources(event.sources);
+          break;
+
+        case "graph_trace":
+          setGraphTrace(event.nodes);
+          break;
+
         case "chat_message": {
           if (agentId && event.data) {
-             const steps = thinkingSteps.current.map(s => ({ ...s, status: s.status === "loading" ? "done" : s.status }));
-             thinkingSteps.current = steps;
-             
-             updateMessage(agentId, { 
-               content: event.data.content,
-               thinkingSteps: steps, 
-               isStreaming: false 
-             });
+            markAllStepsDone(agentId);
+            updateMessage(agentId, {
+              content: event.data.content,
+              isStreaming: false,
+            });
           }
           break;
         }
@@ -132,40 +241,47 @@ export function useInterviewAgent() {
         case "final_payload": {
           // Engine F has returned the final orchestrated semantic payload.
           if (agentId) {
-             // Ensure all thinking steps are marked as done
-             const steps = thinkingSteps.current.map(s => ({ ...s, status: s.status === "loading" ? "done" : s.status }));
-             thinkingSteps.current = steps;
-             
-             // Dispatch to Canvas Store
-             if (event.payload?.components) {
-               useCanvasStore.getState().setCanvasContent(event.payload.components);
-             }
-
-             // Update chat message with a receipt instead of the full payload
-             updateMessage(agentId, { 
-               content: `Artifacts generated: ${event.payload?.components?.length || 0} modules deployed to Canvas.`,
-               isReceipt: true,
-               thinkingSteps: steps, 
-               isStreaming: false 
-             });
+            markAllStepsDone(agentId);
+            // Dispatch to Canvas Store
+            if (event.payload?.components) {
+              useCanvasStore
+                .getState()
+                .setCanvasContent(event.payload.components);
+            }
+            // Update chat message with a receipt instead of the full payload
+            updateMessage(agentId, {
+              content: `Artifacts generated: ${
+                event.payload?.components?.length || 0
+              } modules deployed to Canvas.`,
+              isReceipt: true,
+              isStreaming: false,
+            });
           }
-          
           setActivePersonas([]); // Clear assembly icons
           break;
         }
 
         case "stream_end": {
-          // Mark the agent message as no longer streaming
           if (agentId) {
-            updateMessage(agentId, { isStreaming: false, thinkingSteps: [...thinkingSteps.current] });
+            markAllStepsDone(agentId);
+            updateMessage(agentId, { isStreaming: false });
           }
           currentAgentMsgId.current = null;
-          thinkingSteps.current = [];
           break;
         }
       }
     },
-    [updateMessage, setPhase, setLiveBpmnGraph, setUnresolvedPaths, addOntologyTerm, addDataBinding]
+    [
+      updateMessage,
+      setActivePersonas,
+      addOntologyTerm,
+      addDataBinding,
+      upsertThinkingStep,
+      setRouteDecision,
+      setSources,
+      setGraphTrace,
+      markAllStepsDone,
+    ]
   );
 
   // Main mutation that handles the streaming request
@@ -180,6 +296,10 @@ export function useInterviewAgent() {
       setPhase("active");
       setLiveBpmnGraph(null);
       setActivePersonas([]);
+      // Phase 0: wipe per-turn grounding state so the right-HUD doesn't
+      // show stale routing decisions from a prior query while the new
+      // one is in flight.
+      resetTurnGrounding();
 
       // Add user message
       const userMsg: Message = {
@@ -194,7 +314,6 @@ export function useInterviewAgent() {
       // Create agent message placeholder
       const agentId = uid();
       currentAgentMsgId.current = agentId;
-      thinkingSteps.current = [];
 
       const agentMsg: Message = {
         id: agentId,
@@ -205,6 +324,24 @@ export function useInterviewAgent() {
         timestamp: Date.now(),
       };
       addMessage(agentMsg);
+
+      // Phase 0 instant-pre-render: seed all 5 pipeline stages as
+      // `pending` (first stage `loading`) on the agent message the
+      // moment the query fires. The panel never appears empty — users
+      // see "I heard you" structure before any gateway event arrives.
+      primePipelineStages(agentId);
+
+      // Dev: if mock-grounding is enabled, schedule a synthetic event
+      // sequence that fires alongside the real backend events. Lets us
+      // exercise the grounding panel end-to-end before the gateway
+      // emits typed events for real. No-op in production builds.
+      mockGroundingHandle.current?.cancel();
+      if (isMockGroundingEnabled()) {
+        mockGroundingHandle.current = runMockGroundingFor(
+          userInput,
+          handleStreamEvent
+        );
+      }
 
       // Build request with current graph state
       const request: InterviewRequest = {
@@ -246,6 +383,8 @@ export function useInterviewAgent() {
 
   const cancelStream = useCallback(() => {
     abortController.current?.abort();
+    mockGroundingHandle.current?.cancel();
+    mockGroundingHandle.current = null;
   }, []);
 
   return {

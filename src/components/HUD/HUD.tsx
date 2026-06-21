@@ -1,12 +1,33 @@
 import { motion } from "framer-motion";
 import { Radar } from "lucide-react";
 import { OntologyMap } from "./OntologyMap";
-import { DataBindings } from "./DataBindings";
+import { RoutingDecision } from "./RoutingDecision";
+import { SourcesTrail } from "./SourcesTrail";
+import { GraphTrace } from "./GraphTrace";
+import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { CompileButton } from "@/components/Compilation/CompileButton";
 
+/**
+ * HUD — the right-side grounding panel.
+ *
+ * Stack (top → bottom):
+ *   1. Header (radar pulse + mode toggle)
+ *   2. OntologyMap     — query terms (existing, kept as-is)
+ *   3. RoutingDecision — what subject + verb + engine handled this turn
+ *                        (replaces the stale DataBindings card)
+ *   4. SourcesTrail    — citations the engines returned
+ *   5. GraphTrace      — substrate walk (detailed mode only)
+ *   6. CompileButton   — for interview phases (existing)
+ *
+ * Per architect's principle: the panel surfaces what the pipeline
+ * actually did. Each section corresponds to a real pipeline emission;
+ * none is synthesized. The two-mode toggle is a render-time filter
+ * over the same single event stream; the modes cannot diverge.
+ */
 export function HUD() {
   const phase = useInterviewStore((s) => s.phase);
+  const mode = useInterviewStore((s) => s.groundingDisplayMode);
 
   return (
     <div className="flex flex-col h-full p-4 space-y-4 overflow-y-auto">
@@ -18,16 +39,23 @@ export function HUD() {
         className="flex items-center gap-2 px-1"
       >
         <Radar className="w-4 h-4 text-neon-cyan animate-pulse-neon" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neon-cyan/70">
+        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neon-cyan/70 flex-1">
           Live Context HUD
         </span>
+        <ModeToggle />
       </motion.div>
 
-      {/* Ontology Map */}
+      {/* Ontology Map (existing) */}
       <OntologyMap />
 
-      {/* Data Bindings */}
-      <DataBindings />
+      {/* Routing Decision (Phase 2) */}
+      <RoutingDecision />
+
+      {/* Sources & Evidence (Phase 3) */}
+      <SourcesTrail />
+
+      {/* Graph Trace (Phase 4) — detailed mode only */}
+      {mode === "detailed" && <GraphTrace />}
 
       {/* Compile button (shown when interview reaches blueprint/compiling/complete phase) */}
       {(phase === "blueprint" || phase === "compiling" || phase === "complete") && (

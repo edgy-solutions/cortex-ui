@@ -27,9 +27,10 @@ function getResponseForInput(input: string): MockResponse {
   if (lower.includes("engine") || lower.includes("turbine")) {
     return {
       thinkingSteps: [
-        { label: "Scanning IOF-MRO Ontology...", status: "loading" },
-        { label: "Found Concept: iof:RotatingEquipment", status: "done" },
+        { kind: "legacy", label: "Scanning IOF-MRO Ontology...", status: "loading" },
+        { kind: "legacy", label: "Found Concept: iof:RotatingEquipment", status: "done" },
         {
+          kind: "legacy",
           label: "Querying DataHub for stg_engine_telemetry...",
           status: "loading",
         },
@@ -48,9 +49,10 @@ function getResponseForInput(input: string): MockResponse {
   if (lower.includes("damage") || lower.includes("failure")) {
     return {
       thinkingSteps: [
-        { label: "Scanning IOF-MRO Ontology...", status: "loading" },
-        { label: "Found Concept: iof:ImpactDamage", status: "done" },
+        { kind: "legacy", label: "Scanning IOF-MRO Ontology...", status: "loading" },
+        { kind: "legacy", label: "Found Concept: iof:ImpactDamage", status: "done" },
         {
+          kind: "legacy",
           label: "Querying DataHub for stg_maintenance_logs...",
           status: "loading",
         },
@@ -70,12 +72,14 @@ function getResponseForInput(input: string): MockResponse {
   if (lower.includes("schedule") || lower.includes("maintenance")) {
     return {
       thinkingSteps: [
-        { label: "Scanning IOF-MRO Ontology...", status: "loading" },
+        { kind: "legacy", label: "Scanning IOF-MRO Ontology...", status: "loading" },
         {
+          kind: "legacy",
           label: "Found Concept: iof:MaintenanceSchedule",
           status: "done",
         },
         {
+          kind: "legacy",
           label: "Querying DataHub for fct_work_orders...",
           status: "loading",
         },
@@ -94,8 +98,8 @@ function getResponseForInput(input: string): MockResponse {
   // Default response
   return {
     thinkingSteps: [
-      { label: "Scanning IOF-MRO Ontology...", status: "loading" },
-      { label: "No direct ontology match found", status: "done" },
+      { kind: "legacy", label: "Scanning IOF-MRO Ontology...", status: "loading" },
+      { kind: "legacy", label: "No direct ontology match found", status: "done" },
     ],
     text: `I understand you're interested in "${input}". Let me map this to our data mesh. Could you provide more context? For example, mention specific assets (engines, turbines), failure modes, or maintenance schedules so I can bind the correct ontology concepts and data models.`,
     ontologyTerms: [],
