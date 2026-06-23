@@ -97,6 +97,16 @@ export interface RouteDecision {
     /** Number of candidate verbs the compat-walk surfaced (N=1 is the
         Contract A N=1 confirmation case). */
     candidate_count: number;
+    /** OUTPUT-side persona of the verb edge (e.g. "TECH_WRITER",
+     *  "DATA_STEWARD", "AUDITOR"). Source: `owner_persona` property on
+     *  the (input)-[verb]->(output) edge in Neo4j. This is the substrate
+     *  persona — "which type of expert produced this answer" — NOT the
+     *  caller-identity persona (which is a separate future ADR; see
+     *  [[pingsso-claim-gap]] in iagent-mesh-sdk memory). Surfacing it
+     *  in the UI gives an attribution chip on the Routing Decision
+     *  card; the user can see who in the system "owns" this kind of
+     *  answer. Never conflate with caller-identity persona. */
+    owner_persona?: string;
   };
   handled_by: {
     engine_name: string;    // "Engine W" / "Engine E" / "Engine A" / etc.
@@ -134,34 +144,48 @@ export interface GraphTraceNode {
   via_verb?: string;
 }
 
-/** Parsed stream event types — extended Phase 0 typed union.
+/** Parsed stream event types — Option A clean cut (2026-06-22).
  *
- *  All variants are DERIVED FROM real pipeline data:
- *    status, context_update, chat_message, ui_payload, final_payload,
- *    stream_end — existing variants, unchanged so this is non-breaking.
- *    pipeline_stage — drives the left-stream ThinkingCard (with stable
- *      `kind` for upsert-by-kind dispatch).
- *    route_decision — drives the right-HUD Routing Decision card.
- *    sources        — drives the right-HUD Sources & Evidence trail.
- *    graph_trace    — drives the right-HUD (detailed-mode) Graph Trace.
+ *  The old `status` variant (action: "think" | "found" | "error" | "plan"
+ *  with free-text labels) is REMOVED in this revision. Every signal now
+ *  comes through a typed variant that projects real pipeline data:
  *
- *  Per architect's Phase 0 ruling: declare the typed union once,
- *  later phases ADD variants, the panel and stream never diverge.
+ *    pipeline_stage  ← Dagster step status transitions (RUNNING/SUCCESS/FAILURE)
+ *                      + the gateway-level /route_intent call
+ *    pipeline_error  ← typed error event (replaces action="error" status)
+ *    route_decision  ← supervisor-materialized routing decision (when
+ *                      that asset lands; UI tolerates absence)
+ *    sources         ← engine-attached citation list (when engines emit it)
+ *    graph_trace     ← supervisor-materialized compat-walk (when that
+ *                      asset lands)
+ *    context_update  ← ontology terms + data bindings (unchanged)
+ *    chat_message    ← agent's text answer (unchanged)
+ *    ui_payload /
+ *      final_payload ← schema-driven semantic payload (unchanged)
+ *    stream_end      ← terminator (unchanged)
+ *
+ *  Dagster path discipline: every pipeline_stage and pipeline_error
+ *  emitted in the ONE_SHOT routing flow MUST derive from real Dagster
+ *  step status (the gateway's polling loop reads it from the run's
+ *  step stats / asset materializations). The gateway is not allowed
+ *  to bypass Dagster to fabricate stage progress — the supervisor is
+ *  the audit trail, and the events the UI sees are projections of
+ *  what Dagster actually recorded.
+ *
+ *  The active-roster "personas summoning" decoration is GONE. It was
+ *  visual flavor that didn't surface a real grounding signal; the
+ *  output-side `owner_persona` lives on the verb edge instead and is
+ *  surfaced as an attribution chip in the Routing Decision card.
+ *  Caller-identity persona from Keycloak claims is a separate future
+ *  ADR (see [[pingsso-claim-gap]]).
  */
 export type StreamEvent =
-  | {
-      type: "status";
-      action: "think" | "found" | "error" | "plan";
-      category?: "Concept" | "Process" | "Asset";
-      label: string;
-      personas?: string[];
-    }
   | { type: "context_update"; contextType: "ontology" | "bindings"; data: string[] }
   | { type: "chat_message"; data: { role: string; content: string } }
   | { type: "ui_payload"; payload: DashboardUI }
   | { type: "final_payload"; payload: DashboardUI }
   | { type: "stream_end" }
-  // ── Phase 0+: typed grounding-panel events ─────────────────
+  // ── Typed grounding-panel events ─────────────────
   | {
       type: "pipeline_stage";
       kind: PipelineStageKind;
@@ -175,6 +199,21 @@ export type StreamEvent =
       };
       /** ms since pipeline_start; used by ThinkingCard for elapsed display. */
       elapsed_ms?: number;
+    }
+  | {
+      /** Typed error event. Replaces the legacy action="error" status
+       *  event with a structured payload. Optional `kind` lets the UI
+       *  attach the error to the relevant pipeline stage (e.g. a red
+       *  icon on the "retrieving" row). `retryable` is the policy hint
+       *  the backend includes when known (e.g. transient HTTP 5xx vs.
+       *  a verb-unfound contract-B short-circuit).  */
+      type: "pipeline_error";
+      kind?: PipelineStageKind;
+      message: string;
+      retryable?: boolean;
+      /** Optional cause classification — verb_unfound, llm_timeout,
+          engine_5xx, etc. — for downstream telemetry / diagnostics. */
+      cause?: string;
     }
   | { type: "route_decision"; decision: RouteDecision }
   | { type: "sources"; sources: Source[] }

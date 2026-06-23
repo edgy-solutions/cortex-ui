@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
-import { useMeshConfig, DynamicIcon } from '../NeuralStream/AgentTeamLoader';
+import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers } from 'lucide-react';
 
 export const CanvasPane = () => {

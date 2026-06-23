@@ -105,10 +105,32 @@ export function RoutingDecision() {
                   : "(WARN: Contract A property — fit was not confirmed by LLM)"
               }
             />
+            {decision.action.owner_persona && (
+              <DetailLine
+                k="Owner persona"
+                v={decision.action.owner_persona}
+                hint="(output-side persona on the verb edge — who in the system 'owns' this kind of answer)"
+              />
+            )}
           </div>
         }
       >
         <ConfidenceBar value={decision.action.confidence} />
+        {/* Output-side persona attribution chip. Source: owner_persona
+            property on the (input)-[verb]->(output) edge in Neo4j. Per
+            [[persona-split]]: this is the substrate persona ("who in
+            the system owns this kind of answer"), NOT the caller-
+            identity persona (that's a separate future ADR). */}
+        {decision.action.owner_persona && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
+              Voice
+            </span>
+            <span className="text-[10px] font-mono text-neon-purple/80 px-1.5 py-0.5 rounded border border-neon-purple/30 bg-neon-purple/5">
+              {decision.action.owner_persona}
+            </span>
+          </div>
+        )}
       </RoutingRow>
 
       <RoutingRow

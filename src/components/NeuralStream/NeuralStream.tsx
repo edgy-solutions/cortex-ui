@@ -3,12 +3,29 @@ import { AnimatePresence } from "framer-motion";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
-import { AgentTeamLoader } from "./AgentTeamLoader";
 
+/**
+ * NeuralStream — the left-side chat / pipeline-progress surface.
+ *
+ * Option A clean cut (2026-06-22): the `AgentTeamLoader` component
+ * (the "summoning specialized graph agents" badges) was REMOVED. It
+ * surfaced the supervisor's active persona roster, which was
+ * decorative — the substrate already routes by predicate-graph
+ * walk, not by persona team-up. Per the architect's principle
+ * "surface what the pipeline did, never synthesize" — badges that
+ * imply collaboration that isn't really there in the routing
+ * semantics are exactly the kind of theater we cut.
+ *
+ * What this surface still does:
+ *   - Renders user/agent chat bubbles
+ *   - Renders the per-message ThinkingCard with the 5 pipeline stages
+ *     (driven by typed `pipeline_stage` events from the gateway)
+ *   - Surfaces typed errors via ThinkingCard rows in `error` state
+ *     (driven by typed `pipeline_error` events)
+ */
 export function NeuralStream() {
   const messages = useInterviewStore((s) => s.messages);
   const isProcessing = useInterviewStore((s) => s.isProcessing);
-  const activePersonas = useInterviewStore((s) => s.activePersonas);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages or content updates
@@ -17,13 +34,7 @@ export function NeuralStream() {
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages, isProcessing, activePersonas]);
-
-  // Determine if we are in the "Agent Assembling" phase
-  // We show the loader if we are processing AND we have personas but the CURRENT agent response hasn't started talking yet.
-  // Look at the last message in the array (which during processing is the pending agent message).
-  const lastMessage = messages[messages.length - 1];
-  const at_planning_phase = isProcessing && activePersonas.length > 0 && lastMessage?.role === 'agent' && !lastMessage.content;
+  }, [messages, isProcessing]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -32,7 +43,7 @@ export function NeuralStream() {
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
       >
-        {messages.length === 0 && !at_planning_phase && (
+        {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 rounded-full border border-neon-blue/30 flex items-center justify-center mb-4 animate-breathe">
               <div className="w-8 h-8 rounded-full bg-neon-blue/10 animate-pulse-neon" />
@@ -51,9 +62,6 @@ export function NeuralStream() {
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
-          {at_planning_phase && (
-            <AgentTeamLoader activePersonas={activePersonas} />
-          )}
         </AnimatePresence>
       </div>
 

@@ -4,7 +4,6 @@ import { streamInterviewResponse } from "@/api/client";
 import type {
   StreamEvent,
   InterviewRequest,
-  PipelineStageKind,
 } from "@/api/types";
 import {
   useInterviewStore,
@@ -22,30 +21,14 @@ import {
 let _id = 0;
 const uid = () => `msg-${++_id}-${Date.now()}`;
 
-/**
- * Map an existing untyped "status / think" label to a PipelineStageKind
- * when possible. This is a transitional bridge — the gateway today
- * emits free-text labels; later we'll receive typed `pipeline_stage`
- * events directly. Until then, we still want the dedup property:
- * recurring "Agent reasoning…" labels MUST collapse to a single row,
- * not accumulate. This map turns the most common labels into stable
- * kinds so the upsert dedups them.
- */
-function classifyLegacyLabel(label: string): PipelineStageKind | "agent_reasoning" | null {
-  const s = label.toLowerCase();
-  if (s.includes("agent") && s.includes("reasoning")) return "agent_reasoning";
-  if (s.includes("smolagent")) return "agent_reasoning";
-  if (s.includes("plan")) return "understanding";
-  if (s.includes("resolv") || s.includes("subject") || s.includes("understand"))
-    return "locating";
-  if (s.includes("verb") || s.includes("classif") || s.includes("action"))
-    return "choosing_action";
-  if (s.includes("query") || s.includes("retriev") || s.includes("search"))
-    return "retrieving";
-  if (s.includes("compos") || s.includes("respons") || s.includes("answer"))
-    return "composing";
-  return null;
-}
+// Option A clean cut (2026-06-22): the legacy `classifyLegacyLabel`
+// helper that mapped free-text "status / think" labels onto stable
+// PipelineStageKinds was REMOVED. The gateway now emits typed
+// `pipeline_stage` events directly; the heartbeat / accumulation
+// problem is fixed at the source (no every-10s status emission).
+// If a legacy gateway is still emitting `status` events, parseSSE
+// drops them silently — verify gateway version >= the Option A roll
+// before upgrading the UI.
 
 /**
  * The real interview hook that connects to the backend streaming API.
@@ -63,7 +46,6 @@ export function useInterviewAgent() {
     addMessage,
     updateMessage,
     setLiveBpmnGraph,
-    setActivePersonas,
     setIsProcessing,
     setPhase,
     addOntologyTerm,
@@ -110,17 +92,17 @@ export function useInterviewAgent() {
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
-      // Allow context updates and the new typed grounding events to flow
-      // even before an agent message exists (the gateway may emit them
-      // out-of-order; we tolerate that rather than dropping signal).
+      // Typed grounding-panel events flow even before an agent message
+      // exists — gateway may emit them out-of-order; tolerate rather
+      // than drop signal.
       const isAlwaysAllowed =
-        event.type === "status" ||
         event.type === "context_update" ||
         event.type === "final_payload" ||
         event.type === "ui_payload" ||
         event.type === "chat_message" ||
         event.type === "stream_end" ||
         event.type === "pipeline_stage" ||
+        event.type === "pipeline_error" ||
         event.type === "route_decision" ||
         event.type === "sources" ||
         event.type === "graph_trace";
@@ -149,35 +131,19 @@ export function useInterviewAgent() {
           break;
         }
 
-        case "status": {
+        case "pipeline_error": {
           if (!agentId) break;
-          // Phase 0 dedup: route legacy "think" labels through the
-          // upsert-by-kind dispatch. Recurring labels (e.g. "Agent
-          // reasoning time 10s / 20s / 30s") now collapse to ONE row
-          // whose label updates in place — NEVER accumulate.
-          const kind =
-            classifyLegacyLabel(event.label) ?? ("legacy" as const);
-          if (event.action === "think") {
-            upsertThinkingStep(agentId, {
-              kind,
-              label: event.label,
-              status: "loading",
-            });
-          } else if (event.action === "found") {
-            upsertThinkingStep(agentId, {
-              kind,
-              label: event.label,
-              status: "done",
-            });
-          } else if (event.action === "error") {
-            upsertThinkingStep(agentId, {
-              kind,
-              label: event.label,
-              status: "error",
-            });
-          } else if (event.action === "plan" && event.personas) {
-            setActivePersonas(event.personas);
-          }
+          // Typed error event — replaces the legacy action="error"
+          // status. If the error is bound to a specific pipeline stage
+          // (`kind`), mark that row as error and surface the message.
+          // If unbound, the error becomes a synthetic "composing" row
+          // so the user still sees the failure in the timeline.
+          const errorKind = event.kind ?? "composing";
+          upsertThinkingStep(agentId, {
+            kind: errorKind,
+            label: event.message,
+            status: "error",
+          });
           break;
         }
 
@@ -257,7 +223,7 @@ export function useInterviewAgent() {
               isStreaming: false,
             });
           }
-          setActivePersonas([]); // Clear assembly icons
+          // (AgentTeamLoader was removed in Option A — nothing to clear here.)
           break;
         }
 
@@ -273,7 +239,6 @@ export function useInterviewAgent() {
     },
     [
       updateMessage,
-      setActivePersonas,
       addOntologyTerm,
       addDataBinding,
       upsertThinkingStep,
@@ -295,7 +260,6 @@ export function useInterviewAgent() {
       setIsProcessing(true);
       setPhase("active");
       setLiveBpmnGraph(null);
-      setActivePersonas([]);
       // Phase 0: wipe per-turn grounding state so the right-HUD doesn't
       // show stale routing decisions from a prior query while the new
       // one is in flight.

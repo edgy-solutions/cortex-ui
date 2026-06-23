@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
-import { useMeshConfig, DynamicIcon } from "../NeuralStream/AgentTeamLoader";
+import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
 import { DigitalTwinWidget } from "../mesh/DigitalTwinWidget";

@@ -23,17 +23,16 @@ export type InterviewPhase = "active" | "blueprint" | "compiling" | "complete";
  *     (understanding, locating, choosing_action, retrieving, composing).
  *     These pre-render as `pending` the instant a query fires so the
  *     panel never appears empty.
- *   - "agent_reasoning": a single elapsed-time row for the smolagents
- *     loop. Updates in place via `elapsedMs`, NEVER appends a new step
- *     per tick. This is the fix for "Agent reasoning time 10s / 20s / 30s"
- *     accumulation.
- *   - "legacy": untyped events from the existing gateway, preserved for
- *     backward compatibility until the gateway emits typed events.
+ *   - "legacy": used by the in-process useMockAgent helper for free-text
+ *     thinking-step rows that don't map to a known pipeline stage.
+ *     Production traffic NEVER produces this kind any more — the gateway
+ *     emits typed pipeline_stage events post Option A clean cut
+ *     (2026-06-22). Kept only for the mock-agent dev path.
  *
  * The `kind` field is the discriminator for the upsert. `id` is still
  * used as a React key but does NOT govern identity any more.
  */
-export type ThinkingStepKind = PipelineStageKind | "agent_reasoning" | "legacy";
+export type ThinkingStepKind = PipelineStageKind | "legacy";
 
 export interface ThinkingStep {
   id: string;
@@ -105,8 +104,6 @@ interface InterviewState {
   liveBpmnGraph: BPMNGraphUpdate | SemanticUIContainer | null;
   /** Dead-end paths requiring user resolution */
   unresolvedPaths: string[];
-  /** Personas currently active in the Mesh reasoning plan */
-  activePersonas: string[];
   isProcessing: boolean;
 
   // ── Grounding panel state (Phase 0 typed-union driven) ──
@@ -153,7 +150,6 @@ interface InterviewState {
   addDataBinding: (binding: DataBinding) => void;
   setLiveBpmnGraph: (graph: BPMNGraphUpdate | SemanticUIContainer | null) => void;
   setUnresolvedPaths: (paths: string[]) => void;
-  setActivePersonas: (personas: string[]) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   // ── Grounding panel actions ──
   setRouteDecision: (decision: RouteDecision | null) => void;
@@ -173,7 +169,6 @@ const initialState = {
   dataBindings: [] as DataBinding[],
   liveBpmnGraph: null as BPMNGraphUpdate | SemanticUIContainer | null,
   unresolvedPaths: [] as string[],
-  activePersonas: [] as string[],
   isProcessing: false,
   routeDecision: null as RouteDecision | null,
   sources: [] as Source[],
@@ -293,8 +288,6 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   setLiveBpmnGraph: (graph) => set({ liveBpmnGraph: graph }),
 
   setUnresolvedPaths: (paths) => set({ unresolvedPaths: paths }),
-
-  setActivePersonas: (personas) => set({ activePersonas: personas }),
 
   setIsProcessing: (isProcessing) => set({ isProcessing }),
 

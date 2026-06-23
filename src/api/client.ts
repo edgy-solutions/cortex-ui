@@ -50,20 +50,18 @@ api.interceptors.request.use((cfg) => {
 /**
  * Parses a single SSE block (event + data) into a StreamEvent.
  * SSE format: "event: <type>\ndata: <json>\n\n"
+ *
+ * Option A clean cut (2026-06-22): the legacy `status` event is no
+ * longer parsed. The gateway has been updated to emit typed events
+ * (`pipeline_stage`, `pipeline_error`, etc.) instead. If a legacy
+ * gateway is still emitting `status`, those events are now dropped
+ * silently — verify gateway version >= the Option A roll before
+ * upgrading the UI.
  */
 function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
   try {
     const parsed = dataStr ? JSON.parse(dataStr) : {};
     switch (eventType) {
-      case "status": {
-        return {
-          type: "status",
-          action: parsed.action,
-          category: parsed.category,
-          label: parsed.label,
-          personas: parsed.personas,
-        };
-      }
       case "context_update": {
         return {
           type: "context_update",
@@ -82,6 +80,34 @@ function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
       }
       case "stream_end":
         return { type: "stream_end" };
+      // ── Typed grounding-panel events ─────────────────
+      case "pipeline_stage": {
+        return {
+          type: "pipeline_stage",
+          kind: parsed.kind,
+          status: parsed.status,
+          detail: parsed.detail,
+          elapsed_ms: parsed.elapsed_ms,
+        };
+      }
+      case "pipeline_error": {
+        return {
+          type: "pipeline_error",
+          kind: parsed.kind,
+          message: parsed.message ?? "Pipeline error",
+          retryable: parsed.retryable,
+          cause: parsed.cause,
+        };
+      }
+      case "route_decision": {
+        return { type: "route_decision", decision: parsed };
+      }
+      case "sources": {
+        return { type: "sources", sources: parsed.sources ?? parsed };
+      }
+      case "graph_trace": {
+        return { type: "graph_trace", nodes: parsed.nodes ?? parsed };
+      }
       default:
         return null;
     }

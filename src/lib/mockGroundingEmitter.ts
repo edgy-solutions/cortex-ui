@@ -92,6 +92,7 @@ function buildMockSequenceForQuery(query: string): {
           confidence: 0.91,
           classify_called: true,
           candidate_count: 1,
+          owner_persona: "DATA_STEWARD",
         },
         handled_by: {
           engine_name: "Engine A",
@@ -139,6 +140,7 @@ function buildMockSequenceForQuery(query: string): {
           confidence: 0.92,
           classify_called: true,
           candidate_count: 1,
+          owner_persona: "TECH_WRITER",
         },
         handled_by: {
           engine_name: "Engine W",
@@ -194,6 +196,7 @@ function buildMockSequenceForQuery(query: string): {
         confidence: 0.55,
         classify_called: true,
         candidate_count: 2,
+        owner_persona: "AUDITOR",
       },
       handled_by: {
         engine_name: "Engine E",
