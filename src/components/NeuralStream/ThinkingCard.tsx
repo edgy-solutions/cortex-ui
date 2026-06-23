@@ -126,16 +126,18 @@ export function ThinkingCard({ steps }: ThinkingCardProps) {
                 animate={{
                   opacity: isPending ? 0.45 : 1,
                   x: 0,
-                  // Subtle breathing on the active stage — the architect's
-                  // "lean into the existing cyberpunk language" note.
-                  scale: isLoading ? [1, 1.012, 1] : 1,
                 }}
-                transition={{
-                  duration: isLoading ? 2.4 : 0.3,
-                  repeat: isLoading ? Infinity : 0,
-                  ease: "easeInOut",
-                }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="flex items-center gap-2"
+                // Scale breathing runs as its own keyed CSS animation so
+                // it doesn't drag the parent's entry transition (opacity,
+                // x) into an infinite loop — that was making the active
+                // stage's text re-cycle through opacity 0 every 2.4s.
+                style={
+                  isLoading
+                    ? { animation: "stage-breathe 2.4s ease-in-out infinite" }
+                    : undefined
+                }
               >
                 <StepIcon step={step} />
                 <span

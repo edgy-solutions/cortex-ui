@@ -130,6 +130,19 @@ body,
   }
 }
 
+/* Active pipeline-stage breathing — scale only, never opacity. Opacity
+   pulsing was the prior framer-motion bug that made the active stage
+   re-cycle through opacity 0 every 2.4s and disappear from view. */
+@keyframes stage-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.012);
+  }
+}
+
 /* ── React Flow overrides ─────────────────────────────── */
 .react-flow__pane {
   cursor: grab;
