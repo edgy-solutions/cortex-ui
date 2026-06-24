@@ -204,7 +204,14 @@ function RoutingRow({ icon, slotLabel, primary, details, children }: RoutingRowP
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="mt-2 ml-[88px] p-2 rounded-md bg-slate-900/40 border border-slate-800/50">
+            {/* Details panel indented just past the row's slot label
+                (icon ~14px + gap 8px = ~22px), so the values sit
+                visually grouped with their section title (ABOUT /
+                ACTION / HANDLED BY) but get nearly the full card
+                width for long URIs and URNs to read naturally.
+                Earlier ml-[88px] squeezed long values into a narrow
+                right-side column under the primary text. */}
+            <div className="mt-2 ml-[22px] p-2 rounded-md bg-slate-900/40 border border-slate-800/50">
               {details}
             </div>
           </motion.div>
