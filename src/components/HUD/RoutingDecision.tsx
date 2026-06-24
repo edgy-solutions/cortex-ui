@@ -223,28 +223,36 @@ function DetailLine({
   v: string;
   hint?: string;
 }) {
+  // Stacked layout: label on its own line above the value. Previously
+  // label + value lived on the same row with the label taking a fixed
+  // 68px left column, which left long URIs/URNs/endpoint URLs only
+  // ~150px of right-side width — they wrapped aggressively and looked
+  // squashed against the right edge. Stacking gives the value the full
+  // card width and the wrapped URL reads left-to-right naturally.
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider min-w-[68px]">
+    <div className="space-y-0.5">
+      <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
         {k}
-      </span>
-      <span className="text-[11px] font-mono text-slate-300 flex-1 break-all">
-        {v}
-        {hint && (
-          <span className="ml-1 text-[10px] text-slate-500 italic">{hint}</span>
+      </div>
+      <div className="flex items-start gap-2">
+        <span className="text-[11px] font-mono text-slate-300 flex-1 break-all">
+          {v}
+          {hint && (
+            <span className="ml-1 text-[10px] text-slate-500 italic">{hint}</span>
+          )}
+        </span>
+        {v.startsWith("http") && (
+          <a
+            href={v}
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-600 hover:text-neon-cyan flex-shrink-0 mt-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="w-3 h-3" />
+          </a>
         )}
-      </span>
-      {v.startsWith("http") && (
-        <a
-          href={v}
-          target="_blank"
-          rel="noreferrer"
-          className="text-slate-600 hover:text-neon-cyan"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink className="w-3 h-3" />
-        </a>
-      )}
+      </div>
     </div>
   );
 }
