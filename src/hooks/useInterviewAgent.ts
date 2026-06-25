@@ -65,11 +65,32 @@ export function useInterviewAgent() {
 
 
   /**
-   * Helper used by `stream_end` and payload events to mark every still-
-   * loading step as `done` without disturbing kind / startedAt. We read
-   * the latest thinkingSteps off the store (not a ref) so we never drift.
+   * Helper invoked at `stream_end` to mark every stage that NEVER
+   * received an explicit completion or error signal as `incomplete`.
+   *
+   * **The founding principle this enforces**: surface what the
+   * pipeline did, never synthesize. The previous implementation
+   * (`markAllStepsDone`) promoted any still-loading or pending stage
+   * to `done` — a UI-side fabrication of a completion signal that
+   * the gateway never sent. That was the *one* place the UI was
+   * manufacturing green, and it's the contributing layer in the
+   * silent-degrade composition class: when Engine O can't talk to
+   * LiteLLM and downstream layers silently degrade to "did
+   * SOMETHING," the gateway's stream still ends with no error AND no
+   * completed event for stages 2-5, and the old code painted them
+   * all green. Catastrophic false-positive.
+   *
+   * The corrected behavior is success-on-positive-signal:
+   *  - `done` only on receipt of `pipeline_stage status=completed`
+   *  - `error` only on receipt of `pipeline_error`
+   *  - `incomplete` (NEW third state) on stream_end if neither arrived
+   *
+   * `incomplete` is rendered as an amber HelpCircle distinct from
+   * pending (which means "still working"), surfacing the actual
+   * epistemic situation: the stream is over, this stage never
+   * reported done, we don't know if it completed.
    */
-  const markAllStepsDone = useCallback(
+  const markUnconfirmedStepsIncomplete = useCallback(
     (agentMsgId: string) => {
       const msg = useInterviewStore
         .getState()
@@ -80,7 +101,7 @@ export function useInterviewAgent() {
           upsertThinkingStep(agentMsgId, {
             kind: s.kind,
             label: s.label,
-            status: "done",
+            status: "incomplete",
           });
         }
       });
@@ -193,8 +214,13 @@ export function useInterviewAgent() {
           break;
 
         case "chat_message": {
+          // chat_message means the synthesis stage produced text — it
+          // does NOT mean every prior stage completed. Each stage gets
+          // marked done only by its own pipeline_stage:completed event;
+          // any stage still pending or loading at stream_end becomes
+          // `incomplete`. Founding principle: surface what the pipeline
+          // did, never synthesize.
           if (agentId && event.data) {
-            markAllStepsDone(agentId);
             updateMessage(agentId, {
               content: event.data.content,
               isStreaming: false,
@@ -205,9 +231,13 @@ export function useInterviewAgent() {
 
         case "ui_payload":
         case "final_payload": {
-          // Engine F has returned the final orchestrated semantic payload.
+          // Engine F's final payload arrival is positive signal for
+          // `composing` only — and the gateway already emits an explicit
+          // pipeline_stage(composing, completed) for that. We do NOT
+          // synthesize completion for stages 1-4 just because stage 5
+          // produced output (the silent-degrade composition class can
+          // produce a vacuous final_payload from a wholly-degraded run).
           if (agentId) {
-            markAllStepsDone(agentId);
             // Dispatch to Canvas Store
             if (event.payload?.components) {
               useCanvasStore
@@ -228,8 +258,12 @@ export function useInterviewAgent() {
         }
 
         case "stream_end": {
+          // Stream is over. Any stage still in pending/loading never
+          // received its positive completion signal — mark them
+          // `incomplete` (NOT `done`). See markUnconfirmedStepsIncomplete
+          // for the founding-principle rationale.
           if (agentId) {
-            markAllStepsDone(agentId);
+            markUnconfirmedStepsIncomplete(agentId);
             updateMessage(agentId, { isStreaming: false });
           }
           currentAgentMsgId.current = null;
@@ -245,7 +279,7 @@ export function useInterviewAgent() {
       setRouteDecision,
       setSources,
       setGraphTrace,
-      markAllStepsDone,
+      markUnconfirmedStepsIncomplete,
     ]
   );
 

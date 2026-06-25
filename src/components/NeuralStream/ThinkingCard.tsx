@@ -7,6 +7,7 @@ import {
   Database,
   Circle,
   AlertCircle,
+  HelpCircle,
 } from "lucide-react";
 import type { ThinkingStep } from "@/store/useInterviewStore";
 
@@ -25,6 +26,15 @@ function StepIcon({ step }: { step: ThinkingStep }) {
   }
   if (step.status === "error") {
     return <AlertCircle className="w-3.5 h-3.5 text-red-400" />;
+  }
+  if (step.status === "incomplete") {
+    // The stream ended without a positive completion signal for this
+    // stage. Visually distinct from pending (still spinning — work in
+    // progress), done (green — confirmed complete), and error (red —
+    // confirmed failed). Amber HelpCircle: "we don't know — the
+    // pipeline never told us." The honest rendering for the
+    // silent-degrade composition case.
+    return <HelpCircle className="w-3.5 h-3.5 text-amber-400" />;
   }
   if (step.status === "loading") {
     // "Retrieving" is the database-flavored step — keep the existing
@@ -146,12 +156,16 @@ export function ThinkingCard({ steps }: ThinkingCardProps) {
                       ? "text-neon-green/90"
                       : step.status === "error"
                       ? "text-red-400/90"
+                      : step.status === "incomplete"
+                      ? "text-amber-400/90"
                       : isPending
                       ? "text-slate-600"
                       : "text-slate-400"
                   }`}
                 >
-                  {step.label}
+                  {step.status === "incomplete"
+                    ? `${step.label} — never confirmed`
+                    : step.label}
                 </span>
 
                 {/* Elapsed time — only on active stages so users see
@@ -182,10 +196,16 @@ export function ThinkingCard({ steps }: ThinkingCardProps) {
                 )}
 
                 {/* Search icon fallback (preserves the prior legacy look
-                    for steps we couldn't classify into a known kind). */}
-                {!isLoading && step.status !== "done" && step.status !== "error" && (
-                  <Search className="w-3.5 h-3.5 text-slate-700" />
-                )}
+                    for steps we couldn't classify into a known kind).
+                    Suppressed on `incomplete` — the amber HelpCircle in
+                    StepIcon is the full visual signal; appending a Search
+                    glyph would muddy it. */}
+                {!isLoading &&
+                  step.status !== "done" &&
+                  step.status !== "error" &&
+                  step.status !== "incomplete" && (
+                    <Search className="w-3.5 h-3.5 text-slate-700" />
+                  )}
               </motion.div>
             );
           })}

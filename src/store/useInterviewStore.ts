@@ -38,8 +38,28 @@ export interface ThinkingStep {
   id: string;
   kind: ThinkingStepKind;
   label: string;
-  /** "pending" lets us pre-render structure instantly on query fire. */
-  status: "pending" | "loading" | "done" | "error";
+  /**
+   * Pipeline-stage status, by reception of a positive signal:
+   *  - pending    : pre-rendered structure, no signal received yet
+   *  - loading    : `pipeline_stage status=started` received
+   *  - done       : `pipeline_stage status=completed` received (positive signal of success)
+   *  - error      : `pipeline_error` received (positive signal of failure)
+   *  - incomplete : stream ended without ever receiving a status for this stage —
+   *                 the system did NOT confirm completion. NEVER synthesized to
+   *                 "done" by the UI; founding principle is "surface what the
+   *                 pipeline did, never synthesize." Visually distinct from
+   *                 pending (which still means "still running") and from done
+   *                 (positive completion signal).
+   *
+   * The fifth state was added 2026-06-25 to close the silent-degrade
+   * composition class: when Engine O can't talk to LiteLLM and downstream
+   * layers silently degrade to "did SOMETHING," the gateway's stream still
+   * ends — and historically the UI promoted every still-pending stage to
+   * "done" inside markAllStepsDone, manufacturing green checkmarks for
+   * stages the pipeline never confirmed. That synthesis is the disease;
+   * "incomplete" is the cure (positive third state for "we don't know").
+   */
+  status: "pending" | "loading" | "done" | "error" | "incomplete";
   /** Set when the step entered `loading` (used for elapsed-time display). */
   startedAt?: number;
   /** Reported by event; if absent, ThinkingCard derives from startedAt. */
