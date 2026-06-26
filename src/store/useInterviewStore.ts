@@ -316,7 +316,25 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   setSources: (sources) => set({ sources }),
   setGraphTrace: (nodes) => set({ graphTrace: nodes }),
   resetTurnGrounding: () =>
-    set({ routeDecision: null, sources: [], graphTrace: [] }),
+    // Per-turn grounding state — wiped on each new query so the
+    // right-HUD shows the CURRENT query's grounding, not an
+    // accumulation across the session. ontologyTerms + dataBindings
+    // were previously missing from this reset, producing the
+    // append-only "concepts list grows forever" bug where a prior
+    // turn's "mesh_demo_customers" stayed visible alongside the
+    // current turn's "360 Dashboard" and made it look like the
+    // current query was about both. The HUD's job is to surface
+    // what the pipeline did for THIS question — same founding
+    // principle as the ThinkingCard incomplete state: surface, don't
+    // synthesize, and don't accumulate across what the user reads as
+    // discrete turns.
+    set({
+      routeDecision: null,
+      sources: [],
+      graphTrace: [],
+      ontologyTerms: [],
+      dataBindings: [],
+    }),
   setGroundingDisplayMode: (mode) => {
     if (typeof window !== "undefined") {
       try {
