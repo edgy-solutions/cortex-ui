@@ -17,6 +17,36 @@ import {
   type MockHandle,
 } from "@/lib/mockGroundingEmitter";
 
+// Hop 3 of the projector build plan
+// (docs/plans/projector-build-plan.md commit 0eda9f7 §4 Hop 3 Part 2).
+//
+// SSE handlers MUST NOT drive any Electric-covered field on the
+// Artifact (routing, sources, graph_trace, rendered_output, status,
+// durability_status, watermark, produced_by, resolved_intent — see
+// ELECTRIC_COVERED_FIELDS in useCanvasStore.ts). Pre-Hop-3 this
+// hook drove ALL of those from SSE events (route_decision, sources,
+// graph_trace, ui_payload/final_payload, pipeline_error, stream_end,
+// onError). Post-Hop-3, every one of those branches is a NO-OP for
+// the artifact path; the cortex-bff Hop 1 writer persists the
+// substrate state to Neo4j, the projector projects it, Electric
+// delivers it to the canvas store. Part 2's absence-of-SSE probe
+// asserts the provenance map confirms no sse:* tag touched any
+// Electric-covered field.
+//
+// What this hook STILL does for the SSE turn:
+//   - context_update     → ontology/binding HUD chips
+//   - pipeline_error     → HUD step error indicator only
+//   - pipeline_stage     → HUD step status
+//   - chat_message       → agent message text (chat layer, not artifact)
+//   - ui_payload/final_payload → receipt-text on the chat message
+//                          (artifact rendered_output is Electric's)
+//   - stream_end         → mark unconfirmed steps incomplete +
+//                          clear the agent message's isStreaming
+//   - onError            → mark the agent message with the error
+//                          (the artifact stays in its locally-pending
+//                          state until Electric delivers a terminal
+//                          state, per [[feedback-trailing-steps-nonfatal]])
+
 // ── Helpers ───────────────────────────────────────────────
 let _id = 0;
 const uid = () => `msg-${++_id}-${Date.now()}`;
@@ -171,9 +201,12 @@ export function useInterviewAgent() {
         event.type === "sources" ||
         event.type === "graph_trace";
       if (!agentId && !isAlwaysAllowed) return;
-
-      // Convenience: artifact-store getter we use across cases.
-      const canvas = useCanvasStore.getState();
+      // Note: pre-Hop-3, this function used `const canvas = useCanvasStore.getState()`
+      // as a convenience for updateArtifact calls. Hop 3 removed every
+      // such call (the artifact data path is Electric-only). artifactId
+      // is still tracked because future receipt-text logic refers to
+      // it via the chat-layer's findIndex; the canvas-store getter has
+      // moved to the (single) site that still needs it.
 
       switch (event.type) {
         case "context_update": {
@@ -211,12 +244,13 @@ export function useInterviewAgent() {
             label: event.message,
             status: "error",
           });
-          // Reflect honest failure on the artifact too — status=failed
-          // is the honest-degradation discipline applied to the
-          // durable artifact (not silently absorbed into "complete").
-          if (artifactId) {
-            canvas.updateArtifact(artifactId, { status: "failed" });
-          }
+          // Hop 3: artifact.status is an ELECTRIC-COVERED field. SSE
+          // does NOT drive it post-Hop-3 — the cortex-bff Hop 1 writer
+          // marks the Neo4j artifact `failed` on pipeline_error and
+          // Electric propagates the row. The HUD step above is
+          // SSE-side because pipeline_stage events flow over SSE; the
+          // artifact's substrate state flows over Electric. Two
+          // distinct concerns, two distinct paths.
           break;
         }
 
@@ -254,37 +288,29 @@ export function useInterviewAgent() {
         }
 
         case "route_decision":
-          // Routing arrived → update the artifact in place. This is also
-          // where produced_by gets refined from the pending sentinel
-          // to the real engine identity carried by handled_by — the
-          // pending→complete lifecycle transition acceptance #2
-          // exercises.
-          if (artifactId) {
-            canvas.updateArtifact(artifactId, {
-              routing: event.decision,
-              produced_by: {
-                actor_type: "agent",
-                actor_id: event.decision.handled_by.engine_name,
-                endpoint: event.decision.handled_by.endpoint_url,
-              },
-              resolved_intent: {
-                subject_uri: event.decision.about.uri,
-                verb_iri: event.decision.action.iri,
-              },
-            });
-          }
+          // Hop 3: `routing`, `produced_by`, `resolved_intent` are
+          // ALL Electric-covered. Pre-Hop-3, this handler refined
+          // produced_by from its pending sentinel — now the cortex-bff
+          // Hop 1 writer captures handled_by into the Neo4j artifact
+          // and Electric propagates the refined row. SSE handler
+          // intentionally NO-OPs for the artifact; pipeline_stage
+          // events still flow over SSE for the HUD's reasoning
+          // panel (handled elsewhere). Per Part 2's absence-of-SSE
+          // claim, the provenance map must show route_decision
+          // NEVER touched routing/produced_by/resolved_intent.
           break;
 
         case "sources":
-          if (artifactId) {
-            canvas.updateArtifact(artifactId, { sources: event.sources });
-          }
+          // Hop 3: `sources` is Electric-covered. Hop 1 writer
+          // persists each Source as a (:Source) node and (:CITES) edge;
+          // the projector denormalizes them into the projection's
+          // `sources` JSONB column; Electric delivers it. SSE no-op.
           break;
 
         case "graph_trace":
-          if (artifactId) {
-            canvas.updateArtifact(artifactId, { graph_trace: event.nodes });
-          }
+          // Hop 3: `graph_trace` is Electric-covered. Same shape as
+          // sources — persisted in Neo4j by Hop 1, projected by
+          // Hop 2, delivered by Electric. SSE no-op.
           break;
 
         case "chat_message": {
@@ -312,25 +338,12 @@ export function useInterviewAgent() {
           // produced output (the silent-degrade composition class can
           // produce a vacuous final_payload from a wholly-degraded run).
           if (agentId) {
-            // Transition the artifact: pending → complete, with the
-            // rendered_output the canvas reads. The artifact's status
-            // is the responsiveness-flow signal acceptance #2 needs to
-            // see transition (not be replaced by a new artifact).
-            if (artifactId && event.payload?.components) {
-              canvas.updateArtifact(artifactId, {
-                status: "complete",
-                rendered_output: {
-                  components: event.payload.components,
-                },
-              });
-            }
-            // Receipt text: the artifact's 1-based position in the
-            // collection. Append-only collection → index is the
-            // stable per-session sequence number. Prepares for a
-            // future click-to-recall affordance: the receipt knows
-            // its artifact id (via Message.artifactId) and its
-            // number, so wiring "click → setCurrentArtifact(id)" is
-            // a one-line follow-up.
+            // Hop 3: `status` and `rendered_output` are BOTH
+            // Electric-covered. The cortex-bff Hop 1 writer captures
+            // the rendered output into the Neo4j artifact at the
+            // final_payload point and Electric delivers it. SSE
+            // handler no-ops on the artifact; only the receipt text
+            // for the chat message (a non-Artifact concern) fires.
             const fresh = useCanvasStore.getState();
             const artifactNumber = artifactId
               ? fresh.artifacts.findIndex((a) => a.id === artifactId) + 1
@@ -354,21 +367,15 @@ export function useInterviewAgent() {
             markUnconfirmedStepsIncomplete(agentId);
             updateMessage(agentId, { isStreaming: false });
           }
-          // Artifact lifecycle: if the artifact never transitioned
-          // out of pending (no final_payload arrived), mark it
-          // complete with whatever it accumulated so it persists
-          // honestly. If it errored, leave it as failed. This is the
-          // "honest finalization" of the pending→complete flow —
-          // pending artifacts aren't allowed to live forever; they
-          // terminate, honestly, into complete or failed.
-          if (artifactId) {
-            const current = useCanvasStore
-              .getState()
-              .artifacts.find((a) => a.id === artifactId);
-            if (current?.status === "pending") {
-              canvas.updateArtifact(artifactId, { status: "complete" });
-            }
-          }
+          // Hop 3: artifact.status is Electric-covered. Pre-Hop-3,
+          // stream_end would force a pending→complete transition
+          // here as the "honest finalization" of the responsiveness
+          // flow. Post-Hop-3 the cortex-bff Hop 1 writer is the
+          // single decider of artifact terminal state (complete /
+          // failed / persistence_*), and Electric carries that state
+          // to the canvas. SSE no-op on the artifact; the agent
+          // message's isStreaming flip above is a chat-layer concern
+          // and stays.
           currentAgentMsgId.current = null;
           currentArtifactIdRef.current = null;
           break;
@@ -504,14 +511,21 @@ export function useInterviewAgent() {
           error: error.message || "NETWORK_OR_BACKEND_UNREACHABLE",
         });
       }
-      // Mark the pending artifact as honestly failed — the durable
-      // record of the failed turn, not a silent loss. Honest-
-      // degradation as artifact state.
-      if (currentArtifactIdRef.current) {
-        useCanvasStore.getState().updateArtifact(currentArtifactIdRef.current, {
-          status: "failed",
-        });
-      }
+      // Hop 3: artifact.status is Electric-covered. Pre-Hop-3, the
+      // network-failure case would set status=failed locally. Now:
+      //   - If the SSE stream itself failed (network/backend
+      //     unreachable), the cortex-bff Hop 1 write probably hasn't
+      //     run either; the artifact stays in its locally-created
+      //     `pending` + `persistence_pending` state. That IS the
+      //     honest state per Decision 0's decouple-with-honest-
+      //     failure-state ruling — a stuck-pending artifact is honest
+      //     about what the system knows (it never heard back), not a
+      //     forced-to-failed lie.
+      //   - If the SSE stream completed but cortex-bff's Neo4j write
+      //     failed, the Hop 1 writer records durability_status=
+      //     persistence_failed AND status=complete/failed per its
+      //     own state machine; Electric delivers that state.
+      // Either way, SSE no longer drives the artifact.status field.
       currentAgentMsgId.current = null;
       currentArtifactIdRef.current = null;
     },

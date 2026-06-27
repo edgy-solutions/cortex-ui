@@ -2,6 +2,79 @@ import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 
 /**
+ * Hop 3 of the projector build plan
+ * (docs/plans/projector-build-plan.md commit 0eda9f7 §4 Hop 3 Part 2).
+ *
+ * Provenance instrumentation for updateArtifact — Shape A of Load 2.
+ *
+ * Every call to updateArtifact passes a `source` tag identifying who
+ * wrote it. The store records the source of the LAST update for each
+ * (artifactId, fieldName) pair. Part 2's absence-of-SSE probe reads
+ * `_lastUpdateSource` and asserts every Electric-covered field's
+ * last-update-source is `electric:*`, none are `sse:*`.
+ *
+ * Without provenance, a future PR could silently re-add SSE-driven
+ * updates for routing/sources/graph_trace and the test would still
+ * pass (because Electric also writes the field and the value would
+ * be correct from BOTH sources). The provenance tag is the durable
+ * defence against SSE-handler reintroduction.
+ *
+ * The Electric-covered fields are documented in ELECTRIC_COVERED_FIELDS
+ * below; the test reads that constant and the provenance map together.
+ */
+export type UpdateSource =
+  // Electric subscription delivered the Postgres projection row.
+  | "electric:answer_artifact_projection"
+  // SSE event handler in useInterviewAgent. Should NOT appear as the
+  // last source for any field in ELECTRIC_COVERED_FIELDS after Hop 3.
+  | "sse:route_decision"
+  | "sse:sources"
+  | "sse:graph_trace"
+  | "sse:ui_payload"
+  | "sse:final_payload"
+  | "sse:pipeline_error"
+  | "sse:stream_end"
+  // Local writes: creating a pending artifact, the onError fallback
+  // marking it failed, etc. These are NOT Electric-covered (they're
+  // about client-side liveness, not substrate state).
+  | "local:create_pending"
+  | "local:onerror_failed";
+
+/**
+ * Fields the Electric subscription is the sole source of truth for
+ * post-Hop-3. After this hop, no SSE handler may drive these fields
+ * onto the store — only `electric:answer_artifact_projection` may.
+ *
+ * Part 2's absence probe asserts: for every artifact, every field in
+ * this list whose `_lastUpdateSource` is set is `electric:*`, never
+ * `sse:*`. (Fields untouched by either side are allowed to be
+ * absent from `_lastUpdateSource` — the assertion is `last == sse`
+ * is FALSE for these fields, not that `last == electric` is TRUE.)
+ *
+ * These match what cortex-bff writes into Neo4j (Hop 1) and what the
+ * projector copies into Postgres (Hop 2): routing, sources, graph_trace,
+ * rendered_output, status, durability_status, watermark. The first
+ * four were SSE-driven pre-Hop-3; the last three are new fields the
+ * projector covers exclusively.
+ *
+ * `produced_by` and `resolved_intent` are also Electric-covered
+ * because route_decision used to refine them in the SSE path; the
+ * Electric row contains the same refinement and the SSE handler
+ * MUST NOT touch them post-Hop-3.
+ */
+export const ELECTRIC_COVERED_FIELDS: readonly (keyof Artifact)[] = [
+  "routing",
+  "sources",
+  "graph_trace",
+  "rendered_output",
+  "status",
+  "durability_status",
+  "watermark",
+  "produced_by",
+  "resolved_intent",
+] as const;
+
+/**
  * Canvas store — the artifact-collection foundation per ADR-0023.
  *
  * This store replaces the previous single-slot `activeComponents`
@@ -65,6 +138,29 @@ interface CanvasState {
   isInspectorOpen: boolean;
 
   /**
+   * Per-artifact per-field provenance of the LAST update.
+   *
+   * `_lastUpdateSource[artifactId][fieldName] = UpdateSource`. The
+   * provenance is tagged AT THE CALL SITE (not computed after the
+   * fact) — every updateArtifact / electricUpsertArtifact / etc.
+   * passes its `source` and the store records it for each field in
+   * the patch. Per [[verify-subtle-acceptance-by-inspection]], the
+   * tag-at-source design is what makes the provenance unforgeable;
+   * a post-hoc tag could lie.
+   *
+   * Read by Part 2's absence probe (test_hop3_electric_vs_sse_provenance).
+   * Bounded by the artifact collection size; reset by clearCanvas.
+   *
+   * INTERIM under Decisions 0+1+3 — when Electric retires, the
+   * provenance map's surface area collapses to "local writes only"
+   * (no SSE, no Electric); the map either dies or becomes a debug
+   * affordance. The map's job today is to PROVE no SSE source
+   * touched an Electric-covered field; that proof obligation
+   * dissolves with the SSE path.
+   */
+  _lastUpdateSource: Record<string, Partial<Record<keyof Artifact, UpdateSource>>>;
+
+  /**
    * Create a new PENDING artifact for this turn.
    *
    * Phase 1 acceptance #2: this is the create-pending half of the
@@ -106,16 +202,48 @@ interface CanvasState {
   /**
    * Patch an existing artifact by id.
    *
-   * Phase 1 acceptance #2: the update-in-place half of the flow. Used
-   * by `useInterviewAgent` as pipeline events arrive — `route_decision`
-   * sets `routing` + refines `produced_by`; `sources` sets `sources`;
-   * `graph_trace` sets `graph_trace`; `ui_payload`/`final_payload`
-   * sets `rendered_output` + transitions `status` to `complete`;
-   * `stream_end` ensures pending artifacts complete or fail.
+   * Phase 1 acceptance #2: the update-in-place half of the flow.
+   *
+   * Hop 3 (this commit): callers MUST pass a `source` tag identifying
+   * who is writing (per [[verify-subtle-acceptance-by-inspection]] —
+   * tag-at-source, not post-hoc). The store records the source for
+   * each field in the patch in `_lastUpdateSource[id]`. Part 2's
+   * absence probe reads this map to assert no SSE source touched any
+   * Electric-covered field. Without the source parameter, a future
+   * regression that re-adds SSE writes for Electric-covered fields
+   * would be invisible to the test.
+   *
+   * Post-Hop-3 SSE handlers may STILL call updateArtifact (e.g., the
+   * onError fallback marking the artifact failed when the SSE stream
+   * itself dies — that's a client-side liveness concern, not a
+   * substrate-state concern), but ONLY for fields NOT in
+   * ELECTRIC_COVERED_FIELDS. The absence probe enforces this.
    *
    * `updated_at` is bumped automatically on every patch.
    */
-  updateArtifact: (id: string, patch: Partial<Artifact>) => void;
+  updateArtifact: (id: string, patch: Partial<Artifact>, source: UpdateSource) => void;
+
+  /**
+   * Upsert from an Electric-synced projection row. The Postgres-side
+   * shape comes through `@electric-sql/client`; we coerce it to an
+   * `Artifact` and either:
+   *   - patch the existing row (preserves question_text + message_id
+   *     captured at create-pending; the projection echoes these but
+   *     the client's local row is the canonical source for them in
+   *     the create-pending → Electric-fill flow), OR
+   *   - append a new row (Electric is the sole source — happens on
+   *     page reload or when an artifact was created in another tab).
+   *
+   * All fields written via this path are tagged
+   * `electric:answer_artifact_projection` in the provenance map.
+   *
+   * Hop 3 (this commit) is where this method ships; before this commit
+   * the store had no Electric path and SSE handlers drove every
+   * field. See useArtifactsSubscription in src/lib/electric.ts for
+   * the caller; the conversion lives there to keep the store's
+   * surface area on the data shape, not the wire shape.
+   */
+  electricUpsertArtifact: (artifact: Artifact) => void;
 
   /** Foreground a specific artifact (canvas view selection). */
   setCurrentArtifact: (id: string) => void;
@@ -140,6 +268,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   activeTab: "ALL",
   inspectedNodeId: null,
   isInspectorOpen: false,
+  _lastUpdateSource: {},
 
   createPendingArtifact: (seed) =>
     set((state) => {
@@ -188,22 +317,106 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         // comment on the Artifact.watermark field.
         watermark: 0,
       };
+      // Tag every field on the new artifact with `local:create_pending`
+      // so the provenance map starts in a known shape. Subsequent
+      // updates from Electric or SSE overwrite per-field.
+      const provenance: Partial<Record<keyof Artifact, UpdateSource>> = {};
+      (Object.keys(artifact) as (keyof Artifact)[]).forEach((k) => {
+        provenance[k] = "local:create_pending";
+      });
       return {
         artifacts: [...state.artifacts, artifact],
         currentArtifactId: seed.id,
         isRevealing: true,
         activeTab: "ALL",
+        _lastUpdateSource: {
+          ...state._lastUpdateSource,
+          [seed.id]: provenance,
+        },
       };
     }),
 
-  updateArtifact: (id, patch) =>
-    set((state) => ({
-      artifacts: state.artifacts.map((a) =>
-        a.id === id
-          ? { ...a, ...patch, updated_at: Date.now() }
-          : a
-      ),
-    })),
+  updateArtifact: (id, patch, source) =>
+    set((state) => {
+      // Record provenance for every field in the patch. Tag-at-source
+      // per [[verify-subtle-acceptance-by-inspection]]: the call site
+      // knows what it is; a post-hoc tag could lie.
+      const prevSource = state._lastUpdateSource[id] ?? {};
+      const nextSource: Partial<Record<keyof Artifact, UpdateSource>> = {
+        ...prevSource,
+      };
+      (Object.keys(patch) as (keyof Artifact)[]).forEach((k) => {
+        nextSource[k] = source;
+      });
+      return {
+        artifacts: state.artifacts.map((a) =>
+          a.id === id
+            ? { ...a, ...patch, updated_at: Date.now() }
+            : a
+        ),
+        _lastUpdateSource: {
+          ...state._lastUpdateSource,
+          [id]: nextSource,
+        },
+      };
+    }),
+
+  electricUpsertArtifact: (artifact) =>
+    set((state) => {
+      // Electric is the substrate's authoritative read-side per
+      // ADR-0023's CQRS naming. When a row arrives:
+      //   - If the artifact already exists locally (created-pending
+      //     started the local row), patch it with Electric's fields.
+      //     question_text + message_id were captured locally at
+      //     create-pending; Electric echoes them, the local values
+      //     win on the question_text/message_id keys to avoid a
+      //     spurious display change while the user is still reading
+      //     the question text. All other fields take Electric's
+      //     value.
+      //   - If no local row exists (page reload, cross-tab create),
+      //     append the Electric row outright.
+      //
+      // Every field touched is tagged
+      // `electric:answer_artifact_projection`. Per Part 2's absence
+      // probe, this is the ONLY source tag that may legitimately
+      // appear for fields in ELECTRIC_COVERED_FIELDS.
+      const existingIdx = state.artifacts.findIndex((a) => a.id === artifact.id);
+      const prevSource = state._lastUpdateSource[artifact.id] ?? {};
+      const nextSource: Partial<Record<keyof Artifact, UpdateSource>> = {
+        ...prevSource,
+      };
+      (Object.keys(artifact) as (keyof Artifact)[]).forEach((k) => {
+        nextSource[k] = "electric:answer_artifact_projection";
+      });
+      let nextArtifacts: Artifact[];
+      if (existingIdx >= 0) {
+        const existing = state.artifacts[existingIdx];
+        const merged: Artifact = {
+          ...existing,
+          ...artifact,
+          // Preserve locally-captured invariants — question_text +
+          // message_id are set at create-pending and the user is
+          // already seeing them; the projection echoes them but
+          // letting the SAME value re-arrive via Electric is fine,
+          // we just don't want a future schema drift to wipe them.
+          question_text: existing.question_text || artifact.question_text,
+          message_id: existing.message_id || artifact.message_id,
+          updated_at: Date.now(),
+        };
+        nextArtifacts = state.artifacts.map((a, i) =>
+          i === existingIdx ? merged : a
+        );
+      } else {
+        nextArtifacts = [...state.artifacts, artifact];
+      }
+      return {
+        artifacts: nextArtifacts,
+        _lastUpdateSource: {
+          ...state._lastUpdateSource,
+          [artifact.id]: nextSource,
+        },
+      };
+    }),
 
   setCurrentArtifact: (id) => set({ currentArtifactId: id }),
 
@@ -223,6 +436,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       activeTab: "ALL",
       isInspectorOpen: false,
       inspectedNodeId: null,
+      _lastUpdateSource: {},
     }),
 }));
 

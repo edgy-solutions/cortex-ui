@@ -13,8 +13,38 @@ import {
   CORTEX_UI_CAPABILITIES,
 } from "@/registry/frontendCapabilities";
 import { registerFrontendCapabilities } from "@/api/client";
+import { startArtifactsSubscription } from "@/lib/electric";
 
 import { Toaster } from "sonner";
+
+/**
+ * Hop 3 of the projector build plan
+ * (docs/plans/projector-build-plan.md commit 0eda9f7 §4 Hop 3 Part 2).
+ *
+ * Mount the Electric subscription once at App-startup. Lifecycle:
+ *   - Subscription starts on first mount (regardless of auth — the
+ *     sandbox today is single-user; multi-user scoping comes in a
+ *     follow-up that gates on produced_for.user_id once the JWT
+ *     carries the user persona per [[pingsso-claim-gap]]).
+ *   - On unmount, the subscription's stop function unsubscribes from
+ *     the ShapeStream. React StrictMode in dev mounts twice; the
+ *     unsubscribe between the two mounts is harmless (ShapeStream
+ *     starts fresh on the second).
+ *   - VITE_ELECTRIC_URL="" disables the subscription entirely (Shape C
+ *     of Part 2 — proves the canvas works via Electric alone OR
+ *     proves it doesn't when Electric is cut off).
+ *
+ * Source-of-truth claim: post-Hop-3, this subscription is the SOLE
+ * source for the Electric-covered fields list in
+ * useCanvasStore.ELECTRIC_COVERED_FIELDS. Part 2's absence probe
+ * asserts via the provenance map.
+ */
+function useArtifactSync() {
+  useEffect(() => {
+    const stop = startArtifactsSubscription();
+    return stop;
+  }, []);
+}
 
 // ADR-0017 frontend self-registration of presentation capabilities.
 // Fires once per authenticated session, best-effort. cortex-bff logs
@@ -58,6 +88,7 @@ export default function App() {
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
+  useArtifactSync();
 
   return (
     <RequireAuth>

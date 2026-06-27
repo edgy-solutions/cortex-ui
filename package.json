@@ -26,6 +26,7 @@
     "@aws-sdk/client-s3": "^3.1030.0",
     "@aws-sdk/credential-providers": "^3.1030.0",
     "@aws-sdk/s3-request-presigner": "^3.1030.0",
+    "@electric-sql/client": "^1.5.22",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@platform/iagent-contracts": "github:edgy-solutions/invincible-agent#master",
     "@tanstack/react-query": "^5.90.21",

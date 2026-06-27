@@ -1,0 +1,60 @@
+version: "3.8"
+
+# Hop 3 of the projector build plan — local Electric + Postgres stack
+# for the Part 2 propagation probe and the Monday-handoff visual
+# confirmation.
+#
+# Sandbox Postgres has wal_level=replica (not logical), which Electric
+# requires. The architect's STOP-point allows "Electric deployed to
+# sandbox OR running locally with sandbox Postgres port-forwarded;
+# state which." Local Postgres path picked:
+#   - Sandbox Postgres is shared with Dagster + DataHub + other
+#     services; a wal_level flip requires a pod restart that disrupts
+#     them. The chart change (this commit) makes the next deploy
+#     correct; but for this Hop 3 close, running locally avoids the
+#     disruption.
+#   - The cortex-bff + projector run locally too, all pointing at the
+#     local Postgres for write + project + serve.
+#
+# Cleanup: `docker compose down -v` drops the volume and the slot.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: hop3-postgres
+    environment:
+      POSTGRES_USER: iagent
+      POSTGRES_PASSWORD: changeme-iagent
+      POSTGRES_DB: iagent
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "max_wal_senders=10"
+    ports:
+      - "5433:5432"
+    volumes:
+      - hop3-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iagent -d iagent"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  electric:
+    image: electricsql/electric:1.0.13
+    container_name: hop3-electric
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://iagent:changeme-iagent@postgres:5432/iagent?sslmode=disable"
+      ELECTRIC_INSECURE: "true"
+    ports:
+      - "3000:3000"
+
+volumes:
+  hop3-pgdata:
