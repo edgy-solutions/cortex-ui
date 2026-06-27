@@ -447,16 +447,27 @@ export function useInterviewAgent() {
       // see "I heard you" structure before any gateway event arrives.
       primePipelineStages(agentId);
 
-      // Dev: if mock-grounding is enabled, schedule a synthetic event
-      // sequence that fires alongside the real backend events. Lets us
-      // exercise the grounding panel end-to-end before the gateway
-      // emits typed events for real. No-op in production builds.
+      // Dev: if mock-grounding is enabled, the mock OWNS the timeline.
+      // It emits pipeline_stage, route_decision, sources, graph_trace,
+      // final_payload (when applicable), and stream_end. The real
+      // backend call is skipped in this mode — otherwise a no-backend
+      // dev environment would error out at streamInterviewResponse and
+      // mutation.onError would mark the artifact failed regardless of
+      // the mock's intended scenario. Phase 2 scenario triggers
+      // (@happy / @fail / @partial-no-payload / @partial-no-grounding /
+      // @empty) live in the mock; see mockGroundingEmitter docstring.
       mockGroundingHandle.current?.cancel();
       if (isMockGroundingEnabled()) {
         mockGroundingHandle.current = runMockGroundingFor(
           userInput,
           handleStreamEvent
         );
+        // Resolve the mutation cleanly so React Query doesn't fire
+        // onError (which would override the mock's intended artifact
+        // status). Processing flips off when the mock's stream_end
+        // fires; until then the artifact is `pending` honestly.
+        setIsProcessing(false);
+        return;
       }
 
       // Build request with current graph state

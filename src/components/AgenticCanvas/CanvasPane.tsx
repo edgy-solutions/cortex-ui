@@ -33,6 +33,12 @@ export const CanvasPane = () => {
   const artifact = useCurrentArtifact();
   const activeTab = useCanvasStore((s) => s.activeTab);
   const setActiveTab = useCanvasStore((s) => s.setActiveTab);
+  const artifactCount = useCanvasStore((s) => s.artifacts.length);
+  const currentIndex = useCanvasStore((s) => {
+    const id = s.currentArtifactId;
+    if (!id) return -1;
+    return s.artifacts.findIndex((a) => a.id === id);
+  });
 
   // The components for the current artifact (empty until status=complete
   // and rendered_output is populated).
@@ -55,22 +61,58 @@ export const CanvasPane = () => {
     return components.filter((comp: any) => comp?.source_persona === activeTab);
   }, [components, activeTab]);
 
-  // Empty state: no current artifact, OR current artifact is pending
-  // and has no components yet. Both are honestly "nothing to render."
-  if (!artifact || components.length === 0) {
+  // Honest empty/transitional states per ADR-0023 lifecycle:
+  // - no current artifact → "Awaiting Mesh Artifacts" (true empty)
+  // - artifact pending → "Working on it…" (live, working)
+  // - artifact failed → "This attempt failed." (honest — the turn
+  //   happened but produced no canvas content; the routing card may
+  //   still show what was tried; the failure is the answer, not a
+  //   silent looks-like-nothing-happened)
+  // - artifact complete with 0 components → "No components produced."
+  //   (honest "finalized empty" — distinguishable from pending)
+  if (!artifact) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-slate-950/50 border-l border-white/10">
         <p className="font-mono text-slate-600 text-xs tracking-widest uppercase">
-          {artifact?.status === "pending"
-            ? "Working on it…"
-            : "Awaiting Mesh Artifacts..."}
+          Awaiting Mesh Artifacts...
         </p>
+      </div>
+    );
+  }
+  if (components.length === 0) {
+    const empty =
+      artifact.status === "pending"
+        ? { label: "Working on it…", tone: "text-slate-500" }
+        : artifact.status === "failed"
+        ? { label: "This attempt failed.", tone: "text-rose-400/80" }
+        : { label: "No components produced.", tone: "text-amber-400/80" };
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/50 border-l border-white/10 gap-2">
+        <p className={`font-mono text-xs tracking-widest uppercase ${empty.tone}`}>
+          {empty.label}
+        </p>
+        {artifactCount > 1 && (
+          <p className="font-mono text-[10px] text-slate-600 tracking-wider">
+            Artifact {currentIndex + 1} of {artifactCount}
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+      {/* Artifact-count badge — verifies state 4 (multiple-in-collection)
+          by looking. NO recall metaphor commitment here (tabs / spatial
+          / drawer are deferred per ADR-0023); just an honest count so
+          the collection growing is visible. */}
+      {artifactCount > 1 && (
+        <div className="w-full flex items-center justify-end px-6 pt-3 pb-1 shrink-0">
+          <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
+            Artifact {currentIndex + 1} of {artifactCount}
+          </span>
+        </div>
+      )}
       {/* Tab Navigation */}
       {uniquePersonas.length > 0 && (
         <div className="w-full flex items-center px-6 pt-4 pb-2 border-b border-white/5 gap-2 overflow-x-auto hide-scrollbar shrink-0">

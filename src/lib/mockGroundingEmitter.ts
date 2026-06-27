@@ -1,13 +1,40 @@
-import type { StreamEvent, RouteDecision, Source, GraphTraceNode } from "@/api/types";
+import type { StreamEvent, RouteDecision, Source, GraphTraceNode, DashboardUI } from "@/api/types";
 
 /**
  * Mock grounding-event emitter.
  *
  * Synthesizes a realistic sequence of the new Phase 0+ typed events
- * (`pipeline_stage`, `route_decision`, `sources`, `graph_trace`) so the
- * grounding panel can be exercised end-to-end during development WITHOUT
- * changes to the gateway or engines. This keeps tonight's facelift
- * fully client-side per architect's caution.
+ * (`pipeline_stage`, `route_decision`, `sources`, `graph_trace`,
+ * `final_payload`, `stream_end`, and `pipeline_error` for failure
+ * scenarios) so the grounding panel + canvas artifact-collection can
+ * be exercised end-to-end during development WITHOUT a running
+ * backend. This keeps Phase 2 hardening fully client-side.
+ *
+ * **2026-06-26 — Phase 2 scenarios added.** Per `[[phase-2-lifecycle-
+ * states-to-enumerate]]`, Phase 1 introduced four new render states
+ * (pending / failed / finalized-with-partial / multiple-in-collection)
+ * that the one-shot UI never had. To exercise them in dev, the
+ * emitter now parses a SCENARIO marker from the query prefix:
+ *
+ *   @happy <query>             — full success path (default)
+ *   @fail <query>              — pipeline_error at "retrieving"; no
+ *                                final_payload; artifact ends `failed`
+ *   @partial-no-payload <query>— all stages + grounding events but NO
+ *                                final_payload; artifact `complete`
+ *                                with routing/sources but no rendered
+ *   @partial-no-grounding <query> — all stages + final_payload but NO
+ *                                route_decision/sources/graph_trace;
+ *                                artifact has rendered_output, empty HUD
+ *   @empty <query>             — full success path but final_payload
+ *                                with components: []; artifact
+ *                                complete-but-zero
+ *
+ * Honest-degradation discipline: the failure/partial states are the
+ * Phase 2 enumeration's "honest" axis under inspection — does the UI
+ * surface what the pipeline did (or didn't), or does it silently look
+ * like nothing happened? See `[[verify-subtle-acceptance-by-inspection]]`
+ * extended-to-honest-axis: agent self-verifies works; user verifies
+ * honest + acceptable by looking.
  *
  * IMPORTANT — what this is NOT:
  *
@@ -52,6 +79,43 @@ export function setMockGroundingEnabled(on: boolean) {
   }
 }
 
+/** Scenarios the mock can simulate for Phase 2 lifecycle state hardening. */
+export type MockScenario =
+  | "happy"
+  | "fail-at-retrieving"
+  | "partial-no-payload"
+  | "partial-no-grounding"
+  | "empty-components";
+
+/**
+ * Parse a leading `@scenario ` prefix off the query. Defaults to
+ * "happy" when no marker is present. Returns the clean query (with
+ * the marker stripped) so downstream heuristics still work.
+ */
+function parseScenario(query: string): {
+  scenario: MockScenario;
+  cleanQuery: string;
+} {
+  const m = query.match(
+    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty)\s+(.+)$/i
+  );
+  if (!m) return { scenario: "happy", cleanQuery: query };
+  const marker = m[1].toLowerCase();
+  const cleanQuery = m[2];
+  switch (marker) {
+    case "fail":
+      return { scenario: "fail-at-retrieving", cleanQuery };
+    case "partial-no-payload":
+      return { scenario: "partial-no-payload", cleanQuery };
+    case "partial-no-grounding":
+      return { scenario: "partial-no-grounding", cleanQuery };
+    case "empty":
+      return { scenario: "empty-components", cleanQuery };
+    default:
+      return { scenario: "happy", cleanQuery };
+  }
+}
+
 /**
  * Build a query-flavored mock event sequence. Heuristic — picks
  * different mock data depending on the input string so the panel
@@ -64,6 +128,7 @@ function buildMockSequenceForQuery(query: string): {
   decision: RouteDecision;
   sources: Source[];
   graphTrace: GraphTraceNode[];
+  payload: DashboardUI;
 } {
   const q = query.toLowerCase();
   if (
@@ -124,6 +189,16 @@ function buildMockSequenceForQuery(query: string): {
           via_verb: "mesh:lookupOwnership",
         },
       ],
+      payload: {
+        components: [
+          {
+            archetype: "KNOWLEDGE_DOCUMENT",
+            subject_concept: "Demo Dashboard Alpha ownership",
+            markdown_content:
+              "**Demo Dashboard Alpha** is owned by:\n\n- owner-a@example.com\n- owner-b@example.com\n- owner-c@example.com\n\n*Source: Superset → DataHub catalog (mock).*",
+          },
+        ],
+      } as unknown as DashboardUI,
     };
   }
   if (q.includes("grenade") || q.includes("assembly") || q.includes("manufactur")) {
@@ -179,6 +254,16 @@ function buildMockSequenceForQuery(query: string): {
           via_verb: "mesh:retrieveKnowledge",
         },
       ],
+      payload: {
+        components: [
+          {
+            archetype: "KNOWLEDGE_DOCUMENT",
+            subject_concept: "M67 grenade assembly excerpt",
+            markdown_content:
+              "## TM-9-1325-203-10 · p.47\n\nPosition the M213 fuze into the body's threaded receptacle and torque to **25-30 in-lb**.\n\n*Excerpt — mock data.*",
+          },
+        ],
+      } as unknown as DashboardUI,
     };
   }
   // Default: maintenance procedure flavor — lower confidence to
@@ -228,23 +313,47 @@ function buildMockSequenceForQuery(query: string): {
         via_verb: "mesh:queryKnowledgeGraph",
       },
     ],
+    payload: {
+      components: [
+        {
+          archetype: "KNOWLEDGE_DOCUMENT",
+          subject_concept: "Rotor inspection findings (mock)",
+          markdown_content:
+            "## Rotor inspection summary\n\n| Finding | Count |\n|---|---|\n| Spalling | 4 |\n| Cracking | 2 |\n| Wear | 5 |\n| OK | 9 |\n\n*Mock data — chart_widget hardening is its own Phase 2 task.*",
+        },
+      ],
+    } as unknown as DashboardUI,
   };
 }
 
+/**
+ * ms after submit — when each stage completes / event fires.
+ *
+ * Phase 2 inspection feedback: the previous values (compressed into
+ * ~6s total) made the pending state pass too quickly to comfortably
+ * watch. Doubled to ~12s total so each transition is observable
+ * during state-by-state walkthroughs. This is a DEV pacing choice
+ * — production timings are whatever the real backend produces; the
+ * mock's job is to let a human comfortably see each lifecycle
+ * transition during hardening.
+ */
 const TIMINGS = {
-  // ms after submit — when each stage completes / event fires
-  understanding_complete: 600,
-  locating_start: 200,
-  locating_complete: 1300,
-  choosing_action_start: 1000,
-  choosing_action_complete: 2400,
-  retrieving_start: 1900,
-  retrieving_complete: 4200,
-  composing_start: 3500,
-  composing_complete: 5400,
-  route_decision: 2500, // after subject+action are known
-  sources: 4400, // after retrieval
-  graph_trace: 2700,
+  understanding_complete: 1200,
+  locating_start: 400,
+  locating_complete: 2600,
+  choosing_action_start: 2000,
+  choosing_action_complete: 4800,
+  retrieving_start: 3800,
+  retrieving_complete: 8400,
+  composing_start: 7000,
+  composing_complete: 10800,
+  route_decision: 5000, // after subject+action are known
+  sources: 8800, // after retrieval
+  graph_trace: 5400,
+  final_payload: 11200, // shortly after composing completes
+  stream_end: 11800, // terminator
+  // Failure-scenario timings
+  fail_at_retrieving: 8600, // shortly after retrieving started
 };
 
 export interface MockHandle {
@@ -255,18 +364,23 @@ export interface MockHandle {
  * Fire a sequence of typed grounding events that mimics a real query
  * flowing through the routing substrate. The events are deliberately
  * spaced so the panel animates rather than snapping.
+ *
+ * Honors the scenario marker parsed off the query prefix (`@fail`,
+ * `@partial-no-payload`, `@partial-no-grounding`, `@empty`, or default
+ * `@happy`). See module docstring for the protocol.
  */
 export function runMockGroundingFor(
   query: string,
   emit: (e: StreamEvent) => void
 ): MockHandle {
   const timers: number[] = [];
-  const seq = buildMockSequenceForQuery(query);
+  const { scenario, cleanQuery } = parseScenario(query);
+  const seq = buildMockSequenceForQuery(cleanQuery);
   const schedule = (ms: number, fn: () => void) => {
     timers.push(window.setTimeout(fn, ms));
   };
 
-  // Stage progression
+  // Stage progression — common to all scenarios up to the divergence.
   schedule(TIMINGS.understanding_complete, () =>
     emit({ type: "pipeline_stage", kind: "understanding", status: "completed" })
   );
@@ -298,6 +412,28 @@ export function runMockGroundingFor(
   schedule(TIMINGS.retrieving_start, () =>
     emit({ type: "pipeline_stage", kind: "retrieving", status: "started" })
   );
+
+  // FAIL scenario: bail at "retrieving" — no completion, no further
+  // stages, pipeline_error fires, stream_end follows. The artifact
+  // ends `status: "failed"`. Routing/sources DON'T fire after the
+  // error to keep the failure visible (no partial-success masking).
+  if (scenario === "fail-at-retrieving") {
+    schedule(TIMINGS.fail_at_retrieving, () =>
+      emit({
+        type: "pipeline_error",
+        kind: "retrieving",
+        message: "Mock failure: simulated engine timeout (Phase 2 honest-failure scenario)",
+        retryable: true,
+        cause: "engine_timeout_mock",
+      })
+    );
+    schedule(TIMINGS.stream_end, () => emit({ type: "stream_end" }));
+    return {
+      cancel: () => timers.forEach((t) => window.clearTimeout(t)),
+    };
+  }
+
+  // Non-fail scenarios: complete retrieving + composing stages.
   schedule(TIMINGS.retrieving_complete, () =>
     emit({ type: "pipeline_stage", kind: "retrieving", status: "completed" })
   );
@@ -308,16 +444,39 @@ export function runMockGroundingFor(
     emit({ type: "pipeline_stage", kind: "composing", status: "completed" })
   );
 
-  // Right-HUD payloads
-  schedule(TIMINGS.route_decision, () =>
-    emit({ type: "route_decision", decision: seq.decision })
-  );
-  schedule(TIMINGS.graph_trace, () =>
-    emit({ type: "graph_trace", nodes: seq.graphTrace })
-  );
-  schedule(TIMINGS.sources, () =>
-    emit({ type: "sources", sources: seq.sources })
-  );
+  // Right-HUD payloads — fire ONLY when the scenario provides grounding.
+  // `partial-no-grounding` deliberately skips these so the artifact has
+  // rendered_output but empty HUD (the inverse of partial-no-payload).
+  if (scenario !== "partial-no-grounding") {
+    schedule(TIMINGS.route_decision, () =>
+      emit({ type: "route_decision", decision: seq.decision })
+    );
+    schedule(TIMINGS.graph_trace, () =>
+      emit({ type: "graph_trace", nodes: seq.graphTrace })
+    );
+    schedule(TIMINGS.sources, () =>
+      emit({ type: "sources", sources: seq.sources })
+    );
+  }
+
+  // final_payload — fires ONLY when the scenario provides a rendered
+  // output. `partial-no-payload` skips this so the artifact finalizes
+  // complete with routing/sources but null rendered_output.
+  if (scenario !== "partial-no-payload") {
+    const payload: DashboardUI =
+      scenario === "empty-components"
+        ? ({ components: [] } as DashboardUI)
+        : seq.payload;
+    schedule(TIMINGS.final_payload, () =>
+      emit({ type: "final_payload", payload })
+    );
+  }
+
+  // stream_end always fires — pending artifacts terminate, honestly
+  // (acceptance #2's pending-doesn't-live-forever discipline). See
+  // useInterviewAgent's stream_end handler for the artifact lifecycle
+  // finalization.
+  schedule(TIMINGS.stream_end, () => emit({ type: "stream_end" }));
 
   return {
     cancel: () => {

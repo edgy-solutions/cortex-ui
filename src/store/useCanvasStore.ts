@@ -212,6 +212,29 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 }));
 
 /**
+ * Stable empty references for the derived selectors below.
+ *
+ * Zustand compares selector results by reference (Object.is). Returning
+ * a fresh `[]` or `{}` literal on each call would tell Zustand "the
+ * value changed" on every store mutation, even unrelated mutations,
+ * which triggers a re-render → re-select → fresh literal → loop. The
+ * symptom is "Maximum update depth exceeded" + "getSnapshot should be
+ * cached" — exactly what Phase 2 inspection caught on first dev-server
+ * boot (HUD components mounted with no current artifact, hit the
+ * empty branch, infinite loop, blank screen).
+ *
+ * Fix: hoist stable EMPTY constants and return THOSE when the value
+ * is logically empty. Same reference across calls → Zustand sees
+ * "unchanged" → no spurious re-render.
+ *
+ * Discipline: any future selector here that defaults to an empty
+ * collection MUST use a hoisted constant, not a literal. The literal
+ * is the trap.
+ */
+const EMPTY_SOURCES: Source[] = [];
+const EMPTY_GRAPH_TRACE: GraphTraceNode[] = [];
+
+/**
  * Derived selector — the currently-foregrounded artifact, or null if
  * none. Used by HUD components (`RoutingDecision`, `SourcesTrail`,
  * `GraphTrace`) to read per-current-artifact instead of from a
@@ -221,6 +244,11 @@ export const useCanvasStore = create<CanvasState>((set) => ({
  * so the read shape is published from one place — closes the class
  * `[[ui-contract-assumed-not-published]]` names for the canvas
  * artifact view-model.
+ *
+ * Stability: returns `null` (literal singleton) on no-current,
+ * otherwise the artifact object reference from the array (which is
+ * stable until `updateArtifact` patches it). Both branches return
+ * referentially-stable values; no infinite-loop risk.
  */
 export function useCurrentArtifact(): Artifact | null {
   return useCanvasStore((s) => {
@@ -239,20 +267,22 @@ export function useCurrentRouting(): RouteDecision | null {
   });
 }
 
-/** Convenience: the current artifact's sources, or empty array. */
+/** Convenience: the current artifact's sources, or stable empty array. */
 export function useCurrentSources(): Source[] {
   return useCanvasStore((s) => {
     const id = s.currentArtifactId;
-    if (!id) return [];
-    return s.artifacts.find((a) => a.id === id)?.sources ?? [];
+    if (!id) return EMPTY_SOURCES;
+    const found = s.artifacts.find((a) => a.id === id)?.sources;
+    return found ?? EMPTY_SOURCES;
   });
 }
 
-/** Convenience: the current artifact's graph trace, or empty array. */
+/** Convenience: the current artifact's graph trace, or stable empty array. */
 export function useCurrentGraphTrace(): GraphTraceNode[] {
   return useCanvasStore((s) => {
     const id = s.currentArtifactId;
-    if (!id) return [];
-    return s.artifacts.find((a) => a.id === id)?.graph_trace ?? [];
+    if (!id) return EMPTY_GRAPH_TRACE;
+    const found = s.artifacts.find((a) => a.id === id)?.graph_trace;
+    return found ?? EMPTY_GRAPH_TRACE;
   });
 }
