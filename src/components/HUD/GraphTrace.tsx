@@ -8,7 +8,7 @@ import {
   ArrowRight,
   Circle,
 } from "lucide-react";
-import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCurrentGraphTrace } from "@/store/useCanvasStore";
 import type { GraphTraceNode } from "@/api/types";
 
 /**
@@ -25,7 +25,9 @@ import type { GraphTraceNode } from "@/api/types";
  * routing isn't black-box.
  */
 export function GraphTrace() {
-  const nodes = useInterviewStore((s) => s.graphTrace);
+  // Per ADR-0023 Phase 1: graph_trace lives on the current Artifact,
+  // not on a per-turn singleton in useInterviewStore.
+  const nodes = useCurrentGraphTrace();
   const [open, setOpen] = useState(false);
 
   if (!nodes || nodes.length === 0) {

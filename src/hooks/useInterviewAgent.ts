@@ -20,6 +20,34 @@ import {
 // ── Helpers ───────────────────────────────────────────────
 let _id = 0;
 const uid = () => `msg-${++_id}-${Date.now()}`;
+let _artifactSeq = 0;
+const artifactUid = () => `artifact-${++_artifactSeq}-${Date.now()}`;
+
+/**
+ * Default `produced_for` for Phase 1.
+ *
+ * Per ADR-0023 + [[pingsso-claim-gap]], the PingSSO JWT today lacks
+ * `user_persona` / `entitled_domains` claims. We populate the slot
+ * THINLY (user_id + is_authenticated) and leave persona/entitlements
+ * NULL. Null here means "unknown user persona," NOT a default —
+ * treating null as default would silently mask the claim gap, which
+ * is the opposite of why the slot exists. When claims expand, this
+ * function expands to read them; the schema stays put.
+ */
+function getProducedFor(): {
+  user_id: string;
+  is_authenticated: boolean;
+  user_persona: string | null;
+  entitled_domains: string[] | null;
+} {
+  return {
+    // Phase 1 placeholder; real user_id arrives when auth wires up.
+    user_id: "sandbox-user",
+    is_authenticated: false,
+    user_persona: null,
+    entitled_domains: null,
+  };
+}
 
 // Option A clean cut (2026-06-22): the legacy `classifyLegacyLabel`
 // helper that mapped free-text "status / think" labels onto stable
@@ -33,6 +61,23 @@ const uid = () => `msg-${++_id}-${Date.now()}`;
 /**
  * The real interview hook that connects to the backend streaming API.
  * Replaces useMockAgent when the backend is running.
+ *
+ * Per ADR-0023 (Phase 1), each turn ALSO produces a durable `Artifact`
+ * in `useCanvasStore.artifacts`:
+ *
+ *   - At turn start: `createPendingArtifact` appends the pending row
+ *     (instant responsiveness — canvas can show "working on it"
+ *     before any event arrives).
+ *   - As events arrive: `updateArtifact` patches the row in place
+ *     (`route_decision` → routing + refined produced_by;
+ *     `sources` → sources; `graph_trace` → graph_trace;
+ *     `ui_payload`/`final_payload` → rendered_output + status=complete).
+ *   - At stream_end: any still-pending artifact is marked complete
+ *     with whatever it accumulated, so it persists honestly.
+ *   - On error: status=failed (honest degradation, not silent loss).
+ *
+ * This is the create-pending → update-complete responsiveness flow
+ * acceptance #2 requires.
  *
  * Features:
  * - Streams text character-by-character (backend controls pacing)
@@ -52,15 +97,12 @@ export function useInterviewAgent() {
     addDataBinding,
     upsertThinkingStep,
     primePipelineStages,
-    setRouteDecision,
-    setSources,
-    setGraphTrace,
-    resetTurnGrounding,
   } = useInterviewStore();
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const abortController = useRef<AbortController | null>(null);
   const currentAgentMsgId = useRef<string | null>(null);
+  const currentArtifactIdRef = useRef<string | null>(null);
   const mockGroundingHandle = useRef<MockHandle | null>(null);
 
 
@@ -113,6 +155,7 @@ export function useInterviewAgent() {
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       const agentId = currentAgentMsgId.current;
+      const artifactId = currentArtifactIdRef.current;
       // Typed grounding-panel events flow even before an agent message
       // exists — gateway may emit them out-of-order; tolerate rather
       // than drop signal.
@@ -128,6 +171,9 @@ export function useInterviewAgent() {
         event.type === "sources" ||
         event.type === "graph_trace";
       if (!agentId && !isAlwaysAllowed) return;
+
+      // Convenience: artifact-store getter we use across cases.
+      const canvas = useCanvasStore.getState();
 
       switch (event.type) {
         case "context_update": {
@@ -165,6 +211,12 @@ export function useInterviewAgent() {
             label: event.message,
             status: "error",
           });
+          // Reflect honest failure on the artifact too — status=failed
+          // is the honest-degradation discipline applied to the
+          // durable artifact (not silently absorbed into "complete").
+          if (artifactId) {
+            canvas.updateArtifact(artifactId, { status: "failed" });
+          }
           break;
         }
 
@@ -202,15 +254,37 @@ export function useInterviewAgent() {
         }
 
         case "route_decision":
-          setRouteDecision(event.decision);
+          // Routing arrived → update the artifact in place. This is also
+          // where produced_by gets refined from the pending sentinel
+          // to the real engine identity carried by handled_by — the
+          // pending→complete lifecycle transition acceptance #2
+          // exercises.
+          if (artifactId) {
+            canvas.updateArtifact(artifactId, {
+              routing: event.decision,
+              produced_by: {
+                actor_type: "agent",
+                actor_id: event.decision.handled_by.engine_name,
+                endpoint: event.decision.handled_by.endpoint_url,
+              },
+              resolved_intent: {
+                subject_uri: event.decision.about.uri,
+                verb_iri: event.decision.action.iri,
+              },
+            });
+          }
           break;
 
         case "sources":
-          setSources(event.sources);
+          if (artifactId) {
+            canvas.updateArtifact(artifactId, { sources: event.sources });
+          }
           break;
 
         case "graph_trace":
-          setGraphTrace(event.nodes);
+          if (artifactId) {
+            canvas.updateArtifact(artifactId, { graph_trace: event.nodes });
+          }
           break;
 
         case "chat_message": {
@@ -238,11 +312,17 @@ export function useInterviewAgent() {
           // produced output (the silent-degrade composition class can
           // produce a vacuous final_payload from a wholly-degraded run).
           if (agentId) {
-            // Dispatch to Canvas Store
-            if (event.payload?.components) {
-              useCanvasStore
-                .getState()
-                .setCanvasContent(event.payload.components);
+            // Transition the artifact: pending → complete, with the
+            // rendered_output the canvas reads. The artifact's status
+            // is the responsiveness-flow signal acceptance #2 needs to
+            // see transition (not be replaced by a new artifact).
+            if (artifactId && event.payload?.components) {
+              canvas.updateArtifact(artifactId, {
+                status: "complete",
+                rendered_output: {
+                  components: event.payload.components,
+                },
+              });
             }
             // Update chat message with a receipt instead of the full payload
             updateMessage(agentId, {
@@ -266,7 +346,23 @@ export function useInterviewAgent() {
             markUnconfirmedStepsIncomplete(agentId);
             updateMessage(agentId, { isStreaming: false });
           }
+          // Artifact lifecycle: if the artifact never transitioned
+          // out of pending (no final_payload arrived), mark it
+          // complete with whatever it accumulated so it persists
+          // honestly. If it errored, leave it as failed. This is the
+          // "honest finalization" of the pending→complete flow —
+          // pending artifacts aren't allowed to live forever; they
+          // terminate, honestly, into complete or failed.
+          if (artifactId) {
+            const current = useCanvasStore
+              .getState()
+              .artifacts.find((a) => a.id === artifactId);
+            if (current?.status === "pending") {
+              canvas.updateArtifact(artifactId, { status: "complete" });
+            }
+          }
           currentAgentMsgId.current = null;
+          currentArtifactIdRef.current = null;
           break;
         }
       }
@@ -276,9 +372,6 @@ export function useInterviewAgent() {
       addOntologyTerm,
       addDataBinding,
       upsertThinkingStep,
-      setRouteDecision,
-      setSources,
-      setGraphTrace,
       markUnconfirmedStepsIncomplete,
     ]
   );
@@ -294,10 +387,13 @@ export function useInterviewAgent() {
       setIsProcessing(true);
       setPhase("active");
       setLiveBpmnGraph(null);
-      // Phase 0: wipe per-turn grounding state so the right-HUD doesn't
-      // show stale routing decisions from a prior query while the new
-      // one is in flight.
-      resetTurnGrounding();
+      // Per-turn UI grounding (ontology terms, data bindings) on the
+      // interview store stays per-turn-resettable — that's transient
+      // UI state, not artifact state. The per-turn routing/sources/
+      // graph_trace SINGLETONS that used to live on useInterviewStore
+      // are GONE — they live on the artifact now. See
+      // useInterviewStore.resetTurnGroundingUI.
+      useInterviewStore.getState().resetTurnGroundingUI();
 
       // Add user message
       const userMsg: Message = {
@@ -309,9 +405,13 @@ export function useInterviewAgent() {
       };
       addMessage(userMsg);
 
-      // Create agent message placeholder
+      // Create agent message placeholder + the durable artifact it
+      // points at. The artifact ID is captured up-front so subsequent
+      // stream events can update it in place (acceptance #2).
       const agentId = uid();
+      const artifactId = artifactUid();
       currentAgentMsgId.current = agentId;
+      currentArtifactIdRef.current = artifactId;
 
       const agentMsg: Message = {
         id: agentId,
@@ -320,8 +420,26 @@ export function useInterviewAgent() {
         isStreaming: true,
         thinkingSteps: [],
         timestamp: Date.now(),
+        // Bidirectional reference: Message ↔ Artifact, by id. They are
+        // STRUCTURALLY DISTINCT objects (acceptance #3). Do NOT add
+        // artifact fields onto Message for convenience.
+        artifactId,
       };
       addMessage(agentMsg);
+
+      // Append the pending artifact to the canvas collection — instant
+      // responsiveness, before any pipeline event arrives. The
+      // produced_by sentinel will be refined when route_decision lands.
+      // derived_from_artifact_id is null in Phase 1 (no follow-up
+      // detection yet); the seed signature accepts it so capture-or-
+      // lose-forever doesn't bite when detection lands later.
+      useCanvasStore.getState().createPendingArtifact({
+        id: artifactId,
+        message_id: agentId,
+        question_text: userInput,
+        produced_for: getProducedFor(),
+        derived_from_artifact_id: null,
+      });
 
       // Phase 0 instant-pre-render: seed all 5 pipeline stages as
       // `pending` (first stage `loading`) on the agent message the
@@ -367,7 +485,16 @@ export function useInterviewAgent() {
           error: error.message || "NETWORK_OR_BACKEND_UNREACHABLE",
         });
       }
+      // Mark the pending artifact as honestly failed — the durable
+      // record of the failed turn, not a silent loss. Honest-
+      // degradation as artifact state.
+      if (currentArtifactIdRef.current) {
+        useCanvasStore.getState().updateArtifact(currentArtifactIdRef.current, {
+          status: "failed",
+        });
+      }
       currentAgentMsgId.current = null;
+      currentArtifactIdRef.current = null;
     },
   });
 

@@ -3,7 +3,6 @@ import { User, Bot } from "lucide-react";
 import type { Message } from "@/store/useInterviewStore";
 import { ThinkingCard } from "./ThinkingCard";
 import { WarningCard } from "./WarningCard";
-import { SemanticInterpreter } from "../registry/SemanticInterpreter";
 
 interface MessageBubbleProps {
   message: Message;
@@ -60,9 +59,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           )}
 
           {/* Error state (Legacy API Error) */}
-          {!isUser && message.error && !message.payload && (
-            <WarningCard 
-              error={message.error} 
+          {!isUser && message.error && (
+            <WarningCard
+              error={message.error}
             />
           )}
         </div>
@@ -75,12 +74,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       </div>
 
-      {/* Composite Dashboard — rendered full-width OUTSIDE the 75% bubble constraint */}
-      {!isUser && message.payload && (
-        <div className="w-full mt-3 pl-11">
-          <SemanticInterpreter payload={message.payload} />
-        </div>
-      )}
+      {/* The composite-dashboard inline-render path is GONE per ADR-0023
+          Phase 1 acceptance #3: the rendered output lives on the Artifact
+          in useCanvasStore, NOT on the Message. The canvas (CanvasPane)
+          renders it; this transcript bubble only shows the chat-side
+          content + the artifact-generated receipt line. Keeping a
+          duplicate inline render here would re-collapse Message and
+          Artifact into one concept, the trap this acceptance prevents. */}
     </motion.div>
   );
 }

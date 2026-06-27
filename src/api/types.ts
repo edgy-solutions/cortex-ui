@@ -219,6 +219,196 @@ export type StreamEvent =
   | { type: "sources"; sources: Source[] }
   | { type: "graph_trace"; nodes: GraphTraceNode[] };
 
+/**
+ * Artifact — the durable, grounded answer-object per ADR-0023.
+ *
+ * One AnswerArtifact per answerer-output. NOT a chat-transcript-turn
+ * (that's `Message` in useInterviewStore). `Message` references
+ * `Artifact` by id when a turn produced one; an `Artifact` references
+ * its triggering `Message` by id. They are STRUCTURALLY DISTINCT and
+ * MUST stay distinct — collapsing them re-creates the same
+ * concept-conflation class as the persona-conflation and the
+ * canvas-overwrite the foundation closes.
+ *
+ * Capture-or-lose-forever applies to `valid_as_of`, `produced_for`,
+ * `produced_by` (refined when routing arrives), and `derived_from_artifact_id`
+ * (when applicable) — they must be set at creation. No backfill is
+ * possible. The fields below are commented inline with WHY each one
+ * exists, so a future implementer cannot strip them thinking they
+ * are incidental.
+ *
+ * Phase 1 of the weekend session (mock-backed). Monday's backend work
+ * wires the Neo4j+Electric projection; the Artifact type stays put.
+ */
+export interface Artifact {
+  /** Stable identifier. Phase 1: client-side generated UID;
+   *  Monday+: URN-shaped (`urn:li:answerArtifact:...`) from the backend. */
+  id: string;
+
+  /** When the artifact was created. */
+  created_at: number;
+  /** Last update — bumps when pending→complete or on substrate-stale mark. */
+  updated_at: number;
+
+  /**
+   * As-of of the grounding. Semantically "the time-point the substrate
+   * was sampled at," distinct from `created_at` which is when the
+   * artifact was made. Initially equals `created_at`; diverges when
+   * an artifact is produced from a historical snapshot.
+   *
+   * REQUIRED — capture-or-lose-forever. This is the field that makes
+   * freshness checkable against captured grounding (sources + routing).
+   * See ADR-0023 §"Freshness as the artifact's stateful dimension."
+   */
+  valid_as_of: number;
+
+  /**
+   * Optional natural expiry — "current sprint status" expires at sprint
+   * end; "who's on call" expires at rotation change; "what was Q3
+   * revenue" has no expiry. Null when no natural expiry applies;
+   * freshness is then computed against grounding instead.
+   */
+  valid_until?: number | null;
+
+  /** Raw user-question text. */
+  question_text: string;
+
+  /**
+   * Resolved intent — subject, verb, parameters as the routing layer
+   * resolved them. Preserved because re-running resolution wouldn't
+   * reproduce the historical answer. Phase 1: derived from routing
+   * when it arrives; null until then.
+   */
+  resolved_intent: {
+    subject_uri?: string;
+    verb_iri?: string;
+    parameters?: Record<string, unknown>;
+  };
+
+  /**
+   * The chat-transcript message this artifact was produced FOR. Lets
+   * the canvas show "which question this artifact answered" without
+   * duplicating the question text into the Message. Bidirectional
+   * reference: Message.artifactId points the other way.
+   */
+  message_id: string;
+
+  /**
+   * Lifecycle status for the UI. NOT the ADR's "artifact state"
+   * (validity is). This is the pending→complete responsiveness flow
+   * only — instant create in `pending`, transitions to `complete` when
+   * the pipeline finishes, or `failed` on honest error.
+   *
+   * IMPORTANT: this field is a UI concern, NOT an ADR-modeled artifact
+   * property. When this projection moves to Neo4j+Electric, this field
+   * is COMPUTED/DERIVED, NOT persisted on the artifact node — the node
+   * is born complete or it isn't born. See ADR-0023 §"Freshness as
+   * the artifact's stateful dimension" for why generation-state is
+   * never an artifact property: it's provenance-at-creation plus
+   * transient UI, not state the artifact carries.
+   */
+  status: "pending" | "complete" | "failed";
+
+  /**
+   * The presentation predicate's output. Shape derived from `DashboardUI`
+   * (components array) plus archetype hints. Null while pending.
+   * Phase 1: comes from `ui_payload` / `final_payload` events.
+   */
+  rendered_output: {
+    components: unknown[];
+    archetype?: string;
+    component_uri?: string;
+  } | null;
+
+  /**
+   * Provenance — answerer-side. The agent/user that PRODUCED this
+   * artifact. Agent actors carry `version`/`endpoint`/`code_hash` for
+   * repro/audit; user actors only carry their actor_id.
+   *
+   * Combined with `routing.action.owner_persona`, this carries the
+   * ANSWERER-SIDE persona per ADR-0009. Structurally separate from
+   * `produced_for` (user-side); conflating them is the bug ADR-0009
+   * closed.
+   *
+   * Phase 1 reality: set to a `pending` sentinel at createPending, then
+   * refined when `route_decision` arrives carrying the real engine
+   * identity in `handled_by`. The lifecycle "pending sentinel → refined
+   * by routing" is the artifact-update path the responsiveness flow
+   * exercises (acceptance #2).
+   */
+  produced_by: {
+    actor_type: "agent" | "user";
+    actor_id: string;
+    version?: string;
+    endpoint?: string;
+    code_hash?: string;
+  };
+
+  /**
+   * Provenance — user-side. The requesting human. Per ADR-0009 this is
+   * STRUCTURALLY SEPARATE from `produced_by`; conflating them is the
+   * bug ADR-0009 closed.
+   *
+   * Today's claim gap [[pingsso-claim-gap]]: the PingSSO JWT lacks
+   * `user_persona` / `entitled_domains` claims. The slot exists from
+   * day one even though it's populated thinly (`user_id`,
+   * `is_authenticated`); persona / entitlements stay nullable until
+   * claims expand. Slot existing now means the claims expansion is a
+   * populate, NOT a schema migration.
+   *
+   * IMPORTANT: a `null` persona here means "unknown user persona," NOT
+   * a default value. Treating null as "default" would silently mask the
+   * claim gap, which is the opposite of why the slot exists.
+   */
+  produced_for: {
+    user_id: string;
+    is_authenticated: boolean;
+    user_persona?: string | null;
+    entitled_domains?: string[] | null;
+  };
+
+  /**
+   * The routing decision (subject, verb, confidence, handler,
+   * `owner_persona`). The substrate already produces this as a
+   * structured object; the artifact records it.
+   *
+   * `routing.action.owner_persona` is the ANSWERER-SIDE persona — the
+   * persona the engine occupied when answering, distinct from
+   * `produced_for.user_persona`. See ADR-0009 and the inline comment
+   * on RouteDecision.action.owner_persona.
+   *
+   * Phase 1: comes from `route_decision` event. Null until then.
+   */
+  routing: RouteDecision | null;
+
+  /**
+   * Sources cited. Each `Source` is shaped as an addressable citation
+   * (URI + type). Dedup-by-URN is a derived selector when needed; the
+   * artifact carries the citations it made.
+   *
+   * Phase 1: comes from `sources` event. Empty array until then.
+   * Monday+: each Source becomes its own `:Source` node and `:CITES`
+   * is the edge; client-side, an array attached to the artifact is the
+   * equivalent shape.
+   */
+  sources: Source[];
+
+  /** Graph trace nodes (subject graph for the HUD's reasoning panel). */
+  graph_trace: GraphTraceNode[];
+
+  /**
+   * Lineage — id of the artifact this follow-up was DERIVED_FROM. Null
+   * for top-of-thread artifacts. One-hop sufficient for Phase 1;
+   * multi-hop lineage queries become traversals once on Neo4j.
+   *
+   * Phase 1 almost always null (no follow-up detection yet in the
+   * mock-backed flow); the seed signature accepts it so the lineage
+   * edge can be captured the moment follow-up detection lands without
+   * changing the creation API.
+   */
+  derived_from_artifact_id?: string | null;
+}
+
 /** BPMN graph state emitted by the backend on each turn */
 export interface BPMNGraphUpdate {
   tasks: BPMNTask[];

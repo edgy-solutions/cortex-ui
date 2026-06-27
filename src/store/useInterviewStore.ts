@@ -2,11 +2,7 @@ import { create } from "zustand";
 import type {
   BPMNGraphUpdate,
   SemanticUIContainer,
-  DashboardUI,
   PipelineStageKind,
-  RouteDecision,
-  Source,
-  GraphTraceNode,
 } from "@/api/types";
 import { PIPELINE_STAGES } from "@/api/types";
 
@@ -76,11 +72,26 @@ export interface Message {
   thinkingSteps?: ThinkingStep[];
   /** Optional network or backend error message */
   error?: string;
-  /** Schema-driven semantic payload for high-fidelity rendering */
-  payload?: DashboardUI;
   /** True if this message should render as a subtle receipt card */
   isReceipt?: boolean;
   timestamp: number;
+  /**
+   * For agent messages: the id of the durable `Artifact` this message
+   * was produced WITH. Bidirectional reference back from the
+   * `useCanvasStore` collection — `Artifact.message_id` points the
+   * other way.
+   *
+   * Per ADR-0023 (Phase 1 acceptance #3), `Message` and `Artifact` are
+   * STRUCTURALLY DISTINCT objects. `Message` = chat-transcript-turn
+   * (what was said). `Artifact` = answerer's-output-object (the
+   * durable grounded answer). They reference each other by id; they
+   * are NOT collapsed. Do NOT add artifact fields (rendered_output,
+   * sources, routing, graph_trace, valid_as_of, ...) onto `Message`
+   * for convenience — that collapses two distinct concepts into one
+   * slot, same class as the persona-conflation and the canvas-
+   * overwrite the artifact-collection foundation closes.
+   */
+  artifactId?: string;
 }
 
 export interface OntologyTerm {
@@ -127,16 +138,19 @@ interface InterviewState {
   isProcessing: boolean;
 
   // ── Grounding panel state (Phase 0 typed-union driven) ──
-  /** The structured routing decision for the most recent turn.
-   *  PERSISTS after the answer arrives — the grounding signal stays
-   *  on screen as standing context. Cleared only on `reset()` or a
-   *  new turn starting. */
-  routeDecision: RouteDecision | null;
-  /** Citations attached to the most recent answer. Same persistence
-   *  semantics as routeDecision. */
-  sources: Source[];
-  /** Compat-walk nodes for the most recent turn (detailed mode). */
-  graphTrace: GraphTraceNode[];
+  //
+  // Per ADR-0023 (Phase 1, 2026-06-26): the per-turn `routeDecision`,
+  // `sources`, `graphTrace` SINGLETONS that used to live here are
+  // GONE. They now live on the durable `Artifact` row in
+  // `useCanvasStore.artifacts` — keyed by the artifact's id, not by
+  // "the most recent turn." This closes the canvas-overwrite class
+  // for grounding state too: prior artifacts' routing/sources/
+  // graph_trace persist on their own rows; new turns don't wipe them.
+  //
+  // HUD components (`RoutingDecision`, `SourcesTrail`, `GraphTrace`)
+  // now read from `useCurrentArtifact()` via the canvas store's
+  // derived selectors. See ADR-0023 acceptance #2 / #3 for the why.
+
   /** Plain / detailed display preference. Persists per-user. */
   groundingDisplayMode: GroundingDisplayMode;
 
@@ -171,13 +185,19 @@ interface InterviewState {
   setLiveBpmnGraph: (graph: BPMNGraphUpdate | SemanticUIContainer | null) => void;
   setUnresolvedPaths: (paths: string[]) => void;
   setIsProcessing: (isProcessing: boolean) => void;
-  // ── Grounding panel actions ──
-  setRouteDecision: (decision: RouteDecision | null) => void;
-  setSources: (sources: Source[]) => void;
-  setGraphTrace: (nodes: GraphTraceNode[]) => void;
-  /** Wipe per-turn grounding state. Called when a NEW user turn begins
-   *  so the panel doesn't show stale routing from a prior query. */
-  resetTurnGrounding: () => void;
+  /**
+   * Wipe per-turn UI-only grounding state. Currently this means the
+   * ontology terms + data bindings — they are transient UI
+   * accumulators tied to the live turn, NOT artifact state. The
+   * routing/sources/graph_trace singletons that used to be reset here
+   * are gone — they live on the artifact row now and persist per-
+   * artifact, not per-turn.
+   *
+   * Called at the START of a new turn by `useInterviewAgent`.
+   * Replaces the old `resetTurnGrounding` (which conflated transient
+   * UI with per-turn grounding singletons that no longer exist).
+   */
+  resetTurnGroundingUI: () => void;
   setGroundingDisplayMode: (mode: GroundingDisplayMode) => void;
   reset: () => void;
 }
@@ -190,9 +210,6 @@ const initialState = {
   liveBpmnGraph: null as BPMNGraphUpdate | SemanticUIContainer | null,
   unresolvedPaths: [] as string[],
   isProcessing: false,
-  routeDecision: null as RouteDecision | null,
-  sources: [] as Source[],
-  graphTrace: [] as GraphTraceNode[],
   groundingDisplayMode: readPersistedMode(),
 };
 
@@ -311,27 +328,16 @@ export const useInterviewStore = create<InterviewState>((set) => ({
 
   setIsProcessing: (isProcessing) => set({ isProcessing }),
 
-  // ── Grounding panel actions ──
-  setRouteDecision: (decision) => set({ routeDecision: decision }),
-  setSources: (sources) => set({ sources }),
-  setGraphTrace: (nodes) => set({ graphTrace: nodes }),
-  resetTurnGrounding: () =>
-    // Per-turn grounding state — wiped on each new query so the
-    // right-HUD shows the CURRENT query's grounding, not an
-    // accumulation across the session. ontologyTerms + dataBindings
-    // were previously missing from this reset, producing the
-    // append-only "concepts list grows forever" bug where a prior
-    // turn's "mesh_demo_customers" stayed visible alongside the
-    // current turn's "360 Dashboard" and made it look like the
-    // current query was about both. The HUD's job is to surface
-    // what the pipeline did for THIS question — same founding
-    // principle as the ThinkingCard incomplete state: surface, don't
-    // synthesize, and don't accumulate across what the user reads as
-    // discrete turns.
+  // ── Per-turn UI-only reset ──
+  //
+  // Wipes the transient UI accumulators (ontology terms + data
+  // bindings) at the start of a new turn so the panel shows the
+  // CURRENT turn's, not an accumulation across the session. The
+  // routing / sources / graph_trace per-turn singletons that used to
+  // be reset here are GONE — they live on the artifact row now and
+  // persist per-artifact, not per-turn. See ADR-0023 Phase 1.
+  resetTurnGroundingUI: () =>
     set({
-      routeDecision: null,
-      sources: [],
-      graphTrace: [],
       ontologyTerms: [],
       dataBindings: [],
     }),

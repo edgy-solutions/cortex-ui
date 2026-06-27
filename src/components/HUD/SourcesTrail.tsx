@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { FileText, Database, BarChart3, ExternalLink, Quote } from "lucide-react";
-import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCurrentSources } from "@/store/useCanvasStore";
 import type { Source } from "@/api/types";
 import { presentConfidence } from "@/lib/confidence";
 
@@ -17,7 +17,9 @@ import { presentConfidence } from "@/lib/confidence";
  * to audit the underlying evidence.
  */
 export function SourcesTrail() {
-  const sources = useInterviewStore((s) => s.sources);
+  // Per ADR-0023 Phase 1: sources live on the current Artifact, not
+  // on a per-turn singleton in useInterviewStore.
+  const sources = useCurrentSources();
 
   return (
     <div className="glass-panel-sm p-3">

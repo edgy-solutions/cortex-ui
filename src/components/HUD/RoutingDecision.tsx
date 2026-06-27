@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Target, Compass, Cog, ChevronRight, ExternalLink } from "lucide-react";
-import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCurrentRouting } from "@/store/useCanvasStore";
 import { ConfidenceBar } from "./ConfidenceBar";
 import { fallbackVerbLabel, fallbackSubjectLabel } from "@/lib/confidence";
 
@@ -26,7 +26,10 @@ import { fallbackVerbLabel, fallbackSubjectLabel } from "@/lib/confidence";
  * the left-stream ThinkingCard's job).
  */
 export function RoutingDecision() {
-  const decision = useInterviewStore((s) => s.routeDecision);
+  // Per ADR-0023 Phase 1: routing lives on the current Artifact, not
+  // on a per-turn singleton in useInterviewStore. The selector reads
+  // through to the canvas's foregrounded artifact.
+  const decision = useCurrentRouting();
 
   if (!decision) {
     return (
