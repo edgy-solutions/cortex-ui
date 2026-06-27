@@ -1,105 +1,339 @@
 import React from "react";
-import { AlertCircle, FileText, Share2, Database } from "lucide-react";
+import { AlertCircle, FileText } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 // Lazy-loaded or imported directly for interpretation
-import { WorkflowCanvas } from "../Blueprint/WorkflowCanvas";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
-import { DigitalTwinWidget } from "../mesh/DigitalTwinWidget";
+// DigitalTwinWidget is intentionally not imported — the
+// DIGITAL_TWIN_3D archetype dispatch was removed 2026-06-26 (user
+// deferred the digital-twin concept until it gets a proper visual
+// pass). The widget file is preserved at
+// `../mesh/DigitalTwinWidget.tsx` so the work isn't lost; re-import
+// here and re-add the dispatch case when the concept is revisited.
+import { ProcessTopologyCard } from "./ProcessTopologyCard";
 import { publishToSuperset } from "@/api/client";
+import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
 
-// Mock/Placeholder components for missing types
-const SupplyTable = ({ data }: { data: any[] }) => {
-  if (!data || !Array.isArray(data)) return null;
-  return (
-    <div className="glass-panel overflow-hidden border-cyan-500/10">
-      <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/5 border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-cyan-400" />
-          <span className="font-mono text-[10px] text-cyan-400/80 font-bold tracking-widest uppercase">Asset_State_Registry</span>
-        </div>
-        <div className="flex gap-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30 animate-pulse" />
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/20" />
+/**
+ * SupplyTable — ASSET_STATE_METRIC render.
+ *
+ * Rebuilt 2026-06-26 (user feedback):
+ *   - Table "always rendered as two columns and truncated all the
+ *     other data" — caused by the description column using
+ *     `text-right`+`text-[9px]`+`tracking-tight`+`uppercase` which
+ *     visually crushed it into illegibility against the third
+ *     column. Now each column has clear width allocation and
+ *     readable typography.
+ *   - "Two dots at the top, one blinks but doesn't do anything" —
+ *     those were decorative pulse indicators that didn't reflect
+ *     any real state. Removed entirely. Honest > decorative.
+ *
+ * Structure matches the ChartWidget for consistency: glass-panel
+ * container, pulsing cyan dot + bold title + small subtitle,
+ * footer info row.
+ */
+const SupplyTable = ({ data, subject }: { data: any[]; subject?: string }) => {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="glass-panel p-6 my-4 border-cyan-500/20">
+        <div className="flex flex-col items-center justify-center gap-2 py-12">
+          <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
+            Asset registry empty
+          </p>
+          <p className="font-mono text-[9px] text-slate-500">
+            no rows attached to this archetype
+          </p>
         </div>
       </div>
-      <div className="p-0">
-        <table className="w-full text-left font-mono text-[11px] border-collapse">
+    );
+  }
+  return (
+    <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
+      {/* Header — matches ChartWidget */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+          <h3 className="text-xl font-bold text-white tracking-tight leading-none">
+            {subject || "Asset Registry"}
+          </h3>
+        </div>
+        <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold">
+          Asset Registry · {data.length} {data.length === 1 ? "row" : "rows"}
+        </p>
+      </div>
+
+      {/* Table — width-allocated columns so the metadata column has
+          room to breathe instead of being squeezed by uppercase 9px
+          right-aligned text. Name takes its natural width; type is a
+          compact chip; metadata fills the remainder. */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
           <thead>
-            <tr className="text-slate-500 bg-slate-900/40">
-              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">DATASET_IDENTIFIER</th>
-              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter">TYPE_TAG</th>
-              <th className="px-4 py-2 border-b border-white/5 font-medium tracking-tighter text-right">METADATA_EXTRACT</th>
+            <tr className="border-b border-white/10">
+              <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/70 w-1/3">
+                Name
+              </th>
+              <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/70 w-[20%]">
+                Type
+              </th>
+              <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/70">
+                Metadata
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {data.map((row, i) => (
-              <tr key={i} className="group hover:bg-cyan-500/5 transition-colors">
-                <td className="px-4 py-3 text-slate-200">
-                  {/* Tier badge removed: `id.slice(0,4)` was meant as a
-                      tier hint for medallion datasets (gold/silv/bron),
-                      but it (1) failed visually for "orders_raw" /
-                      "customers_raw" (showed "ORDE" / "CUST" — nonsense)
-                      and (2) rendered without enough visual separation
-                      so the badge + name read as "goldgold.sales..." in
-                      practice. The dataset id is already informative on
-                      its own; if we want a tier indicator later, derive
-                      it from the dot-separated namespace (`gold.sales.x`
-                      → "GOLD") and only show when present. */}
+              <tr
+                key={row.id ?? i}
+                className="hover:bg-cyan-500/[0.04] transition-colors"
+              >
+                <td className="px-3 py-3 text-slate-100 font-semibold font-mono text-sm align-top">
                   {row.name || row.id}
                 </td>
-                <td className="px-4 py-3">
-                  <span className="text-slate-500 italic lowercase">{row.type || "unknown"}</span>
+                <td className="px-3 py-3 align-top">
+                  {row.type ? (
+                    <span className="inline-flex px-2 py-0.5 rounded font-mono text-[10px] uppercase tracking-wider bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                      {row.type}
+                    </span>
+                  ) : (
+                    <span className="text-slate-600 text-xs">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <span className="text-cyan-400 group-hover:text-cyan-300 transition-colors uppercase text-[9px] font-bold tracking-tight">
-                    {row.description || "NO_DESCRIPTION_PROVIDED"}
-                  </span>
+                <td className="px-3 py-3 text-slate-300 text-sm align-top">
+                  {row.description || (
+                    <span className="text-slate-600">—</span>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Footer — matches chart pattern */}
+      <div className="mt-6 pt-4 border-t border-white/5 flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-tighter">
+        <div className="flex items-center gap-1">
+          <span className="text-cyan-500/50">Rows:</span>
+          <span>{data.length}</span>
+        </div>
+      </div>
     </div>
   );
 };
 
-const MarkdownRenderer = ({ content }: { content: string }) => (
-  <div className="prose prose-invert prose-slate max-w-none font-sans text-sm leading-relaxed text-slate-300 prose-table:font-mono prose-table:text-[11px] prose-th:text-slate-400 prose-th:border-b prose-th:border-white/10 prose-th:pb-2 prose-td:py-1.5 prose-td:border-t prose-td:border-white/5 prose-td:text-slate-300">
-    <div className="flex items-center gap-2 mb-4">
-      <FileText className="w-4 h-4 text-neon-purple" />
-      <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">Knowledge_Doc</span>
+/**
+ * MarkdownRenderer — KNOWLEDGE_DOCUMENT archetype render.
+ *
+ * Rebuilt 2026-06-26 (user feedback iterations):
+ *   - v1 was a bare div with `prose-invert prose-slate` defaults
+ *     — "looks like it's not even markdown."
+ *   - v2 added glass-panel container + cyan-themed `prose-*`
+ *     modifiers. Those did NOTHING because `@tailwindcss/typography`
+ *     isn't installed in this project (Tailwind v4 setup, no
+ *     plugin) — every `prose` class was a no-op. Markdown rendered
+ *     as plain unstyled HTML; "everything in bright white, all the
+ *     same, hard to read."
+ *   - v3 (current) — drop the plugin dependency entirely. Pass a
+ *     `components` map to react-markdown so each HTML element gets
+ *     its own Tailwind classes directly. Full control, zero plugin
+ *     dependency, every element actually styled.
+ *
+ * Color discipline:
+ *   - Headings: white bold; h1/h2 get a cyan-500/20 underline.
+ *   - Body paragraphs: slate-200 (calmer than white; easier on eyes).
+ *   - Strong: white (lifted from body for visible bold).
+ *   - Em: cyan-200 italic (the registry's accent for emphasis).
+ *   - Inline code: cyan-300 on cyan-500/10 ground, monospace.
+ *   - Code blocks: slate-950/60 with cyan-500/10 border.
+ *   - Links: cyan-400, hover cyan-300, medium weight.
+ *   - Blockquote: cyan-500/40 left border, slate-300.
+ *   - Lists: slate-200 text, cyan bullet markers.
+ *   - Tables: cyan-400/80 uppercase tracking-widest headers
+ *     (matches SupplyTable language), slate-200 cells, subtle
+ *     dividers.
+ *
+ * The body color is deliberately NOT pure white. White body text on
+ * dark backgrounds reads as "yelling" once volume gets above a few
+ * lines — slate-200 keeps long-form content scannable.
+ */
+const MarkdownRenderer = ({
+  content,
+  subject,
+}: {
+  content: string;
+  subject?: string;
+}) => {
+  const wordCount = content
+    ? content.split(/\s+/).filter((w) => w.length > 0).length
+    : 0;
+
+  return (
+    <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
+      {/* Header — matches ChartWidget / topology / table */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+          <h3 className="text-xl font-bold text-white tracking-tight leading-none">
+            {subject || "Knowledge Document"}
+          </h3>
+        </div>
+        <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
+          <FileText className="w-3 h-3" />
+          Knowledge Document · {wordCount} {wordCount === 1 ? "word" : "words"}
+        </p>
+      </div>
+
+      {/* Markdown body — each HTML element mapped to a styled component */}
+      <div className="text-sm leading-relaxed">
+        <Markdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            h1: ({ children }) => (
+              <h1 className="text-2xl font-bold text-white tracking-tight border-b border-cyan-500/20 pb-2 mb-4 mt-6 first:mt-0">
+                {children}
+              </h1>
+            ),
+            h2: ({ children }) => (
+              <h2 className="text-xl font-bold text-white tracking-tight border-b border-cyan-500/10 pb-1.5 mb-3 mt-6 first:mt-0">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="text-lg font-semibold text-cyan-100 tracking-tight mb-2 mt-5 first:mt-0">
+                {children}
+              </h3>
+            ),
+            h4: ({ children }) => (
+              <h4 className="text-base font-semibold text-cyan-200 mb-2 mt-4 first:mt-0">
+                {children}
+              </h4>
+            ),
+            p: ({ children }) => (
+              <p className="text-slate-200 leading-relaxed my-3">{children}</p>
+            ),
+            strong: ({ children }) => (
+              <strong className="text-white font-semibold">{children}</strong>
+            ),
+            em: ({ children }) => (
+              <em className="text-cyan-200 italic">{children}</em>
+            ),
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-cyan-400 hover:text-cyan-300 font-medium underline decoration-cyan-500/30 hover:decoration-cyan-400/60 transition-colors"
+              >
+                {children}
+              </a>
+            ),
+            // react-markdown emits <code> for inline. Block code is
+            // wrapped in <pre><code>. We style inline here; the <pre>
+            // wrapper handles block presentation, and we reset the
+            // inline styling when nested inside it.
+            code: ({ className, children, ...rest }) => {
+              const isBlock = (className || "").includes("language-");
+              if (isBlock) {
+                // Inside <pre>; let pre's styling drive the block.
+                return (
+                  <code
+                    className="block font-mono text-[13px] text-cyan-200 leading-relaxed"
+                    {...rest}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+              return (
+                <code className="font-mono text-[0.85em] text-cyan-300 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                  {children}
+                </code>
+              );
+            },
+            pre: ({ children }) => (
+              <pre className="bg-slate-950/60 border border-cyan-500/10 rounded-lg p-4 my-4 overflow-x-auto">
+                {children}
+              </pre>
+            ),
+            blockquote: ({ children }) => (
+              <blockquote className="border-l-2 border-cyan-500/40 pl-4 my-4 text-slate-300 italic">
+                {children}
+              </blockquote>
+            ),
+            ul: ({ children }) => (
+              <ul className="list-disc pl-6 my-3 text-slate-200 marker:text-cyan-500/60 space-y-1">
+                {children}
+              </ul>
+            ),
+            ol: ({ children }) => (
+              <ol className="list-decimal pl-6 my-3 text-slate-200 marker:text-cyan-500/60 space-y-1">
+                {children}
+              </ol>
+            ),
+            li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+            hr: () => <hr className="border-cyan-500/20 my-6" />,
+            table: ({ children }) => (
+              <div className="overflow-x-auto my-4">
+                <table className="w-full text-left text-sm border-collapse">
+                  {children}
+                </table>
+              </div>
+            ),
+            thead: ({ children }) => (
+              <thead className="border-b border-cyan-500/20">{children}</thead>
+            ),
+            tbody: ({ children }) => (
+              <tbody className="divide-y divide-white/5">{children}</tbody>
+            ),
+            tr: ({ children }) => (
+              <tr className="hover:bg-cyan-500/[0.04] transition-colors">
+                {children}
+              </tr>
+            ),
+            th: ({ children }) => (
+              <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/80">
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td className="px-3 py-2.5 text-slate-200 align-top">{children}</td>
+            ),
+            img: ({ src, alt }) => (
+              <div className="my-6 rounded-xl overflow-hidden border border-cyan-500/15 bg-black/50 p-2">
+                <FederatedImage
+                  src={src || ""}
+                  alt={alt}
+                  className="w-full max-h-[500px] object-contain rounded-lg opacity-90 hover:opacity-100 transition-opacity"
+                />
+                {alt && (
+                  <p className="text-center mt-2 font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                    {alt}
+                  </p>
+                )}
+              </div>
+            ),
+          }}
+        >
+          {content}
+        </Markdown>
+      </div>
+
+      {/* Footer — matches chart pattern */}
+      <div className="mt-6 pt-4 border-t border-white/5 flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-tighter">
+        <div className="flex items-center gap-1">
+          <span className="text-cyan-500/50">Words:</span>
+          <span>{wordCount}</span>
+        </div>
+      </div>
     </div>
-    <Markdown 
-      remarkPlugins={[remarkGfm]}
-      components={{
-        img: ({ src, alt }) => (
-          <div className="my-6 rounded-xl overflow-hidden border border-white/10 bg-black/50 p-2">
-            <FederatedImage 
-              src={src || ""} 
-              alt={alt} 
-              className="w-full max-h-[500px] object-contain rounded-lg opacity-90 hover:opacity-100 transition-opacity" 
-            />
-            {alt && (
-              <p className="text-center mt-2 font-mono text-[10px] text-slate-500 uppercase tracking-widest">
-                {alt}
-              </p>
-            )}
-          </div>
-        )
-      }}
-    >
-      {content}
-    </Markdown>
-  </div>
-);
+  );
+};
 
 // Re-export the canonical type from api/types
 export type { SemanticUIContainer } from "@/api/types";
@@ -111,55 +345,52 @@ interface SemanticInterpreterProps {
 // Render a single semantic component by archetype
 const renderComponent = (comp: any, onPublish: (sql: string, title: string) => void) => {
   switch (comp.archetype) {
-    case "PROCESS_TOPOLOGY": {
-      // Map semantic nodes to custom glassmorphism node types.
-      // First node = trigger (green circle), rest = action (purple rectangle).
-      const visualNodes = comp.nodes.map((node: any, index: number) => ({
-        id: node.id,
-        position: { x: 250, y: index * 160 + 50 },
-        data: {
-          label: node.name || node.id,
-          subtitle: node.type || node.description || undefined,
-          delay: index * 0.15,
-        },
-        type: index === 0 ? 'trigger' : 'action',
-      }));
-
-      const visualEdges = comp.edges.map((edge: any, index: number) => ({
-        id: `e-${edge.source}-${edge.target}-${index}`,
-        source: edge.source,
-        target: edge.target,
-        label: edge.relation || edge.predicate || "",
-        type: 'animated',
-      }));
-
+    case "PROCESS_TOPOLOGY":
+      // Redesigned 2026-06-26 — clean horizontal flow of blocks +
+      // connectors instead of ReactFlow/WorkflowCanvas's
+      // cyberpunk-theatrical render (circle triggers with pulse
+      // rings, glitch hover, three-color palette). The new
+      // ProcessTopologyCard matches the ChartWidget's visual language
+      // (glass-panel, cyan accent, geometric blocks). See its
+      // module docstring for the design.
       return (
-        <div className="w-full h-[600px] relative rounded-xl overflow-hidden border border-white/5 bg-slate-950/50">
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 glass-panel-sm border-neon-green/30">
-            <Share2 className="w-3 h-3 text-neon-green" />
-            <span className="font-mono text-[9px] text-neon-green uppercase tracking-tighter">
-              {comp.subject_concept}
-            </span>
-          </div>
-          <WorkflowCanvas nodes={visualNodes} edges={visualEdges} hideHeader />
-        </div>
+        <ProcessTopologyCard
+          subject_concept={comp.subject_concept}
+          nodes={comp.nodes || []}
+          edges={comp.edges || []}
+        />
       );
-    }
 
     case "HAZARD_DECLARATION":
       return (
         <WarningCard
           error={comp.subject_concept}
           hazards={comp.hazards}
-          isCritical={comp.severity === "CRITICAL"}
+          // Pass the full severity through (was: isCritical boolean).
+          // The card now renders the severity as a small chip rather
+          // than a hardcoded "STRUCTURAL RISK ALERT" / "SAFETY
+          // CONSTRAINT" header — those leaked a military/structural
+          // domain assumption that doesn't generalize. See
+          // WarningCard's module docstring.
+          severity={comp.severity}
         />
       );
 
     case "ASSET_STATE_METRIC":
-      return <SupplyTable data={comp.metrics} />;
+      return (
+        <SupplyTable
+          data={comp.metrics}
+          subject={comp.subject_concept}
+        />
+      );
 
     case "KNOWLEDGE_DOCUMENT":
-      return <MarkdownRenderer content={comp.markdown_content} />;
+      return (
+        <MarkdownRenderer
+          content={comp.markdown_content}
+          subject={comp.subject_concept}
+        />
+      );
 
     case "CHART_WIDGET":
       return (
@@ -172,8 +403,11 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
         />
       );
 
-    case "DIGITAL_TWIN_3D":
-      return <DigitalTwinWidget {...comp} />;
+    // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
+    // the "UI COMPONENT NOT FOUND" default render (honest: tells the
+    // truth about archetypes the registry doesn't currently handle).
+    // The widget file at `../mesh/DigitalTwinWidget.tsx` is preserved
+    // for the future revisit.
 
     default:
       return (
@@ -195,14 +429,40 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
   }
 };
 
-// Graphs and documents span full width; cards flow inline in a 2-col grid
+// Full-width archetypes — the components that need ROW space (a
+// table, a chart's x-axis, a process flow, a markdown doc, a 3D
+// twin). The 2-column grid would crush these to 50% canvas width
+// when the viewport is narrow; the rebuild table and hazard cards
+// looked "shrunk" at smaller window sizes specifically because they
+// were excluded here. Added 2026-06-26.
 const isFullWidth = (archetype: string) =>
-  archetype === "PROCESS_TOPOLOGY" || archetype === "KNOWLEDGE_DOCUMENT" || archetype === "CHART_WIDGET" || archetype === "DIGITAL_TWIN_3D";
+  archetype === "PROCESS_TOPOLOGY" ||
+  archetype === "KNOWLEDGE_DOCUMENT" ||
+  archetype === "CHART_WIDGET" ||
+  archetype === "ASSET_STATE_METRIC" ||
+  archetype === "HAZARD_DECLARATION";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();
 
   const handlePublish = async (sql: string, title: string) => {
+    // Mock-grounding mode: the publish-to-superset action genuinely
+    // requires a live backend (gateway → Analyst Service →
+    // Superset). Faking success here would be misleading (nothing
+    // actually got published); letting the request fall through
+    // produces a confusing CORS error toast. Honest middle path:
+    // intercept and tell the user explicitly the action is
+    // backend-gated.
+    if (isMockGroundingEnabled()) {
+      toast.info("Publish requires a live backend", {
+        description:
+          `Mock-grounding mode is on. ` +
+          `"${title}" would publish to Superset via Analyst Service in production.`,
+        duration: 6000,
+      });
+      return;
+    }
+
     const toastId = toast.loading("Publishing to Superset...");
     try {
       const result = await publishToSuperset(sql, title);

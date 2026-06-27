@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { MessageBubble } from "./MessageBubble";
@@ -27,6 +27,19 @@ export function NeuralStream() {
   const messages = useInterviewStore((s) => s.messages);
   const isProcessing = useInterviewStore((s) => s.isProcessing);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Find the LATEST agent message id. Only that message's
+  // ThinkingCard (pipeline list) is rendered in MessageBubble —
+  // prior agent turns collapse to just their receipt line. Reasoning:
+  // the pipeline is "what's happening right now" telemetry; once the
+  // turn is done and a new question is asked, the prior turn's
+  // stages are noise. The artifact + receipt are the durable record.
+  const latestAgentMsgId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "agent") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
 
   // Auto-scroll to bottom on new messages or content updates
   useEffect(() => {
@@ -60,7 +73,13 @@ export function NeuralStream() {
 
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              isLatestAgent={
+                msg.role === "agent" && msg.id === latestAgentMsgId
+              }
+            />
           ))}
         </AnimatePresence>
       </div>

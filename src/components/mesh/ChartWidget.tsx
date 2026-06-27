@@ -4,8 +4,14 @@ import {
   Bar,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
+  ZAxis,
   CartesianGrid,
   Tooltip,
   Legend,
@@ -15,7 +21,7 @@ import { Share2 } from 'lucide-react';
 
 interface ChartWidgetProps {
   data: string; // The stringified JSON array from Engine A/BAML
-  type: 'BAR' | 'LINE' | 'PIE';
+  type: 'BAR' | 'LINE' | 'PIE' | 'SCATTER';
   subject: string;
   sql: string;
   onPublish: (sql: string, title: string) => void;
@@ -79,9 +85,29 @@ type NormalizedShape =
       seriesKeys: string[];
       data: Array<Record<string, unknown>>;
     }
+  | {
+      // Scatter — both axes numeric. Used by SCATTER chart type.
+      kind: "scatter";
+      xKey: string;
+      yKey: string;
+      data: Array<Record<string, unknown>>;
+    }
+  | {
+      // Scatter with a categorical series column. Each unique value
+      // of seriesKey becomes its own colored cluster of points.
+      kind: "scatter-multi";
+      xKey: string;
+      yKey: string;
+      seriesKey: string;
+      seriesGroups: Record<string, Array<Record<string, unknown>>>;
+      seriesKeys: string[];
+    }
   | { kind: "empty"; reason: string };
 
-function normalizeChartData(rows: Array<Record<string, unknown>>): NormalizedShape {
+function normalizeChartData(
+  rows: Array<Record<string, unknown>>,
+  chartType?: "BAR" | "LINE" | "PIE" | "SCATTER"
+): NormalizedShape {
   if (!Array.isArray(rows) || rows.length === 0) {
     return { kind: "empty", reason: "no rows" };
   }
@@ -110,6 +136,50 @@ function normalizeChartData(rows: Array<Record<string, unknown>>): NormalizedSha
   if (numericKeys.length === 0) {
     return { kind: "empty", reason: "no numeric column" };
   }
+
+  // SCATTER-specific shape detection — fires when the chart type
+  // explicitly asks for SCATTER. Requires 2 numeric columns (x and
+  // y). A 3rd categorical column, if present, becomes the series
+  // discriminator (colored clusters).
+  if (chartType === "SCATTER") {
+    if (numericKeys.length < 2) {
+      return {
+        kind: "empty",
+        reason: "scatter requires 2 numeric columns (x and y)",
+      };
+    }
+    const xKey = numericKeys[0];
+    const yKey = numericKeys[1];
+
+    if (categoricalKeys.length === 0) {
+      return { kind: "scatter", xKey, yKey, data: rows };
+    }
+
+    // Multi-cluster scatter — group rows by the first categorical.
+    const seriesKey = categoricalKeys[0];
+    const seriesGroups: Record<string, Array<Record<string, unknown>>> = {};
+    for (const row of rows) {
+      const s = row[seriesKey];
+      if (typeof s !== "string") continue;
+      if (!seriesGroups[s]) seriesGroups[s] = [];
+      seriesGroups[s].push(row);
+    }
+    const seriesKeys = Object.keys(seriesGroups).sort();
+    if (seriesKeys.length === 0) {
+      return { kind: "empty", reason: "no series values in scatter data" };
+    }
+    return {
+      kind: "scatter-multi",
+      xKey,
+      yKey,
+      seriesKey,
+      seriesGroups,
+      seriesKeys,
+    };
+  }
+
+  // Categorical-axis charts (BAR / LINE / PIE) — need at least one
+  // categorical column for the x-axis / slice labels.
   if (categoricalKeys.length === 0) {
     return { kind: "empty", reason: "no categorical column" };
   }
@@ -209,8 +279,8 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
       return { kind: "empty", reason: "JSON parse failure" };
     }
     if (!Array.isArray(rows)) return { kind: "empty", reason: "not an array" };
-    return normalizeChartData(rows as Array<Record<string, unknown>>);
-  }, [data]);
+    return normalizeChartData(rows as Array<Record<string, unknown>>, type);
+  }, [data, type]);
 
   return (
     <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden group">
@@ -230,6 +300,11 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
             {shape.kind === "multi" && (
               <span className="ml-2 text-violet-400/70">
                 · {shape.seriesKeys.length}-series pivot
+              </span>
+            )}
+            {shape.kind === "scatter-multi" && (
+              <span className="ml-2 text-violet-400/70">
+                · {shape.seriesKeys.length} clusters
               </span>
             )}
           </p>
@@ -254,12 +329,106 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
               {shape.reason}
             </p>
           </div>
+        ) : type === 'PIE' && shape.kind === "single" ? (
+          // PIE — single-dim natural fit: one slice per row. Multi-
+          // dim doesn't apply (pie is fundamentally one-series).
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
+              <Legend
+                wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
+                iconType="circle"
+              />
+              <Pie
+                data={shape.data}
+                dataKey={shape.valueKey}
+                nameKey={shape.xKey}
+                cx="50%"
+                cy="50%"
+                outerRadius={120}
+                innerRadius={50}
+                paddingAngle={2}
+                animationDuration={1200}
+                label={(entry: any) =>
+                  `${entry[shape.xKey]}: ${entry[shape.valueKey]}`
+                }
+                labelLine={false}
+              >
+                {shape.data.map((_, i) => (
+                  <Cell
+                    key={i}
+                    fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                    stroke="rgba(15, 23, 42, 0.6)"
+                    strokeWidth={2}
+                  />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        ) : type === 'SCATTER' &&
+          (shape.kind === "scatter" || shape.kind === "scatter-multi") ? (
+          // SCATTER — both axes numeric. Single-series renders one
+          // cluster in cyan; multi-cluster colors each categorical
+          // group from the SERIES_COLORS palette with a legend.
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
+              <XAxis
+                type="number"
+                dataKey={shape.xKey}
+                name={shape.xKey}
+                {...AXIS_STYLE}
+                tick={AXIS_TICK}
+              />
+              <YAxis
+                type="number"
+                dataKey={shape.yKey}
+                name={shape.yKey}
+                {...AXIS_STYLE}
+                tick={AXIS_TICK}
+              />
+              <ZAxis range={[60, 60]} />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                cursor={{ strokeDasharray: '3 3', stroke: '#06b6d4' }}
+              />
+              {shape.kind === "scatter" ? (
+                <Scatter
+                  data={shape.data}
+                  fill={SERIES_COLORS[0]}
+                  fillOpacity={0.75}
+                  stroke={SERIES_COLORS[0]}
+                  animationDuration={1200}
+                />
+              ) : (
+                <>
+                  <Legend
+                    wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
+                    iconType="circle"
+                  />
+                  {shape.seriesKeys.map((sk, i) => (
+                    <Scatter
+                      key={sk}
+                      name={sk}
+                      data={shape.seriesGroups[sk]}
+                      fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      fillOpacity={0.75}
+                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      animationDuration={1200}
+                    />
+                  ))}
+                </>
+              )}
+            </ScatterChart>
+          </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {type === 'LINE' ? (
-              <LineChart data={shape.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart data={(shape.kind === "single" || shape.kind === "multi") ? shape.data : []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
-                <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                {(shape.kind === "single" || shape.kind === "multi") && (
+                  <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                )}
                 <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -276,7 +445,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                     activeDot={{ r: 6, fill: SERIES_COLORS[0], stroke: '#fff', strokeWidth: 2 }}
                     animationDuration={1500}
                   />
-                ) : (
+                ) : shape.kind === "multi" ? (
                   <>
                     <Legend
                       wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
@@ -294,12 +463,14 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                       />
                     ))}
                   </>
-                )}
+                ) : null}
               </LineChart>
             ) : (
-              <BarChart data={shape.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={(shape.kind === "single" || shape.kind === "multi") ? shape.data : []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
-                <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                {(shape.kind === "single" || shape.kind === "multi") && (
+                  <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                )}
                 <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -328,7 +499,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                       </linearGradient>
                     </defs>
                   </>
-                ) : (
+                ) : shape.kind === "multi" ? (
                   <>
                     <Legend
                       wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
@@ -350,7 +521,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                       />
                     ))}
                   </>
-                )}
+                ) : null}
               </BarChart>
             )}
           </ResponsiveContainer>

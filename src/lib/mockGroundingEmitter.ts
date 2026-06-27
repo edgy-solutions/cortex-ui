@@ -87,7 +87,20 @@ export type MockScenario =
   | "partial-no-grounding"
   | "empty-components"
   | "chart-single"
-  | "chart-multi";
+  | "chart-multi"
+  | "chart-line"
+  | "chart-pie"
+  | "chart-scatter"
+  | "topology"
+  | "hazard"
+  | "table"
+  | "doc";
+// `twin` (DIGITAL_TWIN_3D) was REMOVED 2026-06-26 — the archetype's
+// dispatch was deferred until a proper visual pass. The widget file
+// itself is preserved at `src/components/mesh/DigitalTwinWidget.tsx`
+// for the future revisit; re-add `twin` here, in parseScenario, in
+// buildArchetypePayload, and re-import the dispatch case when the
+// concept is picked back up.
 
 /**
  * Parse a leading `@scenario ` prefix off the query. Defaults to
@@ -113,7 +126,7 @@ function parseScenario(query: string): {
   cleanQuery: string;
 } {
   const m = query.match(
-    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi)\s+(.+)$/i
+    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi|chart-line|chart-pie|chart-scatter|topology|hazard|table|doc)\s+(.+)$/i
   );
   if (!m) return { scenario: "happy", cleanQuery: query };
   const marker = m[1].toLowerCase();
@@ -131,8 +144,156 @@ function parseScenario(query: string): {
       return { scenario: "chart-single", cleanQuery };
     case "chart-multi":
       return { scenario: "chart-multi", cleanQuery };
+    case "chart-line":
+      return { scenario: "chart-line", cleanQuery };
+    case "chart-pie":
+      return { scenario: "chart-pie", cleanQuery };
+    case "chart-scatter":
+      return { scenario: "chart-scatter", cleanQuery };
+    case "topology":
+      return { scenario: "topology", cleanQuery };
+    case "hazard":
+      return { scenario: "hazard", cleanQuery };
+    case "table":
+      return { scenario: "table", cleanQuery };
+    case "doc":
+      return { scenario: "doc", cleanQuery };
     default:
       return { scenario: "happy", cleanQuery };
+  }
+}
+
+/**
+ * Build an archetype-specific payload for the @<archetype> mock
+ * scenarios. Each scenario exercises ONE SemanticInterpreter
+ * dispatch case so the renderer can be hardened visually without
+ * needing a real backend to produce that archetype's shape.
+ *
+ * All payloads use example.com / mock identifiers. Never paste real
+ * data here.
+ */
+function buildArchetypePayload(
+  scenario: "topology" | "hazard" | "table" | "doc"
+): DashboardUI {
+  switch (scenario) {
+    case "topology":
+      return {
+        components: [
+          {
+            archetype: "PROCESS_TOPOLOGY",
+            subject_concept: "Customer onboarding workflow (mock)",
+            nodes: [
+              { id: "n1", name: "Receive signup", type: "trigger" },
+              { id: "n2", name: "Verify email", type: "validation" },
+              { id: "n3", name: "Create account", type: "action" },
+              { id: "n4", name: "Send welcome", type: "notification" },
+            ],
+            edges: [
+              { source: "n1", target: "n2", relation: "triggers" },
+              { source: "n2", target: "n3", relation: "passes to" },
+              { source: "n3", target: "n4", relation: "fires" },
+            ],
+          },
+        ],
+      } as unknown as DashboardUI;
+    case "hazard":
+      return {
+        components: [
+          {
+            archetype: "HAZARD_DECLARATION",
+            subject_concept: "M67 grenade assembly station — known hazards",
+            severity: "CRITICAL",
+            hazards: [
+              {
+                id: "h1",
+                name: "Fuze rotation hazard",
+                type: "MECHANICAL",
+                description:
+                  "Risk of inadvertent activation if fuze torqued beyond 32 in-lb.",
+              },
+              {
+                id: "h2",
+                name: "Static discharge",
+                type: "ELECTRICAL",
+                description:
+                  "Always ground the workbench before handling sub-assemblies.",
+              },
+            ],
+          },
+        ],
+      } as unknown as DashboardUI;
+    case "table":
+      return {
+        components: [
+          {
+            archetype: "ASSET_STATE_METRIC",
+            subject_concept: "Catalog assets (mock)",
+            metrics: [
+              {
+                id: "m1",
+                name: "mesh_demo_customers",
+                type: "dataset",
+                description: "10 rows · last updated 2026-06-26",
+              },
+              {
+                id: "m2",
+                name: "publog_lake_index",
+                type: "table",
+                description: "Tier: bronze · health: nominal",
+              },
+              {
+                id: "m3",
+                name: "engine_a_routing",
+                type: "view",
+                description: "Live · 1.2k rows/min",
+              },
+            ],
+          },
+        ],
+      } as unknown as DashboardUI;
+    case "doc":
+      // Enriched 2026-06-26 to exercise the full prose modifier set:
+      // h2 (with cyan underline), bold, italic, table, code (inline +
+      // block), blockquote, link, list. The mock is the renderer's
+      // test fixture; the richer the fixture, the more honest the
+      // visual hardening.
+      return {
+        components: [
+          {
+            archetype: "KNOWLEDGE_DOCUMENT",
+            subject_concept: "Demo Dashboard Alpha — ownership",
+            markdown_content: [
+              "## Ownership at a glance",
+              "",
+              "**Owners (3)** — verified via the Superset → DataHub bridge:",
+              "",
+              "| Email | Role | Joined |",
+              "|---|---|---|",
+              "| owner-a@example.com | Steward | 2025-Q3 |",
+              "| owner-b@example.com | Editor | 2025-Q4 |",
+              "| owner-c@example.com | Viewer | 2026-Q1 |",
+              "",
+              "### Audit query",
+              "",
+              "```sql",
+              "SELECT u.email, u.role, u.joined_at",
+              "FROM superset_dashboard_owners u",
+              "WHERE u.dashboard_urn = 'urn:li:dashboard:superset:demo_dashboard_alpha'",
+              "ORDER BY u.joined_at;",
+              "```",
+              "",
+              "> Ownership changes propagate through the catalog within one",
+              "> sync cycle (~5 minutes). Stale views may appear briefly during a",
+              "> rollover — the staleness contract is honored by the freshness",
+              "> banner on the next read.",
+              "",
+              "*Source: [Superset → DataHub catalog](https://datahub.example/dashboard/demo_dashboard_alpha) (mock data).*",
+              "",
+              "**Last verified:** `2026-06-26T22:30:00Z`",
+            ].join("\n"),
+          },
+        ],
+      } as unknown as DashboardUI;
   }
 }
 
@@ -143,7 +304,14 @@ function parseScenario(query: string): {
  * shape-detector normalizes both single-dim (1 categorical + 1
  * numeric) and multi-dim (≥2 categorical + 1 numeric) rows.
  */
-function buildChartPayload(scenario: "chart-single" | "chart-multi"): DashboardUI {
+function buildChartPayload(
+  scenario:
+    | "chart-single"
+    | "chart-multi"
+    | "chart-line"
+    | "chart-pie"
+    | "chart-scatter"
+): DashboardUI {
   if (scenario === "chart-single") {
     // Single-dim: rotor inspection findings (one category column +
     // one numeric column). Mirrors the existing
@@ -170,34 +338,134 @@ function buildChartPayload(scenario: "chart-single" | "chart-multi"): DashboardU
     } as unknown as DashboardUI;
   }
 
-  // Multi-dim: customer breakdown by region AND plan. The exact shape
-  // that exposed the `[[multi-dim-chart-normalizer-gap]]` — under the
-  // old hardcoded `dataKey="name"`, this would have collapsed to 8
-  // bars labeled with region duplicates (APAC, EU-North, EU-North,
-  // EU-South, US-East, US-East, US-West, US-West). The shape-
-  // detector + pivot in ChartWidget now produces grouped bars: one
-  // x-axis tick per unique region, one bar per plan value within
-  // each region, distinct colors with a legend.
+  if (scenario === "chart-multi") {
+    // Multi-dim: customer breakdown by region AND plan. The exact
+    // shape that exposed the `[[multi-dim-chart-normalizer-gap]]` —
+    // under the old hardcoded `dataKey="name"`, this collapsed to 8
+    // bars labeled with region duplicates. The shape-detector + pivot
+    // in ChartWidget now produces grouped bars.
+    const rows = [
+      { region: "APAC", plan: "pro", customer_count: 2 },
+      { region: "APAC", plan: "enterprise", customer_count: 1 },
+      { region: "EU-North", plan: "starter", customer_count: 1 },
+      { region: "EU-North", plan: "enterprise", customer_count: 1 },
+      { region: "EU-South", plan: "starter", customer_count: 1 },
+      { region: "US-East", plan: "pro", customer_count: 3 },
+      { region: "US-East", plan: "enterprise", customer_count: 1 },
+      { region: "US-West", plan: "pro", customer_count: 1 },
+      { region: "US-West", plan: "starter", customer_count: 1 },
+    ];
+    return {
+      components: [
+        {
+          archetype: "CHART_WIDGET",
+          subject_concept: "Customer breakdown by region and plan (mock)",
+          chart_type: "BAR",
+          chart_data: JSON.stringify(rows),
+          sql_query:
+            "SELECT region, plan, COUNT(*) AS customer_count FROM mesh_demo_customers GROUP BY region, plan ORDER BY region, plan",
+          is_published: false,
+        },
+      ],
+    } as unknown as DashboardUI;
+  }
+
+  if (scenario === "chart-line") {
+    // Multi-series LINE — engine latency over 7 days, one line per
+    // engine. Exercises the existing LINE branch with the multi-
+    // series pivot (region of code that worked but had no mock).
+    const rows = [
+      { day: "Mon", engine: "Engine A", latency_ms: 120 },
+      { day: "Mon", engine: "Engine W", latency_ms: 95 },
+      { day: "Mon", engine: "Engine E", latency_ms: 210 },
+      { day: "Tue", engine: "Engine A", latency_ms: 115 },
+      { day: "Tue", engine: "Engine W", latency_ms: 102 },
+      { day: "Tue", engine: "Engine E", latency_ms: 198 },
+      { day: "Wed", engine: "Engine A", latency_ms: 130 },
+      { day: "Wed", engine: "Engine W", latency_ms: 88 },
+      { day: "Wed", engine: "Engine E", latency_ms: 220 },
+      { day: "Thu", engine: "Engine A", latency_ms: 108 },
+      { day: "Thu", engine: "Engine W", latency_ms: 91 },
+      { day: "Thu", engine: "Engine E", latency_ms: 205 },
+      { day: "Fri", engine: "Engine A", latency_ms: 125 },
+      { day: "Fri", engine: "Engine W", latency_ms: 97 },
+      { day: "Fri", engine: "Engine E", latency_ms: 215 },
+      { day: "Sat", engine: "Engine A", latency_ms: 119 },
+      { day: "Sat", engine: "Engine W", latency_ms: 86 },
+      { day: "Sat", engine: "Engine E", latency_ms: 190 },
+      { day: "Sun", engine: "Engine A", latency_ms: 112 },
+      { day: "Sun", engine: "Engine W", latency_ms: 93 },
+      { day: "Sun", engine: "Engine E", latency_ms: 200 },
+    ];
+    return {
+      components: [
+        {
+          archetype: "CHART_WIDGET",
+          subject_concept: "Engine latency over 7 days (mock)",
+          chart_type: "LINE",
+          chart_data: JSON.stringify(rows),
+          sql_query:
+            "SELECT day, engine, AVG(latency_ms) AS latency_ms FROM engine_telemetry GROUP BY day, engine ORDER BY day, engine",
+          is_published: false,
+        },
+      ],
+    } as unknown as DashboardUI;
+  }
+
+  if (scenario === "chart-pie") {
+    // PIE — single-dim natural fit. Customer count by region as
+    // slices. Pie can't multi-series; the shape is intrinsically
+    // one categorical + one numeric.
+    const rows = [
+      { region: "APAC", customer_count: 12 },
+      { region: "US-East", customer_count: 24 },
+      { region: "US-West", customer_count: 18 },
+      { region: "EU-North", customer_count: 9 },
+      { region: "EU-South", customer_count: 6 },
+    ];
+    return {
+      components: [
+        {
+          archetype: "CHART_WIDGET",
+          subject_concept: "Customer distribution by region (mock)",
+          chart_type: "PIE",
+          chart_data: JSON.stringify(rows),
+          sql_query:
+            "SELECT region, COUNT(*) AS customer_count FROM mesh_demo_customers GROUP BY region",
+          is_published: false,
+        },
+      ],
+    } as unknown as DashboardUI;
+  }
+
+  // chart-scatter — asset thermal vs uptime, colored by severity.
+  // Exercises the scatter-multi shape: two numeric columns (X+Y)
+  // plus a categorical series discriminator. Each severity becomes
+  // its own colored cluster — visually distinct point clouds make
+  // the correlation obvious without needing a second axis chart.
   const rows = [
-    { region: "APAC", plan: "pro", customer_count: 2 },
-    { region: "APAC", plan: "enterprise", customer_count: 1 },
-    { region: "EU-North", plan: "starter", customer_count: 1 },
-    { region: "EU-North", plan: "enterprise", customer_count: 1 },
-    { region: "EU-South", plan: "starter", customer_count: 1 },
-    { region: "US-East", plan: "pro", customer_count: 3 },
-    { region: "US-East", plan: "enterprise", customer_count: 1 },
-    { region: "US-West", plan: "pro", customer_count: 1 },
-    { region: "US-West", plan: "starter", customer_count: 1 },
+    { uptime_hours: 50, temp_c: 62, severity: "OK" },
+    { uptime_hours: 80, temp_c: 64, severity: "OK" },
+    { uptime_hours: 130, temp_c: 67, severity: "OK" },
+    { uptime_hours: 170, temp_c: 65, severity: "OK" },
+    { uptime_hours: 210, temp_c: 70, severity: "OK" },
+    { uptime_hours: 250, temp_c: 78, severity: "DEGRADED" },
+    { uptime_hours: 290, temp_c: 82, severity: "DEGRADED" },
+    { uptime_hours: 330, temp_c: 80, severity: "DEGRADED" },
+    { uptime_hours: 380, temp_c: 88, severity: "DEGRADED" },
+    { uptime_hours: 420, temp_c: 96, severity: "CRITICAL" },
+    { uptime_hours: 460, temp_c: 102, severity: "CRITICAL" },
+    { uptime_hours: 510, temp_c: 99, severity: "CRITICAL" },
   ];
   return {
     components: [
       {
         archetype: "CHART_WIDGET",
-        subject_concept: "Customer breakdown by region and plan (mock)",
-        chart_type: "BAR",
+        subject_concept: "Asset thermal vs uptime (mock)",
+        chart_type: "SCATTER",
         chart_data: JSON.stringify(rows),
         sql_query:
-          "SELECT region, plan, COUNT(*) AS customer_count FROM mesh_demo_customers GROUP BY region, plan ORDER BY region, plan",
+          "SELECT uptime_hours, temp_c, severity FROM asset_telemetry WHERE captured_at > NOW() - INTERVAL '24h'",
         is_published: false,
       },
     ],
@@ -554,8 +822,17 @@ export function runMockGroundingFor(
     const payload: DashboardUI =
       scenario === "empty-components"
         ? ({ components: [] } as DashboardUI)
-        : scenario === "chart-single" || scenario === "chart-multi"
+        : scenario === "chart-single" ||
+          scenario === "chart-multi" ||
+          scenario === "chart-line" ||
+          scenario === "chart-pie" ||
+          scenario === "chart-scatter"
         ? buildChartPayload(scenario)
+        : scenario === "topology" ||
+          scenario === "hazard" ||
+          scenario === "table" ||
+          scenario === "doc"
+        ? buildArchetypePayload(scenario)
         : seq.payload;
     schedule(TIMINGS.final_payload, () =>
       emit({ type: "final_payload", payload })

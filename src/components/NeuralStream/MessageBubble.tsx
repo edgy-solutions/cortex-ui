@@ -6,9 +6,19 @@ import { WarningCard } from "./WarningCard";
 
 interface MessageBubbleProps {
   message: Message;
+  /**
+   * True only for the LATEST agent message in the transcript. Used to
+   * decide whether to render the pipeline (`ThinkingCard`): only the
+   * current turn shows the full stage list; prior turns collapse to
+   * just the receipt line. Reasoning: the pipeline is live-telemetry
+   * for the active turn — once a new question is asked, the prior
+   * turn's stages are noise. The artifact + its receipt are the
+   * durable record. Computed by NeuralStream from the messages array.
+   */
+  isLatestAgent?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, isLatestAgent }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -31,10 +41,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={`max-w-[75%] flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}
         >
-          {/* Thinking steps (agent only) */}
-          {!isUser && message.thinkingSteps && message.thinkingSteps.length > 0 && (
-            <ThinkingCard steps={message.thinkingSteps} />
-          )}
+          {/* Thinking steps — only on the LATEST agent message.
+              Prior turns collapse to just their receipt line (the
+              durable record). See `isLatestAgent` JSDoc on
+              MessageBubbleProps for the why. */}
+          {!isUser &&
+            isLatestAgent &&
+            message.thinkingSteps &&
+            message.thinkingSteps.length > 0 && (
+              <ThinkingCard steps={message.thinkingSteps} />
+            )}
 
           {/* Message content */}
           {(message.content || isUser) && !message.error && (

@@ -324,11 +324,19 @@ export function useInterviewAgent() {
                 },
               });
             }
-            // Update chat message with a receipt instead of the full payload
+            // Receipt text: the artifact's 1-based position in the
+            // collection. Append-only collection → index is the
+            // stable per-session sequence number. Prepares for a
+            // future click-to-recall affordance: the receipt knows
+            // its artifact id (via Message.artifactId) and its
+            // number, so wiring "click → setCurrentArtifact(id)" is
+            // a one-line follow-up.
+            const fresh = useCanvasStore.getState();
+            const artifactNumber = artifactId
+              ? fresh.artifacts.findIndex((a) => a.id === artifactId) + 1
+              : 0;
             updateMessage(agentId, {
-              content: `Artifacts generated: ${
-                event.payload?.components?.length || 0
-              } modules deployed to Canvas.`,
+              content: `Artifact #${artifactNumber} deployed to Canvas.`,
               isReceipt: true,
               isStreaming: false,
             });
