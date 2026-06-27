@@ -3,15 +3,20 @@
  * Hop 3 Part 1 — Artifact type byte-identical-diff probe
  * docs/plans/projector-build-plan.md commit 0eda9f7 §4 Hop 3.
  *
- * Baseline reference: commit 496fd8c — "hop1: Artifact gains
- * durability_status + watermark fields". The architect's guardrail:
+ * Baseline reference: commit 0b57974 — "feat(adr-0025): Capture A
+ * entitlement_source + Capture B access_decision slot". The
+ * architect's guardrail:
  *
  *   Baselining against pre-Hop-1 (4f359dc, Phase 1) would diff
  *   `durability_status` + `watermark` as drift and fail the gate
- *   forever. The Part 1 probe MUST baseline against the post-Hop-1
- *   commit (496fd8c) which is where the architect-approved
- *   additions ALREADY landed. The audit trail comment immediately
- *   below this header records this guardrail.
+ *   forever. The Part 1 probe baselined against the post-Hop-1
+ *   commit (496fd8c) where those additions landed. Capture A
+ *   (entitlement_source on the inline-typed produced_for) adds a
+ *   third architect-approved Artifact-shape modification per
+ *   ADR-0025 §Implementation notes — the baseline shifts to
+ *   0b57974 where that addition lands. The audit-trail comment
+ *   immediately below this header records this guardrail and the
+ *   history of sanctioned shifts.
  *
  * What this probe protects:
  *
@@ -45,20 +50,30 @@ const repoRoot = join(__dirname, "..", "..");
 
 // === BASELINE REFERENCE — load-bearing comment ===
 //
-// 496fd8c is the post-Hop-1 commit that added durability_status +
-// watermark to the Artifact interface. The Part 1 byte-identical-diff
-// probe baselines against THIS commit, not against pre-Hop-1
-// (4f359dc, Phase 1). The architect specifically flagged this:
-// baselining against pre-Hop-1 would diff durability_status + watermark
-// as drift and fail forever; baselining against the working tree
-// would dissolve the gate entirely (no fixed reference).
+// 0b57974 is the post-ADR-0025-Capture-A commit. The Part 1
+// byte-identical-diff probe baselines against THIS commit because
+// `produced_for` is inline-typed in the Artifact interface, so
+// adding the `entitlement_source` field changes the Artifact body.
+//
+// History of sanctioned baseline shifts:
+//   - 4f359dc (Phase 1) — pre-Hop-1; pre-durability_status+watermark.
+//   - 496fd8c (Hop 1)   — durability_status + watermark added; the
+//                         architect-approved first shift.
+//   - 0b57974 (Capture A) — produced_for gains entitlement_source for
+//                         ADR-0025; the second architect-approved shift.
+//                         Capture A is documented as a sanctioned
+//                         Artifact-shape modification in ADR-0025
+//                         §Implementation notes. Capture B (the
+//                         reserved access_decision slot) lives on
+//                         Source, NOT on the Artifact body, so it
+//                         does NOT contribute to the baseline shift.
 //
 // If a future revision of the plan or a future hop adds more fields
 // to the Artifact interface that should join the baseline (e.g.,
 // Hop 4 might add a `published_at` field), the baseline commit SHIFTS
 // to that hop's closing commit and this constant updates with it.
-// Until that happens, 496fd8c is THE baseline.
-const BASELINE_REF = "496fd8c";
+// Until that happens, 0b57974 is THE baseline.
+const BASELINE_REF = "0b57974";
 
 const TARGET_FILE = "src/api/types.ts";
 const INTERFACE_NAME = "Artifact";
