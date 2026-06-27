@@ -247,6 +247,19 @@ interface CanvasState {
     message_id: string;
     question_text: string;
     produced_for: Artifact["produced_for"];
+    /**
+     * Lineage to a prior artifact, when this turn is a follow-up.
+     *
+     * Required in the seed signature even though Phase 1 will almost
+     * always pass null (no follow-up detection yet in the mock-backed
+     * flow). The reason is capture-or-lose-forever: lineage is only
+     * capturable at creation, and if the seed doesn't accept it, then
+     * even when follow-up detection ships later the lineage edge
+     * becomes structurally uncapturable without changing the creation
+     * path. Cheap to include in the seed now; awkward to retrofit
+     * onto a creation API that doesn't accept it.
+     */
+    derived_from_artifact_id?: string | null;
   }) => void;
 
   /** Patch an existing artifact (pending → complete, sources arrived, etc.). */
