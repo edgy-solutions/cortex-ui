@@ -127,6 +127,62 @@ export interface Source {
   relevance?: number;   // 0..1 if the engine reports it
   snippet?: string;     // first ~120 chars of matched-chunk text
   open_url?: string;    // deep link to viewer (S3 URL / DataHub URL / etc.)
+
+  /**
+   * Access-decision provenance per ADR-0025.
+   *
+   * RESERVED SLOT: null today (no retrieval enforces access control
+   * yet per ADR-0025 §Non-goals). Shaped to hold the Topaz decision's
+   * record when enforcement lands. Capture-or-lose-forever applies at
+   * decision time per `[[verify-subtle-acceptance-by-inspection]]`;
+   * reserving the slot now means the enforcement session doesn't
+   * need a second migration through writer + Neo4j + projector +
+   * Postgres + Electric + cortex-ui Source.
+   *
+   * Field meanings (the documented shape):
+   *   outcome              — allow / deny / filter. A `"deny"` decision
+   *                          implies the source is NOT in CITES (its
+   *                          record exists for audit of why a
+   *                          candidate was excluded). A `"filter"`
+   *                          decision means the source IS in CITES
+   *                          but with CLS/RLS applied.
+   *   policy_version       — the Topaz policy bundle version the
+   *                          decision was made under. Required because
+   *                          policy changes; a v1.3.2 decision may
+   *                          not reproduce under v1.4.0.
+   *   attributes_considered — KEYS (not values) of subject/resource/
+   *                          environment attributes the policy
+   *                          consulted. Values may be sensitive;
+   *                          the audit question is "what was
+   *                          consulted," not "what was the value."
+   *   filters_applied      — column-level redaction set + row-filter
+   *                          expression Topaz returned. Mirrors the
+   *                          mock Rego at topaz-configmap.yaml's
+   *                          `allowed_columns` / `row_filters` shape.
+   *   decided_at           — epoch milliseconds of the decision moment.
+   *                          Required because environment attributes
+   *                          (time-of-day) and policy version are
+   *                          time-bound.
+   *
+   * INTERIM under `[[coupled-interim-mechanisms-retire-together]]` —
+   * the Restate+topic successor's durable handler subsumes this
+   * slot's crash-resumability; the slot's CONTENT survives, only
+   * its WRITE PATH changes.
+   */
+  access_decision?: {
+    outcome: "allow" | "deny" | "filter";
+    policy_version: string;
+    attributes_considered: {
+      subject: string[];      // attribute keys, not values
+      resource: string[];
+      environment: string[];
+    };
+    filters_applied?: {
+      columns_redacted?: string[];
+      rows_filtered_by?: string;
+    };
+    decided_at: number;       // epoch ms
+  } | null;
 }
 
 /**
@@ -359,12 +415,25 @@ export interface Artifact {
    * IMPORTANT: a `null` persona here means "unknown user persona," NOT
    * a default value. Treating null as "default" would silently mask the
    * claim gap, which is the opposite of why the slot exists.
+   *
+   * Capture A per ADR-0025: `entitlement_source` records WHICH ORIGIN
+   * the persona / entitled_domains came from at the moment auth.py
+   * read the JWT — `"claim"` / `"fallback"` / `"partial"`. The
+   * persisted VALUE is what downstream code sees today; the origin
+   * flag is the audit fact that otherwise would be lost
+   * (capture-or-lose-forever per
+   * `[[verify-subtle-acceptance-by-inspection]]`). Per
+   * `[[optimistic-defaults-are-dishonest]]`: there is NO optimistic
+   * default — `"fallback"` is the honest default at the client-side
+   * pending seed (the client truly doesn't know at pending-creation
+   * time; the Electric-synced server value overwrites on first apply).
    */
   produced_for: {
     user_id: string;
     is_authenticated: boolean;
     user_persona?: string | null;
     entitled_domains?: string[] | null;
+    entitlement_source: "claim" | "fallback" | "partial";
   };
 
   /**

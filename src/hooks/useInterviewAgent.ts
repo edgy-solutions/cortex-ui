@@ -63,19 +63,24 @@ const artifactUid = () => `artifact-${++_artifactSeq}-${Date.now()}`;
  * treating null as default would silently mask the claim gap, which
  * is the opposite of why the slot exists. When claims expand, this
  * function expands to read them; the schema stays put.
+ *
+ * Capture A per ADR-0025: `entitlement_source` defaults to
+ * `"fallback"` here — the client truly doesn't know the JWT-read-time
+ * origin (it's a server-side fact). The Electric-synced server value
+ * overwrites this on first apply. Per
+ * `[[optimistic-defaults-are-dishonest]]`: do NOT default to `"claim"`
+ * — that would silently mask the production PingSSO fallback path.
  */
-function getProducedFor(): {
-  user_id: string;
-  is_authenticated: boolean;
-  user_persona: string | null;
-  entitled_domains: string[] | null;
-} {
+function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
   return {
     // Phase 1 placeholder; real user_id arrives when auth wires up.
     user_id: "sandbox-user",
     is_authenticated: false,
     user_persona: null,
     entitled_domains: null,
+    // Honest default per [[optimistic-defaults-are-dishonest]]:
+    // failure-revealing, overwritten on first Electric apply.
+    entitlement_source: "fallback",
   };
 }
 
