@@ -407,6 +407,64 @@ export interface Artifact {
    * changing the creation API.
    */
   derived_from_artifact_id?: string | null;
+
+  /**
+   * Substrate-write-state. Orthogonal to `status` — `status` is the
+   * pipeline-lifecycle (pending/complete/failed), this is whether the
+   * answer has been written to Neo4j as the substrate of record.
+   *
+   * - `persistence_pending` — initial value at delivery time; the
+   *   cortex-bff Neo4j write is in flight (or queued for retry).
+   * - `durable` — the cortex-bff Neo4j write succeeded; the artifact
+   *   is in the graph-of-record.
+   * - `persistence_failed` — cortex-bff's retry budget exhausted; the
+   *   user has the answer, but it is NOT in the graph-of-record. The
+   *   system honestly knows this; the dashboard would surface it.
+   *
+   * Per the planning doc §3.1 Decision 0 sub-decision: DO NOT collapse
+   * into `status`. The two questions are orthogonal facts about the
+   * artifact; collapsing them re-creates the same concept-conflation
+   * class as the persona-conflation, the Message-vs-Artifact
+   * conflation, and the canvas-overwrite (see
+   * [[verify-subtle-acceptance-by-inspection]]).
+   *
+   * INTERIM under the Restate+topic successor: the durable handler
+   * formalizes this via the journal (exactly-once, crash-resumable)
+   * instead of a recorded honest-state. Retires with Decisions 0+1+3
+   * per [[coupled-interim-mechanisms-retire-together]]. See
+   * docs/plans/projector-build-plan.md §3.5 Through-line.
+   */
+  durability_status: "persistence_pending" | "durable" | "persistence_failed";
+
+  /**
+   * The projector's monotonic apply-order position (Decision 3
+   * Option C: watermark-as-column on every artifact row, not a synced
+   * row, not a separate shape). The cortex-bff writer assigns it from
+   * a Neo4j sequence node on every UPDATE — including updates that
+   * only flip `durability_status`. Bumped on EVERY apply per
+   * [[verify-subtle-acceptance-by-inspection]]'s vestigial-watermark
+   * defense.
+   *
+   * `0` is the pre-projection SENTINEL: it means the projector has
+   * not yet assigned this artifact a real watermark (the client just
+   * created a pending artifact locally; the SSE write hasn't completed
+   * yet OR the projector hasn't read it back). Any positive value is
+   * a server-assigned position.
+   *
+   * Distinct concept from `valid_as_of` — `valid_as_of` is the
+   * semantic as-of of the grounding (ADR-0023's freshness primitive);
+   * `watermark` is the transport-side apply-order position (Option
+   * C's see-your-write primitive). Two distinct concept spaces; do
+   * NOT collapse under any framing.
+   *
+   * INTERIM under the Restate+topic successor: the topic offset
+   * becomes the position; the per-row watermark column becomes
+   * redundant scaffolding. Retires with Decisions 0+1+3 per
+   * [[coupled-interim-mechanisms-retire-together]]. See
+   * docs/plans/projector-build-plan.md §3.4 Decision 3 (RESOLVED
+   * Option C) and §3.5 Through-line.
+   */
+  watermark: number;
 }
 
 /** BPMN graph state emitted by the backend on each turn */

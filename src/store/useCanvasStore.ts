@@ -172,6 +172,21 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         sources: [],
         graph_trace: [],
         derived_from_artifact_id: seed.derived_from_artifact_id ?? null,
+        // Hop 1 of projector build plan
+        // (docs/plans/projector-build-plan.md commit 0eda9f7) — both
+        // INTERIM under Decisions 0+1+3 (retire with Restate+topic
+        // successor per [[coupled-interim-mechanisms-retire-together]]).
+        //
+        // durability_status starts `persistence_pending`: the artifact
+        // is delivered locally; the cortex-bff Neo4j write is in
+        // flight or queued. Transitions to `durable` or
+        // `persistence_failed` arrive via Hop 3 (Electric → store).
+        durability_status: "persistence_pending",
+        // watermark = 0 is the pre-projection SENTINEL: the projector
+        // has not yet assigned this artifact a real watermark. Any
+        // positive value is server-assigned. See types.ts inline
+        // comment on the Artifact.watermark field.
+        watermark: 0,
       };
       return {
         artifacts: [...state.artifacts, artifact],
