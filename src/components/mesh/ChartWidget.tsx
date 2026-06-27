@@ -1,16 +1,17 @@
 import { useMemo } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer 
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
 } from 'recharts';
-import { Share2, BarChart3 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 
 interface ChartWidgetProps {
   data: string; // The stringified JSON array from Engine A/BAML
@@ -20,23 +21,203 @@ interface ChartWidgetProps {
   onPublish: (sql: string, title: string) => void;
 }
 
+/**
+ * Color palette for multi-series charts. Picked to be visually
+ * distinguishable while staying tonally adjacent to the cyan accent
+ * the rest of the cortex UI uses. Order matters — series get colors
+ * in index order, so the first series is always cyan to match the
+ * existing single-series accent. Wraps via `% length` for the rare
+ * many-series case.
+ */
+const SERIES_COLORS = [
+  '#06b6d4', // cyan
+  '#a78bfa', // violet
+  '#f472b6', // pink
+  '#84cc16', // lime
+  '#fb923c', // orange
+  '#facc15', // yellow
+];
+
+/**
+ * Detect a row's "shape" so the chart can render either single-series
+ * (the existing `[{name, value}]` shape) or multi-series (the
+ * multi-dim row shape like `[{region, plan, count}, ...]`).
+ *
+ * Algorithm — type each column as `categorical` (string-typed across
+ * rows) or `numeric` (number-typed). Then:
+ *
+ *   1 categorical + ≥1 numeric → single-series. X-axis = categorical;
+ *     series = first numeric. The existing chart's hardcoded
+ *     `dataKey="name"` + `dataKey="value"` is exactly this when
+ *     the data has those literal keys; the new code generalizes to
+ *     ANY 1-categorical+1-numeric row shape.
+ *
+ *   ≥2 categorical + ≥1 numeric → multi-series. X-axis = first
+ *     categorical; series = SECOND categorical's unique values
+ *     (pivoted into one column per series). Series values = first
+ *     numeric. This closes the `[[multi-dim-chart-normalizer-gap]]`
+ *     for the rendering layer: a "SELECT region, plan, COUNT(*)
+ *     GROUP BY region, plan" row format now produces grouped bars,
+ *     not the duplicate-region collapse the old hardcoded
+ *     dataKey="name" produced.
+ *
+ *   No categorical OR no numeric → empty. The widget renders an
+ *   empty state honestly (better than a confusing fake render).
+ *
+ * Returns a normalized shape the chart can hand straight to Recharts.
+ */
+type NormalizedShape =
+  | {
+      kind: "single";
+      xKey: string;
+      valueKey: string;
+      data: Array<Record<string, unknown>>;
+    }
+  | {
+      kind: "multi";
+      xKey: string;
+      seriesKeys: string[];
+      data: Array<Record<string, unknown>>;
+    }
+  | { kind: "empty"; reason: string };
+
+function normalizeChartData(rows: Array<Record<string, unknown>>): NormalizedShape {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { kind: "empty", reason: "no rows" };
+  }
+  const first = rows[0];
+  if (!first || typeof first !== "object") {
+    return { kind: "empty", reason: "rows aren't objects" };
+  }
+
+  // Classify each key by the type of its FIRST-row value. The row
+  // shape is assumed consistent across rows (which is what
+  // GROUP BY produces and what the backend's chart_data emitter is
+  // expected to honor). If a key's type varies row-to-row, the
+  // first-row classification still gives a sensible answer.
+  const keys = Object.keys(first);
+  const categoricalKeys: string[] = [];
+  const numericKeys: string[] = [];
+  for (const k of keys) {
+    const v = first[k];
+    if (typeof v === "number") numericKeys.push(k);
+    else if (typeof v === "string") categoricalKeys.push(k);
+    // booleans / objects / nulls are ignored — chart_data isn't
+    // supposed to carry them, and silently dropping is safer than
+    // miscategorizing.
+  }
+
+  if (numericKeys.length === 0) {
+    return { kind: "empty", reason: "no numeric column" };
+  }
+  if (categoricalKeys.length === 0) {
+    return { kind: "empty", reason: "no categorical column" };
+  }
+
+  // Single-series: 1 categorical + N numeric → render the FIRST
+  // numeric against the categorical. Multi-numeric in the SAME row
+  // (e.g. "revenue + cost per quarter") is a future enhancement;
+  // today we still cover the standard case.
+  if (categoricalKeys.length === 1) {
+    return {
+      kind: "single",
+      xKey: categoricalKeys[0],
+      valueKey: numericKeys[0],
+      data: rows,
+    };
+  }
+
+  // Multi-series: ≥2 categorical + 1 numeric → pivot.
+  // X-axis = first categorical (e.g. "region")
+  // Series = unique values of second categorical (e.g. "plan")
+  // Value = first numeric (e.g. "customer_count")
+  const xKey = categoricalKeys[0];
+  const seriesKey = categoricalKeys[1];
+  const valueKey = numericKeys[0];
+
+  const pivoted = new Map<string, Record<string, unknown>>();
+  const seriesValues = new Set<string>();
+
+  for (const row of rows) {
+    const x = row[xKey];
+    const s = row[seriesKey];
+    const v = row[valueKey];
+    if (typeof x !== "string" || typeof s !== "string" || typeof v !== "number") {
+      // Skip malformed rows rather than silently misrender.
+      continue;
+    }
+    if (!pivoted.has(x)) {
+      // Seed the pivoted row with the x-key value so Recharts can
+      // read it via `dataKey={xKey}`.
+      pivoted.set(x, { [xKey]: x });
+    }
+    pivoted.get(x)![s] = v;
+    seriesValues.add(s);
+  }
+
+  // Stable-sort series keys for consistent color assignment across
+  // re-renders. Sorting alphabetically is a defensible default; a
+  // future enhancement could sort by total volume (largest series
+  // first) for visual prominence.
+  const seriesKeys = Array.from(seriesValues).sort();
+  const data = Array.from(pivoted.values());
+
+  if (data.length === 0 || seriesKeys.length === 0) {
+    return { kind: "empty", reason: "pivot produced no rows" };
+  }
+
+  // Backfill missing-series values with 0 so Recharts doesn't render
+  // gaps for combinations the source data didn't include (e.g. APAC
+  // having no "enterprise" rows). This is honest: missing-from-source
+  // → 0 in the pivoted view IS what the row data says.
+  for (const row of data) {
+    for (const sk of seriesKeys) {
+      if (typeof row[sk] !== "number") row[sk] = 0;
+    }
+  }
+
+  return { kind: "multi", xKey, seriesKeys, data };
+}
+
+const AXIS_STYLE = {
+  stroke: "#64748b",
+  fontSize: 10,
+  tickLine: false as const,
+  axisLine: false as const,
+};
+const AXIS_TICK = { fill: "#94a3b8" };
+const TOOLTIP_STYLE = {
+  backgroundColor: "rgba(15, 23, 42, 0.9)",
+  borderColor: "rgba(6, 182, 212, 0.4)",
+  borderRadius: "12px",
+  backdropFilter: "blur(12px)",
+  border: "1px solid rgba(6, 182, 212, 0.2)",
+  fontSize: "12px",
+  color: "#f1f5f9",
+};
+
 export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidgetProps) => {
-  // Use useMemo to prevent re-parsing and Recharts flickering on parent re-renders
-  const chartData = useMemo(() => {
+  // Parse + normalize once. Recharts is sensitive to re-creating
+  // data arrays on every render (it triggers expensive re-layout);
+  // useMemo guards against that.
+  const shape = useMemo<NormalizedShape>(() => {
+    let rows: unknown;
     try {
-      return JSON.parse(data);
+      rows = JSON.parse(data);
     } catch (e) {
       console.error("Failed to parse chart data:", e);
-      return [];
+      return { kind: "empty", reason: "JSON parse failure" };
     }
+    if (!Array.isArray(rows)) return { kind: "empty", reason: "not an array" };
+    return normalizeChartData(rows as Array<Record<string, unknown>>);
   }, [data]);
 
   return (
     <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden group">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-        <BarChart3 className="w-24 h-24 text-cyan-400" />
-      </div>
+      {/* The pre-existing background BarChart3 decoration (faint cyan
+          icon at top-right) was removed 2026-06-26 during Phase 2 chart
+          hardening — visual noise the user flagged on inspection. The
+          chart speaks for itself; no decoration needed. */}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 relative z-10">
         <div>
@@ -46,10 +227,15 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
           </div>
           <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold">
             Headless Analyst Preview
+            {shape.kind === "multi" && (
+              <span className="ml-2 text-violet-400/70">
+                · {shape.seriesKeys.length}-series pivot
+              </span>
+            )}
           </p>
         </div>
-        
-        <button 
+
+        <button
           className="btn-publish flex items-center gap-2 group/btn"
           onClick={() => onPublish(sql, subject)}
         >
@@ -57,95 +243,118 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
           <span>Publish to Superset</span>
         </button>
       </div>
-      
+
       <div className="h-[350px] w-full relative z-10">
-        <ResponsiveContainer width="100%" height="100%">
-          {type === 'LINE' ? (
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
-              <XAxis 
-                dataKey="name" 
-                stroke="#64748b" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false}
-                tick={{ fill: '#94a3b8' }}
-              />
-              <YAxis 
-                stroke="#64748b" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false}
-                tick={{ fill: '#94a3b8' }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                  borderColor: 'rgba(6, 182, 212, 0.4)', 
-                  borderRadius: '12px',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(6, 182, 212, 0.2)',
-                  fontSize: '12px',
-                  color: '#f1f5f9'
-                }}
-                itemStyle={{ color: '#22d3ee' }}
-                cursor={{ stroke: '#06b6d4', strokeWidth: 1 }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#06b6d4" 
-                strokeWidth={3} 
-                dot={{ r: 4, fill: '#0f172a', stroke: '#06b6d4', strokeWidth: 2 }} 
-                activeDot={{ r: 6, fill: '#06b6d4', stroke: '#fff', strokeWidth: 2 }} 
-                animationDuration={1500}
-              />
-            </LineChart>
-          ) : (
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
-              <XAxis 
-                dataKey="name" 
-                stroke="#64748b" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false}
-                tick={{ fill: '#94a3b8' }}
-              />
-              <YAxis 
-                stroke="#64748b" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false}
-                tick={{ fill: '#94a3b8' }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                  borderColor: 'rgba(6, 182, 212, 0.4)', 
-                  borderRadius: '12px',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(6, 182, 212, 0.2)',
-                  fontSize: '12px',
-                  color: '#f1f5f9'
-                }}
-                cursor={{ fill: 'rgba(6, 182, 212, 0.05)' }}
-              />
-              <Bar 
-                dataKey="value" 
-                fill="url(#barGradient)" 
-                radius={[4, 4, 0, 0]} 
-                animationDuration={1500}
-              />
-              <defs>
-                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.8} />
-                  <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.2} />
-                </linearGradient>
-              </defs>
-            </BarChart>
-          )}
-        </ResponsiveContainer>
+        {shape.kind === "empty" ? (
+          <div className="h-full w-full flex flex-col items-center justify-center gap-2">
+            <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
+              Chart data not renderable
+            </p>
+            <p className="font-mono text-[9px] text-slate-500">
+              {shape.reason}
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            {type === 'LINE' ? (
+              <LineChart data={shape.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
+                <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  itemStyle={{ color: '#22d3ee' }}
+                  cursor={{ stroke: '#06b6d4', strokeWidth: 1 }}
+                />
+                {shape.kind === "single" ? (
+                  <Line
+                    type="monotone"
+                    dataKey={shape.valueKey}
+                    stroke={SERIES_COLORS[0]}
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#0f172a', stroke: SERIES_COLORS[0], strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: SERIES_COLORS[0], stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={1500}
+                  />
+                ) : (
+                  <>
+                    <Legend
+                      wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
+                      iconType="rect"
+                    />
+                    {shape.seriesKeys.map((sk, i) => (
+                      <Line
+                        key={sk}
+                        type="monotone"
+                        dataKey={sk}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#0f172a', stroke: SERIES_COLORS[i % SERIES_COLORS.length], strokeWidth: 2 }}
+                        animationDuration={1200}
+                      />
+                    ))}
+                  </>
+                )}
+              </LineChart>
+            ) : (
+              <BarChart data={shape.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
+                <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  cursor={{ fill: 'rgba(6, 182, 212, 0.05)' }}
+                />
+                {shape.kind === "single" ? (
+                  <>
+                    <Bar
+                      dataKey={shape.valueKey}
+                      fill="url(#barGradient)"
+                      radius={[4, 4, 0, 0]}
+                      animationDuration={1500}
+                      // Render zero values as a 2px visible marker on
+                      // the baseline so "0" is distinguishable from
+                      // "no data." Without this, 0 collapses to
+                      // invisible — same shape as `[[ui-surfaces-
+                      // wrong-path]]` at the chart layer: missing-
+                      // looking-like-zero is the visual conflation
+                      // we close here.
+                      minPointSize={2}
+                    />
+                    <defs>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={SERIES_COLORS[0]} stopOpacity={0.8} />
+                        <stop offset="100%" stopColor={SERIES_COLORS[0]} stopOpacity={0.2} />
+                      </linearGradient>
+                    </defs>
+                  </>
+                ) : (
+                  <>
+                    <Legend
+                      wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
+                      iconType="rect"
+                    />
+                    {shape.seriesKeys.map((sk, i) => (
+                      <Bar
+                        key={sk}
+                        dataKey={sk}
+                        fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        radius={[4, 4, 0, 0]}
+                        animationDuration={1200}
+                        // Zero renders as a 2px baseline marker (NOT
+                        // a gap) so "0 customers in this region·plan
+                        // combination" is visually distinct from "no
+                        // data for this combination." Honest-
+                        // degradation discipline at the chart layer.
+                        minPointSize={2}
+                      />
+                    ))}
+                  </>
+                )}
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Footer Info */}

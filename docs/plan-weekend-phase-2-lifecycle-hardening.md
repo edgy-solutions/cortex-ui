@@ -38,6 +38,8 @@ type a query with one of these prefixes:
 | `@partial-no-payload <query>` | All stages + grounding fire, NO final_payload | `status: "complete"`, has routing/sources, `rendered_output: null` |
 | `@partial-no-grounding <query>` | All stages + final_payload fire, NO route_decision/sources/graph_trace | `status: "complete"`, has rendered_output, empty HUD |
 | `@empty <query>` | Full path but `final_payload.components: []` | `status: "complete"`, `rendered_output.components: []` |
+| `@chart-single <query>` | Happy path; CHART_WIDGET payload with single-dim `[{name, value}]` rows | `status: "complete"`, single-series cyan bar chart |
+| `@chart-multi <query>` | Happy path; CHART_WIDGET payload with multi-dim `[{region, plan, count}, ...]` rows | `status: "complete"`, grouped multi-series chart with legend (pivot rendered) |
 
 The query body after the marker still drives the data heuristic
 (`dashboard` / `superset` → catalog flavor; `grenade` / `assembly`
@@ -219,12 +221,45 @@ grew.
 ### Per-component states (parallel track)
 
 After lifecycle states pass, the per-component states get
-hardened:
+hardened.
 
-- KnowledgeDocument (covered by mock data above)
-- Chart widget — including the banked
-  `[[multi-dim-chart-normalizer-gap]]` (multi-dim "by X AND Y"
-  queries collapse to duplicate-X bars).
+#### Chart widget — single-dim + multi-dim
+
+**How to drive:**
+- `@chart-single rotor inspection` — single-dim path. The chart
+  receives `[{name, value}]` rows; renders as one cyan
+  bar series (no legend, "Headless Analyst Preview" subtitle
+  un-decorated).
+- `@chart-multi customer breakdown` — multi-dim path. The chart
+  receives `[{region, plan, customer_count}, ...]` rows; the
+  shape-detector picks region as X-axis, pivots plan into series,
+  renders grouped bars with a legend. The subtitle gets a
+  "· N-series pivot" annotation in violet so the multi-series
+  rendering path is explicit.
+
+**What "honest" looks like:**
+- Single-dim: matches the existing `dataKey="name"`/`dataKey="value"`
+  behavior — same cyan accent, same gradient, no regression.
+- Multi-dim: NO duplicate-region bars. Each unique region is one
+  x-axis tick; each unique plan value within that region is one
+  bar with a distinct color; a legend names the plans. Missing
+  combinations (e.g. APAC with no `enterprise` rows) render as
+  `0`, not as gaps — `0` is what the row data says, gaps would
+  be silently editorializing.
+- Malformed input → "Chart data not renderable" amber empty
+  state with the reason (no rows / no numeric column / etc.).
+  Honest rather than a confusing fake render.
+
+**The closed gap:** `[[multi-dim-chart-normalizer-gap]]` —
+previously a `SELECT region, plan, COUNT(*) GROUP BY region, plan`
+produced 8 bars labeled with region duplicates (`APAC, EU-North,
+EU-North, EU-South, US-East, US-East, US-West, US-West`) because
+the chart's hardcoded `dataKey="name"` took the first non-numeric
+column and dropped the rest. The pivot is the cure.
+
+#### Remaining per-component states
+
+- KnowledgeDocument (already covered by lifecycle mock data).
 - Tables, topology, hazard, digital-twin — exercise as time
   permits.
 

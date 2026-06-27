@@ -85,19 +85,35 @@ export type MockScenario =
   | "fail-at-retrieving"
   | "partial-no-payload"
   | "partial-no-grounding"
-  | "empty-components";
+  | "empty-components"
+  | "chart-single"
+  | "chart-multi";
 
 /**
  * Parse a leading `@scenario ` prefix off the query. Defaults to
  * "happy" when no marker is present. Returns the clean query (with
  * the marker stripped) so downstream heuristics still work.
+ *
+ * Scenario families:
+ *
+ *   Lifecycle scenarios (happy / fail / partial-no-payload /
+ *   partial-no-grounding / empty) — control the EVENT TIMELINE
+ *   (which events fire and when). Payload archetype defaults to
+ *   KNOWLEDGE_DOCUMENT (rendered by the query keyword heuristic).
+ *
+ *   Payload scenarios (chart-single / chart-multi) — control which
+ *   ARCHETYPE the happy-path final_payload uses. Lifecycle is the
+ *   happy path; the rendered_output is a CHART_WIDGET with
+ *   single-dim or multi-dim chart_data so the ChartWidget's
+ *   shape-detection + pivot path is exerciseable. Closes
+ *   `[[multi-dim-chart-normalizer-gap]]` for the rendering layer.
  */
 function parseScenario(query: string): {
   scenario: MockScenario;
   cleanQuery: string;
 } {
   const m = query.match(
-    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty)\s+(.+)$/i
+    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi)\s+(.+)$/i
   );
   if (!m) return { scenario: "happy", cleanQuery: query };
   const marker = m[1].toLowerCase();
@@ -111,9 +127,81 @@ function parseScenario(query: string): {
       return { scenario: "partial-no-grounding", cleanQuery };
     case "empty":
       return { scenario: "empty-components", cleanQuery };
+    case "chart-single":
+      return { scenario: "chart-single", cleanQuery };
+    case "chart-multi":
+      return { scenario: "chart-multi", cleanQuery };
     default:
       return { scenario: "happy", cleanQuery };
   }
+}
+
+/**
+ * Build a CHART_WIDGET payload for the chart-* scenarios. The
+ * `chart_data` field is the JSON-stringified row data — mirrors the
+ * real BAML contract shape ChartUI declares. The ChartWidget's
+ * shape-detector normalizes both single-dim (1 categorical + 1
+ * numeric) and multi-dim (≥2 categorical + 1 numeric) rows.
+ */
+function buildChartPayload(scenario: "chart-single" | "chart-multi"): DashboardUI {
+  if (scenario === "chart-single") {
+    // Single-dim: rotor inspection findings (one category column +
+    // one numeric column). Mirrors the existing
+    // [{name, value}] backend shape — the chart should render as
+    // single-series cyan bars (no legend).
+    const rows = [
+      { name: "Spalling", value: 4 },
+      { name: "Cracking", value: 2 },
+      { name: "Wear", value: 5 },
+      { name: "OK", value: 9 },
+    ];
+    return {
+      components: [
+        {
+          archetype: "CHART_WIDGET",
+          subject_concept: "Rotor inspection findings (mock)",
+          chart_type: "BAR",
+          chart_data: JSON.stringify(rows),
+          sql_query:
+            "SELECT category, COUNT(*) FROM rotor_inspection GROUP BY category",
+          is_published: false,
+        },
+      ],
+    } as unknown as DashboardUI;
+  }
+
+  // Multi-dim: customer breakdown by region AND plan. The exact shape
+  // that exposed the `[[multi-dim-chart-normalizer-gap]]` — under the
+  // old hardcoded `dataKey="name"`, this would have collapsed to 8
+  // bars labeled with region duplicates (APAC, EU-North, EU-North,
+  // EU-South, US-East, US-East, US-West, US-West). The shape-
+  // detector + pivot in ChartWidget now produces grouped bars: one
+  // x-axis tick per unique region, one bar per plan value within
+  // each region, distinct colors with a legend.
+  const rows = [
+    { region: "APAC", plan: "pro", customer_count: 2 },
+    { region: "APAC", plan: "enterprise", customer_count: 1 },
+    { region: "EU-North", plan: "starter", customer_count: 1 },
+    { region: "EU-North", plan: "enterprise", customer_count: 1 },
+    { region: "EU-South", plan: "starter", customer_count: 1 },
+    { region: "US-East", plan: "pro", customer_count: 3 },
+    { region: "US-East", plan: "enterprise", customer_count: 1 },
+    { region: "US-West", plan: "pro", customer_count: 1 },
+    { region: "US-West", plan: "starter", customer_count: 1 },
+  ];
+  return {
+    components: [
+      {
+        archetype: "CHART_WIDGET",
+        subject_concept: "Customer breakdown by region and plan (mock)",
+        chart_type: "BAR",
+        chart_data: JSON.stringify(rows),
+        sql_query:
+          "SELECT region, plan, COUNT(*) AS customer_count FROM mesh_demo_customers GROUP BY region, plan ORDER BY region, plan",
+        is_published: false,
+      },
+    ],
+  } as unknown as DashboardUI;
 }
 
 /**
@@ -466,6 +554,8 @@ export function runMockGroundingFor(
     const payload: DashboardUI =
       scenario === "empty-components"
         ? ({ components: [] } as DashboardUI)
+        : scenario === "chart-single" || scenario === "chart-multi"
+        ? buildChartPayload(scenario)
         : seq.payload;
     schedule(TIMINGS.final_payload, () =>
       emit({ type: "final_payload", payload })
