@@ -79,6 +79,42 @@ export const CanvasPane = () => {
       </div>
     );
   }
+
+  // Question header — sourced from the artifact's own durable
+  // `question_text` (projected through Electric, rehydrates on refresh)
+  // NOT from `useInterviewStore` (ephemeral messages, gone after reload).
+  // Every visible artifact self-describes the prompt that produced it,
+  // regardless of whether the chat pane still has the message in memory.
+  //
+  // Per architect Decision A (overnight 2026-06-27): "This is NOT
+  // message-persistence and NOT reconstruction — it is reading the field
+  // that already exists from the store that already persists it." The
+  // [[fork-a-finding-cortex-ui-vs-adr-0023]] Messages-vs-Artifacts
+  // distinction is preserved: Messages still live in
+  // useInterviewStore (ephemeral), Artifacts still live in
+  // useCanvasStore (durable); we just stopped sourcing the canvas's
+  // own header from the wrong store.
+  const artifactHeader = (
+    <div className="w-full flex items-baseline justify-between px-6 pt-4 pb-2 gap-4 shrink-0 border-b border-white/5">
+      <p
+        className="font-mono text-xs text-slate-300 truncate"
+        title={artifact.question_text}
+      >
+        <span className="text-slate-500 tracking-widest uppercase mr-2">
+          Q
+        </span>
+        {artifact.question_text || (
+          <span className="text-slate-600 italic">no question recorded</span>
+        )}
+      </p>
+      {artifactCount > 1 && (
+        <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase whitespace-nowrap">
+          Artifact {currentIndex + 1} of {artifactCount}
+        </span>
+      )}
+    </div>
+  );
+
   if (components.length === 0) {
     const empty =
       artifact.status === "pending"
@@ -87,32 +123,20 @@ export const CanvasPane = () => {
         ? { label: "This attempt failed.", tone: "text-rose-400/80" }
         : { label: "No components produced.", tone: "text-amber-400/80" };
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/50 border-l border-white/10 gap-2">
-        <p className={`font-mono text-xs tracking-widest uppercase ${empty.tone}`}>
-          {empty.label}
-        </p>
-        {artifactCount > 1 && (
-          <p className="font-mono text-[10px] text-slate-600 tracking-wider">
-            Artifact {currentIndex + 1} of {artifactCount}
+      <div className="h-full w-full flex flex-col bg-slate-950/50 border-l border-white/10">
+        {artifactHeader}
+        <div className="flex-1 flex items-center justify-center">
+          <p className={`font-mono text-xs tracking-widest uppercase ${empty.tone}`}>
+            {empty.label}
           </p>
-        )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
-      {/* Artifact-count badge — verifies state 4 (multiple-in-collection)
-          by looking. NO recall metaphor commitment here (tabs / spatial
-          / drawer are deferred per ADR-0023); just an honest count so
-          the collection growing is visible. */}
-      {artifactCount > 1 && (
-        <div className="w-full flex items-center justify-end px-6 pt-3 pb-1 shrink-0">
-          <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
-            Artifact {currentIndex + 1} of {artifactCount}
-          </span>
-        </div>
-      )}
+      {artifactHeader}
       {/* Tab Navigation */}
       {uniquePersonas.length > 0 && (
         <div className="w-full flex items-center px-6 pt-4 pb-2 border-b border-white/5 gap-2 overflow-x-auto hide-scrollbar shrink-0">
