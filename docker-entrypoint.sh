@@ -11,7 +11,8 @@ window.__RUNTIME_CONFIG__ = {
   VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}",
   VITE_KEYCLOAK_REALM_URL: "${VITE_KEYCLOAK_REALM_URL:-http://localhost:8080/realms/cortex}",
   VITE_KEYCLOAK_CLIENT_ID: "${VITE_KEYCLOAK_CLIENT_ID:-cortex-ui}",
-  VITE_NO_AUTH: "${VITE_NO_AUTH:-false}"
+  VITE_NO_AUTH: "${VITE_NO_AUTH:-false}",
+  VITE_ELECTRIC_URL: "${VITE_ELECTRIC_URL:-}"
 };
 EOF
 
