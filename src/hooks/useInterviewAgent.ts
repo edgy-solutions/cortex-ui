@@ -490,11 +490,17 @@ export function useInterviewAgent() {
         return;
       }
 
-      // Build request with current graph state
+      // Build request with current graph state. Pass the locally-
+      // generated artifactId so cortex-bff persists with the SAME id —
+      // when Electric streams the real artifact back, the cortex-ui
+      // store's `electricUpsertArtifact` finds the pending row by id
+      // and merges in place (otherwise pending stays foregrounded
+      // empty while the real one sits unviewed in the collection).
       const request: InterviewRequest = {
         message: userInput,
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
+        artifact_id: artifactId,
       };
 
       // Stream the response

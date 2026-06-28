@@ -553,6 +553,18 @@ export interface InterviewRequest {
   // per request, defeating dedup and launching duplicate Dagster runs.
   session_id: string;
   current_graph_json?: string;
+  /**
+   * Client-supplied AnswerArtifact id. Hop 3 (Electric → store) needs
+   * cortex-ui's locally-created pending artifact id to equal the
+   * server's persisted artifact id, otherwise Electric streams the
+   * real artifact with a DIFFERENT id, `existingIdx === -1`, and the
+   * pending stays foregrounded with empty data while the real one
+   * sits unviewed. `useInterviewAgent` passes the same `artifactId`
+   * it gave to `createPendingArtifact`; cortex-bff uses it as the
+   * persisted id; Electric upsert finds the pending row by id and
+   * merges in place.
+   */
+  artifact_id?: string;
 }
 
 // ── BPMN Payload Models ───────────────────────────────────
