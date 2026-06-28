@@ -127,6 +127,23 @@ interface CanvasState {
    */
   currentArtifactId: string | null;
 
+  /**
+   * True iff `currentArtifactId` was set by an explicit user action
+   * (createPendingArtifact, setCurrentArtifact) since the last
+   * clearCanvas. Used by `electricUpsertArtifact` to decide whether
+   * Electric's hydrate-time rows may auto-foreground the
+   * highest-watermark artifact.
+   *
+   * Without this flag, Electric stream-order determines the foreground:
+   * the FIRST row received locks currentArtifactId (because once
+   * non-null, subsequent upserts respect it). Electric streams shapes
+   * in apply-order, so on refresh you'd land on the OLDEST artifact
+   * instead of the newest. This flag lets the store keep auto-
+   * foregrounding (always picking highest-watermark) until the user
+   * acts.
+   */
+  currentArtifactSetByUser: boolean;
+
   /** UI affordance: the canvas reveals (animates in) when content arrives. */
   isRevealing: boolean;
 
@@ -264,6 +281,7 @@ interface CanvasState {
 export const useCanvasStore = create<CanvasState>((set) => ({
   artifacts: [],
   currentArtifactId: null,
+  currentArtifactSetByUser: false,
   isRevealing: false,
   activeTab: "ALL",
   inspectedNodeId: null,
@@ -327,6 +345,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       return {
         artifacts: [...state.artifacts, artifact],
         currentArtifactId: seed.id,
+        currentArtifactSetByUser: true,
         isRevealing: true,
         activeTab: "ALL",
         _lastUpdateSource: {
@@ -410,30 +429,44 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         nextArtifacts = [...state.artifacts, artifact];
       }
 
-      // On page reload, the store starts with currentArtifactId=null
-      // and Electric hydrates the collection from the substrate. Without
-      // this block the canvas would stay on the empty "AWAITING MESH
-      // ARTIFACTS..." state forever — artifacts present in the
-      // collection but nothing foregrounded. Foreground the
+      // On page reload, the store starts with currentArtifactId=null,
+      // currentArtifactSetByUser=false, and Electric hydrates the
+      // collection from the substrate. We need to foreground the
       // highest-watermark row (server-assigned monotonic apply-order
       // per Decision 3 Option C) so the user lands on the most
-      // recently-projected artifact. `createPendingArtifact` sets
-      // currentArtifactId at turn start, so during an active query
-      // this branch never fires — Electric upserts merge into the
-      // already-foregrounded pending row.
+      // recently-projected artifact.
+      //
+      // Why "always recompute until user acts": Electric streams rows
+      // in apply-order (ascending watermark). On a "null → set on first
+      // row" approach, the FIRST row received wins and currentArtifactId
+      // locks to the OLDEST. We have to keep recomputing the
+      // highest-watermark on each upsert during the hydrate window, and
+      // stop only when the user has explicitly chosen (createPendingArtifact
+      // or setCurrentArtifact). That's what `currentArtifactSetByUser`
+      // gates.
+      //
+      // During an active query, createPendingArtifact has already set
+      // currentArtifactSetByUser=true at turn start — so this block
+      // never auto-foregrounds away from the user's pending artifact.
+      // The Electric upsert for that pending artifact's id matches
+      // existingIdx and merges in place; the foreground sticks.
       //
       // Class instance: [[fixture-must-exercise-paths]] — Hop 3
       // substrate-proof tested propagation but didn't evoke the
-      // "page reload, no foreground" path. The bug stayed schrödinger
-      // until production refresh exposed it.
-      const nextCurrentId = state.currentArtifactId
-        ?? nextArtifacts.reduce<string | null>((best, a) => {
-          if (best === null) return a.id;
-          const bestArtifact = nextArtifacts.find((x) => x.id === best);
-          return (bestArtifact && a.watermark > bestArtifact.watermark)
-            ? a.id
-            : best;
-        }, null);
+      // "page reload with multiple existing artifacts streamed in
+      // apply-order" path. First-fix attempt (82b999a) used a
+      // null-check that only fired once, locking to the first row.
+      // Production refresh exposed both bugs in sequence.
+      const computeHighestWatermarkId = (): string | null => {
+        if (nextArtifacts.length === 0) return null;
+        return nextArtifacts.reduce<Artifact>(
+          (best, a) => (a.watermark > best.watermark ? a : best),
+          nextArtifacts[0]
+        ).id;
+      };
+      const nextCurrentId = state.currentArtifactSetByUser
+        ? state.currentArtifactId
+        : computeHighestWatermarkId();
 
       return {
         artifacts: nextArtifacts,
@@ -445,7 +478,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       };
     }),
 
-  setCurrentArtifact: (id) => set({ currentArtifactId: id }),
+  setCurrentArtifact: (id) =>
+    set({ currentArtifactId: id, currentArtifactSetByUser: true }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -459,6 +493,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     set({
       artifacts: [],
       currentArtifactId: null,
+      currentArtifactSetByUser: false,
       isRevealing: false,
       activeTab: "ALL",
       isInspectorOpen: false,
