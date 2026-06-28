@@ -409,8 +409,35 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       } else {
         nextArtifacts = [...state.artifacts, artifact];
       }
+
+      // On page reload, the store starts with currentArtifactId=null
+      // and Electric hydrates the collection from the substrate. Without
+      // this block the canvas would stay on the empty "AWAITING MESH
+      // ARTIFACTS..." state forever — artifacts present in the
+      // collection but nothing foregrounded. Foreground the
+      // highest-watermark row (server-assigned monotonic apply-order
+      // per Decision 3 Option C) so the user lands on the most
+      // recently-projected artifact. `createPendingArtifact` sets
+      // currentArtifactId at turn start, so during an active query
+      // this branch never fires — Electric upserts merge into the
+      // already-foregrounded pending row.
+      //
+      // Class instance: [[fixture-must-exercise-paths]] — Hop 3
+      // substrate-proof tested propagation but didn't evoke the
+      // "page reload, no foreground" path. The bug stayed schrödinger
+      // until production refresh exposed it.
+      const nextCurrentId = state.currentArtifactId
+        ?? nextArtifacts.reduce<string | null>((best, a) => {
+          if (best === null) return a.id;
+          const bestArtifact = nextArtifacts.find((x) => x.id === best);
+          return (bestArtifact && a.watermark > bestArtifact.watermark)
+            ? a.id
+            : best;
+        }, null);
+
       return {
         artifacts: nextArtifacts,
+        currentArtifactId: nextCurrentId,
         _lastUpdateSource: {
           ...state._lastUpdateSource,
           [artifact.id]: nextSource,
