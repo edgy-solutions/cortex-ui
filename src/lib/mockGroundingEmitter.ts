@@ -28,6 +28,11 @@ import type { StreamEvent, RouteDecision, Source, GraphTraceNode, DashboardUI } 
  *   @empty <query>             — full success path but final_payload
  *                                with components: []; artifact
  *                                complete-but-zero
+ *   @doc-image <query>         — full success path with KNOWLEDGE_DOCUMENT
+ *                                that has embedded markdown image refs;
+ *                                exercises the FederatedImage rendering
+ *                                chain. Visual UX target for PDF answers
+ *                                with diagrams and IADS slide-in figures.
  *
  * Honest-degradation discipline: the failure/partial states are the
  * Phase 2 enumeration's "honest" axis under inspection — does the UI
@@ -94,7 +99,18 @@ export type MockScenario =
   | "topology"
   | "hazard"
   | "table"
-  | "doc";
+  | "doc"
+  // `doc-image` (added 2026-06-29) exercises the SemanticInterpreter's
+  // markdown `img` renderer end-to-end via FederatedImage. The mock
+  // produces a KNOWLEDGE_DOCUMENT whose markdown_content has
+  // `![alt](URL)` references — the renderer routes each through
+  // FederatedImage, which passes non-s3:// URIs straight through.
+  // Sets the visual target for the real PDF answer path: today
+  // `process_document_artifact` uploads images to S3 but
+  // `build_knowledge_graph` doesn't inject markdown image refs into
+  // chunks, so the LLM never references them in the final answer.
+  // Once the architect okays the visual, the real fix is small.
+  | "doc-image";
 // `twin` (DIGITAL_TWIN_3D) was REMOVED 2026-06-26 — the archetype's
 // dispatch was deferred until a proper visual pass. The widget file
 // itself is preserved at `src/components/mesh/DigitalTwinWidget.tsx`
@@ -125,8 +141,11 @@ function parseScenario(query: string): {
   scenario: MockScenario;
   cleanQuery: string;
 } {
+  // doc-image must precede doc in the regex alternation so the longer
+  // marker wins (regex would otherwise match "@doc" and leave "-image"
+  // in the cleanQuery).
   const m = query.match(
-    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi|chart-line|chart-pie|chart-scatter|topology|hazard|table|doc)\s+(.+)$/i
+    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi|chart-line|chart-pie|chart-scatter|topology|hazard|table|doc-image|doc)\s+(.+)$/i
   );
   if (!m) return { scenario: "happy", cleanQuery: query };
   const marker = m[1].toLowerCase();
@@ -158,6 +177,8 @@ function parseScenario(query: string): {
       return { scenario: "table", cleanQuery };
     case "doc":
       return { scenario: "doc", cleanQuery };
+    case "doc-image":
+      return { scenario: "doc-image", cleanQuery };
     default:
       return { scenario: "happy", cleanQuery };
   }
@@ -173,7 +194,7 @@ function parseScenario(query: string): {
  * data here.
  */
 function buildArchetypePayload(
-  scenario: "topology" | "hazard" | "table" | "doc"
+  scenario: "topology" | "hazard" | "table" | "doc" | "doc-image"
 ): DashboardUI {
   switch (scenario) {
     case "topology":
@@ -290,6 +311,83 @@ function buildArchetypePayload(
               "*Source: [Superset → DataHub catalog](https://datahub.example/dashboard/demo_dashboard_alpha) (mock data).*",
               "",
               "**Last verified:** `2026-06-26T22:30:00Z`",
+            ].join("\n"),
+          },
+        ],
+      } as unknown as DashboardUI;
+    case "doc-image":
+      // Exercises the SemanticInterpreter's markdown `img` renderer
+      // end-to-end via FederatedImage. The mock uses placeholder
+      // image URLs (https://) — FederatedImage's non-s3:// branch
+      // passes them straight through to a native <img> tag, so the
+      // chain renders WITHOUT a running cortex-bff or S3-backed
+      // image.
+      //
+      // The content shape mirrors what a real PDF-with-diagrams
+      // answer should look like once we wire `build_knowledge_graph`
+      // to inject image markdown into chunks:
+      //   - prose steps that REFERENCE callout numbers in the figure
+      //     (1, 2, 3, ...) — same pattern the 40051 helmet XML uses
+      //     via `<callout assocfig="..." label="N">`
+      //   - the figure immediately under the steps, with an alt-text
+      //     caption rendered below it by the img wrapper
+      //   - a "Figures" section at the bottom collating all referenced
+      //     figures with their captions — so the user can scan all
+      //     diagrams in the answer at a glance
+      //
+      // When you swap any of these `https://placehold.co/...` URLs
+      // for a real `s3://processing-artifacts/manufacturing/inbound/
+      // generated/<doc>_pdf/images/<file>.png` (and you have
+      // cortex-bff + the auth header), the SAME UX renders against
+      // the live federated path. That's the integration target —
+      // the mock just removes the infra dependency for visual
+      // iteration.
+      return {
+        components: [
+          {
+            archetype: "KNOWLEDGE_DOCUMENT",
+            subject_concept:
+              "Microphone Boom Removal — Procedure with diagrams (mock)",
+            markdown_content: [
+              "## Microphone Boom Removal",
+              "",
+              "**Module:** TM 1-1680-TNG-13P · **Domain:** Helmet Audio Equipment · **Procedure ID:** m0004-1-1680-TNG",
+              "",
+              "### Tools required",
+              "",
+              "- Cross-tip screwdriver",
+              "- Soft cloth (lint-free)",
+              "",
+              "### Removal steps",
+              "",
+              "1. Using a cross-tip screwdriver, remove the **swivel assembly screw** (1) and **washer** (2).",
+              "2. Remove the **flat washer** (3) from the **boom support washer** (9).",
+              "3. Remove the **special washer** (5) from the boom support washer.",
+              "4. Remove the **boom** (8) and the **grooved washer** (4).",
+              "5. Disconnect the **microphone cord** from the clip attached to the boom assembly.",
+              "6. Remove the **thumbscrew** from the boom and remove the microphone from the boom.",
+              "",
+              "![Figure 1 — Boom and Microphone (exploded view, callouts 1–9)](https://placehold.co/720x440/0891b2/ffffff?text=Figure+1+%E2%80%94+Boom+and+Microphone)",
+              "",
+              "### Re-installation steps",
+              "",
+              "1. Using a cross-tip screwdriver, attach the **screw** (6) to the **knurled knob** (7).",
+              "2. Attach the **flat washer** (3) to the **boom support washer** (9).",
+              "3. Using a cross-tip screwdriver, attach the **swivel assembly screw** (1) and **washer** (2).",
+              "4. Plug the microphone cord into the communications jack on the rear of the helmet.",
+              "",
+              "![Figure 2 — Communications jack (rear of helmet)](https://placehold.co/720x300/0e7490/ffffff?text=Figure+2+%E2%80%94+Comm+jack+%28rear%29)",
+              "",
+              "> **Inspection:** before re-installing, examine the boom and microphone assembly for any loose screws or visible damage. Replace any worn parts in accordance with TM 1-1680-TNG-13P §4.2.",
+              "",
+              "### Figures referenced",
+              "",
+              "| Figure | Title | Source |",
+              "|---|---|---|",
+              "| 1 | Boom and Microphone (exploded view) | TM 1-1680-TNG-13P, Fig. M00016 |",
+              "| 2 | Communications jack (rear of helmet) | TM 1-1680-TNG-13P, Fig. M00017 |",
+              "",
+              "*Mock content — figures rendered via FederatedImage's non-`s3://` passthrough. In production the URLs would be `s3://processing-artifacts/.../images/<figure>.png` produced by the PDF or IADS ingest paths.*",
             ].join("\n"),
           },
         ],
@@ -831,7 +929,8 @@ export function runMockGroundingFor(
         : scenario === "topology" ||
           scenario === "hazard" ||
           scenario === "table" ||
-          scenario === "doc"
+          scenario === "doc" ||
+          scenario === "doc-image"
         ? buildArchetypePayload(scenario)
         : seq.payload;
     schedule(TIMINGS.final_payload, () =>
