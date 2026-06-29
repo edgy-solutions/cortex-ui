@@ -303,6 +303,20 @@ export function useInterviewAgent() {
           // panel (handled elsewhere). Per Part 2's absence-of-SSE
           // claim, the provenance map must show route_decision
           // NEVER touched routing/produced_by/resolved_intent.
+          //
+          // MOCK-MODE OVERRIDE: in production the data flows through
+          // Postgres+Electric. The mock-grounding emitter fires this
+          // event client-side with no Postgres in the loop, so the
+          // UI would never see routing data. When mock mode is on,
+          // write directly to the canvas store — visual iteration
+          // works without infra. Production path UNCHANGED.
+          if (isMockGroundingEnabled() && artifactId) {
+            useCanvasStore.getState().updateArtifact(
+              artifactId,
+              { routing: event.decision },
+              "mock-grounding",
+            );
+          }
           break;
 
         case "sources":
@@ -310,12 +324,28 @@ export function useInterviewAgent() {
           // persists each Source as a (:Source) node and (:CITES) edge;
           // the projector denormalizes them into the projection's
           // `sources` JSONB column; Electric delivers it. SSE no-op.
+          // MOCK-MODE OVERRIDE: see route_decision case above.
+          if (isMockGroundingEnabled() && artifactId) {
+            useCanvasStore.getState().updateArtifact(
+              artifactId,
+              { sources: event.sources },
+              "mock-grounding",
+            );
+          }
           break;
 
         case "graph_trace":
           // Hop 3: `graph_trace` is Electric-covered. Same shape as
           // sources — persisted in Neo4j by Hop 1, projected by
           // Hop 2, delivered by Electric. SSE no-op.
+          // MOCK-MODE OVERRIDE: see route_decision case above.
+          if (isMockGroundingEnabled() && artifactId) {
+            useCanvasStore.getState().updateArtifact(
+              artifactId,
+              { graph_trace: event.nodes },
+              "mock-grounding",
+            );
+          }
           break;
 
         case "chat_message": {
@@ -349,6 +379,31 @@ export function useInterviewAgent() {
             // final_payload point and Electric delivers it. SSE
             // handler no-ops on the artifact; only the receipt text
             // for the chat message (a non-Artifact concern) fires.
+            //
+            // MOCK-MODE OVERRIDE: in production the rendered_output
+            // and status patches flow through Postgres+Electric. The
+            // mock-grounding emitter fires this event client-side
+            // with no Postgres in the loop, so the canvas's artifact
+            // would stay stuck at "Working on it..." forever. When
+            // mock mode is on, write directly to the canvas store —
+            // visual iteration works without infra. Production path
+            // unchanged. (Same shape as the route_decision / sources
+            // / graph_trace overrides above.)
+            if (
+              isMockGroundingEnabled() &&
+              artifactId &&
+              event.payload
+            ) {
+              useCanvasStore.getState().updateArtifact(
+                artifactId,
+                {
+                  rendered_output: event.payload,
+                  status: "complete",
+                  durability_status: "durable",
+                },
+                "mock-grounding",
+              );
+            }
             const fresh = useCanvasStore.getState();
             const artifactNumber = artifactId
               ? fresh.artifacts.findIndex((a) => a.id === artifactId) + 1

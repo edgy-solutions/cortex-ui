@@ -38,7 +38,22 @@ export type UpdateSource =
   // marking it failed, etc. These are NOT Electric-covered (they're
   // about client-side liveness, not substrate state).
   | "local:create_pending"
-  | "local:onerror_failed";
+  | "local:onerror_failed"
+  // Dev-only: mock-grounding emitter writes synthesizing what
+  // Electric would have delivered if Postgres+projector were
+  // running locally. Fires ONLY when isMockGroundingEnabled() is
+  // true — guarded by the env var or localStorage key. Distinct
+  // from `sse:*` deliberately: the Part 2 absence probe checks
+  // for `sse:*` tags on Electric-covered fields; mock-grounding
+  // writes carry their own tag so the probe remains a valid
+  // production assertion. In production runs this tag MUST NOT
+  // appear (mock mode is off) — its presence on an Electric-
+  // covered field at rest is itself a bug indicating mock-mode
+  // leaked into production. Added 2026-06-29 to close the gap
+  // where the mock fired events client-side but the UI's
+  // Electric-backed rendered_output / sources / routing stayed
+  // null because no Postgres was in the loop.
+  | "mock-grounding";
 
 /**
  * Fields the Electric subscription is the sole source of truth for
