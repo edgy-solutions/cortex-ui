@@ -3,9 +3,28 @@ import { AnimatePresence } from "framer-motion";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
+import { QuestionNavigator } from "./QuestionNavigator";
 
 /**
- * NeuralStream — the left-side chat / pipeline-progress surface.
+ * NeuralStream — the left-side surface.
+ *
+ * 2026-06-29 restructure: the left margin is now durable-first.
+ *
+ *   - TOP: `QuestionNavigator` — the durable index of past questions,
+ *     sourced from `useCanvasStore.artifacts` (Electric-synced,
+ *     hydrates on refresh per Hop 3). Survives reload; click-to-
+ *     foreground via `setCurrentArtifact`.
+ *   - BOTTOM (collapsible / minor): the in-session conversation thread
+ *     (user/agent bubbles + ThinkingCard pipeline for the active turn),
+ *     sourced from `useInterviewStore` (ephemeral / browser-memory).
+ *     Surfaces live pipeline telemetry for the current turn — dies on
+ *     refresh, by design ([[coupled-interim-mechanisms-retire-together]]
+ *     fenced as its own message-substrate arc).
+ *   - INPUT: `InputBar` always pinned to the bottom.
+ *
+ * The transient conversation thread only shows during an active turn
+ * (messages exist for this session) — on refresh it collapses to the
+ * navigator + input.
  *
  * Option A clean cut (2026-06-22): the `AgentTeamLoader` component
  * (the "summoning specialized graph agents" badges) was REMOVED. It
@@ -15,13 +34,6 @@ import { InputBar } from "./InputBar";
  * "surface what the pipeline did, never synthesize" — badges that
  * imply collaboration that isn't really there in the routing
  * semantics are exactly the kind of theater we cut.
- *
- * What this surface still does:
- *   - Renders user/agent chat bubbles
- *   - Renders the per-message ThinkingCard with the 5 pipeline stages
- *     (driven by typed `pipeline_stage` events from the gateway)
- *   - Surfaces typed errors via ThinkingCard rows in `error` state
- *     (driven by typed `pipeline_error` events)
  */
 export function NeuralStream() {
   const messages = useInterviewStore((s) => s.messages);
@@ -31,9 +43,10 @@ export function NeuralStream() {
   // Find the LATEST agent message id. Only that message's
   // ThinkingCard (pipeline list) is rendered in MessageBubble —
   // prior agent turns collapse to just their receipt line. Reasoning:
-  // the pipeline is "what's happening right now" telemetry; once the
-  // turn is done and a new question is asked, the prior turn's
-  // stages are noise. The artifact + receipt are the durable record.
+  // the pipeline is "what's happening right now" telemetry; once a
+  // new question is asked, the prior turn's stages are noise. The
+  // artifact + its question_text are the durable record (surfaced
+  // by `QuestionNavigator` from useCanvasStore.artifacts).
   const latestAgentMsgId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "agent") return messages[i].id;
@@ -41,7 +54,7 @@ export function NeuralStream() {
     return null;
   }, [messages]);
 
-  // Auto-scroll to bottom on new messages or content updates
+  // Auto-scroll on new messages or content updates.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {
@@ -49,42 +62,46 @@ export function NeuralStream() {
     }
   }, [messages, isProcessing]);
 
+  const hasLiveConversation = messages.length > 0;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      {/* Message area */}
+      {/* TOP — durable question navigator. ~60% of left pane when no
+          live conversation; ~40% when a live turn is in flight (the
+          conversation thread takes more space then). */}
       <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+        className={
+          hasLiveConversation
+            ? "h-2/5 flex flex-col border-b border-glass-border"
+            : "flex-1 flex flex-col"
+        }
       >
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-full border border-neon-blue/30 flex items-center justify-center mb-4 animate-breathe">
-              <div className="w-8 h-8 rounded-full bg-neon-blue/10 animate-pulse-neon" />
-            </div>
-            <p className="text-slate-500 font-mono text-sm mb-1">
-              NEURAL STREAM ACTIVE
-            </p>
-            <p className="text-slate-600 text-xs max-w-md">
-              Begin the interrogation. Mention assets, failure modes, or
-              maintenance schedules to activate ontology binding.
-            </p>
-          </div>
-        )}
-
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              isLatestAgent={
-                msg.role === "agent" && msg.id === latestAgentMsgId
-              }
-            />
-          ))}
-        </AnimatePresence>
+        <QuestionNavigator />
       </div>
 
-      {/* Input bar */}
+      {/* BOTTOM — ephemeral live conversation thread. Only present
+          while messages exist this session; renders nothing on
+          fresh reload (durable nav above is the persistent surface). */}
+      {hasLiveConversation && (
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+        >
+          <AnimatePresence initial={false}>
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isLatestAgent={
+                  msg.role === "agent" && msg.id === latestAgentMsgId
+                }
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Input bar — always pinned. */}
       <InputBar />
     </div>
   );
