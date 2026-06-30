@@ -172,9 +172,38 @@ export function FiguresSlideIn({ sourceUri, sourceLabel, onClose }: Props) {
   );
 }
 
+// Browser-renderable image extensions. When the upstream manifest
+// didn't tell us a rendering_origin (empty string), we still want to
+// try rendering anything the browser can natively handle — falling
+// back to URL-text only when the extension is genuinely unknown.
+// Kept in sync with what FederatedImage / the `<img>` tag accept.
+const _BROWSER_RENDERABLE_EXTS = new Set([
+  ".png", ".bmp", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
+]);
+
+function _isBrowserRenderableUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  for (const ext of _BROWSER_RENDERABLE_EXTS) {
+    if (lower.endsWith(ext)) return true;
+  }
+  return false;
+}
+
 function FigureCard({ figure }: { figure: Figure }) {
   const origin = figure.rendering_origin;
-  const isRenderable = origin === "pipeline" || origin === "supplied_override";
+  // Three-state discipline: explicit upstream signal wins. When the
+  // signal is missing (empty string — manifest had no entry for this
+  // figure), fall back to URL-extension sniffing so the slide-in
+  // doesn't degrade to URL-text-only for figures the browser can
+  // render natively. 2026-06-30: the howtouse WP figures all hit
+  // this case because their bundle predates the manifest-writing
+  // path. Without the sniff fallback, every PNG in that WP showed
+  // as URL text instead of an image.
+  const isExplicitlyRenderable =
+    origin === "pipeline" || origin === "supplied_override";
+  const isRenderable =
+    isExplicitlyRenderable ||
+    (!origin && _isBrowserRenderableUrl(figure.url));
   const isSupplied = origin === "supplied_override";
   const isUnsupported = origin === "format_not_supported";
 
@@ -218,9 +247,11 @@ function FigureCard({ figure }: { figure: Figure }) {
             </p>
           </div>
         )}
-        {!origin && (
-          // Legacy / unknown origin — show caption only with the URL
-          // as a debug hint.
+        {!origin && !isRenderable && (
+          // Legacy / unknown origin AND extension isn't browser-
+          // renderable — show URL text as a debug hint. Covers e.g.
+          // .cgm / .tif / .pdf references that slipped through without
+          // a manifest entry.
           <p className="text-[10px] font-mono text-slate-500 break-all">
             URL: {figure.url}
           </p>
