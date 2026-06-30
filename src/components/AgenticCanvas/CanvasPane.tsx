@@ -3,6 +3,7 @@ import { useCanvasStore, useCurrentArtifact } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers } from 'lucide-react';
+import { InlineFigures } from './InlineFigures';
 
 /**
  * CanvasPane — view OVER the artifact collection per ADR-0023.
@@ -177,8 +178,19 @@ export const CanvasPane = () => {
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-        {/* We pass the filtered payload. SemanticInterpreter handles the grid, col-spans, and RadarReveal internally. */}
+        {/* SemanticInterpreter handles the grid, col-spans, and
+            RadarReveal for the LLM-generated answer body. */}
         <SemanticInterpreter payload={{ components: filteredComponents }} />
+        {/* Figures section: renderer-deterministic figure placement
+            below the prose. Reads /data_module/figures for the
+            artifact's dominant data module (most-cited URI in
+            sources). Honest four-state discipline: pipeline /
+            supplied_override render inline; format_not_supported
+            and unresolved render labeled placeholders IN PLACE.
+            The LLM's prose never narrates figure availability;
+            this surface shows the truth deterministically. See
+            InlineFigures.tsx for the four-state rendering. */}
+        <InlineFigures artifact={artifact} />
       </div>
     </div>
   );
