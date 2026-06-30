@@ -68,12 +68,20 @@ export function NeuralStream() {
     <div className="flex-1 flex flex-col overflow-hidden relative">
       {/* TOP — durable question navigator. ~60% of left pane when no
           live conversation; ~40% when a live turn is in flight (the
-          conversation thread takes more space then). */}
+          conversation thread takes more space then).
+
+          `min-h-0` is REQUIRED on every flex child that contains
+          scrolling content. Without it, `flex-1` grows to fit the
+          CHILD CONTENT instead of the parent's available space —
+          which pushes the InputBar off-screen AND breaks the inner
+          `overflow-y-auto` (no constrained height = no overflow).
+          2026-06-30: first cut omitted min-h-0 → architect reported
+          "no input bar visible, list not scrollable." */}
       <div
         className={
           hasLiveConversation
-            ? "h-2/5 flex flex-col border-b border-glass-border"
-            : "flex-1 flex flex-col"
+            ? "h-2/5 min-h-0 flex flex-col border-b border-glass-border"
+            : "flex-1 min-h-0 flex flex-col"
         }
       >
         <QuestionNavigator />
@@ -81,11 +89,12 @@ export function NeuralStream() {
 
       {/* BOTTOM — ephemeral live conversation thread. Only present
           while messages exist this session; renders nothing on
-          fresh reload (durable nav above is the persistent surface). */}
+          fresh reload (durable nav above is the persistent surface).
+          Same `min-h-0` reasoning as the navigator wrapper above. */}
       {hasLiveConversation && (
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+          className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4"
         >
           <AnimatePresence initial={false}>
             {messages.map((msg) => (
