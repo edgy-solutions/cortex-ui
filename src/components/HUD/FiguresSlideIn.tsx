@@ -172,16 +172,14 @@ export function FiguresSlideIn({ sourceUri, sourceLabel, onClose }: Props) {
   );
 }
 
-// Browser-renderable image extensions. When the upstream manifest
-// didn't tell us a rendering_origin (empty string), we still want to
-// try rendering anything the browser can natively handle — falling
-// back to URL-text only when the extension is genuinely unknown.
-// Kept in sync with what FederatedImage / the `<img>` tag accept.
+// Browser-renderable image extensions. Kept in sync with what
+// FederatedImage / the `<img>` tag accept.
 const _BROWSER_RENDERABLE_EXTS = new Set([
   ".png", ".bmp", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
 ]);
 
-function _isBrowserRenderableUrl(url: string): boolean {
+function _isBrowserRenderableUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
   const lower = url.toLowerCase();
   for (const ext of _BROWSER_RENDERABLE_EXTS) {
     if (lower.endsWith(ext)) return true;
@@ -191,14 +189,17 @@ function _isBrowserRenderableUrl(url: string): boolean {
 
 function FigureCard({ figure }: { figure: Figure }) {
   const origin = figure.rendering_origin;
-  // Three-state discipline: explicit upstream signal wins. When the
-  // signal is missing (empty string — manifest had no entry for this
-  // figure), fall back to URL-extension sniffing so the slide-in
-  // doesn't degrade to URL-text-only for figures the browser can
-  // render natively. 2026-06-30: the howtouse WP figures all hit
-  // this case because their bundle predates the manifest-writing
-  // path. Without the sniff fallback, every PNG in that WP showed
-  // as URL text instead of an image.
+  // Four-state rendering discipline:
+  //   pipeline           — explicit upstream signal, render via FederatedImage
+  //   supplied_override  — operator-supplied override, render + badge
+  //   format_not_supported — source format unrenderable, honest placeholder
+  //   unresolved         — manifest lookup miss at ingest, NO url, honest
+  //                        placeholder explaining the gap. Added 2026-06-29
+  //                        to replace the parser's confabulated `.png`
+  //                        URL fallback (which flowed optimistic falsehood
+  //                        downstream indistinguishably from real URLs).
+  //   "" (empty/legacy)  — pre-manifest single-XML ingest. URL-extension
+  //                        sniff as a sensible default.
   const isExplicitlyRenderable =
     origin === "pipeline" || origin === "supplied_override";
   const isRenderable =
@@ -206,6 +207,7 @@ function FigureCard({ figure }: { figure: Figure }) {
     (!origin && _isBrowserRenderableUrl(figure.url));
   const isSupplied = origin === "supplied_override";
   const isUnsupported = origin === "format_not_supported";
+  const isUnresolved = origin === "unresolved";
 
   return (
     <div className="rounded-lg border border-slate-800/80 bg-slate-900/40 overflow-hidden">
@@ -226,6 +228,12 @@ function FigureCard({ figure }: { figure: Figure }) {
             Format Not Supported
           </span>
         )}
+        {isUnresolved && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/40 text-rose-300 uppercase tracking-widest flex items-center gap-1">
+            <AlertTriangle className="w-2.5 h-2.5" />
+            Unresolved at Ingest
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -244,6 +252,21 @@ function FigureCard({ figure }: { figure: Figure }) {
             </p>
             <p className="text-[10px] font-mono text-slate-600 break-all">
               Source: {figure.url}
+            </p>
+          </div>
+        )}
+        {isUnresolved && (
+          <div className="rounded border border-rose-500/30 bg-rose-500/5 px-4 py-6">
+            <p className="text-xs font-mono text-rose-200 mb-2">
+              This figure's source file was not resolved at ingest time.
+            </p>
+            <p className="text-[10px] font-mono text-rose-400/70 leading-relaxed">
+              The data module references this figure (boardno
+              <span className="text-rose-300 font-bold"> {figure.label}</span>),
+              but no matching uploaded file was found in the bundle's
+              graphics manifest. This is an honest-miss marker — not a
+              broken render — and indicates the upstream extractor either
+              didn't process this figure or wrote it under a different key.
             </p>
           </div>
         )}
