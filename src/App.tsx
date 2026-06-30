@@ -40,10 +40,19 @@ import { Toaster } from "sonner";
  * asserts via the provenance map.
  */
 function useArtifactSync() {
+  const auth = useAuth();
+  const token = auth.user?.access_token ?? null;
   useEffect(() => {
-    const stop = startArtifactsSubscription();
+    // 2026-06-30 per-user isolation: the Electric subscription now
+    // flows through cortex-bff's `/electric/shape` proxy, which
+    // server-injects a `produced_for.user_id = <verified sub>`
+    // WHERE clause from the Bearer JWT. Without a token, the
+    // subscription can't authenticate; defer until auth completes.
+    // Re-fires when the token changes (e.g. silent refresh issues
+    // a new access_token).
+    const stop = startArtifactsSubscription(token);
     return stop;
-  }, []);
+  }, [token]);
 }
 
 // ADR-0017 frontend self-registration of presentation capabilities.

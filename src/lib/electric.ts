@@ -155,14 +155,38 @@ function rowToArtifact(row: Row): Artifact {
  *     alone when SSE-for-artifact-data is gone, OR proves it doesn't
  *     when Electric is cut off and SSE is the only source).
  */
-export function startArtifactsSubscription(): () => void {
-  const url = config.VITE_ELECTRIC_URL;
-  if (!url) {
-    console.info("[electric] VITE_ELECTRIC_URL empty; subscription skipped");
+/**
+ * Start the Electric ShapeStream subscription.
+ *
+ * 2026-06-30 per-user isolation interim: the subscription connects to
+ * cortex-bff's `/electric/shape` proxy endpoint (NOT directly to
+ * Electric) so the WHERE clause is server-injected with the verified
+ * JWT `sub`. A client-controlled WHERE would be spoofable; the proxy
+ * is the trusted middle. See gateway.py `electric_shape_proxy`.
+ *
+ * Requires a valid Bearer token. If `token` is null/undefined,
+ * subscription is skipped — caller (App.tsx) should re-invoke when
+ * auth completes.
+ */
+export function startArtifactsSubscription(token: string | null): () => void {
+  if (!token) {
+    console.info("[electric] no token yet; subscription deferred");
+    return () => {};
+  }
+  // Use the cortex-bff base URL (VITE_API_URL) + /electric/shape.
+  // The legacy VITE_ELECTRIC_URL pointed straight at Electric (which
+  // had no user_id filter, hence the over-sharing the proxy fixes).
+  // Empty VITE_API_URL → skip subscription (test/dev escape hatch).
+  const base = config.VITE_API_URL;
+  if (!base) {
+    console.info("[electric] VITE_API_URL empty; subscription skipped");
     return () => {};
   }
   const stream = new ShapeStream({
-    url: `${url}/v1/shape`,
+    url: `${base}/electric/shape`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
     params: {
       table: "answer_artifact_projection",
     },
