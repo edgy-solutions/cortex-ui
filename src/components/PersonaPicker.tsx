@@ -61,8 +61,62 @@ export function PersonaPicker() {
     );
   }
   if (!hasEntitlements()) {
-    // Legacy path — no picker. Server falls back to the JWT-claim
-    // persona / entitled_domains from ADR-0009.
+    // Distinguish two shapes of "no cells" per the ADR-0026 morning
+    // review — absent-vs-empty applied to the entitlement matrix:
+    //
+    //   * source === "jwt-legacy" (or "fallback") — this cluster
+    //     doesn't have topaz-driven entitlements wired at all. Legacy
+    //     JWT-claim path drives routing. The picker doesn't apply;
+    //     nothing to request. Render nothing.
+    //   * source === "topaz" (or "cache") with cells=[] — topaz IS
+    //     the authority, but this specific user has no seeded
+    //     entitlements. That's a REQUESTABLE state, not a legacy
+    //     signal. Render a visible "no entitlements — request access"
+    //     hook. If bob's seed silently failed, he'd hit this state
+    //     and see something instead of a silently-missing picker.
+    //
+    // Both HITL access-request entry points (this state + the 403
+    // `cell_not_entitled` denial from the server) hang off exactly
+    // these two surfaces — provisioning them now means the future
+    // flow has real events to bind to.
+    const source = entitlements?.source ?? "unknown";
+    if (source === "topaz" || source === "cache") {
+      return (
+        <div className="flex items-center gap-2 text-xs px-2 py-2 border-t border-white/5">
+          <span className="text-neon-pink tracking-wider uppercase">
+            No entitlements
+          </span>
+          <span className="text-slate-400">
+            Your account is authenticated but has no persona/domain grants
+            in the policy store. Chat requests will fall back to the
+            legacy JWT-claim path.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              // Placeholder until the HITL access-request flow
+              // (separate arc) provides a real submit path. Logging
+              // here is deliberate — every click is an "I need
+              // access" signal that ops can surface even before
+              // the request-flow ships.
+              console.warn(
+                "[access-request] user clicked request-access placeholder",
+                { source, at: new Date().toISOString() },
+              );
+              alert(
+                "Access-request flow not yet wired. This click was logged; " +
+                  "ping an operator to add you to policy/users.yaml.",
+              );
+            }}
+            className="ml-auto px-2 py-1 border border-neon-pink/50 text-neon-pink rounded uppercase tracking-widest text-[10px] hover:bg-neon-pink/10"
+          >
+            Request access
+          </button>
+        </div>
+      );
+    }
+    // Legacy path — no picker, no request affordance. Server falls
+    // back to the JWT-claim persona / entitled_domains from ADR-0009.
     return null;
   }
 
