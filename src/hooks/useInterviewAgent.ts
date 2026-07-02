@@ -11,6 +11,7 @@ import {
 } from "@/store/useInterviewStore";
 
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import {
   isMockGroundingEnabled,
   runMockGroundingFor,
@@ -551,11 +552,23 @@ export function useInterviewAgent() {
       // store's `electricUpsertArtifact` finds the pending row by id
       // and merges in place (otherwise pending stays foregrounded
       // empty while the real one sits unviewed in the collection).
+      // ADR-0026 step 4: per-prompt persona/domain override from the
+      // picker. Only attach when the user has a matrix (picker
+      // renders); on legacy JWT-claim clusters `selectedPersona` is
+      // null and we send neither field, letting cortex-bff fall back
+      // to the JWT-claim path.
+      const personaSelection = usePersonaStore.getState();
       const request: InterviewRequest = {
         message: userInput,
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,
+        ...(personaSelection.hasEntitlements() && personaSelection.selectedPersona
+          ? {
+              active_persona: personaSelection.selectedPersona,
+              active_domains: personaSelection.selectedDomains,
+            }
+          : {}),
       };
 
       // Stream the response

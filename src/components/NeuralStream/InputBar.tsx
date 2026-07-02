@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Send, Zap, Wifi, WifiOff } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
 import { useInterviewStore } from "@/store/useInterviewStore";
+import { PersonaPicker } from "@/components/PersonaPicker";
 
 export function InputBar() {
   const [value, setValue] = useState("");
@@ -68,6 +69,11 @@ export function InputBar() {
             <Send className="w-4 h-4" />
           </button>
         </div>
+
+        {/* ADR-0026 step 5 — per-prompt persona/domain picker.
+            Renders below the input; hides itself when the user has
+            no seeded entitlements (legacy JWT posture). */}
+        <PersonaPicker />
       </motion.form>
     </div>
   );

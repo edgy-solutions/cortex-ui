@@ -6,6 +6,7 @@ import {
   type InterviewRequest,
   type CompileRequest,
   type CompileResponse,
+  type Entitlements,
 } from "./types";
 
 // ── Auth Utilities ─────────────────────────────────────────
@@ -30,6 +31,25 @@ function getOidcToken(): string | null {
 
 // ── Config ────────────────────────────────────────────────
 const API_URL = config.VITE_API_URL;
+
+// ── ADR-0026 entitlements ─────────────────────────────────
+/**
+ * Fetch the current user's (persona, domain) entitlement matrix from
+ * cortex-bff (backed by topaz). Returns cells + default + provenance.
+ *
+ * The picker (PersonaPicker.tsx) calls this on login and populates
+ * its dropdowns from the returned cells. Empty cells = no entitlements
+ * seeded for this user → picker hides itself and the legacy JWT-claim
+ * path handles routing.
+ */
+export async function fetchEntitlements(): Promise<Entitlements> {
+  const token = getOidcToken();
+  const resp = await axios.get<Entitlements>(`${API_URL}/me/entitlements`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    timeout: 5000,
+  });
+  return resp.data;
+}
 
 const api = axios.create({
   baseURL: API_URL,

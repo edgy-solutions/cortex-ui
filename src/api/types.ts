@@ -565,6 +565,34 @@ export interface InterviewRequest {
    * merges in place.
    */
   artifact_id?: string;
+  /**
+   * ADR-0026 step 4: per-prompt persona/domain override from the
+   * picker. Both together = override this request; both absent =
+   * server falls back to the caller's `entitlements.default` (or
+   * first cell, or legacy JWT-claim path). Server 400s if only
+   * one is set. Server 403s (`cell_not_entitled`) if the cell is
+   * outside the caller's entitlement matrix.
+   */
+  active_persona?: string;
+  active_domains?: string[];
+}
+
+// ── ADR-0026 entitlement matrix ────────────────────────────
+
+/** One (persona, domain) cell the user is entitled to. */
+export interface EntitlementCell {
+  persona: string;
+  domain: string;
+}
+
+/** Response body for GET /me/entitlements */
+export interface Entitlements {
+  user_id: string;
+  email: string;
+  cells: EntitlementCell[];
+  default: EntitlementCell | null;
+  /** Provenance flag: topaz | cache | jwt-legacy | fallback. */
+  source: string;
 }
 
 // ── BPMN Payload Models ───────────────────────────────────
