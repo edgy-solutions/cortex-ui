@@ -59,9 +59,24 @@ export function DecisionPathDiagram() {
   const subjectLosers = (routing.candidates ?? [])
     .filter((c) => c.uri !== winnerUri)
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  const winnerScore = (routing.candidates ?? []).find(
+
+  // TWO AXES, kept distinct (the "Dataset 0.00" finding). The candidate
+  // pool scores are Weaviate RECALL (vector/BM25 similarity). The winner
+  // is the LLM's PRECISION pick — its selecting signal is the classifier
+  // confidence (routing.about.confidence), NOT its recall score. Showing
+  // the winner's recall (which can be the LOWEST in the pool) as if it
+  // were "the winning score" reads as a broken selection; it isn't. So
+  // the winner carries its confidence, the losers carry recall, and when
+  // the winner's recall rank is low we surface the override explicitly.
+  const winnerConfidence = routing.about.confidence;
+  const winnerRecall = (routing.candidates ?? []).find(
     (c) => c.uri === winnerUri,
   )?.score;
+  const topLoserRecall = subjectLosers[0]?.score;
+  const precisionOverrode =
+    typeof winnerRecall === "number" &&
+    typeof topLoserRecall === "number" &&
+    topLoserRecall > winnerRecall;
 
   const isFallback = !!routing.fallback;
   const fb = isFallback && routing.fallback_reason
@@ -96,17 +111,27 @@ export function DecisionPathDiagram() {
             className="overflow-hidden"
           >
             <div className="mt-3">
-              {/* SUBJECT — winner box + the resolver losers as offshoots */}
+              {/* SUBJECT — winner box (shows the LLM CONFIDENCE that
+                  selected it, not its recall score) + the resolver losers
+                  as offshoots (recall scores). */}
               <SpineNode
                 label={subject.label}
                 uri={subject.uri}
-                score={winnerScore}
+                score={winnerConfidence}
+                scoreLabel="conf"
                 kind="subject"
                 winner
               />
+              {precisionOverrode && (
+                <div className="ml-3 my-1 text-[9px] font-mono italic text-amber-400/80 leading-snug">
+                  classifier picked the lowest-recall candidate — precision
+                  overrode vector recall (winner recall{" "}
+                  {winnerRecall!.toFixed(2)} &lt; {topLoserRecall!.toFixed(2)})
+                </div>
+              )}
               {subjectLosers.length > 0 && (
                 <Offshoots
-                  caption="candidates not chosen"
+                  caption="candidates not chosen (recall)"
                   items={subjectLosers.map((c) => ({
                     label: c.label || _short(c.uri),
                     score: c.score,
@@ -176,12 +201,17 @@ function SpineNode({
   label,
   uri,
   score,
+  scoreLabel,
   kind,
   winner,
 }: {
   label: string;
   uri: string;
   score?: number;
+  /** What the score MEANS ("conf" for the winner's LLM confidence,
+   *  "recall" for pool scores) — kept explicit so the two axes never
+   *  read as the same number. */
+  scoreLabel?: string;
   kind: NodeKind;
   winner?: boolean;
 }) {
@@ -202,6 +232,11 @@ function SpineNode({
           <span className="text-xs font-mono truncate">{label}</span>
           {typeof score === "number" && (
             <span className="ml-auto text-[10px] font-mono tabular-nums opacity-80">
+              {scoreLabel && (
+                <span className="mr-1 text-[8px] uppercase tracking-wider opacity-70">
+                  {scoreLabel}
+                </span>
+              )}
               {score.toFixed(2)}
             </span>
           )}

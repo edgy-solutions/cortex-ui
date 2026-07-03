@@ -118,6 +118,7 @@ export function RoutingDecision() {
         <CandidatePool
           candidates={decision.candidates}
           winnerUri={decision.about.uri}
+          winnerConfidence={decision.about.confidence}
         />
       )}
 
@@ -338,9 +339,15 @@ function FallbackBanner({ reason }: { reason: FallbackReason }) {
 function CandidatePool({
   candidates,
   winnerUri,
+  winnerConfidence,
 }: {
   candidates: SubjectCandidate[];
   winnerUri: string;
+  /** The winner's LLM CONFIDENCE (routing.about.confidence). The pool
+   *  `score`s are Weaviate RECALL — a different axis. The winner won on
+   *  confidence, not recall, so its row shows confidence; showing its
+   *  recall (which can be the pool's lowest) reads as a broken pick. */
+  winnerConfidence?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const sorted = [...candidates].sort(
@@ -396,14 +403,24 @@ function CandidatePool({
                     >
                       {c.label || _labelFromUri(c.uri)}
                     </span>
-                    {typeof c.score === "number" && (
-                      <span
-                        className={`text-[10px] font-mono tabular-nums ${
-                          isWinner ? "text-neon-cyan/90" : "text-slate-500"
-                        }`}
-                      >
-                        {c.score.toFixed(2)}
-                      </span>
+                    {isWinner ? (
+                      typeof winnerConfidence === "number" && (
+                        <span className="text-[10px] font-mono tabular-nums text-neon-cyan/90">
+                          <span className="mr-1 text-[8px] uppercase tracking-wider opacity-70">
+                            conf
+                          </span>
+                          {winnerConfidence.toFixed(2)}
+                        </span>
+                      )
+                    ) : (
+                      typeof c.score === "number" && (
+                        <span className="text-[10px] font-mono tabular-nums text-slate-500">
+                          <span className="mr-1 text-[8px] uppercase tracking-wider opacity-60">
+                            recall
+                          </span>
+                          {c.score.toFixed(2)}
+                        </span>
+                      )
                     )}
                   </div>
                 );
