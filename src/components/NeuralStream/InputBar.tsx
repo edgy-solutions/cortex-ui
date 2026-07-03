@@ -48,6 +48,11 @@ export function InputBar() {
               static Zap glyph + the exposed dropdown row. */}
           <PersonaPicker />
 
+          {/* min-w-0 on the input is load-bearing: without it the input
+              keeps its intrinsic min content-width and refuses to
+              shrink, so when the picker's label pill expands the flex
+              row overflows and pushes the send button off the composer.
+              min-w-0 lets flex-1 actually absorb the pill's growth. */}
           <input
             type="text"
             value={value}
@@ -62,7 +67,7 @@ export function InputBar() {
                     ? "Connected to mesh — begin interrogation..."
                     : "Offline mode — begin interrogation..."
             }
-            className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 font-mono outline-none disabled:opacity-40"
+            className="flex-1 min-w-0 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 font-mono outline-none disabled:opacity-40"
           />
 
           <button

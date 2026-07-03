@@ -197,10 +197,17 @@ export function PersonaPicker() {
     // narrow to one to match the "Persona · Domain" single readout).
     const firstDomain = domainsFor(p)[0];
     if (firstDomain) setSelectedDomains([firstDomain]);
-    setOpen(false);
+    // Deliberately DO NOT close: switching persona surfaces a
+    // different set of entitled domains in the right column, and the
+    // user probably wants to pick one. Palette stays open until they
+    // pick a domain or dismiss (Esc / click-away). If the new persona
+    // has exactly one domain there's nothing more to choose, so close
+    // as a convenience.
+    if (domainsFor(p).length <= 1) setOpen(false);
   };
   const pickDomain = (d: string) => {
     setSelectedDomains([d]);
+    // Domain is the terminal choice — close.
     setOpen(false);
   };
 
