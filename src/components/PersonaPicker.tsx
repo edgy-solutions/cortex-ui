@@ -1,32 +1,69 @@
 /**
- * ADR-0026 step 5 — the picker.
+ * ADR-0026 persona/domain picker — "hover-morph bolt trigger" (design
+ * option 2e, per design_handoff_persona_domain_trigger/).
  *
- * Two dependent dropdowns rendered immediately under the message
- * input. On persona change, the domain multi-select refreshes to
- * only the domains entitled to that persona for this user.
+ * The composer's bolt glyph IS the picker. Idle: bare bolt, composer
+ * looks untouched. Hover: a label pill slides out ("Data Engineer ·
+ * Aviation"). Click: a two-column palette (ANSWERING AS | SPECIALIZED
+ * IN) opens below. Selecting an item updates + closes. Esc / outside
+ * click closes.
  *
- * Also renders the "Acting as" badge — always-visible signifier of
- * "what am I about to send this question as." The badge is
- * clickable/inline with the dropdowns to make the affordance
- * discoverable.
+ * This REPLACES the composer's static bolt glyph (it renders the bolt
+ * itself) — mounted in InputBar in the bolt's old slot, not as a
+ * separate row below the input.
  *
- * When the user has no seeded entitlements (empty matrix), the
- * whole component renders NULL — the picker doesn't apply on the
- * legacy JWT-claim posture. That's the honest signal, not an error
- * state.
+ * State comes from usePersonaStore (topaz-resolved entitlement matrix
+ * + current selection). Options are NOT hardcoded — persona list is
+ * the user's entitled personas, domain list is the domains entitled
+ * to the selected persona.
+ *
+ * Three renders by entitlement state:
+ *   * hasEntitlements → full bolt picker (the design).
+ *   * source topaz/cache + cells==0 → bolt whose palette shows a
+ *     single "no entitlements — request access" affordance (keeps
+ *     the ADR-0026 distinguishable-not-hidden posture without a
+ *     layout-breaking banner).
+ *   * legacy (jwt-legacy/fallback) OR loading OR error → bare static
+ *     bolt, no interactivity (nothing to configure; composer looks
+ *     untouched per the design's idle state).
  */
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "react-oidc-context";
 
 import { fetchEntitlements } from "@/api/client";
 import { usePersonaStore } from "@/store/usePersonaStore";
+
+// Design tokens — exact values from the handoff spec. The app's neon
+// palette doesn't have direct equivalents for these specific shades,
+// so per the handoff ("match exactly; substitute only where a direct
+// equivalent exists") we use the literal hex.
+const CYAN = "#3fe6d6"; // persona / system accent
+const BLUE = "#5b8cff"; // domain / bolt accent
+
+// SNAKE_CASE → Title Case for display; raw enum is what gets submitted.
+const nice = (v: string): string =>
+  v
+    .split("_")
+    .map((w) => w[0] + w.slice(1).toLowerCase())
+    .join(" ");
+
+const BoltSvg = () => (
+  <svg
+    className="pp-bolt"
+    width="13"
+    height="16"
+    viewBox="0 0 13 16"
+    aria-hidden="true"
+  >
+    <path d="M7 0 0 9h5l-1 7 8-10H7z" fill={BLUE} />
+  </svg>
+);
 
 export function PersonaPicker() {
   const auth = useAuth();
   const {
     entitlements,
     entitlementsLoading,
-    entitlementsError,
     selectedPersona,
     selectedDomains,
     setSelectedPersona,
@@ -37,162 +74,288 @@ export function PersonaPicker() {
     loadEntitlements,
   } = usePersonaStore();
 
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
   // Load entitlements once we have a JWT — refetch on user switch.
   useEffect(() => {
     if (!auth.isAuthenticated) return;
     const sub = auth.user?.profile?.sub;
     if (!sub) return;
-    if (entitlements?.user_id === sub) return; // already loaded
+    if (entitlements?.user_id === sub) return;
     void loadEntitlements(fetchEntitlements);
-  }, [auth.isAuthenticated, auth.user?.profile?.sub, entitlements?.user_id, loadEntitlements]);
+  }, [
+    auth.isAuthenticated,
+    auth.user?.profile?.sub,
+    entitlements?.user_id,
+    loadEntitlements,
+  ]);
 
-  if (entitlementsLoading) {
+  // Esc + outside-click close.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onClick);
+    };
+  }, [open]);
+
+  const source = entitlements?.source ?? "unknown";
+  const topazAuthoritative = source === "topaz" || source === "cache";
+  const entitled = hasEntitlements();
+
+  // Legacy path / loading / error → bare static bolt (composer looks
+  // untouched; nothing to configure).
+  if (!entitled && !(topazAuthoritative && !entitlementsLoading)) {
     return (
-      <div className="text-xs text-slate-500 px-2 py-1">Loading entitlements...</div>
+      <span className="pp-wrap">
+        <PickerStyles />
+        <span className="pp-trigger pp-static" aria-hidden="true">
+          <BoltSvg />
+        </span>
+      </span>
     );
   }
-  if (entitlementsError) {
-    // Deliberately loud — this is authz plumbing broken; the ADR-0026
-    // posture is "surface it, don't silently degrade."
+
+  // Topaz-authoritative but zero cells → discreet request-access
+  // affordance inside the same trigger.
+  if (!entitled) {
     return (
-      <div className="text-xs text-neon-pink px-2 py-1">
-        Entitlements unavailable: {entitlementsError}
-      </div>
+      <span className="pp-wrap" ref={wrapRef}>
+        <PickerStyles />
+        <span
+          className={"pp-trigger" + (open ? " pp-open-label" : "")}
+          role="button"
+          aria-haspopup="true"
+          aria-expanded={open}
+          tabIndex={0}
+          title="No entitlements"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen((o) => !o);
+            }
+          }}
+        >
+          <BoltSvg />
+          <span className="pp-label pp-label-warn">No entitlements</span>
+        </span>
+        {open && (
+          <div className="pp-palette" role="menu">
+            <div className="pp-col" style={{ minWidth: 220 }}>
+              <div className="pp-col-head pp-head-persona">NO ENTITLEMENTS</div>
+              <div className="pp-empty-msg">
+                Your account is authenticated but has no persona/domain grants
+                in the policy store. Chat falls back to the legacy claim path.
+              </div>
+              <button
+                type="button"
+                className="pp-request"
+                onClick={() => {
+                  console.warn("[access-request] request-access placeholder", {
+                    source,
+                    at: new Date().toISOString(),
+                  });
+                  alert(
+                    "Access-request flow not yet wired. This click was logged; " +
+                      "ping an operator to add you to policy/users.yaml.",
+                  );
+                }}
+              >
+                Request access
+              </button>
+            </div>
+          </div>
+        )}
+      </span>
     );
   }
-  if (!hasEntitlements()) {
-    // Distinguish two shapes of "no cells" per the ADR-0026 morning
-    // review — absent-vs-empty applied to the entitlement matrix:
-    //
-    //   * source === "jwt-legacy" (or "fallback") — this cluster
-    //     doesn't have topaz-driven entitlements wired at all. Legacy
-    //     JWT-claim path drives routing. The picker doesn't apply;
-    //     nothing to request. Render nothing.
-    //   * source === "topaz" (or "cache") with cells=[] — topaz IS
-    //     the authority, but this specific user has no seeded
-    //     entitlements. That's a REQUESTABLE state, not a legacy
-    //     signal. Render a visible "no entitlements — request access"
-    //     hook. If bob's seed silently failed, he'd hit this state
-    //     and see something instead of a silently-missing picker.
-    //
-    // Both HITL access-request entry points (this state + the 403
-    // `cell_not_entitled` denial from the server) hang off exactly
-    // these two surfaces — provisioning them now means the future
-    // flow has real events to bind to.
-    const source = entitlements?.source ?? "unknown";
-    if (source === "topaz" || source === "cache") {
-      return (
-        <div className="flex items-center gap-2 text-xs px-2 py-2 border-t border-white/5">
-          <span className="text-neon-pink tracking-wider uppercase">
-            No entitlements
-          </span>
-          <span className="text-slate-400">
-            Your account is authenticated but has no persona/domain grants
-            in the policy store. Chat requests will fall back to the
-            legacy JWT-claim path.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              // Placeholder until the HITL access-request flow
-              // (separate arc) provides a real submit path. Logging
-              // here is deliberate — every click is an "I need
-              // access" signal that ops can surface even before
-              // the request-flow ships.
-              console.warn(
-                "[access-request] user clicked request-access placeholder",
-                { source, at: new Date().toISOString() },
-              );
-              alert(
-                "Access-request flow not yet wired. This click was logged; " +
-                  "ping an operator to add you to policy/users.yaml.",
-              );
-            }}
-            className="ml-auto px-2 py-1 border border-neon-pink/50 text-neon-pink rounded uppercase tracking-widest text-[10px] hover:bg-neon-pink/10"
-          >
-            Request access
-          </button>
-        </div>
-      );
-    }
-    // Legacy path — no picker, no request affordance. Server falls
-    // back to the JWT-claim persona / entitled_domains from ADR-0009.
-    return null;
-  }
 
-  const availablePersonas = personas();
-  const availableDomains = selectedPersona ? domainsFor(selectedPersona) : [];
+  // ── Full picker ──────────────────────────────────────────────
+  const personaOpts = personas();
+  const domainOpts = selectedPersona ? domainsFor(selectedPersona) : [];
+  const activeDomain = selectedDomains[0] ?? domainOpts[0] ?? "";
+
+  const pickPersona = (p: string) => {
+    setSelectedPersona(p);
+    // Single-domain design: reset to the first entitled domain of the
+    // newly-chosen persona (store's setSelectedPersona populates ALL;
+    // narrow to one to match the "Persona · Domain" single readout).
+    const firstDomain = domainsFor(p)[0];
+    if (firstDomain) setSelectedDomains([firstDomain]);
+    setOpen(false);
+  };
+  const pickDomain = (d: string) => {
+    setSelectedDomains([d]);
+    setOpen(false);
+  };
 
   return (
-    <div className="flex items-center gap-3 text-xs px-2 py-2 border-t border-white/5">
-      <div className="flex items-center gap-2">
-        <label className="text-slate-400 tracking-wider uppercase">Persona</label>
-        <select
-          value={selectedPersona ?? ""}
-          onChange={(e) => setSelectedPersona(e.target.value)}
-          className="bg-slate-900/50 border border-neon-blue/30 text-neon-blue px-2 py-1 rounded focus:outline-none focus:border-neon-blue/70"
-        >
-          {availablePersonas.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </div>
+    <span className="pp-wrap" ref={wrapRef}>
+      <PickerStyles />
+      <span
+        className={"pp-trigger" + (open ? " pp-open-label" : "")}
+        role="button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        tabIndex={0}
+        title="Configure who answers"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+      >
+        <BoltSvg />
+        <span className="pp-label">
+          <span>{selectedPersona ? nice(selectedPersona) : "—"}</span>
+          <span className="pp-sep"> · </span>
+          <span>{activeDomain ? nice(activeDomain) : "—"}</span>
+        </span>
+      </span>
 
-      <div className="flex items-center gap-2">
-        <label className="text-slate-400 tracking-wider uppercase">Domain</label>
-        {/* Multi-select via a chip-style toggle group so users can
-            see all their entitled domains under this persona and
-            pick a subset without a native multi-select's rough UX. */}
-        <div className="flex gap-1 flex-wrap">
-          {availableDomains.map((d) => {
-            const active = selectedDomains.includes(d);
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => {
-                  if (active) {
-                    // Don't allow the user to deselect the last domain
-                    // — an empty domains list would send the picker
-                    // into "override incomplete" 400 territory. If
-                    // they want no domain filter, they pick a different
-                    // persona whose grants span more.
-                    if (selectedDomains.length > 1) {
-                      setSelectedDomains(selectedDomains.filter((x) => x !== d));
-                    }
-                  } else {
-                    setSelectedDomains([...selectedDomains, d]);
-                  }
-                }}
-                className={
-                  active
-                    ? "px-2 py-1 rounded border border-neon-cyan/70 bg-neon-cyan/20 text-neon-cyan"
-                    : "px-2 py-1 rounded border border-slate-700 bg-slate-900/50 text-slate-400 hover:border-slate-500"
-                }
-              >
-                {d}
-              </button>
-            );
-          })}
+      {open && (
+        <div className="pp-palette" role="menu">
+          <div className="pp-col pp-col-persona">
+            <div className="pp-col-head pp-head-persona">ANSWERING AS</div>
+            {personaOpts.map((p) => {
+              const sel = p === selectedPersona;
+              return (
+                <div
+                  key={p}
+                  className={"pp-item" + (sel ? " pp-selected" : "")}
+                  role="menuitemradio"
+                  aria-checked={sel}
+                  onClick={() => pickPersona(p)}
+                >
+                  <span>{nice(p)}</span>
+                  <span className="pp-dot">●</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="pp-divider" />
+          <div className="pp-col pp-col-domain">
+            <div className="pp-col-head pp-head-domain">SPECIALIZED IN</div>
+            {domainOpts.map((d) => {
+              const sel = d === activeDomain;
+              return (
+                <div
+                  key={d}
+                  className={"pp-item" + (sel ? " pp-selected" : "")}
+                  role="menuitemradio"
+                  aria-checked={sel}
+                  onClick={() => pickDomain(d)}
+                >
+                  <span>{nice(d)}</span>
+                  <span className="pp-dot">●</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* Always-visible "Acting as" badge — the ADR-0026 requirement
-          for the current-context signifier. Includes provenance
-          (from picker vs cache vs topaz) via the `source` flag on
-          the entitlements response. */}
-      <div className="ml-auto text-slate-500 tracking-wider uppercase">
-        Acting as{" "}
-        <span className="text-neon-blue">{selectedPersona ?? "?"}</span> ·{" "}
-        <span className="text-neon-blue">{selectedDomains.join(", ") || "?"}</span>
-        {entitlements && (
-          <span className="ml-2 text-slate-600 normal-case tracking-normal">
-            (entitlements: {entitlements.source})
-          </span>
-        )}
-      </div>
-    </div>
+      )}
+    </span>
   );
 }
+
+// Scoped styles — exact tokens from the handoff. Inlined as a <style>
+// so the values stay pixel-accurate without polluting the global
+// stylesheet or requiring tailwind config additions.
+const PickerStyles = () => (
+  <style>{`
+    .pp-wrap { position: relative; display: inline-flex; }
+    .pp-trigger {
+      display: flex; align-items: center;
+      padding: 5px 6px; border-radius: 8px; cursor: pointer;
+      transition: background .15s; user-select: none;
+    }
+    .pp-trigger:not(.pp-static):hover { background: rgba(91,140,255,.09); }
+    .pp-static { cursor: default; }
+    .pp-bolt { flex: none; filter: drop-shadow(0 0 6px rgba(91,140,255,.55)); }
+    .pp-label {
+      display: inline-block; overflow: hidden; white-space: nowrap;
+      vertical-align: middle; max-width: 0; opacity: 0; margin-left: 0;
+      font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+      font-size: 12px; color: rgba(180,205,220,.85);
+      transition:
+        max-width .3s cubic-bezier(.4,0,.2,1),
+        opacity .22s ease,
+        margin-left .3s cubic-bezier(.4,0,.2,1);
+    }
+    .pp-label-warn { color: rgba(255,120,150,.9); }
+    .pp-trigger:hover .pp-label,
+    .pp-trigger.pp-open-label .pp-label {
+      max-width: 240px; opacity: 1; margin-left: 8px;
+    }
+    .pp-sep { color: rgba(150,175,195,.4); }
+
+    .pp-palette {
+      position: absolute; bottom: calc(100% + 12px); left: 0; z-index: 50;
+      display: flex; gap: 10px; padding: 14px;
+      background: rgba(9,14,24,.98);
+      border: 1px solid rgba(90,190,220,.22); border-radius: 14px;
+      box-shadow: 0 18px 48px rgba(0,0,0,.65), 0 0 40px rgba(40,180,200,.12);
+    }
+    .pp-col { min-width: 160px; }
+    .pp-divider { width: 1px; background: rgba(120,160,190,.15); }
+    .pp-col-head {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 9px; letter-spacing: .18em; margin: 2px 0 8px 6px;
+    }
+    .pp-head-persona { color: rgba(63,230,214,.7); }
+    .pp-head-domain  { color: rgba(91,140,255,.75); }
+    .pp-item {
+      padding: 9px 11px; border-radius: 8px;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11.5px; letter-spacing: .06em; color: rgba(185,205,220,.8);
+      cursor: pointer; display: flex; justify-content: space-between;
+      align-items: center; gap: 14px; transition: all .14s;
+    }
+    .pp-col-persona .pp-item:hover { background: rgba(63,230,214,.08); }
+    .pp-col-domain  .pp-item:hover { background: rgba(91,140,255,.08); }
+    .pp-item.pp-selected {
+      background: rgba(63,230,214,.13); color: #eafeff;
+      box-shadow: inset 0 0 0 1px rgba(63,230,214,.3);
+      text-shadow: 0 0 12px rgba(63,230,214,.4);
+    }
+    .pp-dot { font-size: 9px; visibility: hidden; }
+    .pp-item.pp-selected .pp-dot { visibility: visible; }
+    .pp-col-persona .pp-dot { color: ${CYAN}; }
+    .pp-col-domain  .pp-dot { color: ${BLUE}; }
+    .pp-empty-msg {
+      font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px; line-height: 1.5; color: rgba(180,205,220,.7);
+      margin: 0 6px 10px; max-width: 220px;
+    }
+    .pp-request {
+      display: block; width: calc(100% - 12px); margin: 0 6px;
+      padding: 8px 10px; border-radius: 8px;
+      background: rgba(255,120,150,.08);
+      border: 1px solid rgba(255,120,150,.4); color: rgba(255,150,175,.95);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+      cursor: pointer; transition: background .14s;
+    }
+    .pp-request:hover { background: rgba(255,120,150,.16); }
+  `}</style>
+);

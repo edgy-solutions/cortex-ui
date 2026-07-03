@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import { Send, Zap, Wifi, WifiOff } from "lucide-react";
+import { Send, Wifi, WifiOff } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
@@ -42,7 +42,11 @@ export function InputBar() {
           ) : (
             <WifiOff className="w-4 h-4 text-slate-500 flex-shrink-0" />
           )}
-          <Zap className="w-4 h-4 text-neon-blue/50 flex-shrink-0" />
+          {/* ADR-0026 picker — the bolt glyph IS the persona/domain
+              trigger (design option 2e). Hover → label pill; click →
+              two-column palette opening upward. Replaces the former
+              static Zap glyph + the exposed dropdown row. */}
+          <PersonaPicker />
 
           <input
             type="text"
@@ -69,11 +73,6 @@ export function InputBar() {
             <Send className="w-4 h-4" />
           </button>
         </div>
-
-        {/* ADR-0026 step 5 — per-prompt persona/domain picker.
-            Renders below the input; hides itself when the user has
-            no seeded entitlements (legacy JWT posture). */}
-        <PersonaPicker />
       </motion.form>
     </div>
   );
