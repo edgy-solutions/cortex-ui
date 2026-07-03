@@ -65,12 +65,13 @@ const artifactUid = () => `artifact-${++_artifactSeq}-${Date.now()}`;
  * is the opposite of why the slot exists. When claims expand, this
  * function expands to read them; the schema stays put.
  *
- * Capture A per ADR-0025: `entitlement_source` defaults to
- * `"fallback"` here — the client truly doesn't know the JWT-read-time
- * origin (it's a server-side fact). The Electric-synced server value
- * overwrites this on first apply. Per
- * `[[optimistic-defaults-are-dishonest]]`: do NOT default to `"claim"`
- * — that would silently mask the production PingSSO fallback path.
+ * Capture A per ADR-0025 / ADR-0026 step 6: `entitlement_source` defaults
+ * to `"none"` here — the client truly doesn't know the origin (it's a
+ * server-side fact) and step 6 made `"none"` the honest-empty state. The
+ * Electric-synced server value (`"topaz"` | `"none"`) overwrites this on
+ * first apply. Per `[[optimistic-defaults-are-dishonest]]`: do NOT default
+ * to `"topaz"` — that would fabricate an entitlement origin the client
+ * hasn't confirmed.
  */
 function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
   return {
@@ -81,7 +82,7 @@ function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
     entitled_domains: null,
     // Honest default per [[optimistic-defaults-are-dishonest]]:
     // failure-revealing, overwritten on first Electric apply.
-    entitlement_source: "fallback",
+    entitlement_source: "none",
   };
 }
 

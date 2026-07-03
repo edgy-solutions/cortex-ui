@@ -113,17 +113,16 @@ function rowToArtifact(row: Row): Artifact {
       actor_type: "agent",
       actor_id: "unknown",
     }) as Artifact["produced_by"],
-    // Capture A per ADR-0025: the projection's produced_for JSONB
-    // includes `entitlement_source` since the projector picks it up
-    // from the :Actor node's `entitlement_source` property. The
-    // default below is used only when the JSONB column is null —
-    // honest-default `"fallback"` per
-    // `[[optimistic-defaults-are-dishonest]]` (do NOT default to
-    // "claim").
+    // Capture A per ADR-0025 / ADR-0026 step 6: the projection's
+    // produced_for JSONB includes `entitlement_source` since the projector
+    // picks it up from the :Actor node's `entitlement_source` property.
+    // The default below is used only when the JSONB column is null —
+    // honest-default `"none"` per `[[optimistic-defaults-are-dishonest]]`
+    // (do NOT default to "topaz"; step 6's two states are topaz | none).
     produced_for: parseJsonbOrDefault(row.produced_for, {
       user_id: "unknown",
       is_authenticated: false,
-      entitlement_source: "fallback" as const,
+      entitlement_source: "none" as const,
     }) as Artifact["produced_for"],
     routing: parseJsonbOrNull(row.routing),
     sources: parseJsonbOrDefault(row.sources, []),

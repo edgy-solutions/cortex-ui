@@ -452,24 +452,29 @@ export interface Artifact {
    * a default value. Treating null as "default" would silently mask the
    * claim gap, which is the opposite of why the slot exists.
    *
-   * Capture A per ADR-0025: `entitlement_source` records WHICH ORIGIN
-   * the persona / entitled_domains came from at the moment auth.py
-   * read the JWT — `"claim"` / `"fallback"` / `"partial"`. The
-   * persisted VALUE is what downstream code sees today; the origin
-   * flag is the audit fact that otherwise would be lost
-   * (capture-or-lose-forever per
-   * `[[verify-subtle-acceptance-by-inspection]]`). Per
-   * `[[optimistic-defaults-are-dishonest]]`: there is NO optimistic
-   * default — `"fallback"` is the honest default at the client-side
-   * pending seed (the client truly doesn't know at pending-creation
-   * time; the Electric-synced server value overwrites on first apply).
+   * Capture A per ADR-0025 / ADR-0026 step 6: `entitlement_source`
+   * records where the persona / entitled_domains came from. Step 6
+   * retired the JWT-claim path, collapsing the origin vocabulary from
+   * three JWT-era values (claim / fallback / partial) to TWO honest
+   * states that MUST match the backend's `Literal["topaz", "none"]`:
+   *   "topaz" — Topaz returned a non-empty entitlement matrix.
+   *   "none"  — Topaz returned nothing (unseeded user). HONEST-EMPTY:
+   *             user_persona null, entitled_domains []. Never a
+   *             fabricated default.
+   * The persisted VALUE is what downstream code sees; the origin flag is
+   * the audit fact that would otherwise be lost (capture-or-lose-forever
+   * per `[[verify-subtle-acceptance-by-inspection]]`). Per
+   * `[[optimistic-defaults-are-dishonest]]`: the client-side pending seed
+   * defaults to `"none"` (the client truly doesn't know at pending-
+   * creation time; the Electric-synced server value overwrites on first
+   * apply) — NOT a fabricated `"topaz"`.
    */
   produced_for: {
     user_id: string;
     is_authenticated: boolean;
     user_persona?: string | null;
     entitled_domains?: string[] | null;
-    entitlement_source: "claim" | "fallback" | "partial";
+    entitlement_source: "topaz" | "none";
   };
 
   /**
@@ -627,7 +632,7 @@ export interface Entitlements {
   email: string;
   cells: EntitlementCell[];
   default: EntitlementCell | null;
-  /** Provenance flag: topaz | cache | jwt-legacy | fallback. */
+  /** Provenance flag — the two honest post-step-6 states: topaz | none. */
   source: string;
 }
 
