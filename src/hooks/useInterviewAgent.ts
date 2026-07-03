@@ -344,7 +344,10 @@ export function useInterviewAgent() {
           if (isMockGroundingEnabled() && artifactId) {
             useCanvasStore.getState().updateArtifact(
               artifactId,
-              { graph_trace: event.nodes },
+              {
+                graph_trace: event.nodes,
+                graph_trace_alternates: event.alternates ?? [],
+              },
               "mock-grounding",
             );
           }

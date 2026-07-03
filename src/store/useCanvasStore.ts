@@ -333,6 +333,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         routing: null,
         sources: [],
         graph_trace: [],
+        graph_trace_alternates: [],
         derived_from_artifact_id: seed.derived_from_artifact_id ?? null,
         // Hop 1 of projector build plan
         // (docs/plans/projector-build-plan.md commit 0eda9f7) — both
@@ -539,6 +540,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
  */
 const EMPTY_SOURCES: Source[] = [];
 const EMPTY_GRAPH_TRACE: GraphTraceNode[] = [];
+const EMPTY_GRAPH_ALTERNATES: GraphTraceNode[] = [];
 
 /**
  * Derived selector — the currently-foregrounded artifact, or null if
@@ -580,6 +582,17 @@ export function useCurrentSources(): Source[] {
     if (!id) return EMPTY_SOURCES;
     const found = s.artifacts.find((a) => a.id === id)?.sources;
     return found ?? EMPTY_SOURCES;
+  });
+}
+
+/** Convenience: the current artifact's verb-leg alternates (branches not
+ *  taken), or stable empty array. Consumed by the decision-path diagram. */
+export function useCurrentGraphAlternates(): GraphTraceNode[] {
+  return useCanvasStore((s) => {
+    const id = s.currentArtifactId;
+    if (!id) return EMPTY_GRAPH_ALTERNATES;
+    const found = s.artifacts.find((a) => a.id === id)?.graph_trace_alternates;
+    return found ?? EMPTY_GRAPH_ALTERNATES;
   });
 }
 

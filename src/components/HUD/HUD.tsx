@@ -3,6 +3,7 @@ import { Radar } from "lucide-react";
 import { OntologyMap } from "./OntologyMap";
 import { RoutingDecision } from "./RoutingDecision";
 import { SourcesTrail } from "./SourcesTrail";
+import { DecisionPathDiagram } from "./DecisionPathDiagram";
 import { GraphTrace } from "./GraphTrace";
 import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
@@ -51,10 +52,16 @@ export function HUD() {
       {/* Routing Decision (Phase 2) */}
       <RoutingDecision />
 
+      {/* Decision Path diagram — the DRAWN path with branches-not-taken
+          (both legs). Detailed mode; the visual counterpart to the
+          text-trail GraphTrace below it. */}
+      {mode === "detailed" && <DecisionPathDiagram />}
+
       {/* Sources & Evidence (Phase 3) */}
       <SourcesTrail />
 
-      {/* Graph Trace (Phase 4) — detailed mode only */}
+      {/* Graph Trace (Phase 4) — detailed mode only; the linear text
+          audit of the taken walk (URIs), beneath the drawn diagram. */}
       {mode === "detailed" && <GraphTrace />}
 
       {/* Compile button (shown when interview reaches blueprint/compiling/complete phase) */}

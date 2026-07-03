@@ -127,6 +127,9 @@ function rowToArtifact(row: Row): Artifact {
     routing: parseJsonbOrNull(row.routing),
     sources: parseJsonbOrDefault(row.sources, []),
     graph_trace: parseJsonbOrDefault(row.graph_trace, []),
+    // Verb-leg alternates — sibling to graph_trace (see Artifact type).
+    // Projector-covered once Hop 2 persists it; [] until then.
+    graph_trace_alternates: parseJsonbOrDefault(row.graph_trace_alternates, []),
     derived_from_artifact_id: (row.derived_from_artifact_id as string | null) ?? null,
     durability_status: row.durability_status as Artifact["durability_status"],
     watermark: parseBigInt(row.watermark),

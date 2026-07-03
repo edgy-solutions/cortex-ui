@@ -126,7 +126,11 @@ function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
         return { type: "sources", sources: parsed.sources ?? parsed };
       }
       case "graph_trace": {
-        return { type: "graph_trace", nodes: parsed.nodes ?? parsed };
+        return {
+          type: "graph_trace",
+          nodes: parsed.nodes ?? parsed,
+          alternates: parsed.alternates ?? [],
+        };
       }
       default:
         return null;

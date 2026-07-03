@@ -229,7 +229,7 @@ export interface Source {
 export interface GraphTraceNode {
   uri: string;
   label: string;
-  role: "resolved_subject" | "ancestor_class" | "verb_target" | "output_class";
+  role: "resolved_subject" | "ancestor_class" | "verb_target" | "output_class" | "alternate_verb";
   /** Number of subClassOf hops from the resolved subject. 0 = subject itself. */
   hops?: number;
   /** Verb name if this node is reached via a verb edge (not subClassOf). */
@@ -309,7 +309,7 @@ export type StreamEvent =
     }
   | { type: "route_decision"; decision: RouteDecision }
   | { type: "sources"; sources: Source[] }
-  | { type: "graph_trace"; nodes: GraphTraceNode[] };
+  | { type: "graph_trace"; nodes: GraphTraceNode[]; alternates?: GraphTraceNode[] };
 
 /**
  * Artifact — the durable, grounded answer-object per ADR-0023.
@@ -505,6 +505,11 @@ export interface Artifact {
 
   /** Graph trace nodes (subject graph for the HUD's reasoning panel). */
   graph_trace: GraphTraceNode[];
+
+  /** Verb-leg alternates — the untaken compatible verbs (role
+   *  "alternate_verb"). Sibling to graph_trace; the decision-path diagram
+   *  draws these as branches-not-taken. Empty when only one verb fit. */
+  graph_trace_alternates: GraphTraceNode[];
 
   /**
    * Lineage — id of the artifact this follow-up was DERIVED_FROM. Null
