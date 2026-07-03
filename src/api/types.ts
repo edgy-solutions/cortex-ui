@@ -1,10 +1,14 @@
 // ── Stream Event Protocol (SSE) ─────────────────────────────────
-export { 
-  SemanticArchetype, 
+export {
+  SemanticArchetype,
   SeverityLevel,
   ChartType,
   MoodType,
 } from '@platform/iagent-contracts';
+
+// The fallback_reason vocabulary + presentation lives in lib/routing so
+// the decision-path visualizer has one source of truth for the enum.
+import type { FallbackReason } from '@/lib/routing';
 
 import type {
   DashboardUI,
@@ -113,6 +117,38 @@ export interface RouteDecision {
     provider: string;       // provider field from the verb edge
     endpoint_url?: string;  // the actual HTTP endpoint
   };
+
+  /**
+   * Decision-path visualizer (Part 1) fields. The gateway projection emits
+   * these; older projections may omit them (all optional for backward
+   * compat). "Render only what was captured" — the UI renders these when
+   * present, and honestly shows nothing extra when absent.
+   */
+  /** The supervisor's authoritative status: "matched" | "no_match" |
+   *  "infra_error". */
+  route_status?: string;
+  /** True when routing fell to the Engine A generalist instead of a
+   *  specialist. When true, `fallback_reason` carries WHY. */
+  fallback?: boolean;
+  /** The STRUCTURED closed-enum reason (Part 0). Passed through verbatim
+   *  from the supervisor — see src/lib/routing.ts for presentation. */
+  fallback_reason?: FallbackReason;
+  /** The resolver candidate pool — winner AND the losers it beat, each
+   *  with a score. Rendered losers-first-class so "why did nothing win"
+   *  (or "what did the winner beat") is visible, not just the winner. */
+  candidates?: SubjectCandidate[];
+}
+
+/**
+ * SubjectCandidate — one entry in the resolver's candidate pool, captured
+ * by the supervisor (subject_candidates) with its score. The winner is the
+ * one whose `uri` equals RouteDecision.about.uri; the rest are the losers,
+ * rendered first-class with their scores so the contest is visible.
+ */
+export interface SubjectCandidate {
+  uri: string;
+  label?: string;
+  score?: number;
 }
 
 /**
