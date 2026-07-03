@@ -7,6 +7,8 @@ import {
   type CompileRequest,
   type CompileResponse,
   type Entitlements,
+  type DecisionSubgraphRequest,
+  type DecisionSubgraphResponse,
 } from "./types";
 
 // ── Auth Utilities ─────────────────────────────────────────
@@ -253,6 +255,37 @@ export async function compileWorkflow(
 export async function getMeshConfig(): Promise<any> {
   const { data } = await api.get("/mesh/config");
   return data;
+}
+
+// ── Decision-path MAP base layer ─────────────────────────
+/**
+ * Fetch the bounded live-graph neighborhood for the decision map. The
+ * frontend holds the captured decision and diffs it against this. Network
+ * failure surfaces as the COULDN'T-CHECK state — the caller renders
+ * "captured-only, cannot verify", never an empty map.
+ */
+export async function fetchDecisionSubgraph(
+  request: DecisionSubgraphRequest,
+): Promise<DecisionSubgraphResponse> {
+  try {
+    const { data } = await api.post<DecisionSubgraphResponse>(
+      "/decision_subgraph",
+      request,
+    );
+    return data;
+  } catch (e) {
+    // The transport itself failed — treat as couldn't-check, same shape
+    // the backend returns on a live-read failure. Never fabricate a base
+    // layer; the map must say it couldn't verify.
+    return {
+      available: false,
+      reason: `request failed: ${e instanceof Error ? e.message : String(e)}`,
+      live_nodes: [],
+      live_edges: [],
+      context_nodes: [],
+      ancestor_chain: [],
+    };
+  }
 }
 
 // ── ADR-0017 frontend self-registration ──────────────────

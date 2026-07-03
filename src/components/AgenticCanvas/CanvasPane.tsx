@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
-import { useCanvasStore, useCurrentArtifact } from '../../store/useCanvasStore';
+import { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
-import { Layers } from 'lucide-react';
+import { Layers, Route, X } from 'lucide-react';
 import { InlineFigures } from './InlineFigures';
+import { DecisionMap } from './DecisionMap';
 
 /**
  * CanvasPane — view OVER the artifact collection per ADR-0023.
@@ -32,6 +34,8 @@ import { InlineFigures } from './InlineFigures';
 export const CanvasPane = () => {
   const { personaConfig } = useMeshConfig();
   const artifact = useCurrentArtifact();
+  const routing = useCurrentRouting();
+  const [showMap, setShowMap] = useState(false);
   const activeTab = useCanvasStore((s) => s.activeTab);
   const setActiveTab = useCanvasStore((s) => s.setActiveTab);
   const artifactCount = useCanvasStore((s) => s.artifacts.length);
@@ -136,7 +140,55 @@ export const CanvasPane = () => {
   }
 
   return (
-    <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+    <div className="relative h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+      {/* Decision Map toggle — opens the spatial decision-path map as a
+          slide-in over the canvas. Available whenever a routing decision
+          exists on the foregrounded artifact. */}
+      {routing && (
+        <button
+          onClick={() => setShowMap(true)}
+          className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-neon-cyan/30 bg-neon-cyan/5 text-neon-cyan/90 hover:bg-neon-cyan/10 transition-colors font-mono text-[10px] uppercase tracking-wider"
+          title="Show the decision path as a spatial map (captured decision overlaid on the live graph)"
+        >
+          <Route className="w-3.5 h-3.5" />
+          Decision Map
+        </button>
+      )}
+
+      <AnimatePresence>
+        {showMap && (
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 40 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-sm flex flex-col"
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <Route className="w-4 h-4 text-neon-cyan/80" />
+                <span className="font-mono text-[11px] uppercase tracking-widest text-neon-cyan/80">
+                  Decision Path Map
+                </span>
+                <span className="font-mono text-[10px] text-slate-600">
+                  captured decision overlaid on the live graph
+                </span>
+              </div>
+              <button
+                onClick={() => setShowMap(false)}
+                className="text-slate-500 hover:text-neon-cyan transition-colors"
+                title="Close map"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <DecisionMap />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {artifactHeader}
       {/* Tab Navigation */}
       {uniquePersonas.length > 0 && (

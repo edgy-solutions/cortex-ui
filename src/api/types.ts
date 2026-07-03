@@ -236,6 +236,39 @@ export interface GraphTraceNode {
   via_verb?: string;
 }
 
+/**
+ * Decision-subgraph MAP — the base layer (POST /decision_subgraph). A
+ * BOUNDED live Neo4j read of the decision's neighborhood, diffed on the
+ * frontend against the captured decision. `available=false` is the
+ * COULDN'T-CHECK state (live read failed) — the map must render
+ * "captured-only, cannot verify what changed", never an empty-looking map.
+ */
+export interface DecisionSubgraphRequest {
+  class_uris: string[];
+  verb_iris?: string[];
+  subject_uri?: string;
+}
+
+export interface SubgraphNode {
+  uri: string;
+  labels?: string[];
+}
+export interface SubgraphEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+export interface DecisionSubgraphResponse {
+  available: boolean;
+  reason?: string;
+  live_nodes: SubgraphNode[];
+  live_edges: SubgraphEdge[];
+  context_nodes: SubgraphNode[];
+  /** Ordered subClassOf spine, subject-first — the map's vertical
+   *  backbone with every intermediate class a real node. */
+  ancestor_chain: string[];
+}
+
 /** Parsed stream event types — Option A clean cut (2026-06-22).
  *
  *  The old `status` variant (action: "think" | "found" | "error" | "plan"
