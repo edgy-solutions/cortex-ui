@@ -137,6 +137,13 @@ export interface RouteDecision {
    *  with a score. Rendered losers-first-class so "why did nothing win"
    *  (or "what did the winner beat") is visible, not just the winner. */
   candidates?: SubjectCandidate[];
+
+  /** Acting-persona provenance — the CALLER persona + domain this decision
+   *  was computed under. Persona-driven routing means the same query can
+   *  pick different verbs under different personas; this is the premise
+   *  that makes such a divergence self-explaining. DISTINCT from
+   *  action.owner_persona (the answerer-side "voice"). */
+  acting?: { persona?: string | null; domains?: string[] };
 }
 
 /**

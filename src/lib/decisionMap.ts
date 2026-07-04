@@ -109,6 +109,10 @@ export interface CorridorData {
   }[];
   nodeStates?: Record<string, CorridorNodeState>;
   unverifiedAll?: boolean;
+  /** The CALLER persona + domain this decision was computed under — the
+   *  framing the SPO sentence reads inside ("acting as DATA_STEWARD, …"). */
+  actingPersona?: string | null;
+  actingDomains?: string[];
 }
 
 /**
@@ -133,10 +137,15 @@ export function buildCorridorData(
     if (available && uri && !liveSet.has(uri)) nodeStates[name] = "missing";
   };
 
-  const candidates = captured.candidates.map((c) => {
-    mark(c.label, c.uri);
-    return { name: c.label, recall: c.score };
-  });
+  // Exclude the WINNER from the candidate column — it's the pivot at
+  // center, not a left-column loser. (Without this it renders twice and
+  // the extra row overflows/clips the corridor.)
+  const candidates = captured.candidates
+    .filter((c) => c.uri !== captured.subjectUri)
+    .map((c) => {
+      mark(c.label, c.uri);
+      return { name: c.label, recall: c.score };
+    });
 
   const predicates: CorridorData["predicates"] = [];
   if (captured.outputUri) {
@@ -162,6 +171,8 @@ export function buildCorridorData(
     predicates,
     nodeStates,
     unverifiedAll: !available,
+    actingPersona: routing.acting?.persona ?? null,
+    actingDomains: routing.acting?.domains ?? [],
   };
 }
 

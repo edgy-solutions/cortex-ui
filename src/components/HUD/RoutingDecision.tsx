@@ -78,6 +78,24 @@ export function RoutingDecision() {
         </span>
       </div>
 
+      {/* ACTING PERSONA — the caller persona/domain this decision was
+          computed under (persona-driven verb eligibility). The premise
+          that makes a same-query-different-verb divergence legible.
+          DISTINCT from the "Voice" chip below (owner_persona / answerer). */}
+      {decision.acting?.persona && (
+        <div className="flex items-center gap-1.5 -mt-1">
+          <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
+            Acting as
+          </span>
+          <span className="text-[10px] font-mono text-neon-cyan/90 px-1.5 py-0.5 rounded border border-neon-cyan/30 bg-neon-cyan/5">
+            {decision.acting.persona}
+            {decision.acting.domains && decision.acting.domains.length > 0
+              ? ` · ${decision.acting.domains.join(", ")}`
+              : ""}
+          </span>
+        </div>
+      )}
+
       {/* FALLBACK, VISUALLY LOUD. When routing did NOT reach a specialist,
           the reason is the load-bearing signal — not a footnote. This
           banner surfaces the STRUCTURED fallback_reason the supervisor

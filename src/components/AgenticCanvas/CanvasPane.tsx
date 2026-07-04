@@ -161,8 +161,26 @@ export const CanvasPane = () => {
             Answer
           </button>
 
-          {/* Persona Tabs — sub-views of the Answer */}
-          {uniquePersonas.map(personaKey => {
+          {/* Decision Map — the coequal "how it got there" lens, sitting
+              directly beside Answer as its peer. */}
+          {routing && (
+            <button
+              onClick={() => setView("map")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold
+                ${view === "map"
+                  ? "border-neon-cyan text-neon-cyan bg-neon-cyan/10"
+                  : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"}`}
+            >
+              <Route className="w-4 h-4" />
+              Decision Map
+            </button>
+          )}
+
+          {/* Persona sub-tabs — ONLY when >1 persona actually produced
+              components. With a single answering persona the per-persona
+              tab just duplicates "Answer", so it's suppressed (that
+              redundant tab was the "why is it back" the eye caught). */}
+          {uniquePersonas.length > 1 && uniquePersonas.map(personaKey => {
             const config = personaConfig[personaKey];
             if (!config) return null;
             const isActive = view === "answer" && activeTab === personaKey;
@@ -181,20 +199,6 @@ export const CanvasPane = () => {
               </button>
             );
           })}
-
-          {/* Decision Map — the coequal "how it got there" lens. */}
-          {routing && (
-            <button
-              onClick={() => setView("map")}
-              className={`ml-auto flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold
-                ${view === "map"
-                  ? "border-neon-cyan text-neon-cyan bg-neon-cyan/10"
-                  : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"}`}
-            >
-              <Route className="w-4 h-4" />
-              Decision Map
-            </button>
-          )}
         </div>
       )}
 

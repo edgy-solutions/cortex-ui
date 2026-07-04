@@ -78,7 +78,18 @@ export function SpoCorridor({
             className="flex items-center justify-between px-5 py-3"
             style={{ borderBottom: "1px solid rgba(62,230,247,.1)" }}
           >
-            <span style={topBar}>DECISION PATH · SPO CORRIDOR</span>
+            <span style={topBar}>
+              DECISION PATH · SPO CORRIDOR
+              {data.actingPersona && (
+                <span style={{ color: "#8feafb" }}>
+                  {"  ·  acting as "}
+                  {data.actingPersona}
+                  {data.actingDomains && data.actingDomains.length > 0
+                    ? ` / ${data.actingDomains.join(", ")}`
+                    : ""}
+                </span>
+              )}
+            </span>
             <span style={{ ...topBar, color: "#bdf6ff" }}>
               {data.subject.chosen} ─ {chosen?.name ?? "—"} ▸ {chosen?.object ?? "—"}
             </span>
@@ -99,8 +110,14 @@ export function SpoCorridor({
             <text x={CX.pred} y={16} style={caption} textAnchor="middle">PREDICATES</text>
             <text x={CX.obj} y={16} style={caption} textAnchor="middle">OBJECTS</text>
 
-            {/* ── subject candidates (dashed, recall chips, dashed ties) ── */}
-            {data.subject.candidates.slice(0, 6).map((c, i) => {
+            {/* ── subject candidates (dashed, recall chips, dashed ties) ──
+                FOLD-ON-OVERFLOW: show the top 5 by recall; anything past
+                that folds to a "+N more" chip rather than clipping off the
+                bottom edge (present-in-data must not be cut-off-in-render). */}
+            {[...data.subject.candidates]
+              .sort((a, b) => (b.recall ?? 0) - (a.recall ?? 0))
+              .slice(0, 5)
+              .map((c, i) => {
               const y = 110 + i * 125;
               return (
                 <g key={`subj-${c.name}`}>
@@ -115,6 +132,12 @@ export function SpoCorridor({
                 </g>
               );
             })}
+            {data.subject.candidates.length > 5 && (
+              <text x={CX.subj} y={110 + 5 * 125 - 40} textAnchor="middle"
+                style={{ fontFamily: MONO, fontSize: 11, fill: "rgba(148,190,210,.6)" }}>
+                +{data.subject.candidates.length - 5} more candidates
+              </text>
+            )}
 
             {/* ── alternate predicates: dashed lines + on-line labels ── */}
             {alternates.map((p, i) => {
