@@ -84,7 +84,7 @@ export interface CapturedDecision {
   outputUri: string | null;
   outputLabel: string | null;
   takenVerbLabel: string | null;
-  alternates: { verbLabel: string; outputUri: string; outputLabel: string }[];
+  alternates: { verbLabel: string; outputUri: string; outputLabel: string; score?: number }[];
 }
 
 function shortUri(uri: string): string {
@@ -150,7 +150,7 @@ export function buildCorridorData(
   }
   for (const a of captured.alternates) {
     mark(a.outputLabel, a.outputUri);
-    predicates.push({ name: a.verbLabel, object: a.outputLabel });
+    predicates.push({ name: a.verbLabel, object: a.outputLabel, score: a.score });
   }
 
   return {
@@ -203,6 +203,7 @@ export function collectCapturedDecision(
       verbLabel: a.via_verb ? shortUri(a.via_verb) : a.label,
       outputUri: a.uri,
       outputLabel: a.label || shortUri(a.uri),
+      score: a.score,
     };
   });
 

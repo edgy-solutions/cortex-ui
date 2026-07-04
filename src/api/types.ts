@@ -234,6 +234,10 @@ export interface GraphTraceNode {
   hops?: number;
   /** Verb name if this node is reached via a verb edge (not subClassOf). */
   via_verb?: string;
+  /** Per-alternate semantic score (Weaviate hybrid query→verb match), on
+   *  alternate_verb nodes — lets the decision-path map sort + label the
+   *  alternate fan instead of anonymous dashed lines. */
+  score?: number;
 }
 
 /**
