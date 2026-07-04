@@ -93,6 +93,78 @@ function shortUri(uri: string): string {
   return frag || uri;
 }
 
+// ── SPO Corridor data contract (design handoff 2a) ──────────────────────
+export type CorridorNodeState = "missing" | "unverified";
+export interface CorridorData {
+  subject: {
+    chosen: string;
+    conf?: number;
+    candidates: { name: string; recall?: number }[];
+  };
+  predicates: {
+    name: string;
+    score?: number;
+    object: string;
+    chosen?: boolean;
+  }[];
+  nodeStates?: Record<string, CorridorNodeState>;
+  unverifiedAll?: boolean;
+}
+
+/**
+ * Build the SPO-corridor input from the captured decision + the live diff.
+ * The four honesty-states come from the diff: a captured node absent from
+ * the live layer → "missing" (traversed, now gone); a failed live read →
+ * unverifiedAll (couldn't verify anything). Chosen predicate carries its
+ * real classify confidence; alternate predicate scores are not captured
+ * yet (a follow-up thread — same class as the verb-leg-loser gap).
+ */
+export function buildCorridorData(
+  routing: RouteDecision,
+  graphTrace: GraphTraceNode[],
+  alternates: GraphTraceNode[],
+  live: DecisionSubgraphResponse,
+): CorridorData {
+  const captured = collectCapturedDecision(routing, graphTrace, alternates);
+  const available = live.available;
+  const liveSet = new Set(live.live_nodes.map((n) => n.uri));
+  const nodeStates: Record<string, CorridorNodeState> = {};
+  const mark = (name: string, uri: string | null | undefined) => {
+    if (available && uri && !liveSet.has(uri)) nodeStates[name] = "missing";
+  };
+
+  const candidates = captured.candidates.map((c) => {
+    mark(c.label, c.uri);
+    return { name: c.label, recall: c.score };
+  });
+
+  const predicates: CorridorData["predicates"] = [];
+  if (captured.outputUri) {
+    mark(captured.outputLabel || shortUri(captured.outputUri), captured.outputUri);
+    predicates.push({
+      name: captured.takenVerbLabel || routing.action.label,
+      score: routing.action.confidence,
+      object: captured.outputLabel || shortUri(captured.outputUri),
+      chosen: true,
+    });
+  }
+  for (const a of captured.alternates) {
+    mark(a.outputLabel, a.outputUri);
+    predicates.push({ name: a.verbLabel, object: a.outputLabel });
+  }
+
+  return {
+    subject: {
+      chosen: captured.subjectLabel,
+      conf: captured.winnerConfidence,
+      candidates,
+    },
+    predicates,
+    nodeStates,
+    unverifiedAll: !available,
+  };
+}
+
 /**
  * Distill the artifact's captured decision into the identities the map
  * needs (to send) and the overlay data (to draw). Pure over the store
