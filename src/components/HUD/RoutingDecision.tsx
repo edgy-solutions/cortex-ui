@@ -83,7 +83,7 @@ export function RoutingDecision() {
           that makes a same-query-different-verb divergence legible.
           DISTINCT from the "Voice" chip below (owner_persona / answerer). */}
       {decision.acting?.persona && (
-        <div className="flex items-center gap-1.5 -mt-1">
+        <div className="flex items-center gap-1.5 -mt-1" title="The CALLER persona you're acting as (the picker selection). Distinct from 'Voice' below (the verb's owner / answerer). A data engineer can invoke a verb owned by a data steward — the two differ by design (ADR-0009).">
           <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
             Acting as
           </span>
@@ -182,13 +182,14 @@ export function RoutingDecision() {
             the system owns this kind of answer"), NOT the caller-
             identity persona (that's a separate future ADR). */}
         {decision.action.owner_persona && (
-          <div className="mt-1.5 flex items-center gap-1.5">
+          <div className="mt-1.5 flex items-center gap-1.5" title="The persona that OWNS this verb — the answerer's voice (ADR-0009). Distinct from 'Acting as' above, which is the caller. They differ by design: a caller of one persona can invoke a verb owned by another.">
             <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
               Voice
             </span>
             <span className="text-[10px] font-mono text-neon-purple/80 px-1.5 py-0.5 rounded border border-neon-purple/30 bg-neon-purple/5">
               {decision.action.owner_persona}
             </span>
+            <span className="text-[8px] font-mono text-slate-600 italic">answered by</span>
           </div>
         )}
       </RoutingRow>
