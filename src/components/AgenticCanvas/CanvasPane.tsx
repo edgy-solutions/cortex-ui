@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
-import { Layers, Route, X } from 'lucide-react';
+import { Layers, Route } from 'lucide-react';
 import { InlineFigures } from './InlineFigures';
 import { DecisionMap } from './DecisionMap';
 
@@ -35,7 +34,10 @@ export const CanvasPane = () => {
   const { personaConfig } = useMeshConfig();
   const artifact = useCurrentArtifact();
   const routing = useCurrentRouting();
-  const [showMap, setShowMap] = useState(false);
+  // Two PEER views of one artifact: the composed Answer, and the Decision
+  // Map (how the engine got there). Tabs express "two equal lenses", not a
+  // slide-in annotation — and the map gets the full canvas it needs.
+  const [view, setView] = useState<"answer" | "map">("answer");
   const activeTab = useCanvasStore((s) => s.activeTab);
   const setActiveTab = useCanvasStore((s) => s.setActiveTab);
   const artifactCount = useCanvasStore((s) => s.artifacts.length);
@@ -140,81 +142,35 @@ export const CanvasPane = () => {
   }
 
   return (
-    <div className="relative h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
-      {/* Decision Map toggle — opens the spatial decision-path map as a
-          slide-in over the canvas. Available whenever a routing decision
-          exists on the foregrounded artifact. */}
-      {routing && (
-        <button
-          onClick={() => setShowMap(true)}
-          className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-neon-cyan/30 bg-neon-cyan/5 text-neon-cyan/90 hover:bg-neon-cyan/10 transition-colors font-mono text-[10px] uppercase tracking-wider"
-          title="Show the decision path as a spatial map (captured decision overlaid on the live graph)"
-        >
-          <Route className="w-3.5 h-3.5" />
-          Decision Map
-        </button>
-      )}
-
-      <AnimatePresence>
-        {showMap && (
-          <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 40 }}
-            transition={{ duration: 0.25 }}
-            className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-sm flex flex-col"
-          >
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <Route className="w-4 h-4 text-neon-cyan/80" />
-                <span className="font-mono text-[11px] uppercase tracking-widest text-neon-cyan/80">
-                  Decision Path Map
-                </span>
-                <span className="font-mono text-[10px] text-slate-600">
-                  captured decision overlaid on the live graph
-                </span>
-              </div>
-              <button
-                onClick={() => setShowMap(false)}
-                className="text-slate-500 hover:text-neon-cyan transition-colors"
-                title="Close map"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0">
-              <DecisionMap />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+    <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
       {artifactHeader}
-      {/* Tab Navigation */}
-      {uniquePersonas.length > 0 && (
+      {/* Tab Navigation — Answer + Decision Map are PEER views of the
+          artifact; persona chips sub-filter the Answer. Shows whenever
+          there's an answer to filter OR a routing decision to map. */}
+      {(uniquePersonas.length > 0 || routing) && (
         <div className="w-full flex items-center px-6 pt-4 pb-2 border-b border-white/5 gap-2 overflow-x-auto hide-scrollbar shrink-0">
-          {/* ALL Tab */}
+          {/* Answer (was "Full Dashboard") */}
           <button
-            onClick={() => setActiveTab("ALL")}
+            onClick={() => { setView("answer"); setActiveTab("ALL"); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold
-              ${activeTab === "ALL"
+              ${view === "answer" && activeTab === "ALL"
                 ? "border-neon-blue text-neon-blue bg-neon-blue/10"
                 : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"}`}
           >
             <Layers className="w-4 h-4" />
-            Full Dashboard
+            Answer
           </button>
 
-          {/* Persona Tabs */}
+          {/* Persona Tabs — sub-views of the Answer */}
           {uniquePersonas.map(personaKey => {
             const config = personaConfig[personaKey];
             if (!config) return null;
-            const isActive = activeTab === personaKey;
+            const isActive = view === "answer" && activeTab === personaKey;
 
             return (
               <button
                 key={personaKey}
-                onClick={() => setActiveTab(personaKey)}
+                onClick={() => { setView("answer"); setActiveTab(personaKey); }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold
                   ${isActive
                     ? `border-current ${config.color} ${config.bg}`
@@ -225,25 +181,36 @@ export const CanvasPane = () => {
               </button>
             );
           })}
+
+          {/* Decision Map — the coequal "how it got there" lens. */}
+          {routing && (
+            <button
+              onClick={() => setView("map")}
+              className={`ml-auto flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold
+                ${view === "map"
+                  ? "border-neon-cyan text-neon-cyan bg-neon-cyan/10"
+                  : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"}`}
+            >
+              <Route className="w-4 h-4" />
+              Decision Map
+            </button>
+          )}
         </div>
       )}
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-        {/* SemanticInterpreter handles the grid, col-spans, and
-            RadarReveal for the LLM-generated answer body. */}
-        <SemanticInterpreter payload={{ components: filteredComponents }} />
-        {/* Figures section: renderer-deterministic figure placement
-            below the prose. Reads /data_module/figures for the
-            artifact's dominant data module (most-cited URI in
-            sources). Honest four-state discipline: pipeline /
-            supplied_override render inline; format_not_supported
-            and unresolved render labeled placeholders IN PLACE.
-            The LLM's prose never narrates figure availability;
-            this surface shows the truth deterministically. See
-            InlineFigures.tsx for the four-state rendering. */}
-        <InlineFigures artifact={artifact} />
-      </div>
+      {/* Content Area — the Answer, or the full-canvas Decision Map. */}
+      {view === "map" ? (
+        <div className="flex-1 min-h-0">
+          <DecisionMap />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          {/* SemanticInterpreter handles the grid, col-spans, and
+              RadarReveal for the LLM-generated answer body. */}
+          <SemanticInterpreter payload={{ components: filteredComponents }} />
+          <InlineFigures artifact={artifact} />
+        </div>
+      )}
     </div>
   );
 };
