@@ -69,6 +69,45 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+// ── HITL HumanTask queue (Slice 2 — workflow-ack) ───────────
+/**
+ * REST initial-load of the caller's pending queue. cortex-bff filters by
+ * recipient_id = the caller's authz_id (the SAME key the Electric proxy
+ * injects), so this and the live subscription agree by construction. The live
+ * path is the Electric subscription; this is the on-open snapshot.
+ */
+export interface MyHumanTasksResponse {
+  email: string;
+  tasks: Array<Record<string, unknown>>;
+}
+export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
+  const { data } = await api.get<MyHumanTasksResponse>("/me/human_tasks");
+  return data;
+}
+
+/**
+ * Approve/reject a task. cortex-bff RE-CHECKS Topaz can_act (deny-by-default)
+ * before acting; on approve of a workflow_ack task it resolves the Restate
+ * promise so the suspended workflow resumes. `workflow_resumed` reflects that.
+ */
+export interface ActOnTaskResult {
+  task_id: string;
+  decision: string;
+  rows_resolved: number;
+  workflow_resumed?: boolean;
+}
+export async function actOnHumanTask(
+  taskId: string,
+  decision: "approved" | "rejected",
+  comment = ""
+): Promise<ActOnTaskResult> {
+  const { data } = await api.post<ActOnTaskResult>(
+    `/human_tasks/${encodeURIComponent(taskId)}/act`,
+    { decision, comment }
+  );
+  return data;
+}
+
 /**
  * Parses a single SSE block (event + data) into a StreamEvent.
  * SSE format: "event: <type>\ndata: <json>\n\n"

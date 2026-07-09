@@ -14,6 +14,8 @@ import {
 } from "@/registry/frontendCapabilities";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
+import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
+import { HumanTaskInbox } from "@/components/HumanTaskInbox/HumanTaskInbox";
 
 import { Toaster } from "sonner";
 
@@ -51,6 +53,22 @@ function useArtifactSync() {
     // Re-fires when the token changes (e.g. silent refresh issues
     // a new access_token).
     const stop = startArtifactsSubscription(token);
+    return stop;
+  }, [token]);
+}
+
+/**
+ * HITL Slice 2 — mount the HumanTask queue subscription. Mirrors
+ * useArtifactSync: the Electric `human_task_projection` shape is served through
+ * cortex-bff's /electric/shape proxy, which per-user-filters by the caller's
+ * authz_id — so the browser only receives THIS user's tasks. Deferred until a
+ * token exists; re-fires on silent refresh.
+ */
+function useHumanTaskSync() {
+  const auth = useAuth();
+  const token = auth.user?.access_token ?? null;
+  useEffect(() => {
+    const stop = startHumanTasksSubscription(token);
     return stop;
   }, [token]);
 }
@@ -98,6 +116,7 @@ export default function App() {
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
   useArtifactSync();
+  useHumanTaskSync();
 
   return (
     <RequireAuth>
@@ -134,6 +153,9 @@ export default function App() {
       {(phase === "compiling" || phase === "complete") && (
         <CompilationOverlay onComplete={() => setPhase("blueprint")} />
       )}
+
+      {/* HITL HumanTask inbox drawer (right-edge slide-in) */}
+      <HumanTaskInbox />
     </RequireAuth>
   );
 }
