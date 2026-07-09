@@ -23,13 +23,21 @@ import {
 } from "@/store/useHumanTaskStore";
 import { fetchMyHumanTasks, actOnHumanTask } from "@/api/client";
 
-function seedFromRest() {
+/**
+ * Reconcile the pending list from the authoritative REST snapshot (/me/human_tasks
+ * returns only PENDING rows, filtered by the caller's authz_id). This is the
+ * source of truth for the inbox — it drops tasks resolved out-of-band even when
+ * the Electric live-update didn't arrive, and clears any stale rows. Electric is
+ * a best-effort live layer on top; the acting user's own result comes from the
+ * optimistic removal in act() below, not the round-trip.
+ */
+export function seedFromRest() {
   fetchMyHumanTasks()
     .then((resp) => {
-      const upsert = useHumanTaskStore.getState().upsertTask;
+      const tasks: HumanTask[] = [];
       for (const t of resp.tasks) {
         if (t.id == null || t.task_id == null) continue;
-        upsert({
+        tasks.push({
           id: String(t.id),
           taskId: String(t.task_id),
           workflowId: (t.workflow_id as string | null) ?? null,
@@ -43,6 +51,7 @@ function seedFromRest() {
           createdAt: Number(t.created_at ?? 0),
         });
       }
+      useHumanTaskStore.getState().replacePending(tasks);
     })
     .catch((err) => console.warn("[hitl] REST seed failed (live via Electric)", err));
 }
@@ -55,8 +64,10 @@ function TaskCard({ task }: { task: HumanTask }) {
     setActing(task.taskId, true);
     try {
       const res = await actOnHumanTask(task.taskId, decision);
-      // The status update arrives over Electric and drops it from pending;
-      // the toast confirms the resume (the whole point of workflow-ack).
+      // Optimistic: drop it locally NOW rather than waiting for the Electric
+      // round-trip (which may lag). The backend already resolved it (the act
+      // returned 200); the toast confirms the resume.
+      useHumanTaskStore.getState().removeTask(task.id);
       if (decision === "approved") {
         toast.success(
           res.workflow_resumed ? "Approved — workflow resumed" : "Approved"

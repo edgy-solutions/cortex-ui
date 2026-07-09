@@ -15,7 +15,7 @@ import {
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
-import { HumanTaskInbox } from "@/components/HumanTaskInbox/HumanTaskInbox";
+import { HumanTaskInbox, seedFromRest } from "@/components/HumanTaskInbox/HumanTaskInbox";
 
 import { Toaster } from "sonner";
 
@@ -68,6 +68,9 @@ function useHumanTaskSync() {
   const auth = useAuth();
   const token = auth.user?.access_token ?? null;
   useEffect(() => {
+    // Seed the badge/inbox from the authoritative REST snapshot on load (the
+    // inbox also re-seeds on open). Electric is the best-effort live layer.
+    if (token) seedFromRest();
     const stop = startHumanTasksSubscription(token);
     return stop;
   }, [token]);

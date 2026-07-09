@@ -37,6 +37,11 @@ interface HumanTaskState {
 
   upsertTask: (task: HumanTask) => void;
   removeTask: (rowId: string) => void;
+  // Reconcile the pending set to the authoritative REST snapshot: replace all
+  // PENDING rows with exactly `tasks`, so a task resolved out-of-band (by this
+  // user's own act, or another approver, or a workflow that failed) drops even
+  // when the Electric live-update didn't arrive. Non-pending rows are dropped.
+  replacePending: (tasks: HumanTask[]) => void;
   setInboxOpen: (open: boolean) => void;
   setSelectedTask: (taskId: string | null) => void;
   setActing: (taskId: string, v: boolean) => void;
@@ -59,6 +64,13 @@ export const useHumanTaskStore = create<HumanTaskState>((set) => ({
 
   removeTask: (rowId) =>
     set((state) => ({ tasks: state.tasks.filter((t) => t.id !== rowId) })),
+
+  replacePending: (tasks) =>
+    set((state) => ({
+      // keep any non-pending rows we happen to hold (harmless — the UI filters
+      // to pending), replace the pending set with the authoritative snapshot.
+      tasks: [...state.tasks.filter((t) => t.status !== "pending"), ...tasks],
+    })),
 
   setInboxOpen: (open) => set({ isInboxOpen: open }),
   setSelectedTask: (taskId) => set({ selectedTaskId: taskId }),
