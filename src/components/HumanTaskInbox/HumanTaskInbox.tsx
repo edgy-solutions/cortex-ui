@@ -14,12 +14,11 @@
  * a REST snapshot (fetchMyHumanTasks) in case the subscription hasn't delivered
  * yet — the two agree by construction (same recipient_id filter).
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { X, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHumanTaskStore,
-  selectPendingTasks,
   type HumanTask,
 } from "@/store/useHumanTaskStore";
 import { fetchMyHumanTasks, actOnHumanTask } from "@/api/client";
@@ -116,7 +115,18 @@ function TaskCard({ task }: { task: HumanTask }) {
 export function HumanTaskInbox() {
   const isInboxOpen = useHumanTaskStore((s) => s.isInboxOpen);
   const setInboxOpen = useHumanTaskStore((s) => s.setInboxOpen);
-  const pending = useHumanTaskStore(selectPendingTasks);
+  // Select the STABLE raw tasks array (only changes when upsert/remove creates a
+  // new array), then derive `pending` with useMemo. Subscribing directly to a
+  // filtering selector (returns a NEW array each call) makes useSyncExternalStore
+  // see a fresh snapshot every render -> infinite re-render (React #185).
+  const tasks = useHumanTaskStore((s) => s.tasks);
+  const pending = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.status === "pending")
+        .sort((a, b) => b.createdAt - a.createdAt),
+    [tasks]
+  );
 
   useEffect(() => {
     if (isInboxOpen) seedFromRest();
@@ -157,10 +167,7 @@ export function HumanTaskInbox() {
             </p>
           </div>
         ) : (
-          pending
-            .slice()
-            .sort((a, b) => b.createdAt - a.createdAt)
-            .map((task) => <TaskCard key={task.id} task={task} />)
+          pending.map((task) => <TaskCard key={task.id} task={task} />)
         )}
       </div>
     </div>
