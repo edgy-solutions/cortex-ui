@@ -148,11 +148,13 @@ function rowToArtifact(row: Row): Artifact {
  *     `useCanvasStore.getState().electricUpsertArtifact(artifact)`
  *     with the converted row. The store records the provenance as
  *     `electric:answer_artifact_projection` for every field touched.
- *   - On `delete` messages: not yet handled at Hop 3 — the projector
- *     doesn't delete rows today (artifacts are append-and-update).
- *     If a delete arrives, log a warning and ignore; this is the
- *     premise-shift detector for when the projector grows a delete
- *     path.
+ *   - On `delete` messages: removes the artifact from the collection
+ *     via `removeArtifact(id)`. The projector grew a delete path
+ *     (pre-summary rows are prunable), so the Hop-3 premise ("append-
+ *     and-update only") no longer holds — the old ignore-and-warn
+ *     premise-shift detector fired and this is its resolution.
+ *   - On `must-refetch` control: drops non-pending artifacts so an
+ *     Electric re-sync can't leave stale rows; the snapshot rebuilds.
  *   - On `error` messages: log and continue. The subscription's
  *     own retry logic re-establishes if the server goes away.
  *   - When `VITE_ELECTRIC_URL` is empty: no subscription is started
@@ -200,7 +202,22 @@ export function startArtifactsSubscription(token: string | null): () => void {
     (messages: Message[]) => {
       for (const msg of messages) {
         if (!("headers" in msg)) continue;
-        const op = (msg.headers as Record<string, unknown>).operation;
+        const headers = msg.headers as Record<string, unknown>;
+
+        // Control: `must-refetch` means the cached shape is invalid —
+        // Electric will re-send the current snapshot. Drop all
+        // Electric-sourced (non-pending) artifacts so the re-sync can't
+        // leave ghosts; pending client-created artifacts are kept (they
+        // aren't in the shape yet). The subsequent inserts rebuild the set.
+        if (headers.control === "must-refetch") {
+          const st = useCanvasStore.getState();
+          for (const a of st.artifacts) {
+            if (a.status !== "pending") st.removeArtifact(a.id);
+          }
+          continue;
+        }
+
+        const op = headers.operation;
         if (op === "insert" || op === "update") {
           const row = (msg as { value: Row }).value;
           try {
@@ -210,11 +227,17 @@ export function startArtifactsSubscription(token: string | null): () => void {
             console.error("[electric] row conversion failed", err, row);
           }
         } else if (op === "delete") {
-          console.warn(
-            "[electric] delete operation received; Hop 3 projector " +
-              "does not delete rows. Investigate.",
-            msg
-          );
+          // The projector grew a delete path (rows can be pruned from
+          // answer_artifact_projection). Electric delivers the deleted
+          // row's key columns; remove it from the collection. This
+          // resolves the Hop-3 premise-shift the old warning flagged.
+          const row = (msg as { value?: Row }).value;
+          const id = row?.id;
+          if (id != null) {
+            useCanvasStore.getState().removeArtifact(String(id));
+          } else {
+            console.warn("[electric] delete without id", msg);
+          }
         }
       }
     },

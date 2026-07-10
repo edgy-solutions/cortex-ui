@@ -278,6 +278,15 @@ interface CanvasState {
    */
   electricUpsertArtifact: (artifact: Artifact) => void;
 
+  /**
+   * Remove an artifact from the collection — driven by Electric `delete`
+   * operations (the projector grew a delete path: rows can now be pruned
+   * from `answer_artifact_projection`, e.g. clearing pre-summary
+   * artifacts). If the removed artifact was foregrounded, the selection
+   * clears so the canvas doesn't dangle on a gone id.
+   */
+  removeArtifact: (id: string) => void;
+
   /** Foreground a specific artifact (canvas view selection). */
   setCurrentArtifact: (id: string) => void;
 
@@ -497,6 +506,23 @@ export const useCanvasStore = create<CanvasState>((set) => ({
           ...state._lastUpdateSource,
           [artifact.id]: nextSource,
         },
+      };
+    }),
+
+  removeArtifact: (id) =>
+    set((state) => {
+      if (!state.artifacts.some((a) => a.id === id)) return {};
+      const artifacts = state.artifacts.filter((a) => a.id !== id);
+      const wasCurrent = state.currentArtifactId === id;
+      // Drop provenance for the removed row.
+      const _lastUpdateSource = { ...state._lastUpdateSource };
+      delete _lastUpdateSource[id];
+      return {
+        artifacts,
+        _lastUpdateSource,
+        ...(wasCurrent
+          ? { currentArtifactId: null, currentArtifactSetByUser: false }
+          : {}),
       };
     }),
 
