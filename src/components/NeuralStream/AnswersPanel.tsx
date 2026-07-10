@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { Search, GripVertical, Clock, Hash, Shapes, Hexagon } from "lucide-react";
+import { Search, GripVertical, Clock, Hash, Shapes } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import {
   useAnswerPanelStore,
@@ -180,13 +180,9 @@ export function AnswersPanel() {
           <SortChip mode="TIME" active={sortMode} onPick={setSortMode} icon={<Clock className="w-2.5 h-2.5" />} />
           <SortChip mode="TOPIC" active={sortMode} onPick={setSortMode} icon={<Hash className="w-2.5 h-2.5" />} />
           <SortChip mode="TYPE" active={sortMode} onPick={setSortMode} icon={<Shapes className="w-2.5 h-2.5" />} />
-          <span
-            className="flex items-center gap-1 px-2 py-1 rounded font-mono text-[9px] uppercase tracking-wider text-slate-700 cursor-not-allowed"
-            title="Graph proximity sort — coming in a later pass"
-          >
-            <Hexagon className="w-2.5 h-2.5" />
-            Graph
-          </span>
+          {/* GRAPH sort deferred to v1.5 (needs a cross-answer proximity
+              field that doesn't exist yet). Hidden rather than shown as a
+              dead chip — a dead chip reads as broken. */}
         </div>
       )}
       {q && (
