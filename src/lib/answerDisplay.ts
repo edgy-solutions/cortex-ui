@@ -34,7 +34,11 @@ export type AnswerArchetype =
 
 /** SPO provenance the card carries forward (ADR-0028 Decision 2). */
 export interface AnswerSPO {
+  /** Display subject: the INSTANCE label when resolved, else the class. */
   subjectLabel: string | null;
+  /** The subject CLASS label (the type) — always the class, kept for
+   *  eligibility computation in v2/v3 even when subjectLabel is an instance. */
+  subjectClassLabel: string | null;
   subjectUri: string | null;
   verbLabel: string | null;
   verbIri: string | null;
@@ -132,12 +136,20 @@ export function answerTopic(a: Artifact): string {
   return label || "ungrouped";
 }
 
-/** The SPO provenance the card carries forward for v2/v3. */
+/** The SPO provenance the card carries forward for v2/v3. `subjectLabel`
+ *  prefers the resolved INSTANCE label ("Customer 360") over the class
+ *  label ("Dashboard") — the specific thing the eye hunts for — falling
+ *  back to the class for set/type-level queries. `subjectClassLabel`
+ *  keeps the class available (the type is still carried for eligibility
+ *  computation in v2/v3). */
 export function answerSPO(a: Artifact): AnswerSPO {
   const about = a.routing?.about;
   const action = a.routing?.action;
+  const instance = about?.instance_label?.trim() || null;
+  const klass = about?.label?.trim() || null;
   return {
-    subjectLabel: about?.label?.trim() || null,
+    subjectLabel: instance || klass,
+    subjectClassLabel: klass,
     subjectUri: about?.uri || null,
     verbLabel: action?.label?.trim() || null,
     verbIri: action?.iri || null,

@@ -26,8 +26,15 @@ export function OntologyMap() {
       </div>
 
       {terms.length === 0 ? (
-        <p className="text-xs text-slate-600 italic font-mono">
-          No concepts extracted yet...
+        // Honest empty state: this is a LIVE grounding widget — concepts
+        // stream in while a question is being answered and are not
+        // persisted on the answer. So on retrieval of a past answer it's
+        // empty by design (the Decision Path + Subject Graph carry the
+        // persisted, structured grounding). Say that, rather than reading
+        // as a broken panel.
+        <p className="text-xs text-slate-600 italic font-mono leading-relaxed">
+          Concepts surface here live while a question is being answered.
+          For a past answer, see its Decision Path.
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">

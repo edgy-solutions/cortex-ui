@@ -92,6 +92,11 @@ export interface RouteDecision {
     /** Instance-resolution provenance (if any), straight from /resolve */
     instance_resolved?: boolean;
     instance_identifier?: string;
+    /** Friendly label of the resolved instance (e.g. "Customer 360") —
+     *  the specific thing, vs `label` which is the class ("Dashboard").
+     *  Present when an instance resolved; empty for set/type-level
+     *  queries. The answer summary leads with this when available. */
+    instance_label?: string;
   };
   action: {
     label: string;          // human-readable verb label (e.g. "Search technical manuals")
