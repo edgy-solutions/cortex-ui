@@ -109,6 +109,41 @@ export async function actOnHumanTask(
 }
 
 /**
+ * Bug 2 — Case-1 access request. A caller DENIED read on an asset asks for it.
+ * Reuses the sealed Slice-3 substrate: this is ASYNC (creates a request
+ * HumanTask routed to the domain's `access_grant:<domain>` approvers and
+ * returns immediately — NO suspend, per the DoS ruling for query denials). The
+ * grant SUBJECT is derived server-side from the caller's authz_id; we send only
+ * the asset URN, the domain (approver audience), and an optional reason —
+ * never a subject the client could spoof. An approver later writes the grant
+ * (asset_grants.yaml), closing the deny→request→grant→allow loop.
+ */
+export interface CreateAccessRequestResult {
+  request_id: string;
+  status: string;
+  approvers: number;
+}
+export async function createAccessRequest(req: {
+  asset: string;
+  domain?: string;
+  reason?: string;
+}): Promise<CreateAccessRequestResult> {
+  // OMIT an empty domain so the backend's default approver audience applies —
+  // sending `domain: ""` would route to `access_grant:` (zero approvers). The
+  // routing normally carries the acting domain; this is the safety net.
+  const body: { asset: string; reason: string; domain?: string } = {
+    asset: req.asset,
+    reason: req.reason ?? "",
+  };
+  if (req.domain) body.domain = req.domain;
+  const { data } = await api.post<CreateAccessRequestResult>(
+    "/access_requests",
+    body
+  );
+  return data;
+}
+
+/**
  * Parses a single SSE block (event + data) into a StreamEvent.
  * SSE format: "event: <type>\ndata: <json>\n\n"
  *
@@ -171,6 +206,16 @@ function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
           type: "graph_trace",
           nodes: parsed.nodes ?? parsed,
           alternates: parsed.alternates ?? [],
+        };
+      }
+      case "access_denied": {
+        return {
+          type: "access_denied",
+          denied_assets: parsed.denied_assets ?? [],
+          subject: parsed.subject ?? "",
+          domain: parsed.domain ?? "",
+          message:
+            parsed.message ?? "You don't have access to the requested data.",
         };
       }
       default:

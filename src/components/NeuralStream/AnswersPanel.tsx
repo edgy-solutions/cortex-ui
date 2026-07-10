@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { Search, GripVertical, Clock, Hash, Shapes } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { useInterviewStore } from "@/store/useInterviewStore";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
 } from "@/store/useAnswerPanelStore";
 import { LiveAnswerStrip } from "./LiveAnswerStrip";
+import { AccessDeniedCard } from "./AccessDeniedCard";
 import { useLiveStages } from "./useLiveStages";
 import { ArchetypeGlyph, glyphFor } from "./ArchetypeGlyph";
 import { AnswerChitGhost } from "./AnswerChitGhost";
@@ -54,6 +56,9 @@ export function AnswersPanel() {
   const pinAnswer = useAnswerPanelStore((s) => s.pinAnswer);
   const setCanvasOpen = useAnswerPanelStore((s) => s.setCanvasOpen);
   const { active: liveActive } = useLiveStages();
+  // Bug 2 — a current-turn access denial owns the surface; don't ALSO show the
+  // empty state beneath it (the denial IS the turn's outcome).
+  const hasAccessDenial = useInterviewStore((s) => s.accessDenial !== null);
 
   const pinnedIds = useMemo(
     () => new Set(pins.map((p) => p.answerId)),
@@ -197,9 +202,13 @@ export function AnswersPanel() {
       <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3">
         <div className="px-1">
           <LiveAnswerStrip />
+          {/* Bug 2 — a data-plane access denial for the current turn renders
+              here (terminal state, replaces the live strip once the spinner
+              stops) with the request-access action. */}
+          <AccessDeniedCard />
         </div>
 
-        {total === 0 && !liveActive && <EmptyState />}
+        {total === 0 && !liveActive && !hasAccessDenial && <EmptyState />}
         {total > 0 && filtered.length === 0 && q && (
           <p className="text-slate-600 font-mono text-[11px] px-2 py-4 text-center">
             No answers match “{search}”.

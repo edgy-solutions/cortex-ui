@@ -358,7 +358,19 @@ export type StreamEvent =
     }
   | { type: "route_decision"; decision: RouteDecision }
   | { type: "sources"; sources: Source[] }
-  | { type: "graph_trace"; nodes: GraphTraceNode[]; alternates?: GraphTraceNode[] };
+  | { type: "graph_trace"; nodes: GraphTraceNode[]; alternates?: GraphTraceNode[] }
+  | {
+      /** Bug 2 — a data-plane ACCESS DENIAL. The gateway emits this typed
+       *  event when an engine's can_read gate 403s for the caller. Distinct
+       *  from `pipeline_error` (this is an authorization outcome, not a
+       *  fault) and from an empty result: it carries the denied asset(s) and
+       *  the domain to route a HITL access-request to the right approvers. */
+      type: "access_denied";
+      denied_assets: string[];
+      subject: string;
+      domain: string;
+      message: string;
+    };
 
 /**
  * Artifact — the durable, grounded answer-object per ADR-0023.

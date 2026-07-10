@@ -126,6 +126,15 @@ function readPersistedMode(): GroundingDisplayMode {
   }
 }
 
+/** Bug 2: the structured access-denial the gateway emits as a typed
+ *  `access_denied` SSE event when the data-plane can_read gate 403s. */
+export interface AccessDenial {
+  denied_assets: string[];
+  subject: string;
+  domain: string;
+  message: string;
+}
+
 interface InterviewState {
   messages: Message[];
   phase: InterviewPhase;
@@ -136,6 +145,12 @@ interface InterviewState {
   /** Dead-end paths requiring user resolution */
   unresolvedPaths: string[];
   isProcessing: boolean;
+
+  /** Bug 2: a data-plane ACCESS DENIAL for the in-flight turn (the gate's
+   *  specific 403 signal — distinct from an empty result or a fumble). When
+   *  set, the answer surface shows an access-denied state wired to the HITL
+   *  request-access flow. Ephemeral, cleared at each turn start. */
+  accessDenial: AccessDenial | null;
 
   // ── Grounding panel state (Phase 0 typed-union driven) ──
   //
@@ -185,6 +200,7 @@ interface InterviewState {
   setLiveBpmnGraph: (graph: BPMNGraphUpdate | SemanticUIContainer | null) => void;
   setUnresolvedPaths: (paths: string[]) => void;
   setIsProcessing: (isProcessing: boolean) => void;
+  setAccessDenial: (denial: AccessDenial | null) => void;
   /**
    * Wipe per-turn UI-only grounding state. Currently this means the
    * ontology terms + data bindings — they are transient UI
@@ -210,6 +226,7 @@ const initialState = {
   liveBpmnGraph: null as BPMNGraphUpdate | SemanticUIContainer | null,
   unresolvedPaths: [] as string[],
   isProcessing: false,
+  accessDenial: null as AccessDenial | null,
   groundingDisplayMode: readPersistedMode(),
 };
 
@@ -327,6 +344,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   setUnresolvedPaths: (paths) => set({ unresolvedPaths: paths }),
 
   setIsProcessing: (isProcessing) => set({ isProcessing }),
+  setAccessDenial: (denial) => set({ accessDenial: denial }),
 
   // ── Per-turn UI-only reset ──
   //
@@ -340,6 +358,9 @@ export const useInterviewStore = create<InterviewState>((set) => ({
     set({
       ontologyTerms: [],
       dataBindings: [],
+      // Clear any prior turn's access denial so the fresh turn starts clean;
+      // a new denial (if any) arrives via the access_denied SSE event.
+      accessDenial: null,
     }),
   setGroundingDisplayMode: (mode) => {
     if (typeof window !== "undefined") {

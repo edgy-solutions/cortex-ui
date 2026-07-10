@@ -129,6 +129,7 @@ export function useInterviewAgent() {
     updateMessage,
     setLiveBpmnGraph,
     setIsProcessing,
+    setAccessDenial,
     setPhase,
     addOntologyTerm,
     addDataBinding,
@@ -206,7 +207,8 @@ export function useInterviewAgent() {
         event.type === "pipeline_error" ||
         event.type === "route_decision" ||
         event.type === "sources" ||
-        event.type === "graph_trace";
+        event.type === "graph_trace" ||
+        event.type === "access_denied";
       if (!agentId && !isAlwaysAllowed) return;
       // Note: pre-Hop-3, this function used `const canvas = useCanvasStore.getState()`
       // as a convenience for updateArtifact calls. Hop 3 removed every
@@ -351,6 +353,23 @@ export function useInterviewAgent() {
               "mock-grounding",
             );
           }
+          break;
+
+        case "access_denied":
+          // Bug 2 — the data-plane can_read gate 403'd for this caller.
+          // Store the structured denial so the answer surface can render an
+          // access-denied state (NOT an empty chart / generic error) wired to
+          // the HITL request-access flow. The gate's specific signal is what
+          // keys the request, per the deny→request→grant→allow loop.
+          setAccessDenial({
+            denied_assets: event.denied_assets,
+            subject: event.subject,
+            domain: event.domain,
+            message: event.message,
+          });
+          // Denial is a terminal answer for this turn — stop the spinner so
+          // the surface flips from "processing" to the access-denied state.
+          setIsProcessing(false);
           break;
 
         case "chat_message": {
