@@ -19,6 +19,8 @@ import {
   useAnswerPanelStore,
   type AnswerSortMode,
 } from "@/store/useAnswerPanelStore";
+import { LiveAnswerStrip } from "./LiveAnswerStrip";
+import { useLiveStages } from "./useLiveStages";
 import type { Artifact } from "@/api/types";
 import {
   answerSummary,
@@ -59,14 +61,19 @@ export function AnswersPanel() {
   const setSearch = useAnswerPanelStore((s) => s.setSearch);
   const unresolvedExpanded = useAnswerPanelStore((s) => s.unresolvedExpanded);
   const toggleUnresolved = useAnswerPanelStore((s) => s.toggleUnresolved);
+  const { active: liveActive } = useLiveStages();
 
   // Newest-first baseline (watermark desc, created_at tiebreak) — the
-  // server's apply-order position, same ordering the navigator used.
+  // server's apply-order position. Pending artifacts are suppressed from
+  // the rows: the in-flight answer is represented by the LiveAnswerStrip
+  // at the top (its placeholder), and lands as a normal row on complete.
   const sorted = useMemo(() => {
-    return [...artifacts].sort((a, b) => {
-      if (b.watermark !== a.watermark) return b.watermark - a.watermark;
-      return b.created_at - a.created_at;
-    });
+    return [...artifacts]
+      .filter((a) => a.status !== "pending")
+      .sort((a, b) => {
+        if (b.watermark !== a.watermark) return b.watermark - a.watermark;
+        return b.created_at - a.created_at;
+      });
   }, [artifacts]);
 
   // Ephemeral search over summary + question (case-insensitive).
@@ -98,7 +105,7 @@ export function AnswersPanel() {
     [resolved, sortMode]
   );
 
-  const total = artifacts.length;
+  const total = sorted.length;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -144,7 +151,10 @@ export function AnswersPanel() {
 
       {/* List */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2">
-        {total === 0 && <EmptyState />}
+        {/* Live strip — the in-flight answer's placeholder (top of list). */}
+        <LiveAnswerStrip />
+
+        {total === 0 && !liveActive && <EmptyState />}
 
         {total > 0 && resolved.length === 0 && unresolved.length === 0 && q && (
           <p className="text-slate-600 font-mono text-[11px] px-2 py-4 text-center">

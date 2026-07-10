@@ -1,62 +1,19 @@
-import { useMemo } from "react";
-import { useInterviewStore } from "@/store/useInterviewStore";
-import { PIPELINE_STAGES } from "@/api/types";
-import type { ThinkingStep } from "@/store/useInterviewStore";
+import { useLiveStages, formatElapsed } from "./useLiveStages";
 
 /**
- * LiveStageCapsule — the COMPACT current-state indicator, pinned just
- * above the prompt.
- *
- * Replaces the need to scan the verbose 5-row ThinkingCard for "where are
- * we now": a single dot-train (done · current · todo) + the current
- * stage's label. Only present while a turn is in flight; collapses to
- * nothing when idle. The durable record of the answer lives in the list +
- * canvas — this is purely "what's happening right now."
- *
- * Reads the latest agent message's thinkingSteps from useInterviewStore
- * (same source the ThinkingCard uses); maps them onto the canonical
- * PIPELINE_STAGES order so the dot-train is stable even before every
- * stage has reported.
+ * LiveStageCapsule — the COMPACT current-state indicator pinned just
+ * above the prompt (replaces the verbose ThinkingCard). A dot-train +
+ * current stage label + live elapsed seconds, over a thin progress bar.
+ * Only present while a turn is in flight.
  */
 export function LiveStageCapsule() {
-  const messages = useInterviewStore((s) => s.messages);
-  const isProcessing = useInterviewStore((s) => s.isProcessing);
+  const { active, stages, currentIndex, currentLabel, elapsedMs, progress, total } =
+    useLiveStages();
 
-  const steps = useMemo<ThinkingStep[]>(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "agent") return messages[i].thinkingSteps ?? [];
-    }
-    return [];
-  }, [messages]);
-
-  // Status per canonical stage (default pending if not yet reported).
-  const stages = useMemo(() => {
-    const byKind = new Map(steps.map((s) => [s.kind, s]));
-    return PIPELINE_STAGES.map((st) => ({
-      kind: st.kind,
-      label: st.label,
-      status: byKind.get(st.kind)?.status ?? "pending",
-    }));
-  }, [steps]);
-
-  // Current = the loading stage; else the last done (so a just-finished
-  // pipeline reads "Composing"); else the first stage.
-  const currentIndex = useMemo(() => {
-    const loading = stages.findIndex((s) => s.status === "loading");
-    if (loading >= 0) return loading;
-    let lastDone = -1;
-    stages.forEach((s, i) => {
-      if (s.status === "done") lastDone = i;
-    });
-    return lastDone >= 0 ? lastDone : 0;
-  }, [stages]);
-
-  if (!isProcessing || steps.length === 0) return null;
-
-  const current = stages[currentIndex];
+  if (!active) return null;
 
   return (
-    <div className="px-6 py-2 border-t border-glass-border flex items-center gap-3 flex-shrink-0">
+    <div className="relative px-6 py-2 border-t border-glass-border flex items-center gap-3 flex-shrink-0">
       {/* Dot-train */}
       <div className="flex items-center gap-1.5">
         {stages.map((s, i) => {
@@ -83,13 +40,26 @@ export function LiveStageCapsule() {
           );
         })}
       </div>
-      {/* Current stage label + position */}
+
+      {/* Current stage label */}
       <span className="text-[10px] font-mono text-slate-300 truncate">
-        {current.label}
+        {currentLabel}
       </span>
-      <span className="ml-auto text-[9px] font-mono text-slate-500 tabular-nums flex-shrink-0">
-        {currentIndex + 1}/{stages.length}
+
+      {/* Elapsed seconds + stage position */}
+      <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+        <span className="text-[10px] font-mono text-neon-cyan/70 tabular-nums">
+          {formatElapsed(elapsedMs)}
+        </span>
+        <span className="text-[9px] font-mono text-slate-500 tabular-nums">
+          {currentIndex + 1}/{total}
+        </span>
       </span>
+
+      {/* Thin progress bar along the bottom edge. */}
+      <span className="absolute bottom-0 left-0 h-[2px] bg-neon-blue/70 transition-all duration-300"
+        style={{ width: `${Math.round(progress * 100)}%` }}
+      />
     </div>
   );
 }
