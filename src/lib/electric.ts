@@ -105,6 +105,9 @@ function rowToArtifact(row: Row): Artifact {
     valid_as_of: parseBigInt(row.valid_as_of),
     valid_until: parseBigIntOrNull(row.valid_until),
     question_text: (row.question_text as string) ?? "",
+    // The captured S·P headline from the projection. "" when absent
+    // (legacy/thin-routing rows) — the card degrades to question_text.
+    summary: (row.summary as string) ?? "",
     resolved_intent: parseJsonbOrDefault(row.resolved_intent, {}),
     message_id: (row.message_id as string) ?? "",
     status: row.status as Artifact["status"],

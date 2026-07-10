@@ -87,6 +87,7 @@ export const ELECTRIC_COVERED_FIELDS: readonly (keyof Artifact)[] = [
   "watermark",
   "produced_by",
   "resolved_intent",
+  "summary",
 ] as const;
 
 /**
@@ -317,6 +318,11 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         valid_as_of: now,
         valid_until: null,
         question_text: seed.question_text,
+        // Honest-absent until the answer lands: the S·P headline is
+        // composed at the gateway write point (routing is final) and
+        // arrives via Electric. The pending row has no routing yet, so
+        // no headline; the UI degrades to question_text meanwhile.
+        summary: "",
         resolved_intent: {},
         message_id: seed.message_id,
         status: "pending",

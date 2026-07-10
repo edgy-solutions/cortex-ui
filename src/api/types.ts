@@ -410,6 +410,21 @@ export interface Artifact {
   question_text: string;
 
   /**
+   * The answer's factual S·P headline — the line the answer-first left
+   * column leads with (the question is the dim second line). Composed
+   * ONCE at the gateway write point from the captured routing facts
+   * (`subject label · verb label`; fallback answers → the structured
+   * `fallback_reason`), stored on the artifact, and read VERBATIM here
+   * — per ADR-0028 Decision 4 and the codebase's synthesis-is-theater
+   * principle, it is a CAPTURED FACT, never an LLM summary, never
+   * re-derived on read. v1 is S·P (guaranteed-correct, archetype-blind);
+   * object-enrichment (S·P·O) is a per-archetype write-point follow-up.
+   * Empty string when no headline was captured (legacy/thin-routing
+   * rows) — the UI degrades to `question_text`.
+   */
+  summary: string;
+
+  /**
    * Resolved intent — subject, verb, parameters as the routing layer
    * resolved them. Preserved because re-running resolution wouldn't
    * reproduce the historical answer. Phase 1: derived from routing
