@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Brain } from "lucide-react";
 import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
+import { PersonalCanvas } from "@/components/AgenticCanvas/PersonalCanvas";
 import { UserMenu } from "@/components/UserMenu";
 import { HumanTaskInboxBadge } from "@/components/HumanTaskInbox/HumanTaskInboxBadge";
 
@@ -60,8 +61,12 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           {stream}
         </motion.main>
 
-        {/* Active Canvas (Middle Pane) - Flex width */}
+        {/* Active Canvas (Middle Pane) - Flex width.
+            `data-canvas-dropzone` marks this section as the drag target
+            for answers dragged from the list — AnswerRow hit-tests the
+            drop point against this element's bounds. */}
         <motion.section
+          data-canvas-dropzone
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
@@ -70,6 +75,8 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           {canvas}
           {/* The sliding inspector overlay */}
           <NodeInspector />
+          {/* The personal-canvas overlay + its toggle (ADR-0028 v1) */}
+          <PersonalCanvas />
         </motion.section>
 
         {/* Right HUD Sidebar */}

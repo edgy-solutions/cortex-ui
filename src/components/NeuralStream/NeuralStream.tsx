@@ -3,7 +3,8 @@ import { AnimatePresence } from "framer-motion";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
-import { QuestionNavigator } from "./QuestionNavigator";
+import { AnswersPanel } from "./AnswersPanel";
+import { LiveStageCapsule } from "./LiveStageCapsule";
 
 /**
  * NeuralStream — the left-side surface.
@@ -84,7 +85,7 @@ export function NeuralStream() {
             : "flex-1 min-h-0 flex flex-col"
         }
       >
-        <QuestionNavigator />
+        <AnswersPanel />
       </div>
 
       {/* BOTTOM — ephemeral live conversation thread. Only present
@@ -109,6 +110,12 @@ export function NeuralStream() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Compact live stage indicator — only while a turn is in flight,
+          pinned directly above the prompt (the verbose per-message
+          ThinkingCard remains in the thread; this is the at-a-glance
+          "current state above the prompt"). */}
+      <LiveStageCapsule />
 
       {/* Input bar — always pinned. */}
       <InputBar />
