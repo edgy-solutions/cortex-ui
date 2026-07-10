@@ -10,6 +10,15 @@ const categoryColors: Record<string, string> = {
 
 export function OntologyMap() {
   const terms = useInterviewStore((s) => s.ontologyTerms);
+  const isProcessing = useInterviewStore((s) => s.isProcessing);
+
+  // Live-only widget: concepts stream during the ask and are NOT persisted
+  // on the answer. It shows ONLY while a turn is in flight; when you're
+  // recalling a past answer (or idle) it disappears entirely rather than
+  // showing stale terms from the last turn. The persisted, structured
+  // grounding for a recalled answer lives in the Decision Path + Subject
+  // Graph (artifact-backed), which is where it belongs.
+  if (!isProcessing) return null;
 
   return (
     <div className="glass-panel-sm p-3">
