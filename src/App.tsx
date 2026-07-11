@@ -7,7 +7,7 @@ import { HUD } from "@/components/HUD/HUD";
 import { WorkflowCanvas } from "@/components/Blueprint/WorkflowCanvas";
 import { CompilationOverlay } from "@/components/Compilation/CompilationOverlay";
 import { RequireAuth } from "@/auth/RequireAuth";
-import { CanvasPane } from "@/components/AgenticCanvas/CanvasPane";
+import { GlobalCanvasStage } from "@/components/AgenticCanvas/GlobalCanvasStage";
 import {
   CORTEX_UI_FRONTEND_ID,
   CORTEX_UI_CAPABILITIES,
@@ -143,9 +143,11 @@ export default function App() {
               </div>
             )}
             
-            {/* Semantic Canvas (Active Phase) */}
+            {/* Semantic Canvas (Active Phase) — the camera-driven global
+                stage (ADR-0028 canvas-dock model). It reuses CanvasPane for
+                the double-click full-pane view. */}
             {phase !== "blueprint" && (
-              <CanvasPane />
+              <GlobalCanvasStage />
             )}
           </div>
         }
