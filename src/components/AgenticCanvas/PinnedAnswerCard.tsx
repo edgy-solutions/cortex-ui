@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useMotionValue } from "framer-motion";
 import { X, GitBranch, ChevronDown, ChevronUp } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -74,21 +74,33 @@ export function PinnedAnswerCard({
     (artifact.rendered_output?.components as unknown[] | undefined) ?? [];
   const hasRendered = components.length > 0;
 
+  // Position via framer-motion transform (x/y), NOT left/top. Mixing `drag`
+  // with left/top positioning double-applies the drop: framer leaves its drag
+  // `transform: translate()` in place, and writing the new left/top on top of
+  // it lands the card at ~position+offset again (it flew off-screen). With
+  // x/y motion values, the transform IS the position — one source of truth —
+  // so persisting x.get()/y.get() on drop keeps the card exactly where it
+  // landed. useMotionValue is initialized once (per mount) from the persisted
+  // pin, and drag mutates it directly, so no re-render conflict.
+  const x = useMotionValue(pin.x);
+  const y = useMotionValue(pin.y);
+
   return (
     <motion.div
       drag
       dragConstraints={bounds}
       dragMomentum={false}
       onDragStart={() => bringPinToFront(pin.answerId)}
-      onDragEnd={(_e, info) => {
-        // Persist the new position (offset from where it was).
-        movePin(pin.answerId, pin.x + info.offset.x, pin.y + info.offset.y);
+      onDragEnd={() => {
+        // The x/y motion values ARE the live position after the drag — persist
+        // them verbatim (no offset math, no left/top to double-count).
+        movePin(pin.answerId, x.get(), y.get());
       }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      style={{ left: pin.x, top: pin.y, zIndex: pin.z }}
-      className={`absolute w-80 cursor-grab active:cursor-grabbing rounded-xl border bg-slate-900/95 backdrop-blur-sm shadow-xl ${
+      style={{ x, y, zIndex: pin.z }}
+      className={`absolute top-0 left-0 w-80 cursor-grab active:cursor-grabbing rounded-xl border bg-slate-900/95 backdrop-blur-sm shadow-xl ${
         fallback
           ? "border-amber-700/40"
           : "border-neon-cyan/30"
