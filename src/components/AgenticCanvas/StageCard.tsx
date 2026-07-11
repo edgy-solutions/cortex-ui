@@ -1,14 +1,12 @@
-import { GitBranch } from "lucide-react";
+import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
+import { STAGE_CARD } from "@/lib/stageConstants";
 
-/** World-space card geometry — one card in the camera stage. Big enough to
- *  hold the REAL rendered answer (the chosen "real content everywhere"); read
- *  zoomed-in, previewed zoomed-out. */
-export const STAGE_CARD = { w: 360, h: 280 };
+export { STAGE_CARD };
 
 /**
  * StageCard — one answer on the camera stage. Renders the ACTUAL answer (reuses
@@ -27,13 +25,20 @@ export function StageCard({
   onClick,
   onDoubleClick,
   style,
+  onGripDown,
+  onRemove,
 }: {
   artifact: Artifact;
   focused: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
   style: React.CSSProperties;
+  /** Custom-canvas mode: a grip to pointer-drag the item within the canvas. */
+  onGripDown?: (e: React.PointerEvent) => void;
+  /** Custom-canvas mode: remove the item from the canvas. */
+  onRemove?: () => void;
 }) {
+  const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
   const spo = answerSPO(artifact);
   const fallback = isUnresolved(artifact);
@@ -47,6 +52,13 @@ export function StageCard({
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      draggable
+      onDragStart={(e) => {
+        // Drag a card onto a dock chip to add it to that canvas. dataTransfer
+        // is the source of truth; the DockBar reads it on drop.
+        e.dataTransfer.setData("text/plain", artifact.id);
+        e.dataTransfer.effectAllowed = "copyMove";
+      }}
       style={{
         ...style,
         width: STAGE_CARD.w,
@@ -73,10 +85,36 @@ export function StageCard({
         <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400 truncate">
           {spo.subjectLabel || (fallback ? "unresolved" : "answer")}
         </span>
-        {spo.verbLabel && (
+        {!custom && spo.verbLabel && (
           <span className="ml-auto text-[10px] font-mono text-neon-purple/70 truncate max-w-[45%]">
             {spo.verbLabel}
           </span>
+        )}
+        {onGripDown && (
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onGripDown(e);
+            }}
+            onDragStart={(e) => e.preventDefault()}
+            draggable={false}
+            className="ml-auto text-slate-600 hover:text-neon-cyan cursor-grab active:cursor-grabbing flex-shrink-0"
+            title="Drag to move"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className={`text-slate-600 hover:text-rose-400 flex-shrink-0 ${onGripDown ? "" : "ml-auto"}`}
+            title="Remove from canvas"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
 

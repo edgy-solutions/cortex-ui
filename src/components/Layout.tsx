@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Brain } from "lucide-react";
 import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
-import { PersonalCanvas } from "@/components/AgenticCanvas/PersonalCanvas";
 import { UserMenu } from "@/components/UserMenu";
 import { HumanTaskInboxBadge } from "@/components/HumanTaskInbox/HumanTaskInboxBadge";
 
@@ -75,8 +74,8 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           {canvas}
           {/* The sliding inspector overlay */}
           <NodeInspector />
-          {/* The personal-canvas overlay + its toggle (ADR-0028 v1) */}
-          <PersonalCanvas />
+          {/* (The old personal-canvas overlay + MY CANVAS toggle is retired —
+              the ADR-0028 dock in GlobalCanvasStage replaces it.) */}
         </motion.section>
 
         {/* Right HUD Sidebar */}

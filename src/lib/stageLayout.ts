@@ -5,7 +5,7 @@ import {
   answerTopic,
   type AnswerArchetype,
 } from "./answerDisplay";
-import { STAGE_CARD } from "@/components/AgenticCanvas/StageCard";
+import { STAGE_CARD } from "@/lib/stageConstants";
 
 /**
  * stageLayout — the camera-stage LAYOUT ENGINE (ADR-0028 canvas-dock, Stage 2).

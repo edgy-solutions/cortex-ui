@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { routeAnswerDrop } from "@/lib/canvasDrop";
 
 /**
  * useAnswerPanelStore — the answer-first left column's *view* state,
@@ -73,21 +74,16 @@ export const useAnswerPanelStore = create<AnswerPanelState>()(
       setSortMode: (mode) => set({ sortMode: mode }),
       setCanvasOpen: (open) => set({ canvasOpen: open }),
 
-      pinAnswer: (answerId, x, y) =>
-        set((s) => {
-          // Idempotent: pinning an already-pinned answer just moves it
-          // and brings it to front (drag-to-canvas of a pinned row).
-          const existing = s.pins.find((p) => p.answerId === answerId);
-          const z = _maxZ(s.pins) + 1;
-          if (existing) {
-            return {
-              pins: s.pins.map((p) =>
-                p.answerId === answerId ? { ...p, x, y, z } : p
-              ),
-            };
-          }
-          return { pins: [...s.pins, { answerId, x, y, z }] };
-        }),
+      // ADR-0028 canvas-dock: the list still calls pinAnswer on drop, but the
+      // pin now ROUTES into the dock — onto whichever canvas chip the drop
+      // landed on, else the current custom canvas (see canvasDrop). The old
+      // single-`pins` overlay is retired by the dock; this keeps the list
+      // UNTOUCHED (it just calls pinAnswer as before) while the behavior moves
+      // to the camera-stage canvases. The x/y args are ignored (the router
+      // hit-tests the real pointer). `pins` is left in place for back-compat.
+      pinAnswer: (answerId) => {
+        routeAnswerDrop(answerId);
+      },
 
       unpinAnswer: (answerId) =>
         set((s) => ({ pins: s.pins.filter((p) => p.answerId !== answerId) })),
