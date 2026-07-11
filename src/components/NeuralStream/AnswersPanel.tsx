@@ -97,6 +97,13 @@ export function AnswersPanel() {
   const onRowPointerDown = useCallback(
     (e: React.PointerEvent, id: string) => {
       if (e.button !== 0) return;
+      // The row drag is a custom pin gesture, not a text selection — stop the
+      // browser from starting a native selection as the pointer moves across
+      // the list rows (preventDefault blocks selection initiation; the list
+      // also carries `select-none` while a drag is active, below). Clear any
+      // stray existing selection so nothing stays highlighted.
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
       startRef.current = { x: e.clientX, y: e.clientY, id };
       setDrag({ id, x: e.clientX, y: e.clientY, moved: false });
     },
@@ -198,8 +205,13 @@ export function AnswersPanel() {
         </div>
       )}
 
-      {/* List */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3">
+      {/* List — suppress text selection while a row drag is in flight so
+          dragging a card doesn't highlight the list text. */}
+      <div
+        className={`flex-1 min-h-0 overflow-y-auto px-2 py-3 ${
+          drag ? "select-none" : ""
+        }`}
+      >
         <div className="px-1">
           <LiveAnswerStrip />
           {/* Bug 2 — a data-plane access denial for the current turn renders
