@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, LayoutGrid, GitBranch } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
+import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
+import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import { StageCard, STAGE_CARD } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 
@@ -23,9 +25,6 @@ import { CanvasPane } from "./CanvasPane";
  * custom canvases in Stage 3. Cards render REAL content (SemanticInterpreter).
  */
 
-const PAD = 90;
-const GAP = 48;
-const COLS = 4;
 const CAM_MS = 620;
 const EASE = "cubic-bezier(.3,.75,.25,1)";
 
@@ -59,26 +58,15 @@ export function GlobalCanvasStage() {
     return () => ro.disconnect();
   }, []);
 
-  // Stage-1 arrangement: a simple row-major grid. (Stage 2 replaces this with
-  // the list-mode layout engine + morph.)
-  const positions = useMemo(() => {
-    const m: Record<string, { x: number; y: number }> = {};
-    artifacts.forEach((a, i) => {
-      m[a.id] = {
-        x: PAD + (i % COLS) * (STAGE_CARD.w + GAP),
-        y: PAD + Math.floor(i / COLS) * (STAGE_CARD.h + GAP),
-      };
-    });
-    return m;
-  }, [artifacts]);
-
-  const world = useMemo(() => {
-    const rows = Math.max(1, Math.ceil(artifacts.length / COLS));
-    return {
-      w: PAD * 2 + COLS * STAGE_CARD.w + (COLS - 1) * GAP,
-      h: PAD * 2 + rows * STAGE_CARD.h + (rows - 1) * GAP,
-    };
-  }, [artifacts.length]);
+  // Arrangement follows the LIST's sort mode (list order and map arrangement
+  // always agree). The layout engine reuses the same grouping helpers the list
+  // uses; cards keep stable identity so a mode change animates each card's
+  // left/top (the morph). GRAPH is deferred to the post-canvas edge arc.
+  const sortMode = useAnswerPanelStore((s) => s.sortMode) as StageMode;
+  const { positions, labels, world } = useMemo(
+    () => computeStageLayout(artifacts, sortMode),
+    [artifacts, sortMode],
+  );
 
   // Camera: overview fits the world; focus zooms the focused card to viewport
   // center. transform-origin 0 0, so transform = translate(tx,ty) scale(s).
@@ -122,6 +110,16 @@ export function GlobalCanvasStage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [focusId, fullPane, clearFocus]);
 
+  // Switching the list mode re-lays-out the whole map — zoom out to the
+  // overview first so the morph is the hero moment (per the design).
+  const prevMode = useRef(sortMode);
+  useEffect(() => {
+    if (prevMode.current !== sortMode) {
+      prevMode.current = sortMode;
+      clearFocus();
+    }
+  }, [sortMode, clearFocus]);
+
   const onCardClick = (id: string) => {
     setCurrentArtifact(id); // makes it the current artifact (DecisionMap reads it)
     focus(id);
@@ -161,6 +159,21 @@ export function GlobalCanvasStage() {
           transition: `transform ${CAM_MS}ms ${EASE}`,
         }}
       >
+        {/* Arrangement labels (world space) — day / archetype / topic headers
+            for the active mode. Keyed by mode so they cross-fade on a switch
+            (the cards morph; the labels swap). */}
+        <div key={sortMode} className="animate-in fade-in duration-500">
+          {labels.map((l) => (
+            <div
+              key={l.id}
+              className="absolute pointer-events-none font-mono font-semibold uppercase tracking-[.18em] text-neon-cyan/45 whitespace-nowrap"
+              style={{ left: l.x, top: l.y, fontSize: 26 }}
+            >
+              {l.text}
+            </div>
+          ))}
+        </div>
+
         {artifacts.map((a) => {
           const p = positions[a.id];
           if (!p) return null;
