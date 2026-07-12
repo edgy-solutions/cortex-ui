@@ -19,6 +19,7 @@ import {
   answerArchetype,
   archetypeLabel,
   answerTopic,
+  answerSearchText,
   isUnresolved,
   type AnswerArchetype,
 } from "@/lib/answerDisplay";
@@ -77,14 +78,17 @@ export function AnswersPanel() {
   }, [artifacts]);
 
   const q = search.trim().toLowerCase();
+  // Full-content search index (summary + question + the whole rendered payload
+  // + sources), computed once per answer set and cached so keystrokes are cheap.
+  const searchIndex = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of sorted) m.set(a.id, answerSearchText(a));
+    return m;
+  }, [sorted]);
   const filtered = useMemo(() => {
     if (!q) return sorted;
-    return sorted.filter(
-      (a) =>
-        answerSummary(a).toLowerCase().includes(q) ||
-        (a.question_text || "").toLowerCase().includes(q)
-    );
-  }, [sorted, q]);
+    return sorted.filter((a) => (searchIndex.get(a.id) ?? "").includes(q));
+  }, [sorted, q, searchIndex]);
 
   // ── Pointer drag → chit ghost → pin ────────────────────────────────
   const [drag, setDrag] = useState<{
