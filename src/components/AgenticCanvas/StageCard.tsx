@@ -62,6 +62,21 @@ export function StageCard({
         // is the source of truth; the DockBar reads it on drop.
         e.dataTransfer.setData("text/plain", artifact.id);
         e.dataTransfer.effectAllowed = "copyMove";
+        // The card lives inside the camera's CSS transform (translate+scale),
+        // which breaks the browser's DEFAULT drag ghost — it renders far off to
+        // the side / off-screen. Supply a small custom drag image pinned under
+        // the cursor so the drag is legible and tracks the hand.
+        const ghost = document.createElement("div");
+        ghost.textContent = spo.subjectLabel || "answer";
+        ghost.style.cssText =
+          "position:fixed;top:-1000px;left:-1000px;padding:6px 10px;border-radius:8px;" +
+          "background:#0C1D24;border:1px solid rgba(44,217,238,.55);color:#EAF7F9;" +
+          "font:600 11px 'JetBrains Mono',ui-monospace,monospace;white-space:nowrap;" +
+          "pointer-events:none;z-index:9999;box-shadow:0 8px 20px rgba(0,0,0,.5)";
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 14, 14);
+        // Remove after the browser has snapshotted it for the drag image.
+        setTimeout(() => ghost.remove(), 0);
       }}
       style={{
         ...style,
