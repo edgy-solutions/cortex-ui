@@ -71,7 +71,7 @@ export function DockBar() {
   return (
     <div
       data-overlay
-      className="absolute bottom-0 left-0 right-0 h-14 flex items-center gap-2 px-4 border-t border-neon-cyan/12 bg-slate-950/85 backdrop-blur-sm z-20"
+      className="absolute bottom-0 left-0 right-0 h-14 flex items-center gap-2 px-4 border-t border-neon-cyan/12 bg-[#0A161C] z-20"
     >
       <span className="text-[9px] font-mono uppercase tracking-widest text-slate-600 flex-shrink-0">
         Canvases
