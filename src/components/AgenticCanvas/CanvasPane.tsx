@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
+import { useStageStore } from '@/store/useStageStore';
 import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers, Route } from 'lucide-react';
@@ -37,7 +38,12 @@ export const CanvasPane = () => {
   // Two PEER views of one artifact: the composed Answer, and the Decision
   // Map (how the engine got there). Tabs express "two equal lenses", not a
   // slide-in annotation — and the map gets the full canvas it needs.
-  const [view, setView] = useState<"answer" | "map">("answer");
+  // The Answer / Decision-Map peer view is SHARED with the camera-stage focus
+  // tab (useStageStore.focusTab): entering full-pane keeps whichever view you
+  // were on when zoomed in, and toggling here persists back to the focus
+  // overlay. (Aliased as view/setView so the rest of this file is unchanged.)
+  const view = useStageStore((s) => s.focusTab);
+  const setView = useStageStore((s) => s.setFocusTab);
   const activeTab = useCanvasStore((s) => s.activeTab);
   const setActiveTab = useCanvasStore((s) => s.setActiveTab);
   const artifactCount = useCanvasStore((s) => s.artifacts.length);
