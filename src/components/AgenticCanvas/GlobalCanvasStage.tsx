@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, LayoutGrid, GitBranch, X, Plus } from "lucide-react";
+import { Maximize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -289,6 +289,21 @@ export function GlobalCanvasStage() {
       document.addEventListener("pointerup", onUp);
     };
 
+  // relationship-layout use (ADR-0028 Use 1): one-shot arrange the canvas's
+  // items by how they RELATE (same-subject clusters via the real edges),
+  // writing the graph-layout positions back as the items' positions (so it
+  // stays freeform + persists). Lineage edges will enrich this later.
+  const arrangeByRelationship = () => {
+    if (!activeCanvas) return;
+    const arts = activeCanvas.items.map((it) => artifactById[it.id]).filter(Boolean);
+    const cedges = computeStageEdges(arts);
+    const lay = computeStageLayout(arts, "GRAPH", cedges);
+    for (const a of arts) {
+      const p = lay.positions[a.id];
+      if (p) moveItem(activeCanvas.id, a.id, p.x, p.y);
+    }
+  };
+
   // Custom-canvas: drop dragged card(s) at the pointer (screen → world). A
   // multi-select drag carries several ids (comma-joined) — stagger them.
   const onStageDrop = (e: React.DragEvent) => {
@@ -535,6 +550,19 @@ export function GlobalCanvasStage() {
         >
           <LayoutGrid className="w-2.5 h-2.5" />
           Overview · Esc
+        </button>
+      )}
+
+      {/* relationship-layout use: arrange the custom canvas by how items relate. */}
+      {!isGlobal && activeCanvas?.use === "relationship" && !focusId && !fullPane && (
+        <button
+          data-overlay
+          onClick={arrangeByRelationship}
+          className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-lg border border-neon-purple/40 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-neon-purple hover:bg-neon-purple/15 transition-colors shadow-lg"
+          title="Arrange these answers by how they relate (same-subject)"
+        >
+          <Share2 className="w-2.5 h-2.5" />
+          Arrange by relationship
         </button>
       )}
 
