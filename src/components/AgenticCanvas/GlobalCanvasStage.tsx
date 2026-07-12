@@ -46,8 +46,11 @@ export function GlobalCanvasStage() {
   const focusId = useStageStore((s) => s.focusId);
   const fullPane = useStageStore((s) => s.fullPane);
   const focusTab = useStageStore((s) => s.focusTab);
+  const groupKey = useStageStore((s) => s.groupKey);
   const focus = useStageStore((s) => s.focus);
   const clearFocus = useStageStore((s) => s.clearFocus);
+  const setGroup = useStageStore((s) => s.setGroup);
+  const clearGroup = useStageStore((s) => s.clearGroup);
   const openFullPane = useStageStore((s) => s.openFullPane);
   const setFocusTab = useStageStore((s) => s.setFocusTab);
   const view = useStageStore((s) => s.view);
@@ -112,7 +115,8 @@ export function GlobalCanvasStage() {
     return () => ro.disconnect();
   }, []);
 
-  // Camera: overview fits the world; focus zooms the focused card to center.
+  // Camera has three fits: a focused CARD, a focused GROUP (day/topic/type
+  // box), else the whole world (overview).
   const cam = useMemo(() => {
     const { w: vw, h: vh } = vp;
     const fp = focusId ? posOf(focusId) : null;
@@ -126,10 +130,18 @@ export function GlobalCanvasStage() {
       const cy = fp.y + STAGE_CARD.h / 2;
       return { tx: vw / 2 - cx * s, ty: vh / 2 - cy * s, s };
     }
+    const grp = isGlobal && groupKey ? globalLayout.groups.find((g) => g.id === groupKey) : null;
+    if (grp) {
+      const b = grp.bbox;
+      const s = clamp(Math.min((vw * 0.86) / b.w, (vh * 0.78) / b.h), 0.15, 1.6);
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      return { tx: vw / 2 - cx * s, ty: vh / 2 - cy * s - 10, s };
+    }
     const s = Math.min(vw / world.w, vh / world.h) * 0.9; // margin for the dock
     return { tx: (vw - world.w * s) / 2, ty: (vh - world.h * s) / 2 - 20, s };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, entries, vp, world.w, world.h]);
+  }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h]);
   const camRef = useRef(cam);
   camRef.current = cam;
 
@@ -152,7 +164,7 @@ export function GlobalCanvasStage() {
     }
   }, [currentArtifactId, setView, focus]);
 
-  // ESC → clear the lasso selection first, else back to the overview.
+  // ESC steps back one level: selection → full-pane/card → group → overview.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -161,14 +173,25 @@ export function GlobalCanvasStage() {
         setSel([]);
         return;
       }
-      if (focusId || fullPane) {
+      if (fullPane) {
         e.stopPropagation();
         clearFocus();
+        clearGroup();
+        return;
+      }
+      if (focusId) {
+        e.stopPropagation();
+        clearFocus(); // → back to the group (if any), else overview
+        return;
+      }
+      if (groupKey) {
+        e.stopPropagation();
+        clearGroup();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusId, fullPane, clearFocus]);
+  }, [focusId, fullPane, groupKey, clearFocus, clearGroup]);
 
   // Switching the list mode re-lays-out the global map — zoom out first.
   const prevMode = useRef(sortMode);
@@ -176,8 +199,9 @@ export function GlobalCanvasStage() {
     if (prevMode.current !== sortMode) {
       prevMode.current = sortMode;
       clearFocus();
+      clearGroup();
     }
-  }, [sortMode, clearFocus]);
+  }, [sortMode, clearFocus, clearGroup]);
 
   const onCardClick = (id: string) => {
     setSel([]); // clicking a card clears the lasso selection and focuses it
@@ -202,7 +226,12 @@ export function GlobalCanvasStage() {
   const onStageDown = (e: React.PointerEvent) => {
     if (!isGlobal || focusId) return;
     const t = e.target as HTMLElement;
-    if (t.closest("[data-stage-card]") || t.closest("[data-canvas-chip]") || t.closest("[data-overlay]"))
+    if (
+      t.closest("[data-stage-card]") ||
+      t.closest("[data-canvas-chip]") ||
+      t.closest("[data-overlay]") ||
+      t.closest("[data-group-label]")
+    )
       return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -257,17 +286,18 @@ export function GlobalCanvasStage() {
       document.addEventListener("pointerup", onUp);
     };
 
-  // Custom-canvas: drop a dragged card at the pointer (screen → world).
+  // Custom-canvas: drop dragged card(s) at the pointer (screen → world). A
+  // multi-select drag carries several ids (comma-joined) — stagger them.
   const onStageDrop = (e: React.DragEvent) => {
     if (isGlobal || !activeCanvas) return;
     e.preventDefault();
-    const aid = e.dataTransfer.getData("text/plain");
-    if (!aid) return;
+    const ids = e.dataTransfer.getData("text/plain").split(",").filter(Boolean);
+    if (!ids.length) return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
     const wx = (e.clientX - rect.left - cam.tx) / cam.s - STAGE_CARD.w / 2;
     const wy = (e.clientY - rect.top - cam.ty) / cam.s - STAGE_CARD.h / 2;
-    addItemAt(activeCanvas.id, aid, wx, wy);
+    ids.forEach((id, i) => addItemAt(activeCanvas.id, id, wx + i * 28, wy + i * 28));
   };
 
   return (
@@ -331,13 +361,23 @@ export function GlobalCanvasStage() {
         {isGlobal && (
           <div key={sortMode} className="animate-in fade-in duration-500">
             {globalLayout.labels.map((l) => (
-              <div
+              <button
                 key={l.id}
-                className="absolute pointer-events-none font-mono font-semibold uppercase tracking-[.18em] text-neon-cyan/45 whitespace-nowrap"
+                data-group-label
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setGroup(l.id);
+                }}
+                className={`absolute font-mono font-semibold uppercase tracking-[.18em] whitespace-nowrap cursor-pointer transition-colors ${
+                  groupKey === l.id
+                    ? "text-neon-cyan"
+                    : "text-neon-cyan/45 hover:text-neon-cyan/90"
+                }`}
                 style={{ left: l.x, top: l.y, fontSize: 26 }}
+                title="Zoom into this group"
               >
                 {l.text}
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -354,6 +394,7 @@ export function GlobalCanvasStage() {
               onDoubleClick={() => onCardDouble(a.id)}
               style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
               selected={sel.includes(a.id)}
+              dragIds={sel.includes(a.id) ? sel : [a.id]}
               onGripDown={
                 !isGlobal && itemId
                   ? gripHandler(activeCanvas!.id, itemId, { x: pos.x, y: pos.y })
@@ -446,6 +487,19 @@ export function GlobalCanvasStage() {
             Overview · Esc
           </button>
         </>
+      )}
+
+      {/* Group-focus overview button (no card focused). */}
+      {isGlobal && groupKey && !focusId && !fullPane && (
+        <button
+          data-overlay
+          onClick={clearGroup}
+          className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
+          title="Back to the full canvas (Esc)"
+        >
+          <LayoutGrid className="w-2.5 h-2.5" />
+          Overview · Esc
+        </button>
       )}
 
       {/* Full-pane: the focused card fills the center (the pre-canvas view). */}

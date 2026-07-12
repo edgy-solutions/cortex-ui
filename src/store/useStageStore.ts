@@ -42,6 +42,9 @@ interface StageState {
   focusId: string | null;
   fullPane: boolean;
   focusTab: StageFocusTab;
+  /** A zoomed-into GROUP (day / topic / type) on the global canvas — the
+   *  mid-level between overview and a single card. StageGroup.id. */
+  groupKey: string | null;
 
   // navigation
   focus: (id: string) => void;
@@ -50,6 +53,8 @@ interface StageState {
   closeFullPane: () => void;
   setFocusTab: (t: StageFocusTab) => void;
   setView: (v: string) => void;
+  setGroup: (id: string | null) => void;
+  clearGroup: () => void;
 
   // custom canvases
   createCanvas: (name: string, use?: CanvasUse, enter?: boolean) => string;
@@ -78,6 +83,7 @@ export const useStageStore = create<StageState>()(
       focusId: null,
       fullPane: false,
       focusTab: "answer",
+      groupKey: null,
 
       focus: (id) => set({ focusId: id, focusTab: "answer" }),
       clearFocus: () => set({ focusId: null, fullPane: false }),
@@ -85,7 +91,10 @@ export const useStageStore = create<StageState>()(
       closeFullPane: () => set({ fullPane: false }),
       setFocusTab: (t) => set({ focusTab: t }),
       // Entering any canvas zooms out (per the design: chip click clears focus).
-      setView: (v) => set({ view: v, focusId: null, fullPane: false }),
+      setView: (v) => set({ view: v, focusId: null, fullPane: false, groupKey: null }),
+      // Zoom into a group (clears any single-card focus).
+      setGroup: (id) => set({ groupKey: id, focusId: null, fullPane: false }),
+      clearGroup: () => set({ groupKey: null }),
 
       createCanvas: (name, use, enter = true) => {
         const id = genId();

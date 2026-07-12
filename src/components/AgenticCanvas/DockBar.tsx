@@ -51,14 +51,14 @@ export function DockBar() {
     e.preventDefault();
     e.stopPropagation(); // don't let the stage's drop-at-point also fire
     setHover(null);
-    const aid = e.dataTransfer.getData("text/plain");
-    if (!aid) return;
-    if (chipId === "__new__") {
-      const id = createCanvas(`Canvas ${canvases.length + 1}`, undefined, true);
-      addItemAuto(id, aid);
-    } else {
-      addItemAuto(chipId, aid);
-    }
+    // A multi-select drag carries several ids (comma-joined) — add them all.
+    const ids = e.dataTransfer.getData("text/plain").split(",").filter(Boolean);
+    if (!ids.length) return;
+    const target =
+      chipId === "__new__"
+        ? createCanvas(`Canvas ${canvases.length + 1}`, undefined, true)
+        : chipId;
+    ids.forEach((id) => addItemAuto(target, id));
   };
 
   const submitCreate = () => {

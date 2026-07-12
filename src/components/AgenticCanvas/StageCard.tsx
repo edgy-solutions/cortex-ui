@@ -28,6 +28,7 @@ export function StageCard({
   onGripDown,
   onRemove,
   selected,
+  dragIds,
 }: {
   artifact: Artifact;
   focused: boolean;
@@ -40,6 +41,9 @@ export function StageCard({
   onRemove?: () => void;
   /** Lasso multi-select highlight (global overview). */
   selected?: boolean;
+  /** The ids to carry when this card is dragged — the whole selection if this
+   *  card is part of it, else just this card. Enables multi-card drag-to-chip. */
+  dragIds?: string[];
 }) {
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
@@ -58,16 +62,19 @@ export function StageCard({
       onDoubleClick={onDoubleClick}
       draggable
       onDragStart={(e) => {
-        // Drag a card onto a dock chip to add it to that canvas. dataTransfer
-        // is the source of truth; the DockBar reads it on drop.
-        e.dataTransfer.setData("text/plain", artifact.id);
+        // Drag a card onto a dock chip to add it. If this card is part of a
+        // lasso selection, drag the WHOLE selection (comma-joined ids);
+        // otherwise just this card. dataTransfer is the source of truth.
+        const ids = dragIds && dragIds.length ? dragIds : [artifact.id];
+        e.dataTransfer.setData("text/plain", ids.join(","));
         e.dataTransfer.effectAllowed = "copyMove";
         // The card lives inside the camera's CSS transform (translate+scale),
         // which breaks the browser's DEFAULT drag ghost — it renders far off to
         // the side / off-screen. Supply a small custom drag image pinned under
         // the cursor so the drag is legible and tracks the hand.
         const ghost = document.createElement("div");
-        ghost.textContent = spo.subjectLabel || "answer";
+        ghost.textContent =
+          ids.length > 1 ? `${ids.length} answers` : spo.subjectLabel || "answer";
         ghost.style.cssText =
           "position:fixed;top:-1000px;left:-1000px;padding:6px 10px;border-radius:8px;" +
           "background:#0C1D24;border:1px solid rgba(44,217,238,.55);color:#EAF7F9;" +
