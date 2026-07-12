@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { Search, GripVertical, Clock, Hash, Shapes } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useInterviewStore } from "@/store/useInterviewStore";
+import { useStageStore } from "@/store/useStageStore";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -265,6 +266,16 @@ interface RowCtx {
 // TIME — spine timeline grouped by day
 // ─────────────────────────────────────────────────────────────────────
 
+/** Clicking a list GROUP header zooms the canvas into that group (the same
+ *  group-focus the canvas labels trigger). The ids match stageLayout's group
+ *  ids (`time-<dayKey>` / `type-<archetype>` / `topic-<topic>`). Jumps to the
+ *  global canvas first (a group only exists there). */
+function zoomToGroup(id: string) {
+  const st = useStageStore.getState();
+  st.setView("global");
+  st.setGroup(id);
+}
+
 function Timeline({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
   const now = Date.now();
   const days = useMemo(() => {
@@ -285,7 +296,7 @@ function Timeline({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
     <div className="relative">
       {days.map((g) => (
         <div key={g.key}>
-          <DayHeader label={g.label} />
+          <DayHeader label={g.label} onClick={() => zoomToGroup(`time-${g.key}`)} />
           {g.items.map((a) => (
             <TimeRow key={a.id} a={a} ctx={ctx} />
           ))}
@@ -295,9 +306,13 @@ function Timeline({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
   );
 }
 
-function DayHeader({ label }: { label: string }) {
+function DayHeader({ label, onClick }: { label: string; onClick?: () => void }) {
   return (
-    <div className="flex items-center gap-2 h-7">
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-2 h-7 ${onClick ? "cursor-pointer group/day" : ""}`}
+      title={onClick ? "Zoom the canvas into this day" : undefined}
+    >
       <div className="w-11 flex-shrink-0" />
       <div className="relative w-3 self-stretch flex-shrink-0">
         <div
@@ -309,7 +324,7 @@ function DayHeader({ label }: { label: string }) {
           style={{ background: TEAL, transform: "translate(-50%,-50%) rotate(45deg)" }}
         />
       </div>
-      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500">
+      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500 group-hover/day:text-neon-cyan transition-colors">
         {label}
       </span>
     </div>
@@ -409,19 +424,29 @@ function Clusters({
   const clusters = useMemo(() => buildClusters(items, mode), [items, mode]);
   return (
     <div className="space-y-1">
-      {clusters.map((c) => (
+      {clusters.map((c) => {
+        // Map the list cluster to the canvas group id (stageLayout keys).
+        const groupId =
+          mode === "TYPE"
+            ? c.archetype
+              ? `type-${c.archetype}`
+              : null
+            : `topic-${c.label}`;
+        return (
         <div key={c.key}>
           <ClusterHeader
             label={c.label}
             count={c.items.length}
             color={c.color}
             archetype={c.archetype}
+            onZoom={groupId ? () => zoomToGroup(groupId) : undefined}
           />
           {c.items.map((a) => (
             <ClusterRow key={a.id} a={a} ctx={ctx} />
           ))}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -476,14 +501,20 @@ function ClusterHeader({
   count,
   color,
   archetype,
+  onZoom,
 }: {
   label: string;
   count: number;
   color: string;
   archetype?: AnswerArchetype;
+  onZoom?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 pt-3 pb-1 px-1">
+    <div
+      onClick={onZoom}
+      title={onZoom ? "Zoom the canvas into this group" : undefined}
+      className={`flex items-center gap-2 pt-3 pb-1 px-1 ${onZoom ? "cursor-pointer group/cl" : ""}`}
+    >
       {/* dot-link ●—● */}
       <span className="flex items-center flex-shrink-0" aria-hidden>
         <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />

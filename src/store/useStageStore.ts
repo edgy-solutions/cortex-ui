@@ -85,7 +85,12 @@ export const useStageStore = create<StageState>()(
       focusTab: "answer",
       groupKey: null,
 
-      focus: (id) => set({ focusId: id, focusTab: "answer" }),
+      // Focusing a NEW card defaults to the Answer view; re-focusing the card
+      // you're already on KEEPS the current peer view (the tab selector is the
+      // control) — so clicking / double-clicking a card while on the Decision
+      // Map doesn't snap back to Answer.
+      focus: (id) =>
+        set((s) => ({ focusId: id, focusTab: s.focusId === id ? s.focusTab : "answer" })),
       clearFocus: () => set({ focusId: null, fullPane: false }),
       openFullPane: () => set({ fullPane: true }),
       closeFullPane: () => set({ fullPane: false }),

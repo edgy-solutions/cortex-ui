@@ -29,6 +29,7 @@ export function StageCard({
   onRemove,
   selected,
   dragIds,
+  onDragComplete,
 }: {
   artifact: Artifact;
   focused: boolean;
@@ -44,6 +45,9 @@ export function StageCard({
   /** The ids to carry when this card is dragged — the whole selection if this
    *  card is part of it, else just this card. Enables multi-card drag-to-chip. */
   dragIds?: string[];
+  /** Called after a successful MULTI drag-drop, so the caller can clear the
+   *  lasso selection. */
+  onDragComplete?: () => void;
 }) {
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
@@ -84,6 +88,12 @@ export function StageCard({
         e.dataTransfer.setDragImage(ghost, 14, 14);
         // Remove after the browser has snapshotted it for the drag image.
         setTimeout(() => ghost.remove(), 0);
+      }}
+      onDragEnd={(e) => {
+        // After a successful MULTI drop, clear the lasso selection.
+        if (dragIds && dragIds.length > 1 && e.dataTransfer.dropEffect !== "none") {
+          onDragComplete?.();
+        }
       }}
       style={{
         ...style,

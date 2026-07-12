@@ -395,6 +395,7 @@ export function GlobalCanvasStage() {
               style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
               selected={sel.includes(a.id)}
               dragIds={sel.includes(a.id) ? sel : [a.id]}
+              onDragComplete={() => setSel([])}
               onGripDown={
                 !isGlobal && itemId
                   ? gripHandler(activeCanvas!.id, itemId, { x: pos.x, y: pos.y })
