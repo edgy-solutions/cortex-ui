@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { Search, GripVertical, Clock, Hash, Shapes } from "lucide-react";
+import { Search, GripVertical, Clock, Hash, Shapes, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
+import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -197,9 +198,10 @@ export function AnswersPanel() {
           <SortChip mode="TIME" active={sortMode} onPick={setSortMode} icon={<Clock className="w-2.5 h-2.5" />} />
           <SortChip mode="TOPIC" active={sortMode} onPick={setSortMode} icon={<Hash className="w-2.5 h-2.5" />} />
           <SortChip mode="TYPE" active={sortMode} onPick={setSortMode} icon={<Shapes className="w-2.5 h-2.5" />} />
-          {/* GRAPH sort deferred to v1.5 (needs a cross-answer proximity
-              field that doesn't exist yet). Hidden rather than shown as a
-              dead chip — a dead chip reads as broken. */}
+          {/* GRAPH — now that same-subject edges exist, answers cluster by how
+              they relate (connected components over the edges). Lineage edges
+              layer on later. */}
+          <SortChip mode="GRAPH" active={sortMode} onPick={setSortMode} icon={<Share2 className="w-2.5 h-2.5" />} />
         </div>
       )}
       {q && (
@@ -234,6 +236,8 @@ export function AnswersPanel() {
 
         {sortMode === "TIME" && !q ? (
           <Timeline items={filtered} ctx={rowCtx} />
+        ) : sortMode === "GRAPH" && !q ? (
+          <GraphClusters items={filtered} ctx={rowCtx} />
         ) : (
           <Clusters items={filtered} mode={q ? "TIME" : sortMode} ctx={rowCtx} />
         )}
@@ -451,6 +455,64 @@ function Clusters({
         </div>
         );
       })}
+    </div>
+  );
+}
+
+// GRAPH — cluster the list by how answers RELATE (connected components over the
+// same-subject edges). Multi-answer clusters (same resolved instance) are named
+// by that instance; unlinked answers collect under "Unlinked". Lineage edges
+// will fold in as a second edge kind later.
+function GraphClusters({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
+  const groups = useMemo(() => {
+    const edges = computeStageEdges(items);
+    const comps = connectedComponents(
+      items.map((a) => a.id),
+      edges,
+    );
+    const byId = new Map(items.map((a) => [a.id, a]));
+    const multi = comps.filter((c) => c.length > 1).sort((a, b) => b.length - a.length);
+    const singles = comps.filter((c) => c.length === 1).map((c) => c[0]);
+    const out: {
+      key: string;
+      label: string;
+      count: number;
+      items: Artifact[];
+      linked: boolean;
+    }[] = multi.map((comp, i) => {
+      const first = byId.get(comp[0])!;
+      const lbl =
+        first.routing?.about?.instance_label || first.routing?.about?.label || "linked";
+      return {
+        key: `g-${i}`,
+        label: lbl,
+        count: comp.length,
+        items: comp.map((id) => byId.get(id)!).filter(Boolean),
+        linked: true,
+      };
+    });
+    if (singles.length) {
+      out.push({
+        key: "g-unlinked",
+        label: "Unlinked",
+        count: singles.length,
+        items: singles.map((id) => byId.get(id)!).filter(Boolean),
+        linked: false,
+      });
+    }
+    return out;
+  }, [items]);
+
+  return (
+    <div className="space-y-1">
+      {groups.map((g) => (
+        <div key={g.key}>
+          <ClusterHeader label={g.label} count={g.count} color={g.linked ? TEAL : "#4B5563"} />
+          {g.items.map((a) => (
+            <ClusterRow key={a.id} a={a} ctx={ctx} />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

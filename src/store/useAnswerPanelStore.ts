@@ -21,7 +21,7 @@ import { routeAnswerDrop } from "@/lib/canvasDrop";
  * is deferred to v1.1 — v1 ships drag-to-canvas only.
  */
 
-export type AnswerSortMode = "TIME" | "TOPIC" | "TYPE";
+export type AnswerSortMode = "TIME" | "TOPIC" | "TYPE" | "GRAPH";
 
 /** One pinned answer on the personal canvas. `x`/`y` are the drop
  *  position in canvas-local px; `z` is the stacking order (drag-to-front

@@ -6,6 +6,7 @@ import {
   type AnswerArchetype,
 } from "./answerDisplay";
 import { STAGE_CARD } from "@/lib/stageConstants";
+import { connectedComponents, type StageEdge } from "@/lib/stageEdges";
 
 /**
  * stageLayout — the camera-stage LAYOUT ENGINE (ADR-0028 canvas-dock, Stage 2).
@@ -20,7 +21,7 @@ import { STAGE_CARD } from "@/lib/stageConstants";
  *
  * World coords are top-left of a card; the camera fits/zooms this world.
  */
-export type StageMode = "TIME" | "TOPIC" | "TYPE";
+export type StageMode = "TIME" | "TOPIC" | "TYPE" | "GRAPH";
 
 const W = STAGE_CARD.w;
 const H = STAGE_CARD.h;
@@ -201,13 +202,76 @@ function layoutTopic(items: Artifact[]): StageLayoutResult {
   };
 }
 
+/** Lay out one connected component (a same-subject cluster): a single card, or
+ *  a ring of cards. Returns local (0-origin) positions + the cluster bbox. */
+function layoutComponent(ids: string[]): { local: Record<string, Pos>; w: number; h: number } {
+  const local: Record<string, Pos> = {};
+  const n = ids.length;
+  if (n === 1) {
+    local[ids[0]] = { x: 0, y: 0 };
+    return { local, w: W, h: H };
+  }
+  const R = Math.max(W, H) * 0.62 + n * 12; // ring radius grows with membership
+  const cx = R + W / 2;
+  const cy = R + H / 2;
+  ids.forEach((id, i) => {
+    const ang = (2 * Math.PI * i) / n - Math.PI / 2;
+    local[id] = { x: cx + R * Math.cos(ang) - W / 2, y: cy + R * Math.sin(ang) - H / 2 };
+  });
+  return { local, w: 2 * R + W, h: 2 * R + H };
+}
+
+const instanceLabelOf = (a: Artifact): string => {
+  const about = a.routing?.about;
+  return about?.instance_label || about?.label || "linked";
+};
+
+/** GRAPH — cluster answers by connected component over the edges; multi-member
+ *  clusters (same subject) render as rings, tiled with singletons. Edges are
+ *  drawn by the canvas over these positions. */
+function layoutGraph(items: Artifact[], edges: StageEdge[]): StageLayoutResult {
+  const byId = new Map(items.map((a) => [a.id, a]));
+  const comps = connectedComponents(
+    items.map((a) => a.id),
+    edges,
+  ).sort((a, b) => b.length - a.length); // biggest clusters first
+  const positions: Record<string, Pos> = {};
+  const labels: StageLabel[] = [];
+  const groups: StageGroup[] = [];
+  const META_MAX_W = PAD + Math.max(2, Math.ceil(Math.sqrt(comps.length))) * (3 * W);
+  let mx = PAD;
+  let my = PAD;
+  let rowMaxH = 0;
+  let worldW = 0;
+  comps.forEach((comp, ci) => {
+    const { local, w, h } = layoutComponent(comp);
+    if (mx !== PAD && mx + w > META_MAX_W) {
+      mx = PAD;
+      my += rowMaxH + BLOCK_GAP;
+      rowMaxH = 0;
+    }
+    for (const id of comp) positions[id] = { x: mx + local[id].x, y: my + local[id].y };
+    if (comp.length > 1) {
+      const id = `graph-${ci}`;
+      labels.push({ id, text: instanceLabelOf(byId.get(comp[0])!), x: mx, y: my });
+      groups.push({ id, bbox: { x: mx, y: my, w, h } });
+    }
+    worldW = Math.max(worldW, mx + w);
+    mx += w + BLOCK_GAP;
+    rowMaxH = Math.max(rowMaxH, h);
+  });
+  return { positions, labels, groups, world: { w: worldW + PAD, h: my + rowMaxH + PAD } };
+}
+
 export function computeStageLayout(
   items: Artifact[],
   mode: StageMode,
+  edges: StageEdge[] = [],
 ): StageLayoutResult {
   if (items.length === 0)
     return { positions: {}, labels: [], groups: [], world: { w: 1200, h: 800 } };
   if (mode === "TIME") return layoutTime(items);
   if (mode === "TYPE") return layoutType(items);
+  if (mode === "GRAPH") return layoutGraph(items, edges);
   return layoutTopic(items);
 }

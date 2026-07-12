@@ -4,6 +4,7 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
+import { computeStageEdges } from "@/lib/stageEdges";
 import { STAGE_CARD } from "@/lib/stageConstants";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
@@ -82,9 +83,11 @@ export function GlobalCanvasStage() {
     return m;
   }, [artifacts]);
 
+  // Typed cross-answer edges (same-subject today; lineage layers on later).
+  const edges = useMemo(() => computeStageEdges(artifacts), [artifacts]);
   const globalLayout = useMemo(
-    () => computeStageLayout(artifacts, sortMode),
-    [artifacts, sortMode],
+    () => computeStageLayout(artifacts, sortMode, edges),
+    [artifacts, sortMode, edges],
   );
 
   // The cards to render + their positions, sourced by view.
@@ -341,6 +344,38 @@ export function GlobalCanvasStage() {
           transition: `transform ${CAM_MS}ms ${EASE}`,
         }}
       >
+        {/* GRAPH edges — drawn behind the cards, in world space so they track
+            the camera. Same-subject edges are solid symmetric links; lineage
+            edges (a later kind) will render directed/differently. */}
+        {isGlobal && sortMode === "GRAPH" && edges.length > 0 && (
+          <svg
+            className="absolute top-0 left-0 pointer-events-none"
+            width={world.w}
+            height={world.h}
+            style={{ overflow: "visible" }}
+          >
+            {edges.map((e, i) => {
+              const p1 = globalLayout.positions[e.from];
+              const p2 = globalLayout.positions[e.to];
+              if (!p1 || !p2) return null;
+              const stroke =
+                e.kind === "lineage" ? "rgba(180,140,255,.45)" : "rgba(44,217,238,.35)";
+              return (
+                <line
+                  key={i}
+                  x1={p1.x + STAGE_CARD.w / 2}
+                  y1={p1.y + STAGE_CARD.h / 2}
+                  x2={p2.x + STAGE_CARD.w / 2}
+                  y2={p2.y + STAGE_CARD.h / 2}
+                  stroke={stroke}
+                  strokeWidth={2}
+                  strokeDasharray={e.kind === "lineage" ? "8 6" : undefined}
+                />
+              );
+            })}
+          </svg>
+        )}
+
         {/* Custom-canvas dressing */}
         {!isGlobal && (
           <>
