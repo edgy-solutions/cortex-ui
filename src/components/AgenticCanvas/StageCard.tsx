@@ -1,6 +1,7 @@
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
+import { FitBox } from "./FitBox";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
@@ -163,8 +164,15 @@ export function StageCard({
             <DecisionMap />
           </div>
         ) : hasRendered ? (
-          <div className="absolute inset-0 overflow-hidden px-2 py-1.5 [&_.glass-panel]:!my-1 [&_.glass-panel]:!p-3 [&_.grid]:!gap-2">
-            <SemanticInterpreter payload={{ components }} />
+          // Shrink the WHOLE answer to fit the card — nothing clipped, so the
+          // chart / table / document is fully legible at card scale (the point
+          // of the canvas). Rendered at a natural width, then scaled down.
+          <div className="absolute inset-0 p-2">
+            <FitBox naturalWidth={640}>
+              <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
+                <SemanticInterpreter payload={{ components }} />
+              </div>
+            </FitBox>
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center px-4">
