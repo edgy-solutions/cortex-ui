@@ -160,8 +160,14 @@ export function StageCard({
       {/* Body: the real answer, or the decision map when toggled at focus. */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {showMap ? (
-          <div className="absolute inset-0 overflow-hidden">
-            <DecisionMap />
+          // Shrink the decision map to fit too (it fills its container, so give
+          // it a fixed natural box for FitBox to measure + scale down).
+          <div className="absolute inset-0 p-2">
+            <FitBox naturalWidth={640}>
+              <div style={{ width: 640, height: 380 }}>
+                <DecisionMap />
+              </div>
+            </FitBox>
           </div>
         ) : hasRendered ? (
           // Shrink the WHOLE answer to fit the card — nothing clipped, so the
