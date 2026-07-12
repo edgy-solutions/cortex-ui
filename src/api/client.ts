@@ -335,6 +335,17 @@ export async function compileWorkflow(
   return data;
 }
 
+// ── Canvas persistence (ADR-0028) ────────────────────────
+/** The caller's durable custom canvases (server-side, cross-device). Shape is
+ *  the client's CustomCanvas[] stored verbatim. */
+export async function fetchCanvases(): Promise<unknown[]> {
+  const { data } = await api.get<{ canvases: unknown[] }>("/me/canvases");
+  return data.canvases ?? [];
+}
+export async function saveCanvases(canvases: unknown[]): Promise<void> {
+  await api.put("/me/canvases", { canvases });
+}
+
 // ── Mesh Config ──────────────────────────────────────────
 export async function getMeshConfig(): Promise<any> {
   const { data } = await api.get("/mesh/config");

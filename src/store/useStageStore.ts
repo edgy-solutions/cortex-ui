@@ -57,6 +57,7 @@ interface StageState {
   clearGroup: () => void;
 
   // custom canvases
+  setCanvases: (canvases: CustomCanvas[]) => void; // replace all (server hydrate)
   createCanvas: (name: string, use?: CanvasUse, enter?: boolean) => string;
   renameCanvas: (id: string, name: string) => void;
   deleteCanvas: (id: string) => void;
@@ -101,6 +102,7 @@ export const useStageStore = create<StageState>()(
       setGroup: (id) => set({ groupKey: id, focusId: null, fullPane: false }),
       clearGroup: () => set({ groupKey: null }),
 
+      setCanvases: (canvases) => set({ canvases }),
       createCanvas: (name, use, enter = true) => {
         const id = genId();
         const canvas: CustomCanvas = { id, name: name.trim() || "Canvas", use, items: [] };

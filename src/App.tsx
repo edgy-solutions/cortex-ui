@@ -7,6 +7,7 @@ import { HUD } from "@/components/HUD/HUD";
 import { WorkflowCanvas } from "@/components/Blueprint/WorkflowCanvas";
 import { CompilationOverlay } from "@/components/Compilation/CompilationOverlay";
 import { RequireAuth } from "@/auth/RequireAuth";
+import { CanvasPersistence } from "@/hooks/useCanvasPersistence";
 import { GlobalCanvasStage } from "@/components/AgenticCanvas/GlobalCanvasStage";
 import {
   CORTEX_UI_FRONTEND_ID,
@@ -123,7 +124,9 @@ export default function App() {
 
   return (
     <RequireAuth>
-      <Toaster 
+      {/* Sync custom canvases with the server (durable, cross-device). */}
+      <CanvasPersistence />
+      <Toaster
         theme="dark" 
         position="top-center" 
         expand={false} 
