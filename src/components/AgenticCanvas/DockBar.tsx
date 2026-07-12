@@ -45,6 +45,7 @@ export function DockBar() {
   const [newUse, setNewUse] = useState<CanvasUse | "">("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [confirmId, setConfirmId] = useState<string | null>(null); // delete arm
 
   const onChipDrop = (chipId: string, e: React.DragEvent) => {
     e.preventDefault();
@@ -68,7 +69,10 @@ export function DockBar() {
   };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-14 flex items-center gap-2 px-4 border-t border-neon-cyan/12 bg-slate-950/85 backdrop-blur-sm z-20">
+    <div
+      data-overlay
+      className="absolute bottom-0 left-0 right-0 h-14 flex items-center gap-2 px-4 border-t border-neon-cyan/12 bg-slate-950/85 backdrop-blur-sm z-20"
+    >
       <span className="text-[9px] font-mono uppercase tracking-widest text-slate-600 flex-shrink-0">
         Canvases
       </span>
@@ -112,7 +116,18 @@ export function DockBar() {
             renameCanvas(c.id, editName);
             setEditId(null);
           }}
-          onDelete={() => deleteCanvas(c.id)}
+          confirming={confirmId === c.id}
+          onDeleteClick={() => {
+            // Two-step: first click arms, second confirms (prevents an
+            // accidental one-click delete of a whole canvas).
+            if (confirmId === c.id) {
+              deleteCanvas(c.id);
+              setConfirmId(null);
+            } else {
+              setConfirmId(c.id);
+            }
+          }}
+          onCancelDelete={() => setConfirmId((id) => (id === c.id ? null : id))}
         />
       ))}
 
@@ -209,7 +224,9 @@ function ChipCustom({
   onStartRename,
   onEditName,
   onCommitRename,
-  onDelete,
+  confirming,
+  onDeleteClick,
+  onCancelDelete,
 }: {
   canvas: CustomCanvas;
   active: boolean;
@@ -223,7 +240,9 @@ function ChipCustom({
   onStartRename: () => void;
   onEditName: (v: string) => void;
   onCommitRename: () => void;
-  onDelete: () => void;
+  confirming: boolean;
+  onDeleteClick: () => void;
+  onCancelDelete: () => void;
 }) {
   return (
     <div
@@ -231,6 +250,7 @@ function ChipCustom({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onMouseLeave={onCancelDelete}
       className={`group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider border transition-colors ${
         hover
           ? "border-dashed border-neon-cyan/70 bg-neon-cyan/16 text-neon-cyan"
@@ -262,13 +282,23 @@ function ChipCustom({
         </span>
       )}
       <span className="text-slate-500 tabular-nums">{canvas.items.length}</span>
-      <button
-        onClick={onDelete}
-        className="ml-0.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Delete canvas"
-      >
-        <X className="w-2.5 h-2.5" />
-      </button>
+      {confirming ? (
+        <button
+          onClick={onDeleteClick}
+          className="ml-0.5 rounded px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider bg-rose-500/20 border border-rose-500/50 text-rose-300 hover:bg-rose-500/30 transition-colors"
+          title="Click again to confirm"
+        >
+          Delete?
+        </button>
+      ) : (
+        <button
+          onClick={onDeleteClick}
+          className="ml-0.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Delete canvas"
+        >
+          <X className="w-2.5 h-2.5" />
+        </button>
+      )}
     </div>
   );
 }

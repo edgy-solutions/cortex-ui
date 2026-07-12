@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, LayoutGrid, GitBranch } from "lucide-react";
+import { Maximize2, LayoutGrid, GitBranch, X, Plus } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -54,13 +54,21 @@ export function GlobalCanvasStage() {
   const canvases = useStageStore((s) => s.canvases);
   const setView = useStageStore((s) => s.setView);
   const addItemAt = useStageStore((s) => s.addItemAt);
+  const addItemAuto = useStageStore((s) => s.addItemAuto);
   const moveItem = useStageStore((s) => s.moveItem);
   const removeItem = useStageStore((s) => s.removeItem);
+  const createCanvas = useStageStore((s) => s.createCanvas);
 
   const sortMode = useAnswerPanelStore((s) => s.sortMode) as StageMode;
 
   const stageRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState({ w: 1200, h: 700 });
+
+  // Lasso multi-select (global overview only).
+  const [sel, setSel] = useState<string[]>([]);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const selRef = useRef(sel);
+  selRef.current = sel;
 
   const activeCanvas = view === "global" ? null : canvases.find((c) => c.id === view);
   const isGlobal = !activeCanvas;
@@ -135,10 +143,16 @@ export function GlobalCanvasStage() {
     }
   }, [currentArtifactId, setView, focus]);
 
-  // ESC → overview.
+  // ESC → clear the lasso selection first, else back to the overview.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (focusId || fullPane)) {
+      if (e.key !== "Escape") return;
+      if (selRef.current.length) {
+        e.stopPropagation();
+        setSel([]);
+        return;
+      }
+      if (focusId || fullPane) {
         e.stopPropagation();
         clearFocus();
       }
@@ -157,6 +171,7 @@ export function GlobalCanvasStage() {
   }, [sortMode, clearFocus]);
 
   const onCardClick = (id: string) => {
+    setSel([]); // clicking a card clears the lasso selection and focuses it
     setCurrentArtifact(id);
     focus(id);
   };
@@ -164,6 +179,53 @@ export function GlobalCanvasStage() {
     setCurrentArtifact(id);
     focus(id);
     openFullPane();
+  };
+
+  // Lasso: pointer-down on empty stage (global overview, not focused) starts a
+  // marquee; live-highlight cards whose VIEWPORT rect intersects it.
+  const rectsIntersect = (
+    a: { x: number; y: number; w: number; h: number },
+    b: { x: number; y: number; w: number; h: number },
+  ) => !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+
+  const onStageDown = (e: React.PointerEvent) => {
+    if (!isGlobal || focusId) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("[data-stage-card]") || t.closest("[data-canvas-chip]") || t.closest("[data-overlay]"))
+      return;
+    const rect = stageRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    let last: { x: number; y: number; w: number; h: number } | null = null;
+    const onMove = (ev: PointerEvent) => {
+      const x2 = ev.clientX - rect.left;
+      const y2 = ev.clientY - rect.top;
+      const m = { x: Math.min(sx, x2), y: Math.min(sy, y2), w: Math.abs(x2 - sx), h: Math.abs(y2 - sy) };
+      last = m;
+      setMarquee(m);
+      const c = camRef.current;
+      setSel(
+        entries
+          .filter(({ pos }) =>
+            rectsIntersect(m, {
+              x: pos.x * c.s + c.tx,
+              y: pos.y * c.s + c.ty,
+              w: STAGE_CARD.w * c.s,
+              h: STAGE_CARD.h * c.s,
+            }),
+          )
+          .map((en) => en.a.id),
+      );
+    };
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      setMarquee(null);
+      if (!last || last.w * last.h < 40) setSel([]); // a tiny drag = background click → clear
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   };
 
   // Custom-canvas: grip pointer-drag to move an item (screen delta → world).
@@ -209,6 +271,7 @@ export function GlobalCanvasStage() {
         if (!isGlobal) e.preventDefault();
       }}
       onDrop={onStageDrop}
+      onPointerDown={onStageDown}
     >
       {/* Empty states */}
       {isGlobal && artifacts.length === 0 && (
@@ -279,6 +342,7 @@ export function GlobalCanvasStage() {
               onClick={() => onCardClick(a.id)}
               onDoubleClick={() => onCardDouble(a.id)}
               style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
+              selected={sel.includes(a.id)}
               onGripDown={
                 !isGlobal && itemId
                   ? gripHandler(activeCanvas!.id, itemId, { x: pos.x, y: pos.y })
@@ -291,6 +355,56 @@ export function GlobalCanvasStage() {
           );
         })}
       </div>
+
+      {/* Lasso marquee (viewport space). */}
+      {marquee && (
+        <div
+          className="absolute border border-neon-cyan/70 bg-neon-cyan/10 pointer-events-none z-20"
+          style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+        />
+      )}
+
+      {/* Selection action bar — bulk-add the lasso'd cards to a canvas. */}
+      {isGlobal && !focusId && !marquee && sel.length > 0 && (
+        <div
+          data-overlay
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-neon-cyan/30 bg-slate-950/95 backdrop-blur-sm px-3 py-2 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+        >
+          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
+            {sel.length} selected → Add to
+          </span>
+          {canvases.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => {
+                sel.forEach((id) => addItemAuto(c.id, id));
+                setSel([]);
+              }}
+              className="rounded-md border border-neon-cyan/30 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/15 transition-colors"
+            >
+              {c.name}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              const id = createCanvas(`Canvas ${canvases.length + 1}`, undefined, false);
+              sel.forEach((aid) => addItemAuto(id, aid));
+              setSel([]);
+            }}
+            className="flex items-center gap-1 rounded-md border border-dashed border-slate-600/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan transition-colors"
+          >
+            <Plus className="w-2.5 h-2.5" />
+            New
+          </button>
+          <button
+            onClick={() => setSel([])}
+            className="ml-1 text-slate-500 hover:text-rose-400"
+            title="Clear selection"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {/* Focus overlay: peer-view tabs + expand + overview (both views). */}
       {focusId && !fullPane && (

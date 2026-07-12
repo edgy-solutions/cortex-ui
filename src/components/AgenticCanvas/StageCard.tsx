@@ -27,6 +27,7 @@ export function StageCard({
   style,
   onGripDown,
   onRemove,
+  selected,
 }: {
   artifact: Artifact;
   focused: boolean;
@@ -37,6 +38,8 @@ export function StageCard({
   onGripDown?: (e: React.PointerEvent) => void;
   /** Custom-canvas mode: remove the item from the canvas. */
   onRemove?: () => void;
+  /** Lasso multi-select highlight (global overview). */
+  selected?: boolean;
 }) {
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
@@ -50,6 +53,7 @@ export function StageCard({
 
   return (
     <div
+      data-stage-card
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       draggable
@@ -68,8 +72,10 @@ export function StageCard({
           "left 650ms cubic-bezier(.3,.75,.25,1), top 650ms cubic-bezier(.3,.75,.25,1), opacity 400ms ease, border-color 200ms ease",
       }}
       className={`absolute flex flex-col overflow-hidden rounded-xl border bg-slate-900/95 shadow-xl cursor-pointer ${
-        focused
-          ? "border-neon-cyan/70 shadow-neon-cyan/10"
+        selected
+          ? "border-neon-cyan ring-4 ring-neon-cyan/20"
+          : focused
+          ? "border-neon-cyan/70"
           : fallback
           ? "border-amber-700/40"
           : "border-neon-cyan/25 hover:border-neon-cyan/50"
