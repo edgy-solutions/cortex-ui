@@ -133,11 +133,20 @@ export function GlobalCanvasStage() {
   const camRef = useRef(cam);
   camRef.current = cam;
 
-  // Selecting an answer in the LIST jumps to GLOBAL and zooms to it.
+  // Selecting an answer in the LIST jumps to GLOBAL and zooms to it — but an
+  // in-canvas card click (which also sets currentArtifactId, so DecisionMap
+  // reads it) must zoom IN PLACE on the current canvas, not jump to global.
+  // onCardClick/Double flag the internal selection so this effect skips the
+  // global jump (they've already called focus()).
   const prevCurrent = useRef<string | null>(null);
+  const internalSelect = useRef(false);
   useEffect(() => {
     if (currentArtifactId && currentArtifactId !== prevCurrent.current) {
       prevCurrent.current = currentArtifactId;
+      if (internalSelect.current) {
+        internalSelect.current = false; // in-canvas click already focused
+        return;
+      }
       setView("global");
       focus(currentArtifactId);
     }
@@ -172,10 +181,12 @@ export function GlobalCanvasStage() {
 
   const onCardClick = (id: string) => {
     setSel([]); // clicking a card clears the lasso selection and focuses it
+    internalSelect.current = true; // zoom in place; don't jump to global
     setCurrentArtifact(id);
     focus(id);
   };
   const onCardDouble = (id: string) => {
+    internalSelect.current = true;
     setCurrentArtifact(id);
     focus(id);
     openFullPane();
