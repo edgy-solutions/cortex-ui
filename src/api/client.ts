@@ -346,6 +346,30 @@ export async function saveCanvases(canvases: unknown[]): Promise<void> {
   await api.put("/me/canvases", { canvases });
 }
 
+/** Directed 1-hop DataHub lineage edges among the given answered subjects, for
+ *  canvas GRAPH mode. Proxied through the gateway → Engine D's GATED endpoint
+ *  (the caller's entitlement is applied server-side; lineage they can't see is
+ *  never returned). Honest-empty on failure. */
+export interface LineageEdgeDTO {
+  from: string;
+  to: string;
+  kind: string;
+  directed: boolean;
+}
+export async function fetchLineageEdges(
+  subjects: { answer_id: string; urn: string }[],
+): Promise<LineageEdgeDTO[]> {
+  try {
+    const { data } = await api.post<{ edges: LineageEdgeDTO[] }>(
+      "/canvas/lineage_edges",
+      { subjects },
+    );
+    return data.edges ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Mesh Config ──────────────────────────────────────────
 export async function getMeshConfig(): Promise<any> {
   const { data } = await api.get("/mesh/config");

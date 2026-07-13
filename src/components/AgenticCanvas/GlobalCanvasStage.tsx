@@ -4,7 +4,8 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
-import { computeStageEdges } from "@/lib/stageEdges";
+import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
+import { fetchLineageEdges } from "@/api/client";
 import { STAGE_CARD } from "@/lib/stageConstants";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
@@ -83,8 +84,36 @@ export function GlobalCanvasStage() {
     return m;
   }, [artifacts]);
 
-  // Typed cross-answer edges (same-subject today; lineage layers on later).
-  const edges = useMemo(() => computeStageEdges(artifacts), [artifacts]);
+  // Typed cross-answer edges: same-subject (sync, client-side) + lineage
+  // (directed, fetched from Engine D's gated endpoint only in GRAPH mode).
+  const [lineageEdges, setLineageEdges] = useState<StageEdge[]>([]);
+  useEffect(() => {
+    if (!isGlobal || sortMode !== "GRAPH") {
+      setLineageEdges([]);
+      return;
+    }
+    const subjects = artifacts
+      .map((a) => ({ answer_id: a.id, urn: subjectInstanceKey(a) }))
+      .filter((s) => s.urn);
+    if (subjects.length < 2) {
+      setLineageEdges([]);
+      return;
+    }
+    let cancelled = false;
+    fetchLineageEdges(subjects).then((es) => {
+      if (cancelled) return;
+      setLineageEdges(
+        es.map((e) => ({ from: e.from, to: e.to, kind: "lineage" as const, directed: true })),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGlobal, sortMode, artifacts]);
+  const edges = useMemo(
+    () => [...computeStageEdges(artifacts), ...lineageEdges],
+    [artifacts, lineageEdges],
+  );
   const globalLayout = useMemo(
     () => computeStageLayout(artifacts, sortMode, edges),
     [artifacts, sortMode, edges],
@@ -369,22 +398,58 @@ export function GlobalCanvasStage() {
             height={world.h}
             style={{ overflow: "visible" }}
           >
+            <defs>
+              <marker
+                id="lineage-arrow"
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M0,0 L10,5 L0,10 z" fill="rgba(180,140,255,.75)" />
+              </marker>
+            </defs>
             {edges.map((e, i) => {
               const p1 = globalLayout.positions[e.from];
               const p2 = globalLayout.positions[e.to];
               if (!p1 || !p2) return null;
-              const stroke =
-                e.kind === "lineage" ? "rgba(180,140,255,.45)" : "rgba(44,217,238,.35)";
+              const x1 = p1.x + STAGE_CARD.w / 2;
+              const y1 = p1.y + STAGE_CARD.h / 2;
+              const x2 = p2.x + STAGE_CARD.w / 2;
+              const y2 = p2.y + STAGE_CARD.h / 2;
+              if (e.kind === "lineage") {
+                // Directed (upstream→downstream): dashed purple with an arrow,
+                // shortened so the arrowhead sits at the target card's edge.
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const off = Math.min(len * 0.5, STAGE_CARD.w * 0.55);
+                return (
+                  <line
+                    key={i}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2 - (dx / len) * off}
+                    y2={y2 - (dy / len) * off}
+                    stroke="rgba(180,140,255,.55)"
+                    strokeWidth={2.5}
+                    strokeDasharray="8 6"
+                    markerEnd="url(#lineage-arrow)"
+                  />
+                );
+              }
+              // Same-subject: symmetric solid cyan link.
               return (
                 <line
                   key={i}
-                  x1={p1.x + STAGE_CARD.w / 2}
-                  y1={p1.y + STAGE_CARD.h / 2}
-                  x2={p2.x + STAGE_CARD.w / 2}
-                  y2={p2.y + STAGE_CARD.h / 2}
-                  stroke={stroke}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="rgba(44,217,238,.35)"
                   strokeWidth={2}
-                  strokeDasharray={e.kind === "lineage" ? "8 6" : undefined}
                 />
               );
             })}
