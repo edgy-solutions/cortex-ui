@@ -1,5 +1,5 @@
-import React from "react";
-import { AuthProvider as OidcProvider } from "react-oidc-context";
+import React, { useEffect, useRef } from "react";
+import { AuthProvider as OidcProvider, useAuth } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
 import { config } from "@/config";
 
@@ -36,6 +36,54 @@ const oidcConfig = {
   },
 };
 
+// Recovers automatically from silent-renewal failures instead of
+// stranding the user on the "Retry Connection" screen in
+// RequireAuth.
+//
+// Failure mode this handles: oidc-client-ts strictly validates that
+// a silently-renewed id_token's `auth_time` claim matches the
+// originally stored one (see ResponseValidator in
+// node_modules/oidc-client-ts). Any server-side event that
+// invalidates the Keycloak session — admin "Logout all sessions",
+// SSO idle expiry, a new consent, `prompt=login` on the IdP —
+// produces a fresh `auth_time` on the next refresh_token grant, the
+// validator throws "auth_time in id_token does not match original
+// auth_time", the error bubbles to `useAuth().error`, and the
+// user is stuck with a Retry button that just re-triggers the
+// same broken silent flow.
+//
+// Correct recovery: the user's session on the IdP genuinely
+// changed; their stored artifacts are stale. Drop them and start a
+// clean auth-code flow. `signinRedirect()` navigates them to
+// Keycloak, which re-establishes a fresh session with matching
+// `auth_time` on the return.
+//
+// Guarded by a ref so a burst of renewal errors doesn't produce
+// overlapping redirects.
+function SilentRenewRecovery() {
+  const auth = useAuth();
+  const recovering = useRef(false);
+  useEffect(() => {
+    return auth.events.addSilentRenewError((err) => {
+      if (recovering.current) return;
+      recovering.current = true;
+      console.warn("[auth] silent renew failed — re-authenticating:", err?.message ?? err);
+      void auth.removeUser().finally(() => {
+        auth.signinRedirect().catch((e) => {
+          console.error("[auth] signinRedirect after silent-renew failure also failed:", e);
+          recovering.current = false;
+        });
+      });
+    });
+  }, [auth]);
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  return <OidcProvider {...oidcConfig}>{children}</OidcProvider>;
+  return (
+    <OidcProvider {...oidcConfig}>
+      <SilentRenewRecovery />
+      {children}
+    </OidcProvider>
+  );
 }
