@@ -71,20 +71,30 @@ export function GroupedReviewTable({
       return next;
     });
 
-  // Blockers: a row with no effective disposition, or an override missing its reason.
-  const { needsDisposition, missingReason } = useMemo(() => {
+  // Blockers: a row with no effective disposition; an override missing its reason; or an UNVERIFIED
+  // (needs_review) row that hasn't been individually handled. The last is the anti-laundering seal:
+  // an unverified part is a MANDATORY EXCEPTION — it may not ride accept-all (visibility isn't
+  // friction; a human would "review" it by not noticing it in a batch), so it blocks the whole batch
+  // until it is explicitly overridden. Mirrors the backend resolve_batch guard.
+  const { needsDisposition, missingReason, unhandledUnverified } = useMemo(() => {
     const nd: string[] = [];
     const mr: string[] = [];
+    const uu: string[] = [];
     for (const it of batch.items) {
       const ov = overrides[it.mpn];
       if (!effectiveDisposition(it, ov)) nd.push(it.mpn);
       if (ov && ov.reason.trim() === "") mr.push(it.mpn);
+      if (it.needs_review && !ov) uu.push(it.mpn); // unverified + not individually handled
     }
-    return { needsDisposition: nd, missingReason: mr };
+    return { needsDisposition: nd, missingReason: mr, unhandledUnverified: uu };
   }, [batch.items, overrides]);
 
   const canSubmit =
-    !submitting && !resolved && needsDisposition.length === 0 && missingReason.length === 0;
+    !submitting &&
+    !resolved &&
+    needsDisposition.length === 0 &&
+    missingReason.length === 0 &&
+    unhandledUnverified.length === 0;
 
   const needsReviewCount = useMemo(
     () => batch.items.filter((i) => i.needs_review).length,
@@ -219,6 +229,12 @@ export function GroupedReviewTable({
                           }`}
                         />
                       </div>
+                    ) : it.needs_review ? (
+                      // Unverified + not yet individually handled — a mandatory exception, NOT an
+                      // accepted member of the bulk. It blocks submit until overridden.
+                      <span className="inline-flex items-center gap-1 text-amber-400 text-[10px] uppercase tracking-tighter">
+                        <AlertTriangle className="w-3 h-3" /> unverified — override required
+                      </span>
                     ) : pres ? (
                       <div>
                         <span className={`text-xs ${TONE_ACCENT[pres.tone]}`}>{pres.label}</span>
@@ -254,9 +270,13 @@ export function GroupedReviewTable({
                       <button
                         onClick={() => setOverride(it.mpn, {})}
                         disabled={submitting || resolved}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neon-cyan/40 text-neon-cyan text-[10px] uppercase tracking-tighter hover:bg-neon-cyan/10 disabled:opacity-40 cursor-pointer"
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] uppercase tracking-tighter disabled:opacity-40 cursor-pointer ${
+                          it.needs_review
+                            ? "border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                            : "border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10"
+                        }`}
                       >
-                        Override{rowNeedsDisp ? " *" : ""}
+                        {it.needs_review ? "Disposition *" : `Override${rowNeedsDisp ? " *" : ""}`}
                       </button>
                     )}
                   </td>
@@ -272,6 +292,10 @@ export function GroupedReviewTable({
         <div className="text-[10px] font-mono text-slate-500 uppercase tracking-tighter">
           {needsDisposition.length > 0 ? (
             <span className="text-red-400">{needsDisposition.length} row(s) need a disposition</span>
+          ) : unhandledUnverified.length > 0 ? (
+            <span className="text-amber-400">
+              {unhandledUnverified.length} unverified row(s) need individual disposition
+            </span>
           ) : missingReason.length > 0 ? (
             <span className="text-red-400">{missingReason.length} override(s) need a reason</span>
           ) : (
