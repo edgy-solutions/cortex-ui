@@ -17,6 +17,7 @@ import { FederatedImage } from "../mesh/FederatedImage";
 // here and re-add the dispatch case when the concept is revisited.
 import { ProcessTopologyCard } from "./ProcessTopologyCard";
 import { GroupedReviewTable } from "../GroupedReview/GroupedReviewTable";
+import { WorkflowObservationView } from "../WorkflowObservation/WorkflowObservationView";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
@@ -410,6 +411,12 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
       // is the server-side per-approver-filtered ReviewBatch (Seal 2).
       return <GroupedReviewTable batch={comp.batch} />;
 
+    case "WORKFLOW_OBSERVATION":
+      // "Watch my workflow" — the read-only, gated domain view of a running
+      // workflow. `comp.projection` is the observer-facing ObservationProjection
+      // (no redactions — audit-only, stripped server-side per slice-3 §6).
+      return <WorkflowObservationView projection={comp.projection} />;
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -448,7 +455,8 @@ const isFullWidth = (archetype: string) =>
   archetype === "CHART_WIDGET" ||
   archetype === "ASSET_STATE_METRIC" ||
   archetype === "HAZARD_DECLARATION" ||
-  archetype === "GROUPED_REVIEW";
+  archetype === "GROUPED_REVIEW" ||
+  archetype === "WORKFLOW_OBSERVATION";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();

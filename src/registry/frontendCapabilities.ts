@@ -166,4 +166,17 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     persona_fit: ["OPS_OPERATOR"],
     domain_fit: ["SUSTAINMENT"],
   },
+  // "Watch my workflow" — read-only, gated domain view of a running workflow.
+  // Mirrors SemanticInterpreter's WORKFLOW_OBSERVATION case. The projection is the
+  // observer-facing view (no redactions — audit-only, stripped server-side).
+  {
+    subject_uri: "mesh:WorkflowObservation",
+    object_uri: "mesh:WorkflowObservation",
+    archetype: "WORKFLOW_OBSERVATION",
+    component: "WorkflowObservationView",
+    layout: "full-width",
+    expected_fields: ["workflow_id", "visible", "domain_stages", "current_stage", "steps", "participants"],
+    persona_fit: ["OPS_OPERATOR", "DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING", "SUSTAINMENT", "MAINTENANCE"],
+  },
 ];
