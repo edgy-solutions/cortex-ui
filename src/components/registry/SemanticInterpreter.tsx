@@ -16,6 +16,7 @@ import { FederatedImage } from "../mesh/FederatedImage";
 // `../mesh/DigitalTwinWidget.tsx` so the work isn't lost; re-import
 // here and re-add the dispatch case when the concept is revisited.
 import { ProcessTopologyCard } from "./ProcessTopologyCard";
+import { GroupedReviewTable } from "../GroupedReview/GroupedReviewTable";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
@@ -403,6 +404,12 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
         />
       );
 
+    case "GROUPED_REVIEW":
+      // PCN/PDN part-obsolescence grouped review — one approver resolves N
+      // affected parts in a single accept-all-with-exceptions action. `comp.batch`
+      // is the server-side per-approver-filtered ReviewBatch (Seal 2).
+      return <GroupedReviewTable batch={comp.batch} />;
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -440,7 +447,8 @@ const isFullWidth = (archetype: string) =>
   archetype === "KNOWLEDGE_DOCUMENT" ||
   archetype === "CHART_WIDGET" ||
   archetype === "ASSET_STATE_METRIC" ||
-  archetype === "HAZARD_DECLARATION";
+  archetype === "HAZARD_DECLARATION" ||
+  archetype === "GROUPED_REVIEW";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();

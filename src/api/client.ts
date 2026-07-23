@@ -1,6 +1,7 @@
 import axios from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
+import type { Disposition } from "@/lib/dispositions";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -139,6 +140,35 @@ export async function createAccessRequest(req: {
   const { data } = await api.post<CreateAccessRequestResult>(
     "/access_requests",
     body
+  );
+  return data;
+}
+
+/**
+ * PCN/PDN grouped review — resolve a whole batch in ONE action (accept-all-with-exceptions).
+ * Mirrors the backend bulk-resolve core: one BulkDecision -> N per-item resolutions, each idempotent
+ * on notice_fingerprint × mpn. The client sends ONLY the exceptions (`overrides`); every other item
+ * takes its system-proposed disposition. Each override MUST carry a reason (capture-why is
+ * structural — the type has no optional reason). The backend re-checks can_act, resolves the grouped
+ * HumanTask, and carries each item's needs_review flag forward into the durable resolution.
+ */
+export interface ReviewOverrideInput {
+  mpn: string;
+  disposition: Disposition;
+  reason: string;
+}
+export interface ResolveReviewBatchResult {
+  batch_id: string;
+  items_resolved: number;
+  workflow_resumed?: boolean;
+}
+export async function resolveReviewBatch(
+  batchId: string,
+  overrides: ReviewOverrideInput[]
+): Promise<ResolveReviewBatchResult> {
+  const { data } = await api.post<ResolveReviewBatchResult>(
+    `/review_batches/${encodeURIComponent(batchId)}/resolve`,
+    { overrides }
   );
   return data;
 }

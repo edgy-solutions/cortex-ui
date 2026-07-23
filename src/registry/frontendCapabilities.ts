@@ -152,4 +152,18 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     persona_fit: ["TECH_WRITER", "MECHANIC"],
     domain_fit: ["MAINTENANCE", "MANUFACTURING"],
   },
+  // PCN/PDN grouped review — one approver resolves N affected parts in a single
+  // accept-all-with-exceptions action. Mirrors SemanticInterpreter's GROUPED_REVIEW
+  // case. The batch is per-approver-filtered server-side; each override captures a
+  // reason (capture-why structural); needs_review parts are shown, never hidden.
+  {
+    subject_uri: "mesh:PartObsolescenceReviewBatch",
+    object_uri: "mesh:GroupedReview",
+    archetype: "GROUPED_REVIEW",
+    component: "GroupedReviewTable",
+    layout: "full-width",
+    expected_fields: ["batch_id", "notice_id", "notice_type", "notice_fingerprint", "items"],
+    persona_fit: ["OPS_OPERATOR"],
+    domain_fit: ["SUSTAINMENT"],
+  },
 ];
