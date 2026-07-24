@@ -179,4 +179,20 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     persona_fit: ["OPS_OPERATOR", "DATA_STEWARD"],
     domain_fit: ["DATA_ENGINEERING", "SUSTAINMENT", "MAINTENANCE"],
   },
+  // GENERIC "instances of a class, filtered by one property" table. Mirrors
+  // SemanticInterpreter's INSTANCES_BY_PROPERTY case. Domain-agnostic by
+  // construction — the payload carries columns/rows/vocabulary; the renderer
+  // knows no domain. First consumer is the PCN parts-by-disposition-state
+  // dashboard (fed by cortex-bff GET /pcn/parts_by_state); domain_fit lists the
+  // wired domains, not a limit of the renderer.
+  {
+    subject_uri: "mesh:InstancesByProperty",
+    object_uri: "mesh:InstancesByProperty",
+    archetype: "INSTANCES_BY_PROPERTY",
+    component: "InstancesByPropertyView",
+    layout: "full-width",
+    expected_fields: ["title", "target", "columns", "row_identity", "state_vocabulary", "rows"],
+    persona_fit: ["SUSTAINMENT_ENGINEER", "DATA_STEWARD"],
+    domain_fit: ["SUSTAINMENT", "DATA_ENGINEERING"],
+  },
 ];

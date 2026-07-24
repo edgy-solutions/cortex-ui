@@ -18,6 +18,7 @@ import { FederatedImage } from "../mesh/FederatedImage";
 import { ProcessTopologyCard } from "./ProcessTopologyCard";
 import { GroupedReviewTable } from "../GroupedReview/GroupedReviewTable";
 import { WorkflowObservationView } from "../WorkflowObservation/WorkflowObservationView";
+import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPropertyView";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
@@ -417,6 +418,13 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
       // (no redactions — audit-only, stripped server-side per slice-3 §6).
       return <WorkflowObservationView projection={comp.projection} />;
 
+    case "INSTANCES_BY_PROPERTY":
+      // GENERIC "instances of a class, filtered by one property" table. The PCN
+      // parts-by-disposition-state dashboard is its first instance — everything
+      // domain-specific is in the payload VALUES (columns/rows/vocabulary), the
+      // widget knows none of it. `comp` IS the InstancesByPropertyPayload.
+      return <InstancesByPropertyView payload={comp} />;
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -456,7 +464,8 @@ const isFullWidth = (archetype: string) =>
   archetype === "ASSET_STATE_METRIC" ||
   archetype === "HAZARD_DECLARATION" ||
   archetype === "GROUPED_REVIEW" ||
-  archetype === "WORKFLOW_OBSERVATION";
+  archetype === "WORKFLOW_OBSERVATION" ||
+  archetype === "INSTANCES_BY_PROPERTY";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
   const { personaConfig } = useMeshConfig();

@@ -110,7 +110,14 @@ export type MockScenario =
   // `build_knowledge_graph` doesn't inject markdown image refs into
   // chunks, so the LLM never references them in the final answer.
   // Once the architect okays the visual, the real fix is small.
-  | "doc-image";
+  | "doc-image"
+  // INSTANCES_BY_PROPERTY hardening. `instances` renders the PCN parts-by-
+  // disposition-state dashboard (the archetype's first instance); `instances-
+  // generic` feeds the SAME renderer a NON-PCN payload (datasets by domain) —
+  // the generic-by-construction proof (schema doc §Acceptance): if both draw a
+  // correct table, the widget is not PCN-shaped in disguise.
+  | "instances"
+  | "instances-generic";
 // `twin` (DIGITAL_TWIN_3D) was REMOVED 2026-06-26 — the archetype's
 // dispatch was deferred until a proper visual pass. The widget file
 // itself is preserved at `src/components/mesh/DigitalTwinWidget.tsx`
@@ -145,7 +152,7 @@ function parseScenario(query: string): {
   // marker wins (regex would otherwise match "@doc" and leave "-image"
   // in the cleanQuery).
   const m = query.match(
-    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi|chart-line|chart-pie|chart-scatter|topology|hazard|table|doc-image|doc)\s+(.+)$/i
+    /^@(happy|fail|partial-no-payload|partial-no-grounding|empty|chart-single|chart-multi|chart-line|chart-pie|chart-scatter|topology|hazard|table|doc-image|doc|instances-generic|instances)\s+(.+)$/i
   );
   if (!m) return { scenario: "happy", cleanQuery: query };
   const marker = m[1].toLowerCase();
@@ -179,9 +186,85 @@ function parseScenario(query: string): {
       return { scenario: "doc", cleanQuery };
     case "doc-image":
       return { scenario: "doc-image", cleanQuery };
+    case "instances-generic":
+      return { scenario: "instances-generic", cleanQuery };
+    case "instances":
+      return { scenario: "instances", cleanQuery };
     default:
       return { scenario: "happy", cleanQuery };
   }
+}
+
+/**
+ * Build an INSTANCES_BY_PROPERTY payload for the `@instances` / `@instances-
+ * generic` scenarios. TWO payloads over the SAME renderer:
+ *   - `instances`         → PCN parts by disposition_state (the first instance)
+ *   - `instances-generic` → datasets by domain (NON-PCN, same shape)
+ * If both draw correct tables the widget is generic-by-construction, not PCN-
+ * shaped in disguise (schema doc §Acceptance). All identifiers are mock.
+ */
+function buildInstancesByPropertyPayload(
+  scenario: "instances" | "instances-generic"
+): DashboardUI {
+  if (scenario === "instances-generic") {
+    // A completely different domain/class/property — the generic proof. The
+    // renderer draws these headers/rows/tabs with zero code changes.
+    return {
+      components: [
+        {
+          archetype: "INSTANCES_BY_PROPERTY",
+          title: "Datasets by domain",
+          target: {
+            domain: "DATA_ENGINEERING",
+            class: "idp:Dataset",
+            filter_property: "idp:domain",
+            filter_value: "DATA_ENGINEERING",
+          },
+          columns: [
+            { key: "instance", label: "Dataset", from: "row_identity" },
+            { key: "domain", label: "Domain", from: "idp:domain" },
+            { key: "owner", label: "Owner", from: "idp:owner" },
+            { key: "rows", label: "Row count", from: "idp:rowCount" },
+          ],
+          row_identity: { key: "instance", iri: true, display_from_local_name: true },
+          state_vocabulary: ["DATA_ENGINEERING", "MAINTENANCE", "MANUFACTURING", "SUSTAINMENT"],
+          rows: [
+            { instance: "urn:li:dataset:mock/customers_gold", domain: "DATA_ENGINEERING", owner: "data-stewards", rows: "1,284,001" },
+            { instance: "urn:li:dataset:mock/orders_curated", domain: "DATA_ENGINEERING", owner: "data-stewards", rows: "982,540" },
+            { instance: "urn:li:dataset:mock/sessions_raw", domain: "DATA_ENGINEERING", owner: "platform", rows: "44,102,778" },
+          ],
+        },
+      ],
+    } as unknown as DashboardUI;
+  }
+  // PCN parts by disposition_state — mirrors cortex-bff GET /pcn/parts_by_state.
+  return {
+    components: [
+      {
+        archetype: "INSTANCES_BY_PROPERTY",
+        title: "Parts by disposition state",
+        target: {
+          domain: "SUSTAINMENT",
+          class: "pcn:Component",
+          filter_property: "pcn:dispositionState",
+          filter_value: "dispatchQualification",
+        },
+        columns: [
+          { key: "instance", label: "Part", from: "row_identity" },
+          { key: "state", label: "State", from: "pcn:dispositionState" },
+          { key: "ref", label: "Resolution", from: "pcn:dispositionRef" },
+          { key: "ruleset", label: "Policy", from: "pcn:proposedByRuleset" },
+        ],
+        row_identity: { key: "instance", iri: true, display_from_local_name: true },
+        state_vocabulary: ["dispatchQualification", "dispatchLTB", "dispatchAltSourcing", "archive"],
+        rows: [
+          { instance: "http://internal/components/NSR01L30NXT5G", state: "dispatchQualification", ref: "IPCN25300X:NSR01L30NXT5G", ruleset: "rules@2915ddb229e4" },
+          { instance: "http://internal/components/NSR02F30NXT5G", state: "dispatchQualification", ref: "IPCN25300X:NSR02F30NXT5G", ruleset: "rules@2915ddb229e4" },
+          { instance: "http://internal/components/NSR05F20NXT5G", state: "dispatchQualification", ref: "IPCN25300X:NSR05F20NXT5G", ruleset: "rules@2915ddb229e4" },
+        ],
+      },
+    ],
+  } as unknown as DashboardUI;
 }
 
 /**
@@ -932,6 +1015,8 @@ export function runMockGroundingFor(
           scenario === "doc" ||
           scenario === "doc-image"
         ? buildArchetypePayload(scenario)
+        : scenario === "instances" || scenario === "instances-generic"
+        ? buildInstancesByPropertyPayload(scenario)
         : seq.payload;
     schedule(TIMINGS.final_payload, () =>
       emit({ type: "final_payload", payload })
