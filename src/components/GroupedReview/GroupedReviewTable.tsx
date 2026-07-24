@@ -22,10 +22,7 @@ import {
   presentDisposition,
   type Disposition,
 } from "@/lib/dispositions";
-import {
-  resolveReviewBatch,
-  type ReviewOverrideInput,
-} from "@/api/client";
+import { actOnHumanTask } from "@/api/client";
 import type { ReviewBatch, ReviewItem } from "./types";
 
 interface OverrideDraft {
@@ -104,24 +101,34 @@ export function GroupedReviewTable({
   const submit = async () => {
     setSubmitting(true);
     try {
-      const payload: ReviewOverrideInput[] = Object.entries(overrides).map(
-        ([mpn, o]) => ({ mpn, disposition: o.disposition, reason: o.reason.trim() })
-      );
-      const res = await resolveReviewBatch(batch.batch_id, payload);
+      // ONLY the exceptions travel — {mpn: {disposition, reason}}. Every other row takes its proposed
+      // disposition (accept-all). Submitted through the /act bridge (single durable decision path).
+      const overridesDict: Record<string, { disposition: string; reason: string }> = {};
+      for (const [mpn, o] of Object.entries(overrides)) {
+        overridesDict[mpn] = { disposition: o.disposition, reason: o.reason.trim() };
+      }
+      const res = await actOnHumanTask(batch.batch_id, "approved", "", overridesDict);
+      if (res.accepted === false) {
+        // Policy refusal from submit_decision (canSubmit should prevent this, but surface it honestly
+        // rather than showing a false success — the review stays pending).
+        toast.error(res.reason ? `Refused — ${res.reason}` : "Review refused — still pending");
+        return;
+      }
+      const count = res.resolved_count ?? batch.items.length;
       setResolved(true);
       toast.success(
-        res.workflow_resumed
-          ? `Resolved ${res.items_resolved} parts — workflow resumed`
-          : `Resolved ${res.items_resolved} parts`
+        res.review_dispatched
+          ? `Resolved ${count} parts — dispatched`
+          : `Resolved ${count} parts`
       );
-      onResolved?.({ items_resolved: res.items_resolved });
+      onResolved?.({ items_resolved: count });
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(
         status === 403
           ? "Not authorized to resolve this batch"
           : status === 404
-            ? "Batch no longer available"
+            ? "Review no longer available"
             : "Resolve failed"
       );
     } finally {

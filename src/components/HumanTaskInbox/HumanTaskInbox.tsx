@@ -14,14 +14,16 @@
  * a REST snapshot (fetchMyHumanTasks) in case the subscription hasn't delivered
  * yet — the two agree by construction (same recipient_id filter).
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHumanTaskStore,
   type HumanTask,
 } from "@/store/useHumanTaskStore";
-import { fetchMyHumanTasks, actOnHumanTask } from "@/api/client";
+import { fetchMyHumanTasks, actOnHumanTask, fetchReviewBatch } from "@/api/client";
+import { GroupedReviewTable } from "@/components/GroupedReview/GroupedReviewTable";
+import type { ReviewBatch } from "@/components/GroupedReview/types";
 
 /**
  * Reconcile the pending list from the authoritative REST snapshot (/me/human_tasks
@@ -59,6 +61,11 @@ export function seedFromRest() {
 function TaskCard({ task }: { task: HumanTask }) {
   const acting = useHumanTaskStore((s) => s.acting[task.taskId] ?? false);
   const setActing = useHumanTaskStore((s) => s.setActing);
+  // Grouped review: a batch can't be actioned blind — a needs_review row is a mandatory per-item
+  // exception, so accept-all refuses without an override. The card opens the detail view instead.
+  const isGrouped = task.kind === "pcn_grouped_review";
+  const [reviewBatch, setReviewBatch] = useState<ReviewBatch | null>(null);
+  const [loadingBatch, setLoadingBatch] = useState(false);
 
   const act = async (decision: "approved" | "rejected") => {
     setActing(task.taskId, true);
@@ -89,37 +96,96 @@ function TaskCard({ task }: { task: HumanTask }) {
     }
   };
 
+  const openReview = async () => {
+    if (!task.workflowId) return;
+    setLoadingBatch(true);
+    try {
+      setReviewBatch(await fetchReviewBatch(task.workflowId));
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 404 ? "Review no longer available" : "Could not load review");
+    } finally {
+      setLoadingBatch(false);
+    }
+  };
+
   return (
-    <div className="p-3 bg-slate-900/50 border border-white/10 rounded-lg space-y-2">
-      <div className="flex items-start gap-2">
-        <span className="w-2 h-2 rounded-full bg-neon-pink mt-1.5 animate-pulse shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-mono text-white truncate">{task.title}</p>
-          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{task.summary}</p>
-          <div className="mt-2 space-y-0.5 text-[9px] font-mono text-slate-500 uppercase tracking-wider">
-            <p>audience · {task.audience}</p>
-            {task.requestedBy && <p>requested by · {task.requestedBy}</p>}
-            {task.subjectRef && <p>subject · {task.subjectRef}</p>}
+    <>
+      <div className="p-3 bg-slate-900/50 border border-white/10 rounded-lg space-y-2">
+        <div className="flex items-start gap-2">
+          <span className="w-2 h-2 rounded-full bg-neon-pink mt-1.5 animate-pulse shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-mono text-white truncate">{task.title}</p>
+            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{task.summary}</p>
+            <div className="mt-2 space-y-0.5 text-[9px] font-mono text-slate-500 uppercase tracking-wider">
+              <p>audience · {task.audience}</p>
+              {task.requestedBy && <p>requested by · {task.requestedBy}</p>}
+              {task.subjectRef && <p>subject · {task.subjectRef}</p>}
+            </div>
           </div>
         </div>
+        <div className="flex gap-2 pt-1">
+          {isGrouped ? (
+            <button
+              onClick={openReview}
+              disabled={loadingBatch || !task.workflowId}
+              title={!task.workflowId ? "stale task — no workflow to review" : undefined}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-neon-blue/10 border border-neon-blue/50 text-neon-blue text-[11px] font-mono uppercase tracking-widest hover:bg-neon-blue/20 disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" /> {loadingBatch ? "Loading…" : "Review"}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => act("approved")}
+                disabled={acting}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-neon-green/10 border border-neon-green/50 text-neon-green text-[11px] font-mono uppercase tracking-widest hover:bg-neon-green/20 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+              </button>
+              <button
+                onClick={() => act("rejected")}
+                disabled={acting}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-neon-pink/10 border border-neon-pink/50 text-neon-pink text-[11px] font-mono uppercase tracking-widest hover:bg-neon-pink/20 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Reject
+              </button>
+            </>
+          )}
+        </div>
       </div>
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={() => act("approved")}
-          disabled={acting}
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-neon-green/10 border border-neon-green/50 text-neon-green text-[11px] font-mono uppercase tracking-widest hover:bg-neon-green/20 disabled:opacity-40 transition-colors cursor-pointer"
+
+      {/* Review detail — the batch the reviewer resolves (accept-all-with-exceptions). Overlay above the
+          inbox drawer; resolving it drops the task from the queue. */}
+      {reviewBatch && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setReviewBatch(null)}
         >
-          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-        </button>
-        <button
-          onClick={() => act("rejected")}
-          disabled={acting}
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-neon-pink/10 border border-neon-pink/50 text-neon-pink text-[11px] font-mono uppercase tracking-widest hover:bg-neon-pink/20 disabled:opacity-40 transition-colors cursor-pointer"
-        >
-          <XCircle className="w-3.5 h-3.5" /> Reject
-        </button>
-      </div>
-    </div>
+          <div
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setReviewBatch(null)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Close review"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <GroupedReviewTable
+              batch={reviewBatch}
+              onResolved={() => {
+                useHumanTaskStore.getState().removeTask(task.id);
+                setReviewBatch(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

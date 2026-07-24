@@ -2,6 +2,7 @@ import axios from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import type { Disposition } from "@/lib/dispositions";
+import type { ReviewBatch } from "@/components/GroupedReview/types";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -94,17 +95,29 @@ export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
 export interface ActOnTaskResult {
   task_id: string;
   decision: string;
-  rows_resolved: number;
+  rows_resolved?: number;
   workflow_resumed?: boolean;
+  // pcn_grouped_review bridge: the /act handler validates the decision against the durable workflow
+  // (submit_decision) and only resolves the projection on acceptance. A policy-refused submission
+  // (e.g. an unverified row riding accept-all) comes back accepted:false + status "still_pending".
+  accepted?: boolean;
+  status?: string;
+  review_dispatched?: boolean;
+  resolved_count?: number;
+  reason?: string;
 }
 export async function actOnHumanTask(
   taskId: string,
   decision: "approved" | "rejected",
-  comment = ""
+  comment = "",
+  // pcn_grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
+  overrides?: Record<string, { disposition: string; reason: string }>
 ): Promise<ActOnTaskResult> {
+  const body: Record<string, unknown> = { decision, comment };
+  if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
-    { decision, comment }
+    body
   );
   return data;
 }
@@ -145,30 +158,25 @@ export async function createAccessRequest(req: {
 }
 
 /**
- * PCN/PDN grouped review — resolve a whole batch in ONE action (accept-all-with-exceptions).
- * Mirrors the backend bulk-resolve core: one BulkDecision -> N per-item resolutions, each idempotent
- * on notice_fingerprint × mpn. The client sends ONLY the exceptions (`overrides`); every other item
- * takes its system-proposed disposition. Each override MUST carry a reason (capture-why is
- * structural — the type has no optional reason). The backend re-checks can_act, resolves the grouped
- * HumanTask, and carries each item's needs_review flag forward into the durable resolution.
+ * PCN/PDN grouped review — the reviewer fetches the batch, then resolves it in ONE action
+ * (accept-all-with-exceptions) THROUGH the /act bridge. The client sends ONLY the exceptions
+ * (`overrides` on actOnHumanTask); every other item takes its system-proposed disposition. Each
+ * override MUST carry a reason (capture-why is structural). submit_decision re-checks the batch,
+ * resolves the grouped HumanTask, and fans out — one durable submission path (single decider), so the
+ * old /review_batches/{id}/resolve endpoint (never implemented) is retired rather than left as a
+ * second route someone later "fixes" by building it.
  */
 export interface ReviewOverrideInput {
   mpn: string;
   disposition: Disposition;
   reason: string;
 }
-export interface ResolveReviewBatchResult {
-  batch_id: string;
-  items_resolved: number;
-  workflow_resumed?: boolean;
-}
-export async function resolveReviewBatch(
-  batchId: string,
-  overrides: ReviewOverrideInput[]
-): Promise<ResolveReviewBatchResult> {
-  const { data } = await api.post<ResolveReviewBatchResult>(
-    `/review_batches/${encodeURIComponent(batchId)}/resolve`,
-    { overrides }
+/** Fetch the reviewer's grouped-review batch (parts + proposed dispositions + needs_review flags) so
+ *  the detail view can render it. Existence-oracle-safe server-side: 404 unless the caller holds this
+ *  grouped task in their own queue. */
+export async function fetchReviewBatch(workflowId: string): Promise<ReviewBatch> {
+  const { data } = await api.get<ReviewBatch>(
+    `/pcn/reviews/${encodeURIComponent(workflowId)}/batch`
   );
   return data;
 }
