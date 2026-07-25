@@ -2,6 +2,30 @@ import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
 
+/** Do two task-artifacts carry the same displayed content? Compares the fields
+ *  that matter for rendering (task_ref + display) and `rendered_output` BY
+ *  REFERENCE (a preserved lazy-fetched batch is the same ref). Used so the
+ *  reconciler can REUSE the existing object when a re-delivered task is
+ *  unchanged — otherwise a fresh object churns the render tree and an
+ *  in-progress edit (a review override + reason) is wiped by a remount. */
+function taskArtifactContentEqual(a: Artifact, b: Artifact): boolean {
+  if (a === b) return true;
+  if (a.rendered_output !== b.rendered_output) return false;
+  if (a.summary !== b.summary || a.created_at !== b.created_at || a.status !== b.status) return false;
+  const ra = a.task_ref;
+  const rb = b.task_ref;
+  if (!ra || !rb) return ra === rb;
+  return (
+    ra.task_state === rb.task_state &&
+    ra.kind === rb.kind &&
+    ra.audience === rb.audience &&
+    ra.requestedBy === rb.requestedBy &&
+    ra.subjectRef === rb.subjectRef &&
+    ra.workflowId === rb.workflowId &&
+    ra.taskId === rb.taskId
+  );
+}
+
 /**
  * Hop 3 of the projector build plan
  * (docs/plans/projector-build-plan.md commit 0eda9f7 §4 Hop 3 Part 2).
@@ -543,22 +567,35 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   reconcileTaskArtifacts: (taskArtifacts) =>
     set((state) => {
       const incoming = new Map(taskArtifacts.map((t) => [t.id, t]));
-      const answers = state.artifacts.filter(
-        (a) => !a.id.startsWith(TASK_ARTIFACT_PREFIX)
-      );
       const existingTasks = new Map(
         state.artifacts
           .filter((a) => a.id.startsWith(TASK_ARTIFACT_PREFIX))
           .map((a) => [a.id, a] as const)
       );
+
+      // Build the reconciled task-artifacts, REUSING the existing object whenever
+      // a task's content is unchanged — so a re-delivered identical task (Electric
+      // poll) produces the SAME references and no re-render, and an in-progress
+      // review edit survives. Only genuinely-changed tasks get a fresh object.
+      let changed = existingTasks.size !== incoming.size;
       const merged = taskArtifacts.map((t) => {
         const prev = existingTasks.get(t.id);
         // Preserve a lazy-fetched review batch across a task-state update.
-        if (prev && prev.rendered_output && !t.rendered_output) {
-          return { ...t, rendered_output: prev.rendered_output };
-        }
-        return t;
+        const next =
+          prev && prev.rendered_output && !t.rendered_output
+            ? { ...t, rendered_output: prev.rendered_output }
+            : t;
+        if (prev && taskArtifactContentEqual(prev, next)) return prev;
+        changed = true;
+        return next;
       });
+
+      // Nothing changed (and none removed) -> no state update at all (no churn).
+      if (!changed) return {};
+
+      const answers = state.artifacts.filter(
+        (a) => !a.id.startsWith(TASK_ARTIFACT_PREFIX)
+      );
       const _lastUpdateSource = { ...state._lastUpdateSource };
       for (const id of existingTasks.keys()) {
         if (!incoming.has(id)) delete _lastUpdateSource[id];
