@@ -124,24 +124,31 @@ export function EvidenceCard({
             "scan for it yourself" instruction. */}
         {hasPage ? (
           <div>
-            <div className="relative w-full border border-white/10 rounded overflow-hidden bg-slate-950">
-              <FederatedImage
-                src={item.page_image_url!}
-                alt={`Notice page ${item.page_number}`}
-                className="w-full block"
-              />
-              {frac && (
-                <div
-                  ref={regionRef}
-                  className="absolute border-2 border-neon-pink shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] pointer-events-none"
-                  style={{
-                    left: `${frac.left * 100}%`,
-                    top: `${frac.top * 100}%`,
-                    width: `${frac.width * 100}%`,
-                    height: `${frac.height * 100}%`,
-                  }}
+            {/* Cap the page render's height with its OWN internal scroll so the
+                evidence never visually dominates the review card it serves (the
+                review is the thing awaiting action; evidence is subordinate). The
+                %-overlay stays relative to the image wrapper, so the box tracks
+                the text regardless of the outer scroll. */}
+            <div className="max-h-[55vh] overflow-y-auto custom-scrollbar border border-white/10 rounded bg-slate-950">
+              <div className="relative w-full">
+                <FederatedImage
+                  src={item.page_image_url!}
+                  alt={`Notice page ${item.page_number}`}
+                  className="w-full block"
                 />
-              )}
+                {frac && (
+                  <div
+                    ref={regionRef}
+                    className="absolute border-2 border-neon-pink shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] pointer-events-none"
+                    style={{
+                      left: `${frac.left * 100}%`,
+                      top: `${frac.top * 100}%`,
+                      width: `${frac.width * 100}%`,
+                      height: `${frac.height * 100}%`,
+                    }}
+                  />
+                )}
+              </div>
             </div>
             <p className="mt-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
               {located
