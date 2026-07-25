@@ -13,7 +13,7 @@
  * `items` is per-approver-filtered server-side (Seal 2); this renders what it's given and never
  * filters. Mirrors SupplyTable's shell + TaskCard's act-with-optimism.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +43,13 @@ function effectiveDisposition(
   return override ? override.disposition : item.proposed_disposition;
 }
 
+// Draft cache — an in-progress override set, keyed by batch id, OUTSIDE React so
+// it survives a remount. On the canvas a review card can be remounted by an
+// unrelated re-render (the constant answer-Electric poll, a reveal-wrapper cycle,
+// a stage re-layout); without this, the approver's half-typed override + reason
+// would be wiped mid-edit (exactly the observed bug). Cleared on resolve.
+const reviewDraftCache = new Map<string, Record<string, OverrideDraft>>();
+
 export function GroupedReviewTable({
   batch,
   onResolved,
@@ -50,10 +57,18 @@ export function GroupedReviewTable({
   batch: ReviewBatch;
   onResolved?: (result: { items_resolved: number }) => void;
 }) {
-  // Only the EXCEPTIONS are held in state; presence of a key means the row is overridden.
-  const [overrides, setOverrides] = useState<Record<string, OverrideDraft>>({});
+  // Only the EXCEPTIONS are held in state; presence of a key means the row is
+  // overridden. Initialize from the draft cache so a remount restores the edit.
+  const [overrides, setOverrides] = useState<Record<string, OverrideDraft>>(
+    () => reviewDraftCache.get(batch.batch_id) ?? {}
+  );
   const [submitting, setSubmitting] = useState(false);
   const [resolved, setResolved] = useState(false);
+
+  // Persist every override change to the cache so it outlives a remount.
+  useEffect(() => {
+    reviewDraftCache.set(batch.batch_id, overrides);
+  }, [batch.batch_id, overrides]);
 
   const setOverride = (mpn: string, patch: Partial<OverrideDraft>) =>
     setOverrides((prev) => {
@@ -115,6 +130,7 @@ export function GroupedReviewTable({
         return;
       }
       const count = res.resolved_count ?? batch.items.length;
+      reviewDraftCache.delete(batch.batch_id); // draft consumed
       setResolved(true);
       toast.success(
         res.review_dispatched
