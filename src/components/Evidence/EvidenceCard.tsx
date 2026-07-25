@@ -55,28 +55,40 @@ export function EvidenceCard({
 }) {
   const located = item.bboxes.length > 0;
   const frac = located ? boxFraction(item.bboxes[0], item.page_dims) : null;
+  // Honesty summary, pulled UNDER the title (not buried in a footer): what this
+  // evidence IS, given element-granularity — a table region, not a cell.
+  const summary = located
+    ? `source table · page ${item.page_number} · matched verbatim`
+    : `unlocated · page ${item.page_number} · verify manually`;
 
   return (
-    <div className="glass-panel h-full flex flex-col border-pink-500/20 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-white/5 shrink-0">
-        <FileSearch className="w-4 h-4 text-neon-pink shrink-0" />
-        <span className="font-mono text-[11px] font-bold text-slate-200 tracking-widest uppercase truncate flex-1">
-          Evidence · {item.value || item.field_path}
-        </span>
-        <span
-          className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${METHOD_TONE[item.match_method]}`}
-        >
-          {item.match_method} · {(item.match_confidence * 100).toFixed(0)}%
-        </span>
-        {onDismiss && (
-          <button onClick={onDismiss} className="text-slate-500 hover:text-white transition-colors" title="Dismiss evidence">
-            <X className="w-4 h-4" />
-          </button>
-        )}
+    // Content-sized (max-h caps + scrolls) so a short card reads SUMMONED, not a
+    // resident full-height rail.
+    <div className="glass-panel border-pink-500/20 max-h-full overflow-y-auto custom-scrollbar">
+      {/* Header — title + the honesty summary directly under it. */}
+      <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+        <div className="flex items-center gap-2">
+          <FileSearch className="w-4 h-4 text-neon-pink shrink-0" />
+          <span className="font-mono text-[11px] font-bold text-slate-200 tracking-widest uppercase truncate flex-1">
+            Evidence · {item.value || item.field_path}
+          </span>
+          <span
+            className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${METHOD_TONE[item.match_method]}`}
+          >
+            {item.match_method} · {(item.match_confidence * 100).toFixed(0)}%
+          </span>
+          {onDismiss && (
+            <button onClick={onDismiss} className="text-slate-500 hover:text-white transition-colors" title="Dismiss evidence">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <p className="mt-1.5 pl-6 text-[9px] font-mono uppercase tracking-wider text-slate-500">
+          {summary} · region {item.region}
+        </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+      <div className="p-4 space-y-4">
         {/* not_found first: unlocated ≠ missing. */}
         {!located && (
           <div className="flex items-start gap-2 p-3 rounded border border-pink-500/30 bg-pink-500/5">
@@ -138,12 +150,10 @@ export function EvidenceCard({
             </p>
           </div>
         )}
-      </div>
-
-      {/* Footer metadata */}
-      <div className="px-4 py-2 border-t border-white/10 bg-white/5 flex items-center gap-4 text-[9px] font-mono uppercase tracking-wider text-slate-500 shrink-0">
-        <span>region · {item.region}</span>
-        <span>field · {item.field_path}</span>
+        {/* field path — quiet, for provenance completeness. */}
+        <p className="text-[8px] font-mono uppercase tracking-wider text-slate-600 pt-1">
+          field · {item.field_path}
+        </p>
       </div>
     </div>
   );

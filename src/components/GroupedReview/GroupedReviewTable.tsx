@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, FileSearch } from "lucide-react";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
+import { useStageStore } from "@/store/useStageStore";
 import { toast } from "sonner";
 import {
   DISPOSITIONS,
@@ -74,8 +75,12 @@ export function GroupedReviewTable({
   // Summon the evidence card for a part — the document region its value came
   // from. Subordinate to this review; leaves when the review does.
   const summon = useEvidenceStore((s) => s.summon);
-  const showSource = (mpn: string) =>
+  const showSource = (mpn: string) => {
     summon({ reviewId: batch.batch_id, noticeId: batch.notice_id, mpn });
+    // Open the composite (review + evidence flap) so the flap has room to dock —
+    // "the review card makes place for the evidence card."
+    useStageStore.getState().openFullPane();
+  };
 
   const setOverride = (mpn: string, patch: Partial<OverrideDraft>) =>
     setOverrides((prev) => {

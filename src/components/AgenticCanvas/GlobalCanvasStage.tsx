@@ -5,7 +5,6 @@ import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
-import { EvidencePane } from "../Evidence/EvidencePane";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
 import { fetchLineageEdges } from "@/api/client";
@@ -183,10 +182,8 @@ export function GlobalCanvasStage() {
   // task relabels them (Review / Workflow / Expand), not a different tab set.
   const focusedTaskRef = focusId ? artifactById[focusId]?.task_ref : undefined;
 
-  // Summoned evidence renders as a docked panel at the canvas level, so it shows
-  // in BOTH the focused-card view and the full pane. It leaves with its citizen:
-  // navigating to a different card dismisses it (evidence is subordinate).
-  const summonedEvidence = useEvidenceStore((s) => s.summoned);
+  // Evidence is a docked flap of the review card (rendered in CanvasPane). It
+  // leaves with its citizen: navigating to a different card dismisses it.
   const dismissEvidence = useEvidenceStore((s) => s.dismiss);
   useEffect(() => {
     dismissEvidence();
@@ -669,15 +666,6 @@ export function GlobalCanvasStage() {
 
       {/* The dock — GLOBAL + custom canvases + NEW. */}
       {!fullPane && <DockBar />}
-
-      {/* Summoned evidence — docked beside the canvas, ABOVE both the focused view
-          and the full pane (z over the fullPane cover). Subordinate to its review,
-          dismissable; leaves when you navigate to another card (effect above). */}
-      {summonedEvidence && (
-        <div className="absolute top-0 right-0 h-full w-[440px] max-w-[45%] z-50 p-3 bg-slate-950/95 backdrop-blur-md border-l border-neon-pink/20 shadow-2xl animate-in slide-in-from-right duration-200">
-          <EvidencePane />
-        </div>
-      )}
     </div>
   );
 }

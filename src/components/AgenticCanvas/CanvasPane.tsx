@@ -8,6 +8,8 @@ import { InlineFigures } from './InlineFigures';
 import { DecisionMap } from './DecisionMap';
 import { WorkflowLens } from './WorkflowLens';
 import { taskKindLabel } from '@/lib/taskArtifact';
+import { EvidencePane } from '../Evidence/EvidencePane';
+import { useEvidenceStore } from '@/store/useEvidenceStore';
 
 /**
  * CanvasPane — view OVER the artifact collection per ADR-0023.
@@ -46,6 +48,7 @@ export const CanvasPane = () => {
   // overlay. (Aliased as view/setView so the rest of this file is unchanged.)
   const view = useStageStore((s) => s.focusTab);
   const setView = useStageStore((s) => s.setFocusTab);
+  const summonedEvidence = useEvidenceStore((s) => s.summoned);
   const activeTab = useCanvasStore((s) => s.activeTab);
   const setActiveTab = useCanvasStore((s) => s.setActiveTab);
   const artifactCount = useCanvasStore((s) => s.artifacts.length);
@@ -104,6 +107,10 @@ export const CanvasPane = () => {
   if (artifact.task_ref) {
     const taskRef = artifact.task_ref;
     const onWorkflow = view === "map";
+    // Evidence is a docked FLAP of THIS review (one composite object), shown on
+    // the content lens; the review yields it space. Content-sized, not a rail.
+    const reviewBatchId = (components[0] as { batch?: { batch_id?: string } } | undefined)?.batch?.batch_id;
+    const showEvidence = !onWorkflow && !!summonedEvidence && summonedEvidence.reviewId === reviewBatchId;
     return (
       <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
         <div className="w-full flex items-center px-6 pt-4 pb-2 border-b border-white/5 gap-2 shrink-0">
@@ -126,16 +133,26 @@ export const CanvasPane = () => {
             Workflow
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          {onWorkflow ? (
-            <WorkflowLens taskRef={taskRef} />
-          ) : components.length > 0 ? (
-            <SemanticInterpreter payload={{ components }} />
-          ) : (
-            <div className="h-full flex items-center justify-center">
-              <p className="font-mono text-xs tracking-widest uppercase text-slate-500">
-                Loading review…
-              </p>
+        <div className="flex-1 min-h-0 flex">
+          <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar p-6">
+            {onWorkflow ? (
+              <WorkflowLens taskRef={taskRef} />
+            ) : components.length > 0 ? (
+              <SemanticInterpreter payload={{ components }} />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="font-mono text-xs tracking-widest uppercase text-slate-500">
+                  Loading review…
+                </p>
+              </div>
+            )}
+          </div>
+          {/* Docked evidence FLAP — content-sized (self-start), attached to the
+              review's right edge, sharing its card language; subordinate, not a
+              full-height rail. Dismiss returns the space to the review. */}
+          {showEvidence && (
+            <div className="w-[420px] max-w-[42%] shrink-0 self-start max-h-full overflow-y-auto custom-scrollbar p-4 pl-1">
+              <EvidencePane />
             </div>
           )}
         </div>

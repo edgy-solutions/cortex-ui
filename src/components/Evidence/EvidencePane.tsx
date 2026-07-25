@@ -66,7 +66,7 @@ export function EvidencePane() {
 
 function Frame({ note, onDismiss }: { note: string; onDismiss: () => void }) {
   return (
-    <div className="glass-panel h-full flex flex-col border-pink-500/20">
+    <div className="glass-panel border-pink-500/20">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-white/5">
         <FileSearch className="w-4 h-4 text-neon-pink" />
         <span className="font-mono text-[11px] font-bold text-slate-200 tracking-widest uppercase flex-1">
@@ -76,7 +76,7 @@ function Frame({ note, onDismiss }: { note: string; onDismiss: () => void }) {
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex items-center justify-center p-6">
         <p className="text-[11px] font-mono text-slate-400 leading-relaxed text-center max-w-sm">{note}</p>
       </div>
     </div>
