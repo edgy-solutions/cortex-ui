@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { FileSearch, AlertTriangle, X } from "lucide-react";
 import { boxFraction, type Bbox, type PageDims } from "@/lib/bboxScale";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -5,23 +6,26 @@ import { FederatedImage } from "../mesh/FederatedImage";
 /**
  * EVIDENCE card — the document region a review value came from, SUMMONED beside
  * its review card (never a timeline citizen; it's evidence FOR a decision, not a
- * thing awaiting one). Closes the provenance chain visually: the approver sees
- * the verbatim string in the actual page region it was extracted from.
+ * thing awaiting one). Closes the provenance chain visually.
+ *
+ * TWO HALVES, both needed (the card was standing on one leg until the page render
+ * landed):
+ *  - CONTEXT (main body): the full page with the source region HIGHLIGHTED. Answers
+ *    "where in the document did this come from" — which table among the page's
+ *    several, where it sits, what surrounds it. This is the SELF-VERIFYING form:
+ *    the reviewer sees with their own eyes that the highlight sits on a table
+ *    containing their MPN (after the crop-mismatch bug, worth a lot). The overlay
+ *    is a FRACTION of the page (boxFraction) so it tracks the text at any render
+ *    size — the sealed bbox-scale rule, drift-free by construction.
+ *  - DETAIL (zoom panel below): the table CROP. Answers "what does it say" — the
+ *    row-level read the element-granular box can't give.
  *
  * Doc-tools contract (values from the LLM, boxes from `unstructured`, joined by
- * verbatim text match):
- *  - Boxes are TABLE-ELEMENT granular, not row/cell — every part from one table
- *    shares the same box. So the highlight is labeled "source table for this
- *    part", NOT "this value", and the S3 table CROP is shown as the second panel
- *    (a human scanning the crop for the MPN is the row-level check the box can't
- *    give).
- *  - `not_found` (bboxes empty) is UNLOCATED, not MISSING: no box, an explicit
- *    "could not be located — verify manually" state, and the crop anyway. This is
- *    the state the override ceremony fires on, so it's the state this card exists
- *    for — designed first, not as an edge case.
- *  - The box overlay is positioned as a FRACTION of the page (boxFraction), so it
- *    tracks the text at any render size — the scale rule (bboxScale) enforced by
- *    construction (see the overlay-drift red test).
+ * verbatim text match): boxes are TABLE-element granular, so the highlight marks
+ * the source TABLE, not the cell. `not_found` (bboxes empty) is UNLOCATED, not
+ * MISSING: the page still renders (no highlight) with a "scan for it yourself"
+ * instruction — "here's the document, we couldn't anchor it, you look" is the
+ * state the override ceremony fires on, so it's designed first, not as an edge.
  */
 export interface ProvenanceItem {
   field_path: string;
@@ -36,6 +40,7 @@ export interface ProvenanceItem {
   match_confidence: number;
   needs_review: boolean;
   review_reason: string | null;
+  coherent?: boolean;
   crop_url?: string | null;
   page_image_url?: string | null;
 }
@@ -56,8 +61,18 @@ export function EvidenceCard({
 }) {
   const located = item.bboxes.length > 0;
   const frac = located ? boxFraction(item.bboxes[0], item.page_dims) : null;
-  // Honesty summary, pulled UNDER the title (not buried in a footer): what this
-  // evidence IS, given element-granularity — a table region, not a cell.
+  const hasPage = !!item.page_image_url;
+  const hasCrop = !!item.crop_url;
+
+  // Scroll the highlighted region into view within the card's own scroll area —
+  // the page renders taller than the card, so center the eye on the box.
+  const regionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    regionRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [item.page_image_url, item.mpn]);
+
+  // Honesty summary, pulled UNDER the title (where the eye is): what this evidence
+  // IS, given element-granularity — a table region, not a cell.
   const summary = located
     ? `source table · page ${item.page_number} · matched verbatim`
     : `unlocated · page ${item.page_number} · verify manually`;
@@ -67,7 +82,7 @@ export function EvidenceCard({
     // resident full-height rail.
     <div className="glass-panel border-pink-500/20 max-h-full overflow-y-auto custom-scrollbar">
       {/* Header — title + the honesty summary directly under it. */}
-      <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+      <div className="px-4 py-3 border-b border-white/10 bg-white/5 sticky top-0 z-10 backdrop-blur">
         <div className="flex items-center gap-2">
           <FileSearch className="w-4 h-4 text-neon-pink shrink-0" />
           <span className="font-mono text-[11px] font-bold text-slate-200 tracking-widest uppercase truncate flex-1">
@@ -97,24 +112,28 @@ export function EvidenceCard({
             <div className="text-[11px] font-mono text-pink-200 leading-relaxed">
               Could not be located in the document — verify manually against{" "}
               <span className="text-white">page {item.page_number}</span>
-              {item.crop_url ? " / the table crop below" : ""}. This is why this
-              part is flagged for review.
+              {hasPage ? " below" : ""}. This is why this part is flagged for review.
             </div>
           </div>
         )}
 
-        {/* Source region. No full-page render exists yet (doc-tools Phase 5.8),
-            so the TABLE CROP is the region — element-granular, "source table"
-            not "this cell", and the crop is the row-level scan the bbox can't
-            give. When a full-page render lands (page_image_url), the drift-free
-            %-overlay box draws on the page instead. */}
-        {item.page_image_url ? (
+        {/* CONTEXT — the full page with the source region highlighted. Primary,
+            self-verifying: the highlight visibly sits on the table containing the
+            value. The %-overlay tracks the text at any render size (sealed scale
+            rule). For not_found there's no box — the page renders plain with a
+            "scan for it yourself" instruction. */}
+        {hasPage ? (
           <div>
             <div className="relative w-full border border-white/10 rounded overflow-hidden bg-slate-950">
-              <img src={item.page_image_url} alt={`Notice page ${item.page_number}`} className="w-full block" />
+              <FederatedImage
+                src={item.page_image_url!}
+                alt={`Notice page ${item.page_number}`}
+                className="w-full block"
+              />
               {frac && (
                 <div
-                  className="absolute border-2 border-neon-pink/80 bg-neon-pink/10 pointer-events-none"
+                  ref={regionRef}
+                  className="absolute border-2 border-neon-pink shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] pointer-events-none"
                   style={{
                     left: `${frac.left * 100}%`,
                     top: `${frac.top * 100}%`,
@@ -125,24 +144,35 @@ export function EvidenceCard({
               )}
             </div>
             <p className="mt-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
-              source table · page {item.page_number} · highlights the table, not the row
+              {located
+                ? `source page ${item.page_number} · highlight marks the source table (not the cell)`
+                : `source page ${item.page_number} · value not located — scan the page yourself`}
             </p>
           </div>
-        ) : item.crop_url ? (
+        ) : (
+          // No page render (notice ingested before the rasterizer, or synthetic).
+          // The crop below is the fallback source region; if neither, say so.
+          !hasCrop && (
+            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-600">
+              no source region located · page {item.page_number}
+            </p>
+          )
+        )}
+
+        {/* DETAIL — the table crop, the row-level read. Secondary to the page:
+            labeled a zoom panel when we have the page context above, the primary
+            region when we don't. */}
+        {hasCrop && (
           <div>
             <p className="mb-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
-              source table · page {item.page_number} · scan for the value
+              {hasPage ? "table crop · zoom · scan for the value" : `source table · page ${item.page_number} · scan for the value`}
             </p>
             <FederatedImage
-              src={item.crop_url}
+              src={item.crop_url!}
               alt="Source table crop"
               className="w-full block border border-white/10 rounded bg-slate-950"
             />
           </div>
-        ) : (
-          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-600">
-            no source region located · page {item.page_number}
-          </p>
         )}
 
         {/* The verbatim matched string. */}
