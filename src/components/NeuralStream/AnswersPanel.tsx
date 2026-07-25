@@ -28,6 +28,18 @@ import {
 // Exact mock palette for the spine / nodes / cluster dots.
 const TEAL = "#2dd4bf";
 const AMBER = "#d9a13c";
+// A PENDING task wants something — it glows pink at its chronological spot
+// (pending-is-a-state, not a place). A resolved task settles to muted slate.
+const TASK_PINK = "#f472b6";
+const TASK_MUTED = "#64748b";
+
+/** Short state label for a task-artifact row. */
+function taskKindLabel(kind: string): string {
+  if (kind === "pcn_grouped_review") return "REVIEW";
+  if (kind === "pcn_disposition") return "QUALIFY";
+  if (kind === "access_request") return "ACCESS";
+  return "TASK";
+}
 
 /**
  * AnswersPanel — the answer-first left column, styled as the mock's
@@ -68,13 +80,20 @@ export function AnswersPanel() {
     [pins]
   );
 
-  // Non-pending, newest-first. Pending is represented by the live strip.
+  // Non-pending, newest-first. Pending ANSWERS are represented by the live strip;
+  // task-artifacts are always `complete` (their pending/resolved lifecycle rides
+  // task_ref.task_state) so they interleave here as timeline citizens.
+  //
+  // Ordered by created_at FIRST (watermark as tiebreaker) — chronological arrival
+  // is the shared truth across answers AND tasks, and it's what lets a task sit at
+  // the moment it arrived rather than sink to the bottom on its watermark-0. The
+  // canvas TIME layout already groups by created_at, so this aligns list ↔ canvas.
   const sorted = useMemo(() => {
     return [...artifacts]
       .filter((a) => a.status !== "pending")
       .sort((a, b) => {
-        if (b.watermark !== a.watermark) return b.watermark - a.watermark;
-        return b.created_at - a.created_at;
+        if (b.created_at !== a.created_at) return b.created_at - a.created_at;
+        return b.watermark - a.watermark;
       });
   }, [artifacts]);
 
@@ -347,7 +366,18 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   const selected = a.id === ctx.currentArtifactId;
   const dragging = ctx.draggingId === a.id;
   const pinned = ctx.pinnedIds.has(a.id);
-  const node = fallback ? AMBER : TEAL;
+  // A task is the same citizen as an answer, differing only in what it awaits.
+  // Its state (not its location) tells the truth: pending glows pink + pulses
+  // (it wants action), resolved settles to muted (it's history).
+  const task = a.task_ref;
+  const taskPending = task?.task_state === "pending";
+  const node = task
+    ? taskPending
+      ? TASK_PINK
+      : TASK_MUTED
+    : fallback
+    ? AMBER
+    : TEAL;
 
   return (
     <div
@@ -357,11 +387,15 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
           ? "opacity-45"
           : selected
           ? "bg-neon-blue/10"
+          : taskPending
+          ? "hover:bg-pink-500/[.06]"
           : "hover:bg-white/[.025]"
       }`}
       style={
         dragging
           ? { outline: "1px dashed rgba(125,170,190,.3)" }
+          : taskPending
+          ? { boxShadow: "inset 2px 0 0 rgba(244,114,182,.55)" }
           : undefined
       }
     >
@@ -377,13 +411,27 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
           style={{ background: "rgba(45,212,191,.18)" }}
         />
         <div
-          className="absolute left-1/2 -translate-x-1/2 top-2.5 w-1.5 h-1.5 rounded-full"
+          className={`absolute left-1/2 -translate-x-1/2 top-2.5 w-1.5 h-1.5 rounded-full ${
+            taskPending ? "animate-pulse" : ""
+          }`}
           style={{ background: node, boxShadow: `0 0 6px ${node}66` }}
         />
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0 py-1.5">
+        {task && (
+          <span
+            className={`inline-block mb-0.5 px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
+              taskPending
+                ? "text-pink-300 border-pink-500/40 bg-pink-500/10"
+                : "text-slate-400 border-white/10 bg-white/5"
+            }`}
+          >
+            {taskKindLabel(task.kind)}
+            {taskPending ? " · pending" : task ? " · done" : ""}
+          </span>
+        )}
         <p
           className={`text-[12px] font-mono leading-snug line-clamp-2 ${
             selected ? "text-slate-100" : "text-slate-200"

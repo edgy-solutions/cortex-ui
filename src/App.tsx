@@ -16,6 +16,7 @@ import {
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
+import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { HumanTaskInbox, seedFromRest } from "@/components/HumanTaskInbox/HumanTaskInbox";
 
 import { Toaster } from "sonner";
@@ -121,6 +122,9 @@ export default function App() {
   useFrontendCapabilityRegistration();
   useArtifactSync();
   useHumanTaskSync();
+  // Tasks are timeline citizens: mirror the HITL store into task-artifacts so
+  // they ride the same timeline/canvas/HUD as answers.
+  useTaskArtifactSync();
 
   return (
     <RequireAuth>

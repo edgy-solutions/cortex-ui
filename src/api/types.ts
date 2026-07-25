@@ -656,6 +656,34 @@ export interface Artifact {
    * Option C) and §3.5 Through-line.
    */
   watermark: number;
+
+  /**
+   * TASK marker. Present ONLY on synthetic artifacts adapted from a HITL
+   * task (id prefixed `task:`), absent on answer artifacts. It makes a task
+   * a first-class timeline/canvas/HUD citizen: the same `currentArtifactId`
+   * selection signal, the same archetype rendering (GROUPED_REVIEW /
+   * APPROVAL_TASK), the same HUD contract. `task_state` is the TASK's own
+   * pending/resolved state — distinct from `status` (which is always
+   * `complete` for a task-artifact so it displays). Pending-is-a-state: the
+   * timeline styles the row from `task_state` at its chronological position,
+   * never relocating it. Kept in sync with `useHumanTaskStore` by the
+   * task→artifact reconciler.
+   */
+  task_ref?: TaskRef;
+}
+
+/** The HITL task a synthetic task-artifact stands for (see Artifact.task_ref). */
+export interface TaskRef {
+  /** HumanTask.taskId — the /act + fetchReviewBatch key. */
+  taskId: string;
+  workflowId: string | null;
+  /** pcn_grouped_review | pcn_disposition | workflow_ack | access_request. */
+  kind: string;
+  /** The TASK's state (not the artifact's UI status). */
+  task_state: "pending" | "approved" | "rejected" | "expired";
+  audience: string;
+  requestedBy: string;
+  subjectRef: string | null;
 }
 
 /** BPMN graph state emitted by the backend on each turn */

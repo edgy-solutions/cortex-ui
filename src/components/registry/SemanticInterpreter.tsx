@@ -19,6 +19,8 @@ import { ProcessTopologyCard } from "./ProcessTopologyCard";
 import { GroupedReviewTable } from "../GroupedReview/GroupedReviewTable";
 import { WorkflowObservationView } from "../WorkflowObservation/WorkflowObservationView";
 import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPropertyView";
+import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
+import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
@@ -409,8 +411,20 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
     case "GROUPED_REVIEW":
       // PCN/PDN part-obsolescence grouped review — one approver resolves N
       // affected parts in a single accept-all-with-exceptions action. `comp.batch`
-      // is the server-side per-approver-filtered ReviewBatch (Seal 2).
-      return <GroupedReviewTable batch={comp.batch} />;
+      // is the server-side per-approver-filtered ReviewBatch (Seal 2). On the
+      // canvas this is a task-card; onResolved settles the task in the timeline
+      // (the sealed submission path inside GroupedReviewTable is unchanged).
+      return (
+        <GroupedReviewTable
+          batch={comp.batch}
+          onResolved={() => markTaskResolvedByTaskId(comp.batch.batch_id)}
+        />
+      );
+
+    case "APPROVAL_TASK":
+      // A non-grouped HITL task (qualification / workflow_ack / access_request)
+      // as a canvas card — accept/reject through the same sealed /act bridge.
+      return <ApprovalTaskCard task={comp.task} />;
 
     case "WORKFLOW_OBSERVATION":
       // "Watch my workflow" — the read-only, gated domain view of a running

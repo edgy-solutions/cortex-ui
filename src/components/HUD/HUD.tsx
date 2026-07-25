@@ -5,8 +5,10 @@ import { RoutingDecision } from "./RoutingDecision";
 import { SourcesTrail } from "./SourcesTrail";
 import { DecisionPathDiagram } from "./DecisionPathDiagram";
 import { GraphTrace } from "./GraphTrace";
+import { TaskContextCard } from "./TaskContextCard";
 import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
+import { useCurrentArtifact } from "@/store/useCanvasStore";
 import { CompileButton } from "@/components/Compilation/CompileButton";
 
 /**
@@ -29,6 +31,9 @@ import { CompileButton } from "@/components/Compilation/CompileButton";
 export function HUD() {
   const phase = useInterviewStore((s) => s.phase);
   const mode = useInterviewStore((s) => s.groundingDisplayMode);
+  // The HUD follows the selection's KIND: a task shows task-context, an answer
+  // shows the routing/sources/graph trail. One contract, no overlay war.
+  const isTask = !!useCurrentArtifact()?.task_ref;
 
   return (
     <div className="flex flex-col h-full p-4 space-y-4 overflow-y-auto">
@@ -46,23 +51,31 @@ export function HUD() {
         <ModeToggle />
       </motion.div>
 
-      {/* Ontology Map (existing) */}
-      <OntologyMap />
+      {isTask ? (
+        /* Selected card is a TASK — the HUD shows its context (queue, requester,
+           notice, parts, state) instead of the answer routing trail. */
+        <TaskContextCard />
+      ) : (
+        <>
+          {/* Ontology Map (existing) */}
+          <OntologyMap />
 
-      {/* Routing Decision (Phase 2) */}
-      <RoutingDecision />
+          {/* Routing Decision (Phase 2) */}
+          <RoutingDecision />
 
-      {/* Decision Path diagram — the DRAWN path with branches-not-taken
-          (both legs). Detailed mode; the visual counterpart to the
-          text-trail GraphTrace below it. */}
-      {mode === "detailed" && <DecisionPathDiagram />}
+          {/* Decision Path diagram — the DRAWN path with branches-not-taken
+              (both legs). Detailed mode; the visual counterpart to the
+              text-trail GraphTrace below it. */}
+          {mode === "detailed" && <DecisionPathDiagram />}
 
-      {/* Sources & Evidence (Phase 3) */}
-      <SourcesTrail />
+          {/* Sources & Evidence (Phase 3) */}
+          <SourcesTrail />
 
-      {/* Graph Trace (Phase 4) — detailed mode only; the linear text
-          audit of the taken walk (URIs), beneath the drawn diagram. */}
-      {mode === "detailed" && <GraphTrace />}
+          {/* Graph Trace (Phase 4) — detailed mode only; the linear text
+              audit of the taken walk (URIs), beneath the drawn diagram. */}
+          {mode === "detailed" && <GraphTrace />}
+        </>
+      )}
 
       {/* Compile button (shown when interview reaches blueprint/compiling/complete phase) */}
       {(phase === "blueprint" || phase === "compiling" || phase === "complete") && (

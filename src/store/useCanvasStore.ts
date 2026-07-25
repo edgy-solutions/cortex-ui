@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
+import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
 
 /**
  * Hop 3 of the projector build plan
@@ -39,6 +40,10 @@ export type UpdateSource =
   // about client-side liveness, not substrate state).
   | "local:create_pending"
   | "local:onerror_failed"
+  // Task-artifact: the review batch lazy-fetched (get_batch) on first selection
+  // and written into the GROUPED_REVIEW component. Client-side liveness, not
+  // substrate state — like the other local:* tags.
+  | "local:task_batch"
   // Dev-only: mock-grounding emitter writes synthesizing what
   // Electric would have delivered if Postgres+projector were
   // running locally. Fires ONLY when isMockGroundingEnabled() is
@@ -287,6 +292,15 @@ interface CanvasState {
    */
   removeArtifact: (id: string) => void;
 
+  /**
+   * Reconcile the synthetic TASK artifacts (id-prefixed `task:`) to exactly the
+   * supplied set — upsert each, drop task-artifacts no longer present, and leave
+   * every ANSWER artifact untouched. Preserves an existing task-artifact's
+   * `rendered_output` when the incoming one is null (keeps a lazy-fetched review
+   * batch across a task-state update). The task→artifact reconciler calls this.
+   */
+  reconcileTaskArtifacts: (taskArtifacts: Artifact[]) => void;
+
   /** Foreground a specific artifact (canvas view selection). */
   setCurrentArtifact: (id: string) => void;
 
@@ -521,6 +535,42 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         artifacts,
         _lastUpdateSource,
         ...(wasCurrent
+          ? { currentArtifactId: null, currentArtifactSetByUser: false }
+          : {}),
+      };
+    }),
+
+  reconcileTaskArtifacts: (taskArtifacts) =>
+    set((state) => {
+      const incoming = new Map(taskArtifacts.map((t) => [t.id, t]));
+      const answers = state.artifacts.filter(
+        (a) => !a.id.startsWith(TASK_ARTIFACT_PREFIX)
+      );
+      const existingTasks = new Map(
+        state.artifacts
+          .filter((a) => a.id.startsWith(TASK_ARTIFACT_PREFIX))
+          .map((a) => [a.id, a] as const)
+      );
+      const merged = taskArtifacts.map((t) => {
+        const prev = existingTasks.get(t.id);
+        // Preserve a lazy-fetched review batch across a task-state update.
+        if (prev && prev.rendered_output && !t.rendered_output) {
+          return { ...t, rendered_output: prev.rendered_output };
+        }
+        return t;
+      });
+      const _lastUpdateSource = { ...state._lastUpdateSource };
+      for (const id of existingTasks.keys()) {
+        if (!incoming.has(id)) delete _lastUpdateSource[id];
+      }
+      const currentGone =
+        state.currentArtifactId != null &&
+        state.currentArtifactId.startsWith(TASK_ARTIFACT_PREFIX) &&
+        !incoming.has(state.currentArtifactId);
+      return {
+        artifacts: [...answers, ...merged],
+        _lastUpdateSource,
+        ...(currentGone
           ? { currentArtifactId: null, currentArtifactSetByUser: false }
           : {}),
       };
