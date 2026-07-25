@@ -15,7 +15,8 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert } from "lucide-react";
+import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, FileSearch } from "lucide-react";
+import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { toast } from "sonner";
 import {
   DISPOSITIONS,
@@ -69,6 +70,12 @@ export function GroupedReviewTable({
   useEffect(() => {
     reviewDraftCache.set(batch.batch_id, overrides);
   }, [batch.batch_id, overrides]);
+
+  // Summon the evidence card for a part — the document region its value came
+  // from. Subordinate to this review; leaves when the review does.
+  const summon = useEvidenceStore((s) => s.summon);
+  const showSource = (mpn: string) =>
+    summon({ reviewId: batch.batch_id, noticeId: batch.notice_id, mpn });
 
   const setOverride = (mpn: string, patch: Partial<OverrideDraft>) =>
     setOverrides((prev) => {
@@ -212,6 +219,13 @@ export function GroupedReviewTable({
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-white break-all">{it.mpn}</span>
+                      <button
+                        onClick={() => showSource(it.mpn)}
+                        title="Show where this came from in the notice"
+                        className="text-slate-500 hover:text-neon-pink transition-colors shrink-0"
+                      >
+                        <FileSearch className="w-3 h-3" />
+                      </button>
                       {it.needs_review && (
                         <span
                           title="MPN extraction uncertain — verify before dispatching an action"
@@ -294,7 +308,14 @@ export function GroupedReviewTable({
                       </button>
                     ) : (
                       <button
-                        onClick={() => setOverride(it.mpn, {})}
+                        onClick={() => {
+                          setOverride(it.mpn, {});
+                          // The unverified row exists BECAUSE verification failed —
+                          // summon its evidence eagerly as the override form opens,
+                          // so the reason field isn't asking the human to attest to
+                          // something they were given no way to check.
+                          if (it.needs_review) showSource(it.mpn);
+                        }}
                         disabled={submitting || resolved}
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] uppercase tracking-tighter disabled:opacity-40 cursor-pointer ${
                           it.needs_review

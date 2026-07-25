@@ -3,6 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
+import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -177,6 +178,24 @@ export interface ReviewOverrideInput {
 export async function fetchReviewBatch(workflowId: string): Promise<ReviewBatch> {
   const { data } = await api.get<ReviewBatch>(
     `/pcn/reviews/${encodeURIComponent(workflowId)}/batch`
+  );
+  return data;
+}
+
+/**
+ * Fetch a notice's extraction PROVENANCE — the read-side join (at DISPLAY time,
+ * NOT batch payload) between review values and the document regions they came
+ * from. Extraction stays the authority; the graph's lossy projection isn't
+ * widened. Used to summon the evidence card for a review part.
+ */
+export interface NoticeProvenanceResponse {
+  notice_id: string;
+  page_image_url?: string | null;
+  items: ProvenanceItem[];
+}
+export async function fetchNoticeProvenance(noticeId: string): Promise<NoticeProvenanceResponse> {
+  const { data } = await api.get<NoticeProvenanceResponse>(
+    `/notices/${encodeURIComponent(noticeId)}/provenance`
   );
   return data;
 }
