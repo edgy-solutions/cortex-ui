@@ -1,5 +1,6 @@
 import { FileSearch, AlertTriangle, X } from "lucide-react";
 import { boxFraction, type Bbox, type PageDims } from "@/lib/bboxScale";
+import { FederatedImage } from "../mesh/FederatedImage";
 
 /**
  * EVIDENCE card — the document region a review value came from, SUMMONED beside
@@ -102,7 +103,11 @@ export function EvidenceCard({
           </div>
         )}
 
-        {/* Page region with the source-table highlight (drift-free % overlay). */}
+        {/* Source region. No full-page render exists yet (doc-tools Phase 5.8),
+            so the TABLE CROP is the region — element-granular, "source table"
+            not "this cell", and the crop is the row-level scan the bbox can't
+            give. When a full-page render lands (page_image_url), the drift-free
+            %-overlay box draws on the page instead. */}
         {item.page_image_url ? (
           <div>
             <div className="relative w-full border border-white/10 rounded overflow-hidden bg-slate-950">
@@ -119,26 +124,25 @@ export function EvidenceCard({
                 />
               )}
             </div>
-            {located && (
-              <p className="mt-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
-                Source table for this part · page {item.page_number} · region highlights the table, not the row
-              </p>
-            )}
+            <p className="mt-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
+              source table · page {item.page_number} · highlights the table, not the row
+            </p>
+          </div>
+        ) : item.crop_url ? (
+          <div>
+            <p className="mb-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
+              source table · page {item.page_number} · scan for the value
+            </p>
+            <FederatedImage
+              src={item.crop_url}
+              alt="Source table crop"
+              className="w-full block border border-white/10 rounded bg-slate-950"
+            />
           </div>
         ) : (
           <p className="text-[10px] font-mono uppercase tracking-wider text-slate-600">
-            page image unavailable — page {item.page_number}
+            no source region located · page {item.page_number}
           </p>
-        )}
-
-        {/* The S3 table crop — the row-level check the element box can't give. */}
-        {item.crop_url && (
-          <div>
-            <p className="mb-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-500">
-              Table crop — scan for the value
-            </p>
-            <img src={item.crop_url} alt="Source table crop" className="w-full block border border-white/10 rounded bg-slate-950" />
-          </div>
         )}
 
         {/* The verbatim matched string. */}
