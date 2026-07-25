@@ -5,7 +5,6 @@ import remarkGfm from "remark-gfm";
 
 // Lazy-loaded or imported directly for interpretation
 import { WarningCard } from "../NeuralStream/WarningCard";
-import { RadarReveal } from "../NeuralStream/RadarReveal";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -537,16 +536,14 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
             key={stableKey}
             className={isFullWidth(comp.archetype) ? "col-span-full" : "col-span-1"}
           >
-            <RadarReveal delayMs={index * 400}>
-              {/* Persona attribution badge */}
-              {pCfg && (
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-md border text-[10px] font-mono font-bold uppercase tracking-wider ${pCfg.bg} ${pCfg.color}`}>
-                  <DynamicIcon name={pCfg.icon} className="w-3 h-3" />
-                  {pCfg.label}
-                </div>
-              )}
-              {renderComponent(comp, handlePublish)}
-            </RadarReveal>
+            {/* Persona attribution badge */}
+            {pCfg && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-md border text-[10px] font-mono font-bold uppercase tracking-wider ${pCfg.bg} ${pCfg.color}`}>
+                <DynamicIcon name={pCfg.icon} className="w-3 h-3" />
+                {pCfg.label}
+              </div>
+            )}
+            {renderComponent(comp, handlePublish)}
           </div>
         );
       })}
