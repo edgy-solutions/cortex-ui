@@ -3,6 +3,7 @@ import { Maximize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react"
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
+import { taskKindLabel } from "@/lib/taskArtifact";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
 import { fetchLineageEdges } from "@/api/client";
@@ -174,6 +175,11 @@ export function GlobalCanvasStage() {
     return { tx: (vw - world.w * s) / 2, ty: (vh - world.h * s) / 2 - 20, s };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h]);
+
+  // The focused card's task marker (if any) — drives per-kind tab labels: the
+  // three tabs are citizen-agnostic lenses (content / provenance / focus), so a
+  // task relabels them (Review / Workflow / Expand), not a different tab set.
+  const focusedTaskRef = focusId ? artifactById[focusId]?.task_ref : undefined;
   const camRef = useRef(cam);
   camRef.current = cam;
 
@@ -578,9 +584,13 @@ export function GlobalCanvasStage() {
       {focusId && !fullPane && (
         <>
           <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-lg border border-neon-cyan/25 bg-slate-950/85 backdrop-blur-sm px-1 py-1 shadow-lg z-20">
-            <TabChip label="Answer" active={focusTab === "answer"} onClick={() => setFocusTab("answer")} />
             <TabChip
-              label="Decision Map"
+              label={focusedTaskRef ? taskKindLabel(focusedTaskRef.kind) : "Answer"}
+              active={focusTab === "answer"}
+              onClick={() => setFocusTab("answer")}
+            />
+            <TabChip
+              label={focusedTaskRef ? "Workflow" : "Decision Map"}
               icon={<GitBranch className="w-2.5 h-2.5" />}
               active={focusTab === "map"}
               onClick={() => setFocusTab("map")}

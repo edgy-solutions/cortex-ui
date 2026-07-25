@@ -6,6 +6,8 @@ import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers, Route } from 'lucide-react';
 import { InlineFigures } from './InlineFigures';
 import { DecisionMap } from './DecisionMap';
+import { WorkflowLens } from './WorkflowLens';
+import { taskKindLabel } from '@/lib/taskArtifact';
 
 /**
  * CanvasPane — view OVER the artifact collection per ADR-0023.
@@ -93,16 +95,41 @@ export const CanvasPane = () => {
     );
   }
 
-  // A TASK is not an answer — render its archetype card DIRECTLY, with none of
-  // the answer chrome (no "Q·" header, no Answer/Decision-Map tabs, no persona
-  // sub-tabs). The GROUPED_REVIEW / APPROVAL_TASK card is self-contained and
-  // supplies its own header/state/actions/provenance (the TaskCardShell). Same
-  // citizenship as an answer, its own costume.
+  // A TASK is not an answer — NONE of the answer chrome (no "Q·" header, no
+  // persona sub-tabs). But the three tabs are citizen-agnostic LENSES
+  // (content / provenance / focus), so a task keeps them, relabeled: the content
+  // lens is its archetype card (Review / Task), the provenance lens is the
+  // Workflow (the task-side peer of an answer's Decision Map). Same citizenship,
+  // its own costume + its own nouns.
   if (artifact.task_ref) {
+    const taskRef = artifact.task_ref;
+    const onWorkflow = view === "map";
     return (
       <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+        <div className="w-full flex items-center px-6 pt-4 pb-2 border-b border-white/5 gap-2 shrink-0">
+          <button
+            onClick={() => setView("answer")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold ${
+              !onWorkflow ? "border-neon-pink text-neon-pink bg-neon-pink/10" : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            {taskKindLabel(taskRef.kind)}
+          </button>
+          <button
+            onClick={() => setView("map")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg border-b-2 transition-all font-mono text-[10px] tracking-wider uppercase font-bold ${
+              onWorkflow ? "border-neon-cyan text-neon-cyan bg-neon-cyan/10" : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            <Route className="w-4 h-4" />
+            Workflow
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          {components.length > 0 ? (
+          {onWorkflow ? (
+            <WorkflowLens taskRef={taskRef} />
+          ) : components.length > 0 ? (
             <SemanticInterpreter payload={{ components }} />
           ) : (
             <div className="h-full flex items-center justify-center">

@@ -6,6 +6,7 @@ import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
 import { taskKindLabel } from "@/lib/taskArtifact";
+import { WorkflowLens } from "./WorkflowLens";
 import { STAGE_CARD } from "@/lib/stageConstants";
 
 export { STAGE_CARD };
@@ -179,15 +180,14 @@ export function StageCard({
         )}
       </div>
 
-      {/* Body: the real answer, or the decision map when toggled at focus. */}
+      {/* Body: the content lens (answer / task card), or the provenance lens when
+          toggled at focus — Decision Map for an answer, Workflow for a task. */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {showMap ? (
-          // Shrink the decision map to fit too (it fills its container, so give
-          // it a fixed natural box for FitBox to measure + scale down).
           <div className="absolute inset-0 p-2">
             <FitBox naturalWidth={640}>
-              <div style={{ width: 640, height: 380 }}>
-                <DecisionMap />
+              <div style={{ width: 640, height: task ? undefined : 380 }}>
+                {task ? <WorkflowLens taskRef={task} /> : <DecisionMap />}
               </div>
             </FitBox>
           </div>
