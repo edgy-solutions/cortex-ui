@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { Layout } from "@/components/Layout";
@@ -18,6 +18,7 @@ import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
+import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 
 import { Toaster } from "sonner";
 
@@ -116,7 +117,33 @@ function useFrontendCapabilityRegistration() {
   }, [auth.isAuthenticated]);
 }
 
+/**
+ * Cross-user isolation guard. Called FIRST in App so its effect runs before the
+ * data-sync hooks' effects — when the authenticated subject differs from the one
+ * this browser last saw, purge every user-scoped store + cache before anything
+ * repopulates. Returns false until the check has run, so the tree can withhold
+ * render and no prior user's answers/tasks ever paint. See sessionIsolation.ts.
+ */
+function useSessionIsolation(): boolean {
+  const auth = useAuth();
+  const owner = auth.user?.profile?.sub ?? null;
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      setReady(false);
+      return;
+    }
+    if (!owner) return;
+    reconcileSessionOwner(owner);
+    setReady(true);
+  }, [auth.isAuthenticated, owner]);
+  return ready;
+}
+
 export default function App() {
+  // MUST be first — purges a prior user's cached state before the sync hooks
+  // below start their subscriptions or the timeline renders.
+  const isolationReady = useSessionIsolation();
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
@@ -128,6 +155,26 @@ export default function App() {
 
   return (
     <RequireAuth>
+      {/* Withhold the whole data surface until the session-owner check has run,
+          so a prior user's in-memory answers/tasks can never paint on switch. */}
+      {!isolationReady ? (
+        <div className="h-full w-full bg-slate-950" />
+      ) : (
+        <SessionSurface phase={phase} setPhase={setPhase} />
+      )}
+    </RequireAuth>
+  );
+}
+
+function SessionSurface({
+  phase,
+  setPhase,
+}: {
+  phase: ReturnType<typeof useInterviewStore.getState>["phase"];
+  setPhase: (p: ReturnType<typeof useInterviewStore.getState>["phase"]) => void;
+}) {
+  return (
+    <>
       {/* Sync custom canvases with the server (durable, cross-device). */}
       <CanvasPersistence />
       <Toaster
@@ -165,6 +212,6 @@ export default function App() {
       {(phase === "compiling" || phase === "complete") && (
         <CompilationOverlay onComplete={() => setPhase("blueprint")} />
       )}
-    </RequireAuth>
+    </>
   );
 }
