@@ -93,6 +93,29 @@ export const CanvasPane = () => {
     );
   }
 
+  // A TASK is not an answer — render its archetype card DIRECTLY, with none of
+  // the answer chrome (no "Q·" header, no Answer/Decision-Map tabs, no persona
+  // sub-tabs). The GROUPED_REVIEW / APPROVAL_TASK card is self-contained and
+  // supplies its own header/state/actions/provenance (the TaskCardShell). Same
+  // citizenship as an answer, its own costume.
+  if (artifact.task_ref) {
+    return (
+      <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          {components.length > 0 ? (
+            <SemanticInterpreter payload={{ components }} />
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <p className="font-mono text-xs tracking-widest uppercase text-slate-500">
+                Loading review…
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Question header — sourced from the artifact's own durable
   // `question_text` (projected through Electric, rehydrates on refresh)
   // NOT from `useInterviewStore` (ephemeral messages, gone after reload).

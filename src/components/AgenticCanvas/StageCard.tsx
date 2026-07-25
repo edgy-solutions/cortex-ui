@@ -5,6 +5,7 @@ import { FitBox } from "./FitBox";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
+import { taskKindLabel } from "@/lib/taskArtifact";
 import { STAGE_CARD } from "@/lib/stageConstants";
 
 export { STAGE_CARD };
@@ -54,6 +55,11 @@ export function StageCard({
   const focusTab = useStageStore((s) => s.focusTab);
   const spo = answerSPO(artifact);
   const fallback = isUnresolved(artifact);
+  // A task wears its own costume, not the answer's: header names the task + its
+  // state, not "answer". Its archetype card (GROUPED_REVIEW / APPROVAL_TASK)
+  // supplies the body — same citizenship, different costume.
+  const task = artifact.task_ref;
+  const taskPending = task?.task_state === "pending";
   const components =
     (artifact.rendered_output?.components as unknown[] | undefined) ?? [];
   const hasRendered = components.length > 0;
@@ -114,20 +120,36 @@ export function StageCard({
           : "border-neon-cyan/25 hover:border-neon-cyan/50"
       }`}
     >
-      {/* Header: subject identifier + TRACE hint */}
+      {/* Header: subject identifier + TRACE hint (answer) — or task kind + state. */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 flex-shrink-0">
         <span
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-            fallback ? "bg-amber-500/70" : "bg-neon-cyan"
+            task
+              ? taskPending
+                ? "bg-neon-pink animate-pulse"
+                : "bg-slate-500"
+              : fallback
+              ? "bg-amber-500/70"
+              : "bg-neon-cyan"
           }`}
         />
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400 truncate">
-          {spo.subjectLabel || (fallback ? "unresolved" : "answer")}
+        <span
+          className={`text-[11px] font-mono uppercase tracking-widest truncate ${
+            task && taskPending ? "text-neon-pink/90" : "text-slate-400"
+          }`}
+        >
+          {task ? taskKindLabel(task.kind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
         </span>
-        {!custom && spo.verbLabel && (
-          <span className="ml-auto text-[10px] font-mono text-neon-purple/70 truncate max-w-[45%]">
-            {spo.verbLabel}
+        {task ? (
+          <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-slate-500">
+            {taskPending ? "pending" : task.task_state}
           </span>
+        ) : (
+          !custom && spo.verbLabel && (
+            <span className="ml-auto text-[10px] font-mono text-neon-purple/70 truncate max-w-[45%]">
+              {spo.verbLabel}
+            </span>
+          )
         )}
         {onGripDown && (
           <button

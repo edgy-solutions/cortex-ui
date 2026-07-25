@@ -29,6 +29,24 @@ export const taskRowIdOf = (artifactId: string): string | null =>
 export const isTaskArtifact = (a: Pick<Artifact, "id" | "task_ref">): boolean =>
   !!a.task_ref || a.id.startsWith(TASK_ARTIFACT_PREFIX);
 
+/** Short badge label for a task (timeline chip, card header). */
+export function taskKindLabel(kind: string): string {
+  if (kind === "pcn_grouped_review") return "REVIEW";
+  if (kind === "pcn_disposition") return "QUALIFY";
+  if (kind === "access_request") return "ACCESS";
+  if (kind === "workflow_ack") return "APPROVE";
+  return "TASK";
+}
+
+/** Full descriptive title for a task (HUD, card). */
+export function taskKindTitle(kind: string): string {
+  if (kind === "pcn_grouped_review") return "Disposition review";
+  if (kind === "pcn_disposition") return "Qualification task";
+  if (kind === "access_request") return "Access request";
+  if (kind === "workflow_ack") return "Workflow approval";
+  return kind;
+}
+
 /**
  * The archetype component a task renders as on the canvas.
  *  - grouped review → GROUPED_REVIEW (needs the fetched ReviewBatch; the
@@ -46,6 +64,7 @@ function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
       task: {
         task_id: task.taskId,
         kind: task.kind,
+        task_state: task.status,
         title: task.title,
         summary: task.summary,
         audience: task.audience,

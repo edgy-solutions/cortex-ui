@@ -14,6 +14,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 export interface ApprovalTaskPayload {
   task_id: string;
   kind: string;
+  task_state?: "pending" | "approved" | "rejected" | "expired";
   title: string;
   summary: string;
   audience: string;
@@ -56,10 +57,19 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
     <div className="glass-panel p-6 my-4 border-cyan-500/20">
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-1">
-          <ClipboardCheck className="w-4 h-4 text-neon-blue" />
-          <h3 className="text-lg font-bold text-white tracking-tight leading-none">
+          <ClipboardCheck className="w-4 h-4 text-neon-pink" />
+          <h3 className="text-lg font-bold text-white tracking-tight leading-none flex-1">
             {task.title}
           </h3>
+          <span
+            className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
+              done || task.task_state !== "pending"
+                ? "text-slate-400 border-white/10 bg-white/5"
+                : "text-pink-300 border-pink-500/40 bg-pink-500/10"
+            }`}
+          >
+            {done ?? task.task_state ?? "pending"}
+          </span>
         </div>
         <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold">
           {task.kind} · {task.audience}

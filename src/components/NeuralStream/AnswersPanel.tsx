@@ -4,6 +4,7 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
 import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
+import { taskKindLabel } from "@/lib/taskArtifact";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -32,14 +33,6 @@ const AMBER = "#d9a13c";
 // (pending-is-a-state, not a place). A resolved task settles to muted slate.
 const TASK_PINK = "#f472b6";
 const TASK_MUTED = "#64748b";
-
-/** Short state label for a task-artifact row. */
-function taskKindLabel(kind: string): string {
-  if (kind === "pcn_grouped_review") return "REVIEW";
-  if (kind === "pcn_disposition") return "QUALIFY";
-  if (kind === "access_request") return "ACCESS";
-  return "TASK";
-}
 
 /**
  * AnswersPanel — the answer-first left column, styled as the mock's
@@ -84,16 +77,25 @@ export function AnswersPanel() {
   // task-artifacts are always `complete` (their pending/resolved lifecycle rides
   // task_ref.task_state) so they interleave here as timeline citizens.
   //
-  // Ordered by created_at FIRST (watermark as tiebreaker) — chronological arrival
-  // is the shared truth across answers AND tasks, and it's what lets a task sit at
-  // the moment it arrived rather than sink to the bottom on its watermark-0. The
-  // canvas TIME layout already groups by created_at, so this aligns list ↔ canvas.
+  // HYBRID order — two truths, both kept:
+  //   created_at = the MESH's timeline (when a thing arrived).
+  //   watermark  = YOUR timeline (see-your-write: the answer to the question you
+  //                just asked appears where you're looking).
+  // Chronology across a coarse (per-minute) bucket, but see-your-write WITHIN the
+  // bucket: a just-completed answer (fresh watermark) never sinks below a task
+  // that arrived in the same minute (watermark 0). Pure created_at would violate
+  // see-your-write in exactly the moment it matters; pure watermark would sink
+  // every task to the bottom.
   const sorted = useMemo(() => {
+    const BUCKET_MS = 60_000; // 1 minute
     return [...artifacts]
       .filter((a) => a.status !== "pending")
       .sort((a, b) => {
-        if (b.created_at !== a.created_at) return b.created_at - a.created_at;
-        return b.watermark - a.watermark;
+        const ba = Math.floor(a.created_at / BUCKET_MS);
+        const bb = Math.floor(b.created_at / BUCKET_MS);
+        if (bb !== ba) return bb - ba; // newer minute first (chronology)
+        if (b.watermark !== a.watermark) return b.watermark - a.watermark; // see-your-write within
+        return b.created_at - a.created_at;
       });
   }, [artifacts]);
 
