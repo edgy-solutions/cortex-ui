@@ -17,7 +17,7 @@ import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
-import { HumanTaskInbox, seedFromRest } from "@/components/HumanTaskInbox/HumanTaskInbox";
+import { seedFromRest } from "@/lib/seedHumanTasks";
 
 import { Toaster } from "sonner";
 
@@ -70,8 +70,8 @@ function useHumanTaskSync() {
   const auth = useAuth();
   const token = auth.user?.access_token ?? null;
   useEffect(() => {
-    // Seed the badge/inbox from the authoritative REST snapshot on load (the
-    // inbox also re-seeds on open). Electric is the best-effort live layer.
+    // Seed the Tasks badge + canvas task-citizens from the authoritative REST
+    // snapshot on load. Electric is the best-effort live layer on top.
     if (token) seedFromRest();
     const stop = startHumanTasksSubscription(token);
     return stop;
@@ -165,9 +165,6 @@ export default function App() {
       {(phase === "compiling" || phase === "complete") && (
         <CompilationOverlay onComplete={() => setPhase("blueprint")} />
       )}
-
-      {/* HITL HumanTask inbox drawer (right-edge slide-in) */}
-      <HumanTaskInbox />
     </RequireAuth>
   );
 }

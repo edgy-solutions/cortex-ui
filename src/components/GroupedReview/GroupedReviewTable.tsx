@@ -301,15 +301,21 @@ export function GroupedReviewTable({
                     {!it.replacement_mpn && !it.ltb_date && <span className="text-slate-600">—</span>}
                   </td>
 
-                  {/* Override toggle */}
+                  {/* Override toggle. When a row IS overridden this button CANCELS the
+                      override (reverts the row to the system default) — it is NOT a
+                      per-row confirm. The override is already live as you edit it; the
+                      only submit is the footer "Resolve N". Labeling it "Accept" read as
+                      "confirm my override" and made approvers discard their own edit, so
+                      it pairs with "Override" as its literal inverse: Override ↔ Cancel. */}
                   <td className="px-4 py-3 align-top text-right">
                     {ov ? (
                       <button
                         onClick={() => clearOverride(it.mpn)}
                         disabled={submitting || resolved}
+                        title="Discard this override — revert the row to the system-proposed disposition"
                         className="inline-flex items-center gap-1 px-2 py-1 rounded border border-white/15 text-slate-300 text-[10px] uppercase tracking-tighter hover:bg-white/5 disabled:opacity-40 cursor-pointer"
                       >
-                        <Undo2 className="w-3 h-3" /> Accept
+                        <Undo2 className="w-3 h-3" /> Cancel
                       </button>
                     ) : (
                       <button

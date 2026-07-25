@@ -30,10 +30,6 @@ export interface HumanTask {
 
 interface HumanTaskState {
   tasks: HumanTask[];
-  isInboxOpen: boolean;
-  selectedTaskId: string | null;
-  // in-flight act() calls, keyed by taskId, so the UI can disable buttons
-  acting: Record<string, boolean>;
 
   upsertTask: (task: HumanTask) => void;
   removeTask: (rowId: string) => void;
@@ -42,16 +38,15 @@ interface HumanTaskState {
   // user's own act, or another approver, or a workflow that failed) drops even
   // when the Electric live-update didn't arrive. Non-pending rows are dropped.
   replacePending: (tasks: HumanTask[]) => void;
-  setInboxOpen: (open: boolean) => void;
-  setSelectedTask: (taskId: string | null) => void;
-  setActing: (taskId: string, v: boolean) => void;
 }
 
+// NB: the old inbox-drawer state (isInboxOpen/selectedTaskId/acting +
+// their setters) was removed with the drawer — tasks are timeline citizens
+// acted on from their canvas cards (ApprovalTaskCard / GroupedReviewTable),
+// each of which holds its own in-flight state locally. This store is now just
+// the task set + its reconcilers.
 export const useHumanTaskStore = create<HumanTaskState>((set) => ({
   tasks: [],
-  isInboxOpen: false,
-  selectedTaskId: null,
-  acting: {},
 
   upsertTask: (task) =>
     set((state) => {
@@ -71,11 +66,6 @@ export const useHumanTaskStore = create<HumanTaskState>((set) => ({
       // to pending), replace the pending set with the authoritative snapshot.
       tasks: [...state.tasks.filter((t) => t.status !== "pending"), ...tasks],
     })),
-
-  setInboxOpen: (open) => set({ isInboxOpen: open }),
-  setSelectedTask: (taskId) => set({ selectedTaskId: taskId }),
-  setActing: (taskId, v) =>
-    set((state) => ({ acting: { ...state.acting, [taskId]: v } })),
 }));
 
 /** Pending tasks only — the inbox view. Selector helper for components. */
