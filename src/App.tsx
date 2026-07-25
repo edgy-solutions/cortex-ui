@@ -127,17 +127,19 @@ function useFrontendCapabilityRegistration() {
 function useSessionIsolation(): boolean {
   const auth = useAuth();
   const owner = auth.user?.profile?.sub ?? null;
-  const [ready, setReady] = useState(false);
+  // Track WHICH owner we've reconciled, not just a boolean — so an in-place
+  // account switch (owner changes without a full reload) also blanks the surface
+  // until THIS owner's purge has run. Ready iff the reconciled owner === current.
+  const [readyOwner, setReadyOwner] = useState<string | null>(null);
   useEffect(() => {
-    if (!auth.isAuthenticated) {
-      setReady(false);
+    if (!auth.isAuthenticated || !owner) {
+      setReadyOwner(null);
       return;
     }
-    if (!owner) return;
     reconcileSessionOwner(owner);
-    setReady(true);
+    setReadyOwner(owner);
   }, [auth.isAuthenticated, owner]);
-  return ready;
+  return owner != null && readyOwner === owner;
 }
 
 export default function App() {
