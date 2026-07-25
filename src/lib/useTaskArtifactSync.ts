@@ -14,6 +14,7 @@ import { useEffect, useRef } from "react";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { taskToArtifact, TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { taskKindDisplay } from "@/lib/taskKindRegistry";
 import { fetchReviewBatch } from "@/api/client";
 
 export function useTaskArtifactSync(): void {
@@ -34,7 +35,8 @@ export function useTaskArtifactSync(): void {
     if (!currentId || !currentId.startsWith(TASK_ARTIFACT_PREFIX)) return;
     const st = useCanvasStore.getState();
     const art = st.artifacts.find((a) => a.id === currentId);
-    if (!art?.task_ref || art.task_ref.kind !== "pcn_grouped_review") return;
+    if (!art?.task_ref) return;
+    if (taskKindDisplay(art.task_ref.kind).archetype !== "GROUPED_REVIEW") return;
     if ((art.rendered_output?.components.length ?? 0) > 0) return; // already loaded
     const wf = art.task_ref.workflowId;
     if (!wf || fetching.current.has(currentId)) return;

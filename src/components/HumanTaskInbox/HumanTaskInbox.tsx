@@ -24,6 +24,7 @@ import {
 import { fetchMyHumanTasks, actOnHumanTask } from "@/api/client";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { taskArtifactId } from "@/lib/taskArtifact";
+import { taskKindDisplay } from "@/lib/taskKindRegistry";
 
 /**
  * Reconcile the pending list from the authoritative REST snapshot (/me/human_tasks
@@ -63,7 +64,7 @@ function TaskCard({ task }: { task: HumanTask }) {
   const setActing = useHumanTaskStore((s) => s.setActing);
   const setInboxOpen = useHumanTaskStore((s) => s.setInboxOpen);
   const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
-  const isGrouped = task.kind === "pcn_grouped_review";
+  const isGrouped = taskKindDisplay(task.kind).archetype === "GROUPED_REVIEW";
 
   // Open the task as a CARD ON THE CANVAS (the same rail as answers) rather than
   // a modal — select its task-artifact and let the global canvas zoom to it. The

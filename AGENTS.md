@@ -4,6 +4,24 @@
 
 The Cortex is a cinematic React UI for an AI Agent mesh interrogator. It connects to a FastAPI backend for real-time streaming, but gracefully falls back to mock mode when the backend is unavailable. The aesthetic is "Dark Glass & Neon" (cyberpunk control center).
 
+## GENERIC-AT-BIRTH — the birth rule reaches the UI (STANDING, all repos)
+
+Domain display is **DATA, not code.** No new UI component, `switch`/`if` branch, label map, icon map,
+color map, route, or card-title map may carry a **domain name or domain value** (`pcn`, `pdn`,
+`disposition`, `mpn`, a notice type, a specific process). Domain display arrives as a payload field or a
+served declaration (the `rendersAs` / M3 horizon); the UI holds **zero domain branches**.
+
+- A NEW task kind, archetype, or domain concept adds a **row to a registry table**, never a `kind === "…"`
+  branch scattered across files. There is exactly one such table — `src/lib/taskKindRegistry.ts` for task
+  kinds — and it is **interim scaffolding** awaiting served hints, not a home to grow.
+- Everything else keys on the **archetype (structural)**, never the domain-kind string.
+- An undeclared kind gets the **honest default** (`TASK` / `APPROVAL_TASK`) — UI-COMPONENT-NOT-FOUND for
+  labels, never a silent guess.
+- Why the rule lands here now: the engine birth rule ("no new engine route/endpoint/Topaz-type/capability
+  may carry a domain name") didn't enumerate the UI, and the presentation layer kept being where the
+  discipline arrived last. It arrives here now. The deletion test reads every repo: **no domain-named
+  surface in engines OR UI, feature still runs.** See `invincible-agent/docs/plans/pcn-extraction-sort.md`.
+
 ## Development Workflow
 
 ### Before making changes

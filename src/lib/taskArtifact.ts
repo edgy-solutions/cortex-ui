@@ -14,6 +14,7 @@
 import type { Artifact, TaskRef } from "@/api/types";
 import type { HumanTask } from "@/store/useHumanTaskStore";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
+import { taskKindDisplay } from "@/lib/taskKindRegistry";
 
 export const TASK_ARTIFACT_PREFIX = "task:";
 
@@ -29,33 +30,19 @@ export const taskRowIdOf = (artifactId: string): string | null =>
 export const isTaskArtifact = (a: Pick<Artifact, "id" | "task_ref">): boolean =>
   !!a.task_ref || a.id.startsWith(TASK_ARTIFACT_PREFIX);
 
-/** Short badge label for a task (timeline chip, card header). */
-export function taskKindLabel(kind: string): string {
-  if (kind === "pcn_grouped_review") return "REVIEW";
-  if (kind === "pcn_disposition") return "QUALIFY";
-  if (kind === "access_request") return "ACCESS";
-  if (kind === "workflow_ack") return "APPROVE";
-  return "TASK";
-}
-
-/** Full descriptive title for a task (HUD, card). */
-export function taskKindTitle(kind: string): string {
-  if (kind === "pcn_grouped_review") return "Disposition review";
-  if (kind === "pcn_disposition") return "Qualification task";
-  if (kind === "access_request") return "Access request";
-  if (kind === "workflow_ack") return "Workflow approval";
-  return kind;
-}
+// Display hints (badge/title/archetype) come from the single taskKindRegistry —
+// the ONE address for per-kind presentation, awaiting served hints. Re-exported
+// so existing imports keep one path; new code should read the registry.
+export { taskKindLabel, taskKindTitle } from "@/lib/taskKindRegistry";
 
 /**
- * The archetype component a task renders as on the canvas.
- *  - grouped review → GROUPED_REVIEW (needs the fetched ReviewBatch; the
- *    component is absent until the batch is lazy-fetched on first selection).
- *  - everything else (pcn_disposition, workflow_ack, access_request) →
- *    APPROVAL_TASK (accept/reject on the card; no batch).
+ * The archetype component a task renders as on the canvas — keyed on the kind's
+ * ARCHETYPE (from the registry), NOT on the kind string. A GROUPED_REVIEW needs
+ * the fetched ReviewBatch (absent until lazy-fetched on selection); everything
+ * else is an APPROVAL_TASK card (accept/reject, no batch).
  */
 function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
-  if (task.kind === "pcn_grouped_review") {
+  if (taskKindDisplay(task.kind).archetype === "GROUPED_REVIEW") {
     return batch ? [{ archetype: "GROUPED_REVIEW", batch }] : [];
   }
   return [

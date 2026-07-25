@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ClipboardCheck } from "lucide-react";
 import { useCurrentArtifact } from "@/store/useCanvasStore";
+import { taskKindTitle } from "@/lib/taskKindRegistry";
 
 /**
  * HUD context for a selected TASK — the same contract the HUD gives an answer
@@ -9,14 +10,6 @@ import { useCurrentArtifact } from "@/store/useCanvasStore";
  * and its pending/resolved state. Renders nothing for non-task artifacts, so the
  * HUD swaps content on selection without an overlay war.
  */
-function labelKind(kind: string): string {
-  if (kind === "pcn_grouped_review") return "Disposition review";
-  if (kind === "pcn_disposition") return "Qualification task";
-  if (kind === "access_request") return "Access request";
-  if (kind === "workflow_ack") return "Workflow approval";
-  return kind;
-}
-
 export function TaskContextCard() {
   const current = useCurrentArtifact();
   const task = current?.task_ref;
@@ -61,7 +54,7 @@ export function TaskContextCard() {
         </span>
       </div>
 
-      <p className="text-[11px] font-mono text-slate-200 mb-3">{labelKind(task.kind)}</p>
+      <p className="text-[11px] font-mono text-slate-200 mb-3">{taskKindTitle(task.kind)}</p>
 
       <div className="space-y-1.5">
         {rows
