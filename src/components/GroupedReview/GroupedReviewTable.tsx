@@ -230,9 +230,12 @@ export function GroupedReviewTable({
                         <input
                           value={ov.reason}
                           onChange={(e) => setOverride(it.mpn, { reason: e.target.value })}
-                          placeholder="reason (required)"
+                          placeholder="reason required — why is this disposition correct?"
+                          // Capture-why is structural: focus the reason the moment the override is
+                          // created so it's obvious a reason is required before Resolve un-grays.
+                          autoFocus
                           className={`w-full bg-slate-900 border rounded px-2 py-1 text-[10px] text-white placeholder:text-slate-600 ${
-                            reasonMissing ? "border-red-500/60" : "border-white/10"
+                            reasonMissing ? "border-red-500/60 ring-1 ring-red-500/40" : "border-white/10"
                           }`}
                         />
                       </div>
@@ -314,6 +317,17 @@ export function GroupedReviewTable({
         <button
           onClick={submit}
           disabled={!canSubmit}
+          title={
+            canSubmit
+              ? undefined
+              : unhandledUnverified.length > 0
+                ? `Disposition the ${unhandledUnverified.length} unverified row(s) first`
+                : missingReason.length > 0
+                  ? `Add a reason to ${missingReason.length} override(s) — capture-why is required`
+                  : needsDisposition.length > 0
+                    ? `${needsDisposition.length} row(s) still need a disposition`
+                    : "Nothing to resolve"
+          }
           className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded bg-neon-green/10 border border-neon-green/50 text-neon-green text-[11px] font-mono uppercase tracking-widest hover:bg-neon-green/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
