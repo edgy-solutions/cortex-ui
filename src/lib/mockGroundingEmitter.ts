@@ -237,7 +237,7 @@ function buildInstancesByPropertyPayload(
       ],
     } as unknown as DashboardUI;
   }
-  // PCN parts by disposition_state — mirrors cortex-bff GET /pcn/parts_by_state.
+  // PCN parts by disposition_state — mirrors cortex-bff GET /instances_by_property.
   return {
     components: [
       {

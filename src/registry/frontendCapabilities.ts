@@ -183,7 +183,7 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
   // SemanticInterpreter's INSTANCES_BY_PROPERTY case. Domain-agnostic by
   // construction — the payload carries columns/rows/vocabulary; the renderer
   // knows no domain. First consumer is the PCN parts-by-disposition-state
-  // dashboard (fed by cortex-bff GET /pcn/parts_by_state); domain_fit lists the
+  // dashboard (fed by cortex-bff GET /instances_by_property); domain_fit lists the
   // wired domains, not a limit of the renderer.
   {
     subject_uri: "mesh:InstancesByProperty",

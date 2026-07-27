@@ -29,7 +29,7 @@ export interface TaskKindDisplay {
 // kinds; `pcn_*` are domain values that leaked in with the first consumer — both
 // live here as DATA rows, awaiting served hints, not as code branches.
 const REGISTRY: Record<string, TaskKindDisplay> = {
-  pcn_grouped_review: { badge: "REVIEW", title: "Disposition review", archetype: "GROUPED_REVIEW" },
+  grouped_review: { badge: "REVIEW", title: "Disposition review", archetype: "GROUPED_REVIEW" },
   pcn_disposition: { badge: "QUALIFY", title: "Qualification task", archetype: "APPROVAL_TASK" },
   access_request: { badge: "ACCESS", title: "Access request", archetype: "APPROVAL_TASK" },
   workflow_ack: { badge: "APPROVE", title: "Workflow approval", archetype: "APPROVAL_TASK" },
