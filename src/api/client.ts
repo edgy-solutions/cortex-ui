@@ -98,7 +98,7 @@ export interface ActOnTaskResult {
   decision: string;
   rows_resolved?: number;
   workflow_resumed?: boolean;
-  // pcn_grouped_review bridge: the /act handler validates the decision against the durable workflow
+  // grouped_review bridge: the /act handler validates the decision against the durable workflow
   // (submit_decision) and only resolves the projection on acceptance. A policy-refused submission
   // (e.g. an unverified row riding accept-all) comes back accepted:false + status "still_pending".
   accepted?: boolean;
@@ -111,7 +111,7 @@ export async function actOnHumanTask(
   taskId: string,
   decision: "approved" | "rejected",
   comment = "",
-  // pcn_grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
+  // grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
   overrides?: Record<string, { disposition: string; reason: string }>
 ): Promise<ActOnTaskResult> {
   const body: Record<string, unknown> = { decision, comment };
@@ -177,7 +177,7 @@ export interface ReviewOverrideInput {
  *  grouped task in their own queue. */
 export async function fetchReviewBatch(workflowId: string): Promise<ReviewBatch> {
   const { data } = await api.get<ReviewBatch>(
-    `/pcn/reviews/${encodeURIComponent(workflowId)}/batch`
+    `/reviews/${encodeURIComponent(workflowId)}/batch`
   );
   return data;
 }

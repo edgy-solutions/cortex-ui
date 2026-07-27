@@ -677,7 +677,7 @@ export interface TaskRef {
   /** HumanTask.taskId — the /act + fetchReviewBatch key. */
   taskId: string;
   workflowId: string | null;
-  /** pcn_grouped_review | pcn_disposition | workflow_ack | access_request. */
+  /** grouped_review | pcn_disposition | workflow_ack | access_request. */
   kind: string;
   /** The TASK's state (not the artifact's UI status). */
   task_state: "pending" | "approved" | "rejected" | "expired";
