@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 import { actOnHumanTask } from "@/api/client";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
+import { formatRequestedBy } from "@/lib/requestedBy";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task that is a simple
@@ -81,7 +82,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
       )}
 
       <div className="space-y-0.5 text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-5">
-        {task.requested_by && <p>requested by · {task.requested_by}</p>}
+        {task.requested_by && <p>requested by · {formatRequestedBy(task.requested_by)}</p>}
         {task.subject_ref && <p className="break-all">subject · {task.subject_ref}</p>}
       </div>
 

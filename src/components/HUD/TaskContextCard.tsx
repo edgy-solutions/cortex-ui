@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ClipboardCheck } from "lucide-react";
 import { useCurrentArtifact } from "@/store/useCanvasStore";
 import { taskKindTitle } from "@/lib/taskKindRegistry";
+import { formatRequestedBy } from "@/lib/requestedBy";
 
 /**
  * HUD context for a selected TASK — the same contract the HUD gives an answer
@@ -24,7 +25,7 @@ export function TaskContextCard() {
 
   const rows: Array<[string, string | null]> = [
     ["audience", task.audience || null],
-    ["requested by", task.requestedBy || null],
+    ["requested by", task.requestedBy ? formatRequestedBy(task.requestedBy) : null],
     ["subject", task.subjectRef],
     ["notice", batch?.notice_id ? `${batch.notice_type ?? ""} ${batch.notice_id}`.trim() : null],
     ["parts", batch?.items ? String(batch.items.length) : null],
