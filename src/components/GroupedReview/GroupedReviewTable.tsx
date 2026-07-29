@@ -55,10 +55,19 @@ const reviewDraftCache = new Map<string, Record<string, OverrideDraft>>();
 export function GroupedReviewTable({
   batch,
   onResolved,
+  maxPreviewRows,
 }: {
   batch: ReviewBatch;
   onResolved?: (result: { items_resolved: number }) => void;
+  // Overview-zoom preview cap (declared by the citizen shell for the "dense" tier).
+  // Renders the first N rows + a "⌄ K more" affordance so a long list scales by
+  // width (readable) instead of by height, and the footer stays above the fold.
+  // Unset (focus/full view) = render every row, as before.
+  maxPreviewRows?: number;
 }) {
+  const previewItems =
+    maxPreviewRows != null ? batch.items.slice(0, maxPreviewRows) : batch.items;
+  const hiddenCount = batch.items.length - previewItems.length;
   // Only the EXCEPTIONS are held in state; presence of a key means the row is
   // overridden. Initialize from the draft cache so a remount restores the edit.
   const [overrides, setOverrides] = useState<Record<string, OverrideDraft>>(
@@ -219,7 +228,7 @@ export function GroupedReviewTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {batch.items.map((it) => {
+            {previewItems.map((it) => {
               const ov = overrides[it.mpn];
               const eff = effectiveDisposition(it, ov);
               const pres = eff ? presentDisposition(eff) : null;
@@ -377,6 +386,16 @@ export function GroupedReviewTable({
                 </tr>
               );
             })}
+            {/* Count-remaining affordance (dense-tier preview): "⌄ K more" reads as
+                designed; silent truncation reads as a bug. The full list is one
+                zoom/open away — this is a scan surface, not the acting surface. */}
+            {hiddenCount > 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-2 text-center text-[11px] font-mono uppercase tracking-widest text-neon-cyan/70">
+                  ⌄ {hiddenCount} more part{hiddenCount === 1 ? "" : "s"} · open to review all {batch.items.length}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

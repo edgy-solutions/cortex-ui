@@ -166,6 +166,22 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     persona_fit: ["OPS_OPERATOR"],
     domain_fit: ["SUSTAINMENT"],
   },
+  // A non-grouped HITL task (qualification / workflow_ack / access_request) as a
+  // canvas card — accept/reject through the sealed /act bridge. Mirrors
+  // SemanticInterpreter's APPROVAL_TASK case. Was UNREGISTERED, so at overview it
+  // inherited a grid col-1 corner cell (presentation by accident, not decision);
+  // now declared full-width + the "compact" overview tier (centered in the minimum
+  // frame). Domain-agnostic — a generic approval affordance, no domain terms.
+  {
+    subject_uri: "mesh:HumanApprovalTask",
+    object_uri: "mesh:ApprovalTask",
+    archetype: "APPROVAL_TASK",
+    component: "ApprovalTaskCard",
+    layout: "full-width",
+    expected_fields: ["task"],
+    persona_fit: [],
+    domain_fit: [],
+  },
   // "Watch my workflow" — read-only, gated domain view of a running workflow.
   // Mirrors SemanticInterpreter's WORKFLOW_OBSERVATION case. The projection is the
   // observer-facing view (no redactions — audit-only, stripped server-side).

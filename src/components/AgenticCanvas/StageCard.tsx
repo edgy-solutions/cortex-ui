@@ -8,6 +8,7 @@ import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { WorkflowLens } from "./WorkflowLens";
 import { STAGE_CARD } from "@/lib/stageConstants";
+import { overviewTier, DENSE_PREVIEW_ROWS } from "@/lib/overviewTier";
 
 export { STAGE_CARD };
 
@@ -198,7 +199,18 @@ export function StageCard({
           <div className="absolute inset-0 p-2">
             <FitBox naturalWidth={640}>
               <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
-                <SemanticInterpreter payload={{ components }} />
+                {/* At overview zoom the shell caps a "dense" citizen to a preview
+                    so FitBox scales it by WIDTH (readable) instead of by HEIGHT
+                    (the long-list shrink). compact/visual render whole — FitBox
+                    centers the compact card and scales the visual one. */}
+                <SemanticInterpreter
+                  payload={{ components }}
+                  previewRows={
+                    overviewTier((components?.[0] as { archetype?: string } | undefined)?.archetype) === "dense"
+                      ? DENSE_PREVIEW_ROWS
+                      : undefined
+                  }
+                />
               </div>
             </FitBox>
           </div>

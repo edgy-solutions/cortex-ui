@@ -344,10 +344,18 @@ export type { SemanticUIContainer } from "@/api/types";
 
 interface SemanticInterpreterProps {
   payload: { components: any[] }; // DashboardUI shape
+  // The citizen shell passes this at overview zoom: the "dense" preview cap.
+  // Dense archetypes (tables) render first N rows + a "⌄ K more" affordance so
+  // the frame scales by width, not height. Unset (focus/full view) = render all.
+  previewRows?: number;
 }
 
 // Render a single semantic component by archetype
-const renderComponent = (comp: any, onPublish: (sql: string, title: string) => void) => {
+const renderComponent = (
+  comp: any,
+  onPublish: (sql: string, title: string) => void,
+  previewRows?: number,
+) => {
   switch (comp.archetype) {
     case "PROCESS_TOPOLOGY":
       // Redesigned 2026-06-26 — clean horizontal flow of blocks +
@@ -417,6 +425,7 @@ const renderComponent = (comp: any, onPublish: (sql: string, title: string) => v
         <GroupedReviewTable
           batch={comp.batch}
           onResolved={() => markTaskResolvedByTaskId(comp.batch.batch_id)}
+          maxPreviewRows={previewRows}
         />
       );
 
@@ -478,9 +487,13 @@ const isFullWidth = (archetype: string) =>
   archetype === "HAZARD_DECLARATION" ||
   archetype === "GROUPED_REVIEW" ||
   archetype === "WORKFLOW_OBSERVATION" ||
-  archetype === "INSTANCES_BY_PROPERTY";
+  archetype === "INSTANCES_BY_PROPERTY" ||
+  // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
+  // rendered as a corner postage-stamp (a half-grid cell) — presentation by
+  // accident, not by decision. It fills its frame; the "compact" tier centers it.
+  archetype === "APPROVAL_TASK";
 
-export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload }) => {
+export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows }) => {
   const { personaConfig } = useMeshConfig();
 
   const handlePublish = async (sql: string, title: string) => {
@@ -543,7 +556,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 {pCfg.label}
               </div>
             )}
-            {renderComponent(comp, handlePublish)}
+            {renderComponent(comp, handlePublish, previewRows)}
           </div>
         );
       })}
