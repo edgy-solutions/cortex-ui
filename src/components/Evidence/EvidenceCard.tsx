@@ -124,12 +124,13 @@ export function EvidenceCard({
             "scan for it yourself" instruction. */}
         {hasPage ? (
           <div>
-            {/* Cap the page render's height with its OWN internal scroll so the
-                evidence never visually dominates the review card it serves (the
-                review is the thing awaiting action; evidence is subordinate). The
-                %-overlay stays relative to the image wrapper, so the box tracks
-                the text regardless of the outer scroll. */}
-            <div className="max-h-[55vh] overflow-y-auto custom-scrollbar border border-white/10 rounded bg-slate-950">
+            {/* When SUMMONED, evidence is the thing being STUDIED and takes the
+                canvas majority (the review yields it space; primacy stays with the
+                review via the acting sidebar + lifecycle, not by starving the
+                render). So the page render fills most of the viewport height, with
+                its own scroll for the tail. The %-overlay stays relative to the
+                image wrapper, so the box tracks the text regardless of scroll. */}
+            <div className="max-h-[78vh] overflow-y-auto custom-scrollbar border border-white/10 rounded bg-slate-950">
               <div className="relative w-full">
                 <FederatedImage
                   src={item.page_image_url!}

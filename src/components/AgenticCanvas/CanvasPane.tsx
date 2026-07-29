@@ -134,7 +134,17 @@ export const CanvasPane = () => {
           </button>
         </div>
         <div className="flex-1 min-h-0 flex">
-          <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar p-6">
+          {/* Review surface. It KEEPS PRIMACY even when it yields space: while
+              evidence is open it becomes a compact sidebar (fixed width, still the
+              ACTING surface — dispositions, the resolve footer, the selected-row
+              emphasis all live here), and snaps back to full width the moment
+              evidence is dismissed. The width change animates (transition-all) so
+              the reflow reads as the review YIELDING to the evidence, not a jump. */}
+          <div
+            className={`${
+              showEvidence ? "w-[440px] max-w-[40%] shrink-0" : "flex-1"
+            } min-w-0 overflow-y-auto custom-scrollbar p-6 transition-all duration-200 ease-out`}
+          >
             {onWorkflow ? (
               <WorkflowLens taskRef={taskRef} />
             ) : components.length > 0 ? (
@@ -147,11 +157,12 @@ export const CanvasPane = () => {
               </div>
             )}
           </div>
-          {/* Docked evidence FLAP — content-sized (self-start), attached to the
-              review's right edge, sharing its card language; subordinate, not a
-              full-height rail. Dismiss returns the space to the review. */}
+          {/* Docked evidence — when SUMMONED it is the thing being STUDIED, so it
+              takes the MAJORITY of the canvas (flex-1) at full height (self-stretch),
+              sharing the review's card language. Still subordinate in lifecycle
+              (summoned, dismissable, leaves with its citizen) — space, not primacy. */}
           {showEvidence && (
-            <div className="w-[420px] max-w-[42%] shrink-0 self-start max-h-full overflow-y-auto custom-scrollbar p-4 pl-1">
+            <div className="flex-1 min-w-0 self-stretch overflow-y-auto custom-scrollbar p-4 pl-1 transition-all duration-200 ease-out">
               <EvidencePane />
             </div>
           )}

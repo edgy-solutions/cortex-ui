@@ -75,6 +75,13 @@ export function GroupedReviewTable({
   // Summon the evidence card for a part — the document region its value came
   // from. Subordinate to this review; leaves when the review does.
   const summon = useEvidenceStore((s) => s.summon);
+  const summoned = useEvidenceStore((s) => s.summoned);
+  // The part whose evidence is open FOR THIS review — the row that must visually
+  // PAIR with the evidence header ("Evidence · <mpn>"), so a reviewer studying the
+  // now-majority crop never loses which row the decision belongs to (the review
+  // yields SPACE but keeps PRIMACY; this is the connector that keeps it legible).
+  const summonedMpn =
+    summoned && summoned.reviewId === batch.batch_id ? summoned.mpn : null;
   const showSource = (mpn: string) => {
     summon({ reviewId: batch.batch_id, noticeId: batch.notice_id, mpn });
     // Open the composite (review + evidence flap) so the flap has room to dock —
@@ -219,11 +226,33 @@ export function GroupedReviewTable({
               const rowNeedsDisp = !eff;
               const reasonMissing = !!ov && ov.reason.trim() === "";
               return (
-                <tr key={it.mpn} className={it.needs_review ? "bg-amber-500/5" : undefined}>
+                <tr
+                  key={it.mpn}
+                  className={`transition-colors ${
+                    it.mpn === summonedMpn
+                      // Strong selected state that PAIRS with the evidence header
+                      // (both neon-pink) — the reviewer's anchor between the crop
+                      // being studied and the row the decision belongs to.
+                      ? "bg-neon-pink/10 ring-1 ring-inset ring-neon-pink/40"
+                      : it.needs_review
+                        ? "bg-amber-500/5"
+                        : ""
+                  }`}
+                >
                   {/* Part */}
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-white break-all">{it.mpn}</span>
+                      {/* B1: part reads at text-sm so it's comfortably legible next
+                          to the enlarged crop (no eye-zoom between the two). When its
+                          evidence is open, it emphasizes + goes neon-pink to pair with
+                          the evidence header. */}
+                      <span
+                        className={`text-sm break-all ${
+                          it.mpn === summonedMpn ? "font-semibold text-neon-pink" : "text-white"
+                        }`}
+                      >
+                        {it.mpn}
+                      </span>
                       <button
                         onClick={() => showSource(it.mpn)}
                         title="Show where this came from in the notice"
