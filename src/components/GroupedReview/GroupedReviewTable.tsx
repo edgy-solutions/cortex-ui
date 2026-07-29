@@ -334,7 +334,14 @@ export function GroupedReviewTable({
                             : "border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10"
                         }`}
                       >
-                        {it.needs_review ? "Disposition *" : `Override${rowNeedsDisp ? " *" : ""}`}
+                        {it.needs_review
+                          ? "Disposition *"
+                          : rowNeedsDisp
+                            // No system-proposed disposition — the approver is SETTING one, not
+                            // overriding a proposal that never existed. "Override" here read as
+                            // "override what?" for every part when the proposer abstained.
+                            ? "Set disposition *"
+                            : "Override"}
                       </button>
                     )}
                   </td>
