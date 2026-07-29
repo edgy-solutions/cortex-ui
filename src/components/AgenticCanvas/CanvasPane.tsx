@@ -142,8 +142,11 @@ export const CanvasPane = () => {
               the reflow reads as the review YIELDING to the evidence, not a jump. */}
           <div
             className={`${
-              showEvidence ? "w-[440px] max-w-[40%] shrink-0" : "flex-1"
-            } min-w-0 overflow-y-auto custom-scrollbar p-6 transition-all duration-200 ease-out`}
+              // A touch wider + tighter padding when it's the sidebar, so the review
+              // table's one-line MPN / replacement columns fit without x-scroll;
+              // evidence still holds the majority. Full padding when it's full-width.
+              showEvidence ? "w-[500px] max-w-[44%] shrink-0 p-3" : "flex-1 p-6"
+            } min-w-0 overflow-y-auto custom-scrollbar transition-all duration-200 ease-out`}
           >
             {onWorkflow ? (
               <WorkflowLens taskRef={taskRef} />

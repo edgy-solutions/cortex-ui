@@ -217,10 +217,15 @@ export function GroupedReviewTable({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-900/50">
-              {["Part (MPN)", "Disposition", "Replacement / LTB", ""].map((c) => (
+              {[
+                { c: "Part (MPN)", w: "" },            // sized to the MPN (nowrap) — one line
+                { c: "Disposition", w: "w-[8.5rem]" }, // FIXED — its content may wrap 2 lines
+                { c: "Replacement / LTB", w: "" },     // sized to the number (nowrap) — one line
+                { c: "", w: "w-[5.5rem]" },            // FIXED — the action button (may wrap)
+              ].map(({ c, w }) => (
                 <th
-                  key={c}
-                  className="px-4 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-white/5"
+                  key={c || "action"}
+                  className={`px-2.5 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-white/5 ${w}`}
                 >
                   {c}
                 </th>
@@ -249,14 +254,18 @@ export function GroupedReviewTable({
                   }`}
                 >
                   {/* Part */}
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-2.5 py-3 align-top">
                     <div className="flex items-center gap-2">
                       {/* B1: part reads at text-sm so it's comfortably legible next
                           to the enlarged crop (no eye-zoom between the two). When its
                           evidence is open, it emphasizes + goes neon-pink to pair with
                           the evidence header. */}
                       <span
-                        className={`text-sm break-all ${
+                        // MPN is a critical identifier — it must ALWAYS read on one
+                        // line. break-all split it char-by-char in the narrow sidebar;
+                        // whitespace-nowrap keeps it whole (the table scrolls-x if a
+                        // long MPN needs it) so the eye never reassembles a part number.
+                        className={`text-sm whitespace-nowrap ${
                           it.mpn === summonedMpn ? "font-semibold text-neon-pink" : "text-white"
                         }`}
                       >
@@ -286,7 +295,7 @@ export function GroupedReviewTable({
                   </td>
 
                   {/* Disposition */}
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-2.5 py-3 align-top">
                     {ov ? (
                       <div className="space-y-1.5">
                         <select
@@ -333,8 +342,8 @@ export function GroupedReviewTable({
                   </td>
 
                   {/* Replacement / LTB */}
-                  <td className="px-4 py-3 align-top text-[10px] text-slate-400">
-                    {it.replacement_mpn && <div className="break-all">→ {it.replacement_mpn}</div>}
+                  <td className="px-2.5 py-3 align-top text-[10px] text-slate-400">
+                    {it.replacement_mpn && <div className="whitespace-nowrap">→ {it.replacement_mpn}</div>}
                     {it.ltb_date && <div className="text-slate-500">LTB {it.ltb_date}</div>}
                     {!it.replacement_mpn && !it.ltb_date && <span className="text-slate-600">—</span>}
                   </td>
@@ -345,7 +354,7 @@ export function GroupedReviewTable({
                       only submit is the footer "Resolve N". Labeling it "Accept" read as
                       "confirm my override" and made approvers discard their own edit, so
                       it pairs with "Override" as its literal inverse: Override ↔ Cancel. */}
-                  <td className="px-4 py-3 align-top text-right">
+                  <td className="px-2.5 py-3 align-top text-right">
                     {ov ? (
                       <button
                         onClick={() => clearOverride(it.mpn)}
