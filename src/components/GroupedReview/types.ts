@@ -34,4 +34,12 @@ export interface ReviewBatch {
   /** the approver this batch was filtered for ("you"). */
   approver: string;
   items: ReviewItem[];
+  /**
+   * Extraction-quality warnings qualifying this batch — how much to trust the list.
+   * A degraded extraction (a timed-out vision crop, a failed header pass) yields a
+   * PARTIAL parts list that is indistinguishable from a complete one; unsaid, the
+   * missing parts simply never get a disposition and nobody notices. Absent/empty
+   * on a clean extraction.
+   */
+  extraction_warnings?: string[];
 }

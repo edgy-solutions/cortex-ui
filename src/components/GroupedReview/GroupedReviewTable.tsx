@@ -237,6 +237,37 @@ export function GroupedReviewTable({
         )}
       </div>
 
+      {/* EXTRACTION-QUALITY WARNINGS — above the table, before any disposition is chosen.
+          These say the parts list itself may be INCOMPLETE (a vision crop timed out, the
+          header pass failed), which no per-row badge can express: the rows that ARE here
+          look fine, and the missing ones are invisible. Without this the reviewer
+          dispositions a partial list believing it complete, and the absent parts silently
+          never get one. Proceeding on degraded extraction is fine; proceeding silently
+          is not. Empty/absent on a clean extraction — no banner, no noise. */}
+      {(batch.extraction_warnings?.length ?? 0) > 0 && (
+        <div className="px-4 py-3 border-b border-amber-500/30 bg-amber-500/10">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-mono text-[10px] font-bold text-amber-300 uppercase tracking-widest">
+                Extraction incomplete — this list may be missing parts
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {batch.extraction_warnings!.map((w, i) => (
+                  <li key={i} className="text-[11px] text-amber-200/90 leading-snug">
+                    · {w}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[10px] text-amber-200/70 leading-snug">
+                Verify against the source document before resolving — parts absent from this
+                table receive no disposition.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-x-auto font-mono">
         <table className="w-full text-left border-collapse">
