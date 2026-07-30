@@ -19,6 +19,7 @@ import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, FileSearch }
 import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { useStageStore } from "@/store/useStageStore";
 import { toast } from "sonner";
+import { formatRequestedBy } from "@/lib/requestedBy";
 import {
   DISPOSITIONS,
   presentDisposition,
@@ -167,7 +168,31 @@ export function GroupedReviewTable({
       );
       onResolved?.({ items_resolved: count });
     } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const resp = (err as { response?: { status?: number; data?: { detail?: Record<string, unknown> } } })?.response;
+      const status = resp?.status;
+      const detail = resp?.data?.detail;
+      if (status === 409 && detail?.error === "task_already_resolved") {
+        // A TEAMMATE resolved it first (any-one-of-the-audience acts for the team).
+        // Tell the truth WITH provenance — who settled it and when — instead of the
+        // old misleading "no longer available", and DO NOT discard this reviewer's
+        // work: the draft cache is deliberately left intact (only the success path
+        // deletes it), so their unsent overrides stay on screen to read or re-use.
+        const who = typeof detail.acted_by === "string" ? formatRequestedBy(detail.acted_by) : "another reviewer";
+        const at = typeof detail.acted_at === "number"
+          ? new Date(detail.acted_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : null;
+        const drafted = Object.keys(overrides).length;
+        toast.error(`Already resolved by ${who}${at ? ` at ${at}` : ""}`, {
+          description: drafted
+            ? `Your ${drafted} unsent change${drafted === 1 ? "" : "s"} ${drafted === 1 ? "is" : "are"} kept below — nothing was applied.`
+            : "This review was settled by a member of its audience; nothing was applied.",
+          duration: 10000,
+        });
+        // Reflect the settled truth (disables further editing) WITHOUT clearing the
+        // draft — the rows stay visible so the reviewer can read back what they wrote.
+        setResolved(true);
+        return;
+      }
       toast.error(
         status === 403
           ? "Not authorized to resolve this batch"
