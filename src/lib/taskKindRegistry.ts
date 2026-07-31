@@ -14,6 +14,14 @@
  *   - Everything else keys on the ARCHETYPE (structural), never the kind string.
  *   - An UNDECLARED kind gets the honest default (TASK / APPROVAL_TASK) — the
  *     UI-COMPONENT-NOT-FOUND discipline applied to labels, not a silent guess.
+ *
+ * RETIRES AT M3.3 — **together with `_VERBS_BY_KIND`** in invincible-agent's
+ * `src/iagent/human_tasks.py`. That is the SECOND hardcoded per-kind table (which
+ * verbs each task species accepts), added by the triage-card fix, and the two must
+ * retire in ONE change: a served `rendersAs` declaration that says how a task
+ * RENDERS while a code table still decides what it can DO is the worse half
+ * surviving. See invincible-agent
+ * `docs/plans/m3-grouped-review-definition-design.md` §"TWO interim per-kind tables".
  */
 
 export interface TaskKindDisplay {
