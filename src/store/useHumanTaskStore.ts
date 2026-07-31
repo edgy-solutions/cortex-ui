@@ -20,11 +20,18 @@ export interface HumanTask {
   workflowId: string | null;
   audience: string; // e.g. "promotion:DATA_ENGINEERING"
   kind: string; // "workflow_ack" | "access_request"
-  status: "pending" | "approved" | "rejected" | "expired";
+  // Terminal statuses are PER SPECIES. A triage task is acknowledged/redriven, never
+  // "approved"/"rejected" — the server refuses those verbs on it (422), and a projection that
+  // coerced them would record a decision the task cannot represent. Only `pending` is
+  // load-bearing for queue filtering, so the terminal vocabulary widens safely.
+  status: "pending" | "approved" | "rejected" | "acknowledged" | "redriven" | "expired";
   title: string;
   summary: string;
   requestedBy: string;
   subjectRef: string | null;
+  /** Clearance-safe task payload (identifiers + reason, never notice content). Carries the
+   *  triage card's `warnings` / `reason_code` — the WHY that makes a refusal actionable. */
+  payload?: Record<string, unknown> | null;
   createdAt: number;
 }
 

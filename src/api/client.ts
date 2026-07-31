@@ -107,9 +107,17 @@ export interface ActOnTaskResult {
   resolved_count?: number;
   reason?: string;
 }
+/** The verbs a task may be acted on with. PER SPECIES, not universal: a triage task ("this
+ *  notice could not be prepared for review") takes acknowledged/redriven, and the API REFUSES
+ *  approved/rejected on it with 422 — storing "approved" on an extraction failure writes a
+ *  decision the data cannot represent, which ADR-0034's records would then archive immutably
+ *  as promotion evidence. The server is the authority; this union only stops the wrong verb
+ *  being spelled here. */
+export type TaskDecision = "approved" | "rejected" | "acknowledged" | "redriven";
+
 export async function actOnHumanTask(
   taskId: string,
-  decision: "approved" | "rejected",
+  decision: TaskDecision,
   comment = "",
   // grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
   overrides?: Record<string, { disposition: string; reason: string }>

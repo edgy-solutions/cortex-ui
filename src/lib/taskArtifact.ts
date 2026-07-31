@@ -42,24 +42,36 @@ export { taskKindLabel, taskKindTitle } from "@/lib/taskKindRegistry";
  * else is an APPROVAL_TASK card (accept/reject, no batch).
  */
 function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
-  if (taskKindDisplay(task.kind).archetype === "GROUPED_REVIEW") {
+  const archetype = taskKindDisplay(task.kind).archetype;
+  if (archetype === "GROUPED_REVIEW") {
     return batch ? [{ archetype: "GROUPED_REVIEW", batch }] : [];
   }
-  return [
-    {
-      archetype: "APPROVAL_TASK",
+  const base = {
+    task_id: task.taskId,
+    kind: task.kind,
+    task_state: task.status,
+    title: task.title,
+    summary: task.summary,
+    audience: task.audience,
+    requested_by: task.requestedBy,
+    subject_ref: task.subjectRef,
+  };
+  // TRIAGE_TASK is a THIRD SPECIES — an unprocessable input, not a decision. It carries the
+  // extraction warnings (the WHY that makes the refusal actionable) and the reason code, both
+  // of which the approval card has no place for. Keyed on the ARCHETYPE, never the kind
+  // string, so a second refusal-shaped kind registers as a row and renders correctly with no
+  // code change here.
+  if (archetype === "TRIAGE_TASK") {
+    return [{
+      archetype: "TRIAGE_TASK",
       task: {
-        task_id: task.taskId,
-        kind: task.kind,
-        task_state: task.status,
-        title: task.title,
-        summary: task.summary,
-        audience: task.audience,
-        requested_by: task.requestedBy,
-        subject_ref: task.subjectRef,
+        ...base,
+        warnings: task.payload?.warnings ?? [],
+        reason_code: task.payload?.reason_code ?? "",
       },
-    },
-  ];
+    }];
+  }
+  return [{ archetype: "APPROVAL_TASK", task: base }];
 }
 
 /**

@@ -679,8 +679,10 @@ export interface TaskRef {
   workflowId: string | null;
   /** grouped_review | pcn_disposition | workflow_ack | access_request. */
   kind: string;
-  /** The TASK's state (not the artifact's UI status). */
-  task_state: "pending" | "approved" | "rejected" | "expired";
+  /** The TASK's state (not the artifact's UI status). Terminal states are PER SPECIES:
+   *  a triage task ends acknowledged/redriven, never approved/rejected — the server refuses
+   *  those verbs on it (422). Only `pending` is load-bearing for filtering. */
+  task_state: "pending" | "approved" | "rejected" | "acknowledged" | "redriven" | "expired";
   audience: string;
   requestedBy: string;
   subjectRef: string | null;
