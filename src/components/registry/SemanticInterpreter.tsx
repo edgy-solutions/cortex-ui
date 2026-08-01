@@ -19,6 +19,7 @@ import { GroupedReviewTable } from "../GroupedReview/GroupedReviewTable";
 import { WorkflowObservationView } from "../WorkflowObservation/WorkflowObservationView";
 import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPropertyView";
 import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
+import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -434,6 +435,14 @@ const renderComponent = (
       // as a canvas card — accept/reject through the same sealed /act bridge.
       return <ApprovalTaskCard task={comp.task} />;
 
+    case "TRIAGE_TASK":
+      // A THIRD SPECIES: an input the pipeline could NOT prepare, not a decision.
+      // Acknowledge (reason required) / Re-drive — never approve/reject, which the
+      // API also refuses (422). This card shipped as APPROVAL_TASK first, and the
+      // buttons it inherited would have written provenance the data cannot
+      // represent. See docs/plans/triage-card-archetype.md (invincible-agent).
+      return <TriageTaskCard task={comp.task} />;
+
     case "WORKFLOW_OBSERVATION":
       // "Watch my workflow" — the read-only, gated domain view of a running
       // workflow. `comp.projection` is the observer-facing ObservationProjection
@@ -491,7 +500,10 @@ const isFullWidth = (archetype: string) =>
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.
-  archetype === "APPROVAL_TASK";
+  archetype === "APPROVAL_TASK" ||
+  // Same reasoning as APPROVAL_TASK above: a sparse card must fill its frame rather
+  // than inherit a corner postage-stamp by omission.
+  archetype === "TRIAGE_TASK";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows }) => {
   const { personaConfig } = useMeshConfig();

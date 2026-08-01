@@ -18,6 +18,7 @@ import {
   useHumanTaskStore,
   type HumanTask,
 } from "@/store/useHumanTaskStore";
+import { parseTaskPayload } from "@/lib/taskPayload";
 
 /**
  * Convert an Electric row (snake_case, bigint-as-string) into a HumanTask.
@@ -47,6 +48,11 @@ function rowToHumanTask(row: Row): HumanTask {
     summary: (row.summary as string) ?? "",
     requestedBy: (row.requested_by as string) ?? "",
     subjectRef: (row.subject_ref as string | null) ?? null,
+    // `payload` is a jsonb column and arrives from Electric as a STRING, while the REST seed
+    // hands back a parsed object. Normalizing here keeps the two producers agreeing — a card
+    // whose warnings render on the seeded path and vanish on the live one would look like an
+    // intermittent bug rather than a shape mismatch.
+    payload: parseTaskPayload(row.payload),
     createdAt: parseBigInt(row.created_at),
   };
 }

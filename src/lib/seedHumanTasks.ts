@@ -14,6 +14,7 @@
  */
 import { fetchMyHumanTasks } from "@/api/client";
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
+import { parseTaskPayload } from "@/lib/taskPayload";
 
 export function seedFromRest() {
   fetchMyHumanTasks()
@@ -32,6 +33,7 @@ export function seedFromRest() {
           summary: String(t.summary ?? ""),
           requestedBy: String(t.requested_by ?? ""),
           subjectRef: (t.subject_ref as string | null) ?? null,
+          payload: parseTaskPayload(t.payload),
           createdAt: Number(t.created_at ?? 0),
         });
       }
