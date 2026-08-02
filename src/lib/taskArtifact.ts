@@ -68,6 +68,10 @@ function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
         ...base,
         warnings: task.payload?.warnings ?? [],
         reason_code: task.payload?.reason_code ?? "",
+        // The page renders the failed extraction still produced. Threaded here rather than
+        // fetched: the payload already crossed every boundary with the task, and a second
+        // fetch would be a join that can silently stop happening.
+        pages: task.payload?.pages ?? [],
       },
     }];
   }
