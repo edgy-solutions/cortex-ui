@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
+import { FederatedImage } from "@/components/mesh/FederatedImage";
 import { actOnHumanTask } from "@/api/client";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
@@ -141,16 +142,22 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
             source pages · nothing could be anchored — scan for the parts table yourself
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
+            {/* No anchor around each figure: `s3://` is not a navigable href either — the same
+                reason the raw <img> failed. Full-size viewing needs a real route, filed rather
+                than faked with a link that goes nowhere. */}
             {task.pages.map((p) => (
-              <a
+              <div
                 key={p.page}
-                href={p.s3_url}
-                target="_blank"
-                rel="noreferrer"
                 className="shrink-0 rounded border border-white/10 hover:border-cyan-500/50 transition-colors"
-                title={`page ${p.page} — open full size`}
+                title={`page ${p.page}`}
               >
-                <img
+                {/* FederatedImage, not a raw <img>: the payload carries `s3://bucket/key`,
+                    which a browser cannot fetch — the page slots rendered as empty frames
+                    (witnessed 2026-08-03). The BFF's /federated_image endpoint streams it with
+                    the caller's JWT, which is also why this must not be a plain <img> with a
+                    query URL: the token has to ride the request. Reusing the component the
+                    review card already uses rather than inventing a second image path. */}
+                <FederatedImage
                   src={p.s3_url}
                   alt={`page ${p.page}`}
                   className="h-40 w-auto rounded opacity-90 hover:opacity-100"
@@ -158,7 +165,7 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
                 <span className="block text-center text-[9px] font-mono text-slate-500 py-0.5">
                   page {p.page}
                 </span>
-              </a>
+              </div>
             ))}
           </div>
         </div>
