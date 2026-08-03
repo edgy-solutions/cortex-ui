@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
@@ -54,6 +54,20 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
   const [done, setDone] = useState<null | "acknowledged" | "redriven">(null);
   const [reason, setReason] = useState("");
   const [showReason, setShowReason] = useState(false);
+  // The page a reviewer has opened full-size, or null. Thumbnails are for ORIENTATION —
+  // "which page is the table on" — and are useless for the actual task, which is reading a
+  // parts table the extraction could not. Without an expand, the summon shows that evidence
+  // EXISTS without letting anyone use it.
+  const [expandedPage, setExpandedPage] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (expandedPage === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedPage(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expandedPage]);
 
   // Mirrors the server's rule rather than inventing a second one. The server is still the
   // authority (422 on a blank reason); this only avoids a round-trip to be told so.
@@ -89,7 +103,70 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
     }
   };
 
+  // FULL-SIZE VIEWER. Deliberately a local overlay rather than the canvas EvidencePane: that
+  // pane is store-driven and canvas-scoped, so reusing it would mean giving a card the ability
+  // to drive canvas state — a coupling that buys nothing here. This is the smallest thing that
+  // makes the evidence USABLE, which is the whole point of summoning it.
+  const pages = task.pages ?? [];
+  const openIdx = expandedPage === null ? -1 : pages.findIndex((p) => p.page === expandedPage);
+  const openPage = openIdx >= 0 ? pages[openIdx] : null;
+  const step = (delta: number) => {
+    if (openIdx < 0) return;
+    const next = pages[openIdx + delta];
+    if (next) setExpandedPage(next.page);
+  };
+
+  const viewer = openPage ? (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6"
+      onClick={() => setExpandedPage(null)}
+    >
+      <div className="mb-2 flex items-center gap-4 text-[11px] font-mono uppercase tracking-widest text-slate-300">
+        {/* Page-to-page navigation, because a reviewer hunting a parts table does not know
+            which page it is on — that is precisely what the extraction failed to determine.
+            Opening one page and forcing a close-and-reopen to check the next would make the
+            viewer technically complete and practically useless. */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); step(-1); }}
+          disabled={openIdx <= 0}
+          className="px-2 py-1 rounded border border-white/15 disabled:opacity-30 hover:border-cyan-500/50"
+        >
+          ← prev
+        </button>
+        <span className="text-cyan-300">page {openPage.page} of {pages.length}</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); step(1); }}
+          disabled={openIdx >= pages.length - 1}
+          className="px-2 py-1 rounded border border-white/15 disabled:opacity-30 hover:border-cyan-500/50"
+        >
+          next →
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpandedPage(null); }}
+          className="px-2 py-1 rounded border border-white/15 hover:border-neon-pink/50"
+        >
+          close · esc
+        </button>
+      </div>
+      {/* stopPropagation so clicking the PAGE does not dismiss the viewer — only the backdrop
+          and the explicit close do. Dismissing on the thing you are trying to read is the
+          classic lightbox bug. */}
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[85vh] overflow-auto">
+        <FederatedImage
+          src={openPage.s3_url}
+          alt={`page ${openPage.page} full size`}
+          className="max-w-none h-auto rounded shadow-2xl"
+        />
+      </div>
+    </div>
+  ) : null;
+
   return (
+    <>
+    {viewer}
     <div className="glass-panel p-6 my-4 border-amber-500/30">
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-1">
@@ -146,10 +223,12 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
                 reason the raw <img> failed. Full-size viewing needs a real route, filed rather
                 than faked with a link that goes nowhere. */}
             {task.pages.map((p) => (
-              <div
+              <button
                 key={p.page}
-                className="shrink-0 rounded border border-white/10 hover:border-cyan-500/50 transition-colors"
-                title={`page ${p.page}`}
+                type="button"
+                onClick={() => setExpandedPage(p.page)}
+                className="shrink-0 rounded border border-white/10 hover:border-cyan-500/50 transition-colors cursor-pointer"
+                title={`page ${p.page} — click to open full size`}
               >
                 {/* FederatedImage, not a raw <img>: the payload carries `s3://bucket/key`,
                     which a browser cannot fetch — the page slots rendered as empty frames
@@ -165,7 +244,7 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
                 <span className="block text-center text-[9px] font-mono text-slate-500 py-0.5">
                   page {p.page}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -225,5 +304,6 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
         </>
       )}
     </div>
+  </>
   );
 }
