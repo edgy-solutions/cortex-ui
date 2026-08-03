@@ -42,6 +42,10 @@ export interface TriageTaskPayload {
    *  that makes the refusal actionable. Threaded from the triage payload. */
   warnings?: string[];
   reason_code?: string;
+  /** Page renders from the extraction that FAILED. The card's instrument: alice is asked to
+   *  judge whether a notice the machine could not read matters, and without the pages she has
+   *  strictly less to look at than for a notice it read fine — which is backwards. */
+  pages?: { page: number; s3_url: string }[];
 }
 
 export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
@@ -124,6 +128,50 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* THE INSTRUMENT. Deliberately the `not_found` treatment the review card already uses
+          for an unlocated value: UNLOCATED IS NOT MISSING — the page renders, nothing is
+          highlighted, and the reader is told plainly to scan it themselves. That is the honest
+          shape here too, because the extraction genuinely could not anchor anything: pretending
+          to a highlight would be inventing a location the pipeline never found. */}
+      {task.pages && task.pages.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-cyan-400/70 mb-1.5">
+            source pages · nothing could be anchored — scan for the parts table yourself
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {task.pages.map((p) => (
+              <a
+                key={p.page}
+                href={p.s3_url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded border border-white/10 hover:border-cyan-500/50 transition-colors"
+                title={`page ${p.page} — open full size`}
+              >
+                <img
+                  src={p.s3_url}
+                  alt={`page ${p.page}`}
+                  className="h-40 w-auto rounded opacity-90 hover:opacity-100"
+                />
+                <span className="block text-center text-[9px] font-mono text-slate-500 py-0.5">
+                  page {p.page}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* NO PAGES IS ITS OWN STATE, said out loud rather than rendered as an empty region.
+          A silently absent instrument reads as "there was nothing to see"; the truth is that
+          the extraction produced no renders, which is a fact about the PIPELINE that a
+          reviewer deciding what to do next needs. */}
+      {(!task.pages || task.pages.length === 0) && (
+        <p className="mb-4 text-[11px] text-slate-500 italic">
+          No page renders were produced for this notice — open the source artifact directly.
+        </p>
       )}
 
       <div className="space-y-0.5 text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-5">
