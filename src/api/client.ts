@@ -61,7 +61,24 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach Bearer token and Trace ID to all REST requests
+/**
+ * A stable per-conversation session id. Unlike X-Trace-Id (minted fresh per request),
+ * this persists for the browser tab's session — surviving navigations within one sitting,
+ * resetting on a new tab — so Langfuse can group a whole conversation's traces into one
+ * Session (ADR-0038). sessionStorage is already the app's session-grain store (OIDC,
+ * persona), so this rides the same lifetime.
+ */
+function getSessionId(): string {
+  const KEY = "cortex-session-id";
+  let sid = sessionStorage.getItem(KEY);
+  if (!sid) {
+    sid = crypto.randomUUID();
+    sessionStorage.setItem(KEY, sid);
+  }
+  return sid;
+}
+
+// Attach Bearer token, Trace ID (per request) and Session ID (per sitting) to all REST requests
 api.interceptors.request.use((cfg) => {
   const token = getOidcToken();
   if (token) {
@@ -69,6 +86,8 @@ api.interceptors.request.use((cfg) => {
   }
   // Generate a unique trace ID for each request to link frontend actions to backend logs
   cfg.headers["X-Trace-Id"] = crypto.randomUUID();
+  // Stable session id groups this conversation's traces in Langfuse (see getSessionId)
+  cfg.headers["X-Session-Id"] = getSessionId();
   return cfg;
 });
 
