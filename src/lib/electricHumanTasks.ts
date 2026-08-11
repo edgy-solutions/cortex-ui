@@ -67,6 +67,9 @@ export function startHumanTasksSubscription(token: string | null): () => void {
     console.info("[electric-tasks] VITE_API_URL empty; subscription skipped");
     return () => {};
   }
+  // transport-exception: ShapeStream replication transport, same reasoning as
+  // electric.ts — bearer attached, routed through cortex-bff's `/electric/shape`
+  // proxy so `recipient_id` is filtered by the server-verified caller identity.
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: { Authorization: `Bearer ${token}` },

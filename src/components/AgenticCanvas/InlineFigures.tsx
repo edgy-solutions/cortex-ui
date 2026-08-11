@@ -136,6 +136,9 @@ export function InlineFigures({ artifact }: InlineFiguresProps) {
     const url = `${config.VITE_API_URL}/data_module/figures?uri=${encodeURIComponent(
       dataModuleUri,
     )}`;
+    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
+    // Bypassing the axios wrapper costs only the X-Trace-Id/X-Session-Id correlation
+    // headers; the identity is intact and cortex-bff gates /data_module/figures on it.
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);

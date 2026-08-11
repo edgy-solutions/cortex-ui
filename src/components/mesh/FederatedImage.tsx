@@ -51,6 +51,10 @@ export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, classN
           setError("not authenticated");
           return;
         }
+        // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
+        // Must be raw rather than the axios wrapper because the response is a binary
+        // blob (URL.createObjectURL), not JSON. cortex-bff re-checks domain
+        // entitlement on /federated_image and 403s if the caller is not entitled.
         const resp = await fetch(
           `${config.VITE_API_URL}/federated_image?src=${encodeURIComponent(src)}`,
           { headers: { Authorization: `Bearer ${token}` } },

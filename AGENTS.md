@@ -105,21 +105,48 @@ The React app communicates with the FastAPI BFF (port 8000) through three primar
 
 ## Testing
 
-No test framework is currently set up. Visual testing is done via `npm run dev`. To verify correctness:
+No test framework is currently set up, so the one automated check this repo has runs inside
+`npm run build` rather than beside it — see **Transport declarations** below. Visual testing is
+done via `npm run dev`. To verify correctness:
 
 1. Run through the full demo flow: type 4 messages → blueprint appears → compile → system online.
 2. Check that ontology terms and data bindings populate in the HUD.
 3. Verify animations are smooth (no jank on thinking cards, typewriter, node entrance).
 4. Hover over Action nodes in the blueprint to confirm glitch effect.
 
+### Transport declarations — enforced, not reviewed
+
+**Every outbound call must go through `src/api/client.ts` or declare itself.** The axios instance
+there attaches the caller's OIDC bearer plus `X-Trace-Id`/`X-Session-Id`; anything bypassing it
+needs a `// transport-exception: <why>` comment on the call line or in the comment block directly
+above it.
+
+This is checked by `scripts/check-transport-declarations.mjs`, wired into `npm run build` — which
+is the command CI's image build runs, so an undeclared call **fails the build and no image is
+produced**. It is in `build` and not in a test script because a check nothing executes is worse
+than no check.
+
+Why it exists: a five-repo audit (`invincible-agent/docs/plans/unminted-caller-enumeration.md`)
+found call sites hitting gated services with no credential attached. In this repo it was
+`NodeInspector.tsx`, calling a gated cortex-bff route with no `Authorization` header. A periodic
+sweep re-earns that answer forever; this makes the next one a build failure.
+
+The guard asserts its own scope is inhabited (missing scan root, absent or empty allowlisted
+wrapper, or an implausibly low site count all fail loudly) because a scan that quietly shrinks its
+own scope reports green over nothing. `npm run check:transport:redproof` plants an undeclared
+`fetch`, asserts the guard goes red, removes it, and asserts green returns.
+
 ## Commands
 
 ```bash
 # Frontend
 npm run dev        # Start dev server (http://localhost:5173)
-npm run build      # Production build (tsc + vite build)
+npm run build      # Production build (transport guard + tsc + vite build)
 npm run preview    # Preview production build
 npx tsc --noEmit   # Type-check without emitting
+
+npm run check:transport           # Transport-declaration guard on its own
+npm run check:transport:redproof  # Prove the guard can fail
 
 # Backend (optional)
 cd backend

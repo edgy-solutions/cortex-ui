@@ -189,6 +189,11 @@ export function startArtifactsSubscription(token: string | null): () => void {
     console.info("[electric] VITE_API_URL empty; subscription skipped");
     return () => {};
   }
+  // transport-exception: ShapeStream is a different transport (long-poll replication),
+  // so it cannot ride the axios wrapper. It carries the caller's OIDC bearer, and the
+  // route it targets is cortex-bff's `/electric/shape` PROXY — never Electric directly —
+  // so the WHERE clause is server-injected from the verified JWT `sub` rather than
+  // client-controlled. See gateway.py `electric_shape_proxy`.
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: {

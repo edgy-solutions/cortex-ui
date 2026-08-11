@@ -71,6 +71,9 @@ export function FiguresSlideIn({ sourceUri, sourceLabel, onClose }: Props) {
     setLoading(true);
     setError(null);
     const url = `${config.VITE_API_URL}/data_module/figures?uri=${encodeURIComponent(sourceUri)}`;
+    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
+    // Same route and same reasoning as InlineFigures; identity intact, correlation
+    // headers are what the wrapper bypass costs.
     fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })

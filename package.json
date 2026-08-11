@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "check:transport": "node scripts/check-transport-declarations.mjs",
+    "check:transport:redproof": "node scripts/redproof-transport-guard.mjs",
+    "build": "npm run check:transport && tsc && vite build",
     "start": "serve dist -s -l ${PORT:-8080}",
     "preview": "vite preview"
   },

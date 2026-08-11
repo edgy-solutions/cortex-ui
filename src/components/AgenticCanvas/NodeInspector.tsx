@@ -1,23 +1,54 @@
 import { useEffect, useState } from 'react';
 import { X, Database } from 'lucide-react';
+import { useAuth } from 'react-oidc-context';
+import { config } from '@/config';
 import { useCanvasStore } from '../../store/useCanvasStore';
 
-// Get backend URL from the environment or default to localhost
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// Backend URL from RUNTIME config, not `import.meta.env`.
+//
+// This line previously read `import.meta.env.VITE_API_URL ?? "http://localhost:8000"`,
+// which is baked at BUILD time. The CI image is built with no VITE_API_URL build arg
+// and no tracked .env, so the deployed bundle pinned this panel to loopback and the
+// request never left the browser — every load failed at the network layer.
+//
+// That outer fault MASKED an inner one: the request also carried no Authorization
+// header (see below). Repairing only the URL would have made this panel start reaching
+// cortex-bff and start rendering `{"detail": "Not authenticated"}` as graph data.
+// Both faults are fixed together on purpose; see scripts/check-transport-declarations.mjs
+// for the guard that stops a new unminted call site from landing.
+const API_URL = config.VITE_API_URL;
 
 export const NodeInspector = () => {
   const { inspectedNodeId, isInspectorOpen, closeInspector } = useCanvasStore();
   const [nodeData, setNodeData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const auth = useAuth();
+  const token = auth.user?.access_token;
 
   useEffect(() => {
     if (!inspectedNodeId || !isInspectorOpen) return;
-    
+
     setIsLoading(true);
     let isMounted = true;
 
-    fetch(`${API_URL}/graph/node/${encodeURIComponent(inspectedNodeId)}`)
-      .then((res) => res.json())
+    if (!token) {
+      setNodeData({ error: "not authenticated" });
+      setIsLoading(false);
+      return () => { isMounted = false; };
+    }
+
+    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
+    fetch(`${API_URL}/graph/node/${encodeURIComponent(inspectedNodeId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        // `fetch` does NOT reject on 4xx/5xx. Without this check a 401's
+        // `{"detail": "Not authenticated"}` body parses cleanly and renders in the
+        // "Raw Graph Node" pane as though it were graph data — an auth failure
+        // dressed as a result. Same check the three sibling fetch sites already do.
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json();
+      })
       .then((data) => {
         if (isMounted) {
           setNodeData(data);
@@ -33,7 +64,7 @@ export const NodeInspector = () => {
       });
 
     return () => { isMounted = false; };
-  }, [inspectedNodeId, isInspectorOpen]);
+  }, [inspectedNodeId, isInspectorOpen, token]);
 
   return (
     <div 
