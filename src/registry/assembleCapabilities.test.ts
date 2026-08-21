@@ -1,0 +1,69 @@
+/**
+ * The registration payload is ASSEMBLED from component contracts, not authored.
+ *
+ * The property under test is not "the list has N entries" — it is that a derived row
+ * cannot disagree with the contract it came from, and that migrating one archetype does
+ * not silently delete rows that merely SHARE it.
+ */
+import { describe, it, expect } from "vitest";
+import {
+  assembleCapabilities,
+  assembleDerivedCapabilities,
+  derivedSubjects,
+} from "./assembleCapabilities";
+import { CORTEX_UI_CAPABILITIES } from "./frontendCapabilities";
+import { CHART_WIDGET_CONTRACT } from "../components/mesh/ChartWidget.contract";
+import { MARKDOWN_RENDERER_CONTRACT } from "../components/registry/MarkdownRenderer.contract";
+
+describe("assembleCapabilities", () => {
+  it("computes expected_fields FROM the contract — never a second list", () => {
+    const chart = assembleDerivedCapabilities()
+      .find((c) => c.archetype === "CHART_WIDGET")!;
+    expect(chart.expected_fields).toEqual(Object.keys(CHART_WIDGET_CONTRACT.fields));
+  });
+
+  it("six output types share ONE MarkdownRenderer contract", () => {
+    // The shape the hand-authored table obscured: it looked like six independent
+    // capabilities and was six bindings to one component.
+    const docs = assembleDerivedCapabilities()
+      .filter((c) => c.component === "MARKDOWN_PLACEHOLDER" || c.archetype === "KNOWLEDGE_DOCUMENT");
+    expect(docs).toHaveLength(6);
+    for (const d of docs) {
+      expect(d.contract).toBe(MARKDOWN_RENDERER_CONTRACT);
+      expect(d.expected_fields).toEqual(Object.keys(MARKDOWN_RENDERER_CONTRACT.fields));
+    }
+  });
+
+  it("DEDUPES BY subject_uri, not archetype — the bug this re-key fixed", () => {
+    // Keying on archetype would drop every not-yet-converted row that happens to render as
+    // a document, silently SHRINKING the menu instead of migrating it. Any legacy row whose
+    // subject_uri is not yet derived must survive.
+    const out = assembleCapabilities(CORTEX_UI_CAPABILITIES);
+    const covered = derivedSubjects();
+    for (const legacy of CORTEX_UI_CAPABILITIES) {
+      if (covered.has(legacy.subject_uri)) continue;
+      expect(
+        out.some((c) => c.subject_uri === legacy.subject_uri),
+        `legacy row ${legacy.subject_uri} was dropped`,
+      ).toBe(true);
+    }
+  });
+
+  it("never emits two entries for one subject_uri", () => {
+    const out = assembleCapabilities(CORTEX_UI_CAPABILITIES);
+    const seen = out.map((c) => c.subject_uri);
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  it("every row declares whether it is derived or legacy", () => {
+    for (const c of assembleCapabilities(CORTEX_UI_CAPABILITIES)) {
+      expect(["derived", "legacy"]).toContain(c.contract_source);
+    }
+  });
+
+  it("KNOWLEDGE_DOCUMENT publishes an EMPTY refusal vocabulary", () => {
+    // Load-bearing: it is why this archetype can be the universal fallback. Populating it
+    // would make the fallback refusable and leave slice 4 with nowhere to land.
+    expect(MARKDOWN_RENDERER_CONTRACT.refusalReasons).toHaveLength(0);
+  });
+});

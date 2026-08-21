@@ -27,6 +27,7 @@
  */
 import type { FrontendCapability } from "./frontendCapabilities";
 import { CHART_WIDGET_CONTRACT } from "../components/mesh/ChartWidget.contract";
+import { MARKDOWN_RENDERER_CONTRACT } from "../components/registry/MarkdownRenderer.contract";
 
 /** A capability entry plus the provenance of how it was produced. */
 export type AssembledCapability = FrontendCapability & {
@@ -47,6 +48,52 @@ const DERIVED_BINDINGS = [
     persona_fit: ["DATA_STEWARD"],
     domain_fit: ["DATA_ENGINEERING"],
     contract: CHART_WIDGET_CONTRACT,
+  },
+  // SIX ROWS, ONE CONTRACT. Every one of these output types renders through
+  // MarkdownRenderer, so they share its contract rather than each restating it. That is
+  // the shape the hand-authored table obscured: it looked like six independent
+  // capabilities and was six bindings to one component.
+  {
+    subject_uri: "mesh:OwnershipFact",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["DATA_STEWARD", "OPS_OPERATOR"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:ImpactSet",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:SchemaDescription",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["DATA_ENGINEER"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:AssetProfile",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:CatalogListing",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:KnowledgeRetrievalResponse",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["MECHANIC"],
+    domain_fit: ["MAINTENANCE", "MANUFACTURING"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
   },
 ] as const;
 
@@ -71,8 +118,11 @@ export function assembleDerivedCapabilities(): AssembledCapability[] {
 }
 
 /** Archetypes already covered by a component export — used to drop legacy duplicates. */
-export function derivedArchetypes(): Set<string> {
-  return new Set(DERIVED_BINDINGS.map((b) => b.contract.archetype));
+export function derivedSubjects(): Set<string> {
+  // KEYED ON subject_uri, NOT archetype. Six bindings now share KNOWLEDGE_DOCUMENT, so
+  // dropping legacy rows by ARCHETYPE would delete every not-yet-converted row that happens
+  // to render as a document — silently shrinking the menu instead of migrating it.
+  return new Set(DERIVED_BINDINGS.map((b) => b.subject_uri));
 }
 
 /**
@@ -84,9 +134,9 @@ export function assembleCapabilities(
   legacy: FrontendCapability[],
 ): AssembledCapability[] {
   const derived = assembleDerivedCapabilities();
-  const covered = derivedArchetypes();
+  const covered = derivedSubjects();
   const remaining = legacy
-    .filter((c) => !covered.has(c.archetype))
+    .filter((c) => !covered.has(c.subject_uri))
     .map((c) => ({ ...c, contract_source: "legacy" as const }));
   return [...derived, ...remaining];
 }
