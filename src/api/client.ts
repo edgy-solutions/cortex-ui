@@ -1,6 +1,7 @@
 import axios from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
+import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
@@ -339,7 +340,11 @@ export async function streamInterviewResponse(
       "X-Trace-Id": crypto.randomUUID(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(request),
+    // ADR-0017 amendment: NAME OURSELVES. The archetype decision is valid only against
+    // the render menu of the client that will render it, so the backend has to know which
+    // frontend is asking. Same id used for capability registration -- one identity, one
+    // menu. Merged here rather than at every call site so a caller cannot forget it.
+    body: JSON.stringify({ frontend_id: CORTEX_UI_FRONTEND_ID, ...request }),
     signal: ctrl.signal,
     // CRITICAL: @microsoft/fetch-event-source by default binds a
     // visibilitychange listener that ABORTS the active SSE connection
