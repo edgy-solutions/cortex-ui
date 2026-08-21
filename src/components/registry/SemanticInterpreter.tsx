@@ -20,6 +20,7 @@ import { WorkflowObservationView } from "../WorkflowObservation/WorkflowObservat
 import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPropertyView";
 import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
 import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
+import { PeriodSeries } from "@/components/planning/PeriodSeries";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -456,6 +457,25 @@ const renderComponent = (
       // widget knows none of it. `comp` IS the InstancesByPropertyPayload.
       return <InstancesByPropertyView payload={comp} />;
 
+    case "PERIOD_SERIES":
+      // A LIVE VIEW (ADR-0042) — content is a function of mutable plan state and is replaced
+      // wholesale on re-evaluation. Structural, not domain: the payload carries its own
+      // labels and this renderer draws a series of periods against a threshold, so a second
+      // question of the same shape needs no code here.
+      //
+      // Registered so it is ADDRESSABLE. Without its binding a period series is not refused,
+      // it is ABSORBED — probed 2026-08-21, a [{period,total}] payload satisfied CHART_WIDGET
+      // and drew as a bar chart with `presentation_source: "registered"`. Only
+      // `selection_basis` said otherwise.
+      return (
+        <PeriodSeries
+          rows={comp.rows}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -497,6 +517,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "GROUPED_REVIEW" ||
   archetype === "WORKFLOW_OBSERVATION" ||
   archetype === "INSTANCES_BY_PROPERTY" ||
+  archetype === "PERIOD_SERIES" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.

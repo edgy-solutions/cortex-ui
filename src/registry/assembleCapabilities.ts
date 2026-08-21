@@ -32,6 +32,7 @@ import { PROCESS_TOPOLOGY_CONTRACT } from "../components/registry/ProcessTopolog
 import { SUPPLY_TABLE_CONTRACT } from "../components/registry/SupplyTable.contract";
 import { WARNING_CARD_CONTRACT } from "../components/registry/WarningCard.contract";
 import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedReviewTable.contract";
+import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -154,6 +155,27 @@ const DERIVED_BINDINGS = [
     persona_fit: ["DATA_STEWARD"],
     domain_fit: ["DATA_ENGINEERING"],
     contract: INSTANCES_BY_PROPERTY_CONTRACT,
+  },
+  // THE FIRST LIVE-VIEW BINDING (ADR-0042). Engine P's `mesh:planCostCurve` declares
+  // `mesh:PeriodCostSeries` as its fixed output type; this row is what makes that type
+  // ADDRESSABLE on this frontend's menu.
+  //
+  // WITHOUT THIS ROW the payload is not refused — it is ABSORBED. Probed against the live
+  // selector 2026-08-21: `mesh:PeriodCostSeries` matched no capability, `select_presentation`
+  // widened the search (output_uri is a HINT, and a miss widens rather than ends), and a
+  // `[{period, total}]` series satisfied CHART_WIDGET's contract. Result:
+  // `presentation_source: "registered"`, archetype CHART_WIDGET, a plausible-looking bar
+  // chart, and the wrong renderer. `selection_basis` was the only field that said so.
+  //
+  // Note the compact form here folds to the same canonical token as the engine's full IRI
+  // (`http://invincible-agent/mesh#PeriodCostSeries`) via `capability_registry._canonical`,
+  // which is why the two sides can spell it differently and still meet.
+  {
+    subject_uri: "mesh:PeriodCostSeries",
+    object_uri: "mesh:PeriodSeries",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: PERIOD_SERIES_CONTRACT,
   },
 ] as const;
 

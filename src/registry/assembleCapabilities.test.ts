@@ -80,10 +80,17 @@ describe("assembleCapabilities", () => {
     // component: "WorkflowCanvas" for PROCESS_TOPOLOGY two months after the interpreter
     // switched to ProcessTopologyCard. Deriving the name from the component makes that
     // class of drift unrepresentable, and this pins it.
+    // NOTE (2026-08-21): this set is HAND-MAINTAINED, which makes it a second source for
+    // "what does the interpreter dispatch" — the same two-masters shape the assembler exists
+    // to remove, one layer up. It is correct today and it goes stale the same way the
+    // component list did. Deriving it from SemanticInterpreter's switch is the fix; not done
+    // here because it is a test-design change and this commit is landing a renderer. Adding
+    // a row to it should feel slightly wrong, and that feeling is the signal.
     const dispatched = new Set([
       "ChartWidget", "MarkdownRenderer", "ProcessTopologyCard",
       "SupplyTable", "WarningCard", "GroupedReviewTable",
       "ApprovalTaskCard", "WorkflowObservationView", "InstancesByPropertyView",
+      "PeriodSeries",
     ]);
     for (const c of assembleDerivedCapabilities()) {
       expect(dispatched, `${c.archetype} advertises ${c.component}`).toContain(c.component);
