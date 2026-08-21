@@ -28,6 +28,15 @@
 import type { FrontendCapability } from "./frontendCapabilities";
 import { CHART_WIDGET_CONTRACT } from "../components/mesh/ChartWidget.contract";
 import { MARKDOWN_RENDERER_CONTRACT } from "../components/registry/MarkdownRenderer.contract";
+import { PROCESS_TOPOLOGY_CONTRACT } from "../components/registry/ProcessTopologyCard.contract";
+import { SUPPLY_TABLE_CONTRACT } from "../components/registry/SupplyTable.contract";
+import { WARNING_CARD_CONTRACT } from "../components/registry/WarningCard.contract";
+import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedReviewTable.contract";
+import {
+  APPROVAL_TASK_CONTRACT,
+  WORKFLOW_OBSERVATION_CONTRACT,
+  INSTANCES_BY_PROPERTY_CONTRACT,
+} from "../components/registry/TaskAndObservation.contracts";
 
 /** A capability entry plus the provenance of how it was produced. */
 export type AssembledCapability = FrontendCapability & {
@@ -94,6 +103,57 @@ const DERIVED_BINDINGS = [
     persona_fit: ["MECHANIC"],
     domain_fit: ["MAINTENANCE", "MANUFACTURING"],
     contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  // The last four. Every capability row is now derived from a component export; the legacy
+  // branch below survives only so a future row can land before its contract does.
+  {
+    subject_uri: "mesh:LineageTopology",
+    object_uri: "mesh:ProcessTopology",
+    persona_fit: ["DATA_STEWARD", "DATA_ENGINEER"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: PROCESS_TOPOLOGY_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:FreshnessReport",
+    object_uri: "mesh:AssetStateMetric",
+    persona_fit: ["OPS_OPERATOR", "DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: SUPPLY_TABLE_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:TagFilterResult",
+    object_uri: "mesh:HazardDeclaration",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: WARNING_CARD_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:PartObsolescenceReviewBatch",
+    object_uri: "mesh:GroupedReview",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: GROUPED_REVIEW_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:HumanApprovalTask",
+    object_uri: "mesh:ApprovalTask",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: APPROVAL_TASK_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:WorkflowObservation",
+    object_uri: "mesh:WorkflowObservation",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: WORKFLOW_OBSERVATION_CONTRACT,
+  },
+  {
+    subject_uri: "mesh:InstancesByProperty",
+    object_uri: "mesh:InstancesByProperty",
+    persona_fit: ["DATA_STEWARD"],
+    domain_fit: ["DATA_ENGINEERING"],
+    contract: INSTANCES_BY_PROPERTY_CONTRACT,
   },
 ] as const;
 

@@ -66,4 +66,36 @@ describe("assembleCapabilities", () => {
     // would make the fallback refusable and leave slice 4 with nowhere to land.
     expect(MARKDOWN_RENDERER_CONTRACT.refusalReasons).toHaveLength(0);
   });
+
+  it("EVERY capability row is now derived — no legacy rows remain", () => {
+    // The migration's terminal state. If this goes red, either a new row landed without a
+    // contract (fine, expected, convert it) or a binding was lost (not fine).
+    const out = assembleCapabilities(CORTEX_UI_CAPABILITIES);
+    const legacy = out.filter((c) => c.contract_source === "legacy");
+    expect(legacy.map((c) => c.subject_uri)).toEqual([]);
+  });
+
+  it("no derived row advertises a component the interpreter does not dispatch", () => {
+    // The stale-advertisement check. The hand-authored table published
+    // component: "WorkflowCanvas" for PROCESS_TOPOLOGY two months after the interpreter
+    // switched to ProcessTopologyCard. Deriving the name from the component makes that
+    // class of drift unrepresentable, and this pins it.
+    const dispatched = new Set([
+      "ChartWidget", "MarkdownRenderer", "ProcessTopologyCard",
+      "SupplyTable", "WarningCard", "GroupedReviewTable",
+      "ApprovalTaskCard", "WorkflowObservationView", "InstancesByPropertyView",
+    ]);
+    for (const c of assembleDerivedCapabilities()) {
+      expect(dispatched, `${c.archetype} advertises ${c.component}`).toContain(c.component);
+    }
+  });
+
+  it("every derived row's expected_fields is a projection of its own contract", () => {
+    // The union check generalised: not one contract, but ALL of them. Transcription lies,
+    // and this is the shape that catches it.
+    for (const c of assembleDerivedCapabilities()) {
+      const contract = c.contract as { fields: Record<string, unknown> };
+      expect(c.expected_fields).toEqual(Object.keys(contract.fields));
+    }
+  });
 });
