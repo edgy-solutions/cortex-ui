@@ -90,7 +90,7 @@ describe("assembleCapabilities", () => {
       "ChartWidget", "MarkdownRenderer", "ProcessTopologyCard",
       "SupplyTable", "WarningCard", "GroupedReviewTable",
       "ApprovalTaskCard", "WorkflowObservationView", "InstancesByPropertyView",
-      "PeriodSeries",
+      "PeriodSeries", "ThresholdGrid",
     ]);
     for (const c of assembleDerivedCapabilities()) {
       expect(dispatched, `${c.archetype} advertises ${c.component}`).toContain(c.component);

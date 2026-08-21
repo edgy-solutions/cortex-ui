@@ -33,6 +33,7 @@ import { SUPPLY_TABLE_CONTRACT } from "../components/registry/SupplyTable.contra
 import { WARNING_CARD_CONTRACT } from "../components/registry/WarningCard.contract";
 import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedReviewTable.contract";
 import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.contract";
+import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -176,6 +177,16 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: PERIOD_SERIES_CONTRACT,
+  },
+  // Engine P's `mesh:planSiteLoad` declares `mesh:LoadThresholdGrid`. Same reasoning as the
+  // row above: without this binding the payload is not refused, it is absorbed by whatever
+  // else its shape satisfies.
+  {
+    subject_uri: "mesh:LoadThresholdGrid",
+    object_uri: "mesh:ThresholdGrid",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: THRESHOLD_GRID_CONTRACT,
   },
 ] as const;
 
