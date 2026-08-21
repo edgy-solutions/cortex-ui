@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { CHART_ROW_REQUIREMENTS } from './ChartWidget.contract';
 import {
   BarChart,
   Bar,
@@ -108,7 +109,7 @@ function normalizeChartData(
   rows: Array<Record<string, unknown>>,
   chartType?: "BAR" | "LINE" | "PIE" | "SCATTER"
 ): NormalizedShape {
-  if (!Array.isArray(rows) || rows.length === 0) {
+  if (!Array.isArray(rows) || rows.length < CHART_ROW_REQUIREMENTS.minRows) {
     return { kind: "empty", reason: "no rows" };
   }
   const first = rows[0];
@@ -133,7 +134,9 @@ function normalizeChartData(
     // miscategorizing.
   }
 
-  if (numericKeys.length === 0) {
+  // Requirement read FROM the contract, not restated here — the component cannot enforce
+  // a rule ChartWidget.contract.ts does not declare.
+  if (numericKeys.length < CHART_ROW_REQUIREMENTS.minNumericColumns) {
     return { kind: "empty", reason: "no numeric column" };
   }
 
@@ -142,7 +145,7 @@ function normalizeChartData(
   // y). A 3rd categorical column, if present, becomes the series
   // discriminator (colored clusters).
   if (chartType === "SCATTER") {
-    if (numericKeys.length < 2) {
+    if (numericKeys.length < CHART_ROW_REQUIREMENTS.minNumericColumnsForScatter) {
       return {
         kind: "empty",
         reason: "scatter requires 2 numeric columns (x and y)",
@@ -180,7 +183,7 @@ function normalizeChartData(
 
   // Categorical-axis charts (BAR / LINE / PIE) — need at least one
   // categorical column for the x-axis / slice labels.
-  if (categoricalKeys.length === 0) {
+  if (categoricalKeys.length < CHART_ROW_REQUIREMENTS.minCategoricalColumnsForCategoricalAxis) {
     return { kind: "empty", reason: "no categorical column" };
   }
 

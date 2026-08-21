@@ -13,6 +13,7 @@ import {
   CORTEX_UI_FRONTEND_ID,
   CORTEX_UI_CAPABILITIES,
 } from "@/registry/frontendCapabilities";
+import { assembleCapabilities } from "@/registry/assembleCapabilities";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
@@ -95,7 +96,10 @@ function useFrontendCapabilityRegistration() {
       // Read at runtime from Vite's build-time injected version string;
       // falls back to a placeholder if the env wasn't set.
       frontend_version: (import.meta as any).env?.VITE_APP_VERSION ?? "dev",
-      capabilities: CORTEX_UI_CAPABILITIES,
+      // ASSEMBLED from component contract exports, not hand-authored (ADR-0017
+      // amendment 2026-08-20). Rows whose component exports a contract are derived;
+      // the rest stay legacy until their export lands, one row at a time.
+      capabilities: assembleCapabilities(CORTEX_UI_CAPABILITIES),
     }).then(
       (resp) => {
         // eslint-disable-next-line no-console
