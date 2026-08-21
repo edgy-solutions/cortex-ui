@@ -105,7 +105,11 @@ type NormalizedShape =
     }
   | { kind: "empty"; reason: string };
 
-function normalizeChartData(
+// EXPORTED for test. The eight refusal reasons and the CHART_ROW_REQUIREMENTS thresholds
+// are the contract's behavioural half; slice 2c deletes 194 lines of backend compensation on
+// the claim that this function's acceptance conditions ARE the contract, so they need a test
+// that executes them rather than a type that describes them.
+export function normalizeChartData(
   rows: Array<Record<string, unknown>>,
   chartType?: "BAR" | "LINE" | "PIE" | "SCATTER"
 ): NormalizedShape {

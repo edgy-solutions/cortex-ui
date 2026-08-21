@@ -51,13 +51,21 @@ export const CHART_ROW_REQUIREMENTS = {
  * render, and here is which requirement it missed" from a generic failure — the same
  * discipline as the resolver's provider-empty vs not-specific split.
  */
+// NOT PUBLISHED: "no series values in scatter data". The component still contains that
+// branch, but it is UNREACHABLE by construction — `categoricalKeys` is derived from the
+// FIRST ROW having a string value, so `first[seriesKey]` is always a string, so the first
+// row always survives the `typeof s !== "string"` filter and `seriesGroups` is never empty.
+// It was transcribed here in slice 1 by reading the branch rather than executing it, and
+// the seed test caught it on its first run. Publishing an unemittable reason is worse than
+// omitting it: the backend would wait on a discriminant that never arrives.
+// The dead branch in ChartWidget.tsx is reported separately; removing it is a component
+// change, not a contract change.
 export const CHART_REFUSAL_REASONS = [
   "no rows",
   "rows aren't objects",
   "no numeric column",
   "no categorical column",
   "scatter requires 2 numeric columns (x and y)",
-  "no series values in scatter data",
   "JSON parse failure",
   "not an array",
 ] as const;
