@@ -34,6 +34,7 @@ import { WARNING_CARD_CONTRACT } from "../components/registry/WarningCard.contra
 import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedReviewTable.contract";
 import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.contract";
 import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.contract";
+import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -187,6 +188,14 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: THRESHOLD_GRID_CONTRACT,
+  },
+  // Engine P's `mesh:planMaturityGrid` declares `mesh:MaturityMatrix`.
+  {
+    subject_uri: "mesh:MaturityMatrix",
+    object_uri: "mesh:MatrixGrid",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: MATRIX_GRID_CONTRACT,
   },
 ] as const;
 

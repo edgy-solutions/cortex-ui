@@ -22,6 +22,7 @@ import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
 import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
 import { PeriodSeries } from "@/components/planning/PeriodSeries";
 import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
+import { MatrixGrid } from "@/components/planning/MatrixGrid";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -490,6 +491,22 @@ const renderComponent = (
         />
       );
 
+    case "MATRIX_GRID":
+      // A LIVE VIEW (ADR-0042). Rows x columns of a level against a PER-CELL target. Distinct
+      // from THRESHOLD_GRID on purpose: that one asks "is this over a line" (a breach, read as
+      // danger), this one asks "how far from the goal" (a distance, read as progress). One
+      // colour ramp cannot serve both readings of the same hue.
+      return (
+        <MatrixGrid
+          rows={comp.rows}
+          level_label={comp.level_label}
+          scope_label={comp.scope_label}
+          as_of={comp.as_of}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -533,6 +550,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "INSTANCES_BY_PROPERTY" ||
   archetype === "PERIOD_SERIES" ||
   archetype === "THRESHOLD_GRID" ||
+  archetype === "MATRIX_GRID" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.
