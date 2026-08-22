@@ -35,6 +35,7 @@ import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedRevi
 import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.contract";
 import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.contract";
 import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
+import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -196,6 +197,14 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: MATRIX_GRID_CONTRACT,
+  },
+  // Engine P's `mesh:planDiff` declares `mesh:EffectSet`. INV-3's card.
+  {
+    subject_uri: "mesh:EffectSet",
+    object_uri: "mesh:DeltaSet",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: DELTA_SET_CONTRACT,
   },
 ] as const;
 

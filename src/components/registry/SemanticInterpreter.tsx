@@ -23,6 +23,7 @@ import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
 import { PeriodSeries } from "@/components/planning/PeriodSeries";
 import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
+import { DeltaSet } from "@/components/planning/DeltaSet";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -507,6 +508,21 @@ const renderComponent = (
         />
       );
 
+    case "DELTA_SET":
+      // INV-3's card and a LIVE VIEW (ADR-0042). Renders a COMPARISON, never a state: the
+      // room sees the price of a change beside its benefit, which a before-and-after leaves
+      // the reader to work out. Magnitudes are displayed VERBATIM — one place formats them.
+      return (
+        <DeltaSet
+          effects={comp.effects}
+          scope_label={comp.scope_label}
+          baseline_label={comp.baseline_label}
+          headline={comp.headline}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
@@ -551,6 +567,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "PERIOD_SERIES" ||
   archetype === "THRESHOLD_GRID" ||
   archetype === "MATRIX_GRID" ||
+  archetype === "DELTA_SET" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.
