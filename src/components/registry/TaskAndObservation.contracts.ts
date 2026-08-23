@@ -13,6 +13,8 @@
  * describes; for these, what it describes is the interpreter's dispatch itself.
  */
 
+import { DISPOSITION_TASK_FIELD } from "./disposition.contract";
+
 /** Empty vocabularies: each view renders whatever object it is handed. */
 const NO_REFUSALS = [] as const;
 
@@ -22,8 +24,17 @@ export const APPROVAL_TASK_CONTRACT = {
   layout: "grid-col-1",
   fields: {
     /** The HumanTask. Approve/Reject are its verbs — see triage-card-archetype for why a
-     *  wrong verb is REFUSED rather than stored. */
-    task: { encoding: "object", required: true },
+     *  wrong verb is REFUSED rather than stored.
+     *
+     *  SHARED BY REFERENCE, not restated. This field used to be
+     *  `{encoding:"object", required:true}` — declaring nothing about its own payload, so
+     *  the HumanTask shape lived only in ApprovalTaskCard's destructuring. It is now the
+     *  imported `DISPOSITION_TASK_FIELD`, which DECISION_RECORD composes too; changing the
+     *  keys there changes both, and a test asserts they remain the same object.
+     *
+     *  A TIGHTENING, not a behaviour change: `expected_fields` is `Object.keys(fields)` and
+     *  is still `["task"]`, and `requiredKeys` is read by nothing at runtime. */
+    task: DISPOSITION_TASK_FIELD,
   },
   rowRequirements: {},
   refusalReasons: NO_REFUSALS,
