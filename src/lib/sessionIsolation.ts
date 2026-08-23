@@ -18,11 +18,31 @@ import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
+import { useInterviewStore } from "@/store/useInterviewStore";
 
 const OWNER_KEY = "cortex-session-owner";
 
 /** Persisted-store localStorage keys that hold user-scoped data. */
 const USER_SCOPED_STORAGE_KEYS = ["cortex-answers-panel-v1", "cortex-stage"];
+
+/**
+ * Stores this purge deliberately does NOT touch, each with the argument for why it is
+ * safe. Declaration only — nothing here changes what the purge does.
+ *
+ * The point is that "not purged" stops being a state a store can drift into unnoticed.
+ * sessionIsolation.test.ts asserts every `use*Store` on disk is either named in the purge
+ * body above or listed here, so a new store forces a decision instead of inheriting one.
+ * An entry here is a claim someone can review and disagree with; an omission was never
+ * visible enough to disagree with.
+ */
+export const PURGE_EXEMPT_STORES: Record<string, string> = {
+  usePersonaStore:
+    "Isolates itself by a different mechanism, verified: it persists to sessionStorage " +
+    "(not localStorage, so this key list has no remit over it), deliberately does NOT " +
+    "persist the fetched entitlement matrix, and carries its own `ownerSub` guard that " +
+    "resets the selection when entitlements arrive for a different sub. Purging it here " +
+    "would duplicate that guard in a second place, which is how the two drift apart.",
+};
 
 /**
  * Wipe every user-scoped store (in-memory) and its persisted cache. Called on an
@@ -37,6 +57,17 @@ export function purgeUserScopedState(): void {
     useStageStore.setState({ canvases: [] });
     useAnswerPanelStore.setState({ pins: [] });
     useEvidenceStore.getState().dismiss();
+    // Conversation content: A's questions and the agent's answers to them. Nothing
+    // renders `messages` today (the answer-first redesign left MessageBubble unmounted),
+    // but "safe because a component is dead" is folklore-as-protection — revive the
+    // thread and A's transcript paints for B. Registered rather than exempted.
+    //
+    // `reset()` rather than a hand-listed setState: it spreads the store's own
+    // initialState, so a field added later is purged without anyone remembering to come
+    // back here — the same drift this module's completeness guard exists to refuse. It
+    // deliberately preserves `groundingDisplayMode`, a device-scoped display toggle
+    // rather than user content.
+    useInterviewStore.getState().reset();
     for (const k of USER_SCOPED_STORAGE_KEYS) {
       try { window.localStorage.removeItem(k); } catch { /* ignore */ }
     }
