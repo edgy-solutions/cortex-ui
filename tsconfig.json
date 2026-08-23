@@ -4,7 +4,11 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    // "node" added 2026-08-22: `types` is an ALLOWLIST, so naming vite/client alone
+    // excluded @types/node even once installed. src/dependencyLicense.guard.test.ts reads
+    // package.json and the lockfile through node:fs, and `npm run build` runs tsc — so
+    // without this the licence guard type-errors the build it exists to protect.
+    "types": ["vite/client", "node"],
     "skipLibCheck": true,
 
     /* React JSX */
