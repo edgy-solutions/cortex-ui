@@ -36,6 +36,7 @@ import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.cont
 import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.contract";
 import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
 import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
+import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimeline.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -205,6 +206,17 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: DELTA_SET_CONTRACT,
+  },
+  // Engine P's `mesh:planSchedule` declares `mesh:IntervalSchedule` — Phase 1's anchor
+  // timeline. Same absorption reasoning as the rows above, with a sharper edge: a schedule row
+  // carries `planned_start`/`planned_end`, and an unregistered payload of that shape is a
+  // plausible candidate for anything that draws intervals. Registered, it is addressable.
+  {
+    subject_uri: "mesh:IntervalSchedule",
+    object_uri: "mesh:IntervalTimeline",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: INTERVAL_TIMELINE_CONTRACT,
   },
 ] as const;
 

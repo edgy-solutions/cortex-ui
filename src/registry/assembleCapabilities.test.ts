@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 /**
  * The registration payload is ASSEMBLED from component contracts, not authored.
  *
@@ -80,20 +82,39 @@ describe("assembleCapabilities", () => {
     // component: "WorkflowCanvas" for PROCESS_TOPOLOGY two months after the interpreter
     // switched to ProcessTopologyCard. Deriving the name from the component makes that
     // class of drift unrepresentable, and this pins it.
-    // NOTE (2026-08-21): this set is HAND-MAINTAINED, which makes it a second source for
-    // "what does the interpreter dispatch" — the same two-masters shape the assembler exists
-    // to remove, one layer up. It is correct today and it goes stale the same way the
-    // component list did. Deriving it from SemanticInterpreter's switch is the fix; not done
-    // here because it is a test-design change and this commit is landing a renderer. Adding
-    // a row to it should feel slightly wrong, and that feeling is the signal.
-    const dispatched = new Set([
-      "ChartWidget", "MarkdownRenderer", "ProcessTopologyCard",
-      "SupplyTable", "WarningCard", "GroupedReviewTable",
-      "ApprovalTaskCard", "WorkflowObservationView", "InstancesByPropertyView",
-      "PeriodSeries", "ThresholdGrid", "MatrixGrid", "DeltaSet",
-    ]);
+    // DERIVED FROM THE SWITCH, 2026-08-22. The predecessor comment said it plainly: the
+    // hand-maintained set was "a second source for what the interpreter dispatches — the same
+    // two-masters shape the assembler exists to remove, one layer up", and that "adding a row
+    // to it should feel slightly wrong, and that feeling is the signal."
+    //
+    // Landing INTERVAL_TIMELINE was the next row. Taking the invitation instead of adding it.
+    //
+    // And the derived form is STRICTLY STRONGER: the old set asserted MEMBERSHIP, so a
+    // DERIVED_BINDINGS row naming DeltaSet while the interpreter dispatched PeriodSeries for
+    // that archetype would have passed. This asserts the ARCHETYPE -> COMPONENT MAPPING, which
+    // is the thing that has to agree.
+    const src = readFileSync(
+      path.join(__dirname, "../components/registry/SemanticInterpreter.tsx"),
+      "utf8",
+    );
+    const dispatchedBy = new Map<string, string>();
+    // `case "ARCHETYPE":` … first JSX tag before the next case. Comments in between are
+    // skipped because they contain no `<Capitalized`.
+    const caseRe = /case\s+"([A-Z0-9_]+)"\s*:([\s\S]*?)(?=\n\s*case\s+"|\n\s*default\s*:)/g;
+    for (const m of src.matchAll(caseRe)) {
+      const tag = m[2].match(/<([A-Z]\w+)/);
+      if (tag) dispatchedBy.set(m[1], tag[1]);
+    }
+
+    // Positive control: a regex that stopped matching would make every assertion below pass
+    // over nothing — the guard-gone-quiet shape this file is otherwise full of warnings about.
+    expect(dispatchedBy.size).toBeGreaterThanOrEqual(10);
+
     for (const c of assembleDerivedCapabilities()) {
-      expect(dispatched, `${c.archetype} advertises ${c.component}`).toContain(c.component);
+      expect(
+        dispatchedBy.get(c.archetype),
+        `${c.archetype} advertises ${c.component}; interpreter dispatches ${dispatchedBy.get(c.archetype) ?? "NOTHING"}`,
+      ).toBe(c.component);
     }
   });
 

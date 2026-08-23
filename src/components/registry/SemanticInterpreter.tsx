@@ -24,6 +24,7 @@ import { PeriodSeries } from "@/components/planning/PeriodSeries";
 import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
 import { DeltaSet } from "@/components/planning/DeltaSet";
+import { IntervalTimeline } from "@/components/planning/IntervalTimeline";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -479,6 +480,23 @@ const renderComponent = (
         />
       );
 
+    case "INTERVAL_TIMELINE":
+      // A LIVE VIEW (ADR-0042). Nested intervals whose TOP LEVEL MEANING is stated by the
+      // payload (`group_kind`), never inferred here — guessing from whether an id looks like
+      // one thing or another is how a capability pivot silently renders as an initiative one.
+      //
+      // The drop is REFUSED by the component and disposed server-side; no op is applied
+      // locally. See IntervalTimeline.tsx for why the library's `update-task` is the commit
+      // and `move-task` (the docs' example) is not.
+      return (
+        <IntervalTimeline
+          rows={comp.rows}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "THRESHOLD_GRID":
       // A LIVE VIEW (ADR-0042). Subjects x periods against a threshold each subject OWNS —
       // structural, so the payload's first consumer (site change-load) is invisible here.
@@ -568,6 +586,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "THRESHOLD_GRID" ||
   archetype === "MATRIX_GRID" ||
   archetype === "DELTA_SET" ||
+  archetype === "INTERVAL_TIMELINE" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.
