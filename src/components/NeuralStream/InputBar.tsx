@@ -1,20 +1,25 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Send, Wifi, WifiOff } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
+import { useComposerDraft } from "@/hooks/useComposerDraft";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
 
 export function InputBar() {
-  const [value, setValue] = useState("");
+  // Draft-backed instead of plain useState: a failed silent renew unmounts this whole
+  // surface and bounces to Keycloak, and the typed prompt used to die with it.
+  const { value, setValue, clearDraft } = useComposerDraft();
   const { sendMessage, isConnected, isProcessing } = useAgent();
   const phase = useInterviewStore((s) => s.phase);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    // Early return leaves the draft on disk — a submit that never dispatched has not
+    // consumed the text, and clearing here would delete work the user still owes an attempt.
     if (!value.trim() || phase !== "active" || isProcessing) return;
     sendMessage(value.trim());
-    setValue("");
+    clearDraft();
   };
 
   // Disable while a stream is in flight to prevent spam-submits. The deeper
