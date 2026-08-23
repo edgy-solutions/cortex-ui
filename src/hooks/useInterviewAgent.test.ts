@@ -620,6 +620,18 @@ describe("useInterviewAgent — chat layer vs artifact layer", () => {
   it("final_payload OVERWRITES the chat text with a receipt — the answer body is the canvas's", async () => {
     // The message becomes a pointer, not a copy of rendered_output. The number is the
     // artifact's 1-based position in the collection at receipt time.
+    //
+    // This pins a CONTRACT, not a defect — it reads like data loss and is not. The prose
+    // from `chat_message` is destroyed here, but nothing displays it: the only renderer of
+    // `message.content` is MessageBubble, which the answer-first redesign left unmounted
+    // (see NeuralStream.tsx). The surface reads the ARTIFACT via Electric — `answerSummary`
+    // takes the backend-composed headline, the body renders from `rendered_output`. The
+    // chat message degrading to a receipt is the design, so do not "fix" this overwrite.
+    //
+    // Latent-with-trigger, and the reason this comment exists: it is safe only because a
+    // component is dead. Revive the conversation thread and the overwrite becomes real —
+    // the answer prose would vanish at the last event of every turn. If that thread ever
+    // comes back, this test is the place the question surfaces.
     const r = mount();
     await startTurn(r);
     emit({ type: "chat_message", data: { role: "agent", content: "owners are a, b, c" } });
