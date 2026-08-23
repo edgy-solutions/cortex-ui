@@ -36,3 +36,6 @@ backend/.env
 *.sln
 *.sw?
 .env.local
+
+# Coverage output (vitest --coverage)
+coverage/
