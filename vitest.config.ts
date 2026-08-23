@@ -23,5 +23,16 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     globals: true,
+    // Only active under `--coverage`, so the normal run stays fast. `all: true` is the
+    // load-bearing setting: without it the report covers only files a test already
+    // imports, which flatters the number by hiding every untouched module — the exact
+    // shape of "114 green" concealing four behaviourally-tested modules out of 130.
+    coverage: {
+      provider: "v8",
+      all: true,
+      include: ["src/**/*.ts", "src/**/*.tsx"],
+      exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__spike__/**", "src/main.tsx"],
+      reporter: ["text-summary", "json-summary"],
+    },
   },
 });
