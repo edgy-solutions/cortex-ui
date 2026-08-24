@@ -3,7 +3,22 @@
 Standing checklist for the cortex-ui lane. Items are recorded with the evidence that
 produced them, so a decision can be re-checked rather than re-argued.
 
-Nearest gate: the dress rehearsal.
+Nearest gate: the dress rehearsal. Venue is **work** — decided 2026-08-22.
+
+---
+
+## The cluster session
+
+Six items need the work cluster and close in one sitting. Listed together because they share a
+prerequisite, not because they are one task — four are outside this lane and are recorded here
+only so the session is planned against a complete list.
+
+1. Forced rollout + **in-pod** verify (this lane — see below)
+2. Denial observation (this lane — see below)
+3. Tasks-badge warm-up click (this lane — see below)
+4. `LLM_BASE_URL` / pool-size read
+5. alice's `PORTFOLIO_PLANNING` entitlements
+6. H200 latency measurement
 
 ---
 
@@ -20,7 +35,8 @@ Nearest gate: the dress rehearsal.
       this could have been is not there. Residual risk is a cold-start click landing before
       the first reconcile. Recovery if the canvas ever blanks: `clearCanvas`.
 
-- [ ] **Denial observation** (owner: Chris — needs the work IdP and a denial-triggering asset).
+- [ ] **Denial observation** (needs the work IdP and a denial-triggering asset — runs in the
+      cluster session above).
       Trigger an `access_denied`, then watch how long the composer stays disabled.
       Sub-second re-enable → runbook line, done. Hangs to timeout → it is the visible
       beat-risk and warrants the chrome-side fix.
@@ -32,15 +48,24 @@ Nearest gate: the dress rehearsal.
       Fix shape if needed, proposed not applied: `InputBar` keys on the same signal the
       surface keys on. Keeps the change in chrome, out of the turn's state machine.
 
-- [ ] **Venue decision — work vs sandbox.** Decides whether the draft-persistence image must
-      *deploy* before the demo or merely exist.
+- [x] **Venue decision — DECIDED: work** (2026-08-22). The draft-persistence protection must
+      therefore actually *deploy*, not merely exist in a registry. Everything below is live.
 
-- [ ] **Deploy verification** (only if the venue is work). CI builds `:latest` on push to
-      master, but `helm/cortex-ui/values.yaml:10` sets `imagePullPolicy: IfNotPresent` and the
-      per-frontend `pullPolicy: Always` override on line 22 is commented out. A node holding a
-      cached `:latest` will not re-pull. Force the rollout or flip that override, then confirm
-      the pod is on the new digest. Otherwise the image exists and the pod does not have it,
-      which looks exactly like "the fix did not work".
+- [ ] **Forced rollout + in-pod verify.** CI builds `:latest` on push to master, but
+      `helm/cortex-ui/values.yaml:10` sets `imagePullPolicy: IfNotPresent` and the
+      per-frontend `pullPolicy: Always` override on line 22 is commented out. A node already
+      holding a cached `:latest` will NOT re-pull, so the registry advances while the pod
+      keeps serving the old bundle. Procedure:
+      1. Confirm the registry carries the post-`ec06052` build (CI green for that SHA).
+      2. `kubectl rollout restart` the frontend deployment — or flip the commented-out
+         `pullPolicy: Always` if this is going to keep recurring.
+      3. **Verify in the RUNNING CONTAINER, not the deployment spec.** The spec says what was
+         asked for; only the running container says what is being served. Read the pod's
+         resolved image digest, not `values.yaml` and not the Deployment's image string.
+      Without step 3 the failure mode is indistinguishable from a broken fix: "draft
+      persistence is deployed" and "draft persistence sits in a registry no pod has pulled"
+      look identical from outside. This project has hit that stale-image shape enough times
+      to classify it.
 
 ---
 
