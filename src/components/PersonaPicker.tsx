@@ -64,6 +64,7 @@ export function PersonaPicker() {
   const {
     entitlements,
     entitlementsLoading,
+    entitlementsError,
     selectedPersona,
     selectedDomains,
     setSelectedPersona,
@@ -114,13 +115,40 @@ export function PersonaPicker() {
   const topazAuthoritative = source === "topaz" || source === "cache";
   const entitled = hasEntitlements();
 
-  // Legacy path / loading / error → bare static bolt (composer looks
-  // untouched; nothing to configure).
+  // Legacy path / loading / error → a bolt with nothing behind it.
+  //
+  // These are THREE different situations and this branch used to render them as one silent,
+  // unlabelled, `aria-hidden` glyph: no tooltip, no cursor change, no copy. A user — the
+  // person who built it, in fact — read the unresponsive bolt as a frozen UI and reported the
+  // app as hung. It was not hung; there was simply nothing to click, and the component said
+  // so in no way at all.
+  //
+  // Worse, `entitlementsError` was being captured in the store and never read here, so a
+  // FAILED fetch was presented exactly like a legitimate "you have nothing to configure".
+  // That is a failure wearing an empty state's clothes, which is the one thing this codebase
+  // consistently refuses to ship. Silence is not honesty when the reader cannot tell absence
+  // from breakage.
+  //
+  // The bolt still does nothing — that part was correct — but it now says WHY, and an error
+  // is visually distinct from an empty entitlement set rather than identical to it.
   if (!entitled && !(topazAuthoritative && !entitlementsLoading)) {
+    const reason = entitlementsError
+      ? `Persona selection unavailable — could not load entitlements: ${entitlementsError}`
+      : entitlementsLoading
+        ? "Loading entitlements…"
+        : "Persona selection unavailable — no entitlements loaded for this session";
     return (
       <span className="pp-wrap">
         <PickerStyles />
-        <span className="pp-trigger pp-static" aria-hidden="true">
+        <span
+          className="pp-trigger pp-static"
+          // Not aria-hidden any more: it carries a reason now, and a screen reader user has
+          // the same question a sighted one does.
+          role="img"
+          aria-label={reason}
+          title={reason}
+          style={entitlementsError ? { filter: "hue-rotate(310deg)" } : undefined}
+        >
           <BoltSvg />
         </span>
       </span>

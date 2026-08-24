@@ -117,7 +117,45 @@ only so the session is planned against a complete list.
 
 ---
 
-## OPEN DIAGNOSTIC — the UI-wedges-entirely report
+## RESOLVED — the "UI wedges entirely" report was a SILENT STATE, not a hang
+
+**2026-08-24.** A second "everything is stuck" report resolved to something more useful than a
+wedge. The session was fully responsive. The persona bolt genuinely would not respond — that
+part was real and IS the bug — but not because anything was frozen: with no entitlements
+loaded, `PersonaPicker` renders a deliberately inert branch (`pp-static`, `aria-hidden`, **no
+click handler at all**), confirmed from the live DOM. Nothing to click, and — until this was
+fixed — nothing said so. The reader could not distinguish "inert by design" from "frozen", so
+a working app was reported as hung.
+
+That matters far beyond the one session, because **"an ungated sibling component is also
+unresponsive" was the load-bearing evidence for hypothesis B below** — the reason a whole-page
+render loop looked like the only explanation. That premise is gone: the sibling was never
+unresponsive, it was non-interactive. Hypothesis B loses its main support, and hypothesis A
+(a latched turn state, which only ever explained the composer) is back in contention for the
+ORIGINAL report — whose "can't change permissions" half was very plausibly this same misread.
+
+Also settled from that DOM: the composer input carried **no `disabled` attribute**, so
+`phase === "active"` and `isProcessing === false`. The send button's `disabled` was correct —
+`!value.trim()` on an empty box. And the console held only five Recharts container warnings:
+no `Maximum update depth exceeded`, no `getSnapshot should be cached`. A page in a render
+storm is noisy; that console was quiet. **Do not treat those Recharts warnings as evidence of
+a loop** — they are charts measuring an unlaid-out container, and a symptom at most.
+
+What remains genuinely open is narrow: whether the ORIGINAL report's "cannot ask questions"
+half was a real latched turn (hypothesis A) or also a misread. That needs a reproduction where
+someone types a character and reports whether it appears — not an impression of stuckness.
+
+### The real finding underneath
+
+**The inert bolt explains nothing about itself.** It has no tooltip, no cursor change, no
+copy — so its honest-degradation state is indistinguishable from a frozen UI, and it misled
+the person who built it. A one-line `title` ("No entitlements loaded — persona selection
+unavailable") would have prevented this entire diagnostic. Silence is not honesty when the
+user cannot tell absence from breakage.
+
+---
+
+## SUPERSEDED — the two hypotheses (kept for the reasoning, not the conclusion)
 
 Witnessed live: after a turn, the composer would not accept input **and** the persona picker
 would not respond. Two hypotheses, and they need different fixes, so nothing ships until one
