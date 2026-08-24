@@ -93,6 +93,18 @@ export const CHART_WIDGET_CONTRACT = {
     chart_type: { type: "enum", values: CHART_TYPES, required: true },
     subject_concept: { type: "string", required: false },
     sql_query: { type: "string", required: false },
+    /**
+     * What the plotted numbers MEAN, as an ISO-4217 code ("USD") or a bare unit token
+     * ("hours", "count"). Optional, and its absence is meaningful rather than a gap: the
+     * axis renders magnitude only ("1.5M") unless the answer says otherwise.
+     *
+     * This field exists because the alternative was worse. A cost curve's axis reading
+     * "1.5M" is honest but flat; making the widget print "$1.5M" because cost curves are
+     * usually money would be the axis asserting a unit the payload never sent — the same
+     * defect as the hardcoded engine name this component used to show in its footer. The
+     * producer knows the unit; the renderer must not guess it. So the producer declares it.
+     */
+    value_unit: { type: "string", required: false },
   },
   rowRequirements: CHART_ROW_REQUIREMENTS,
   refusalReasons: CHART_REFUSAL_REASONS,

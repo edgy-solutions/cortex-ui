@@ -35,8 +35,20 @@ describe("every value axis is actually WIRED to the formatter", () => {
   });
 
   it("no value axis renders raw numbers — that is the clipping, re-introduced", () => {
-    const unwired = axes.filter((a) => !a.includes("tickFormatter={formatAxisValue}"));
+    // Asserts a tickFormatter is PRESENT rather than naming one particular callback, so
+    // threading the unit through a closure did not require weakening the guard.
+    const unwired = axes.filter((a) => !/tickFormatter=\{/.test(a));
     expect(unwired).toEqual([]);
+  });
+
+  it("every axis formats through the SAME closure — one chart must not mix units", () => {
+    // Two axes with different formatters would render one in dollars and one bare on the
+    // same card, which reads as two different quantities.
+    const formatters = new Set(
+      axes.map((a) => a.match(/tickFormatter=\{([A-Za-z0-9_]+)\}/)?.[1] ?? "inline"),
+    );
+    expect(formatters.size).toBe(1);
+    expect(formatters.has("inline")).toBe(false);
   });
 });
 
@@ -50,16 +62,35 @@ describe("formatAxisValue", () => {
     }
   });
 
-  it("asserts NO unit — the contract declares none, so the axis may not invent one", () => {
-    // Guarded against the well-meaning "it's a cost curve, add a $" change. If the contract
-    // ever gains a unit field this test should be REPLACED, not deleted quietly.
-    const fields = Object.keys(CHART_WIDGET_CONTRACT.fields);
-    expect(fields).not.toContain("unit");
-    expect(fields).not.toContain("currency");
-    expect(fields).not.toContain("value_kind");
+  it("invents NO unit when the answer declares none — magnitude only", () => {
+    // The original form of this test asserted the contract had no unit field at all, and
+    // said it should be REPLACED rather than deleted when one arrived. One arrived. What
+    // survives is the property that mattered: absence of a declared unit means the axis
+    // says less, never that it guesses. "It's a cost curve, add a $" stays wrong.
     for (const v of [1_500_000, 500, 0]) {
-      expect(formatAxisValue(v)).not.toMatch(/[$£€]/);
+      expect(formatAxisValue(v)).not.toMatch(/[$£€¥]/);
     }
+  });
+
+  it("READS the declared unit — the producer knows it is money, the renderer does not", () => {
+    expect(CHART_WIDGET_CONTRACT.fields.value_unit.required).toBe(false);
+    expect(formatAxisValue(1_500_000, "USD")).toBe("$1.5M");
+    expect(formatAxisValue(500, "GBP")).toBe("£500");
+    // Case is the producer's business, not the axis's.
+    expect(formatAxisValue(2_000_000, "usd")).toBe("$2M");
+  });
+
+  it("puts the symbol INSIDE the sign — on a cost curve the sign carries the meaning", () => {
+    // "$-1.5M" makes a reader hunt for the minus. "-$1.5M" does not.
+    expect(formatAxisValue(-1_500_000, "USD")).toBe("-$1.5M");
+  });
+
+  it("an UNRECOGNISED unit means say less, not paste a token onto every tick", () => {
+    // A bare token ("hours", "widgets") has no agreed axis rendering, and inventing one
+    // would push arbitrary text into a gutter already narrow enough to have clipped
+    // digits once. Unknown unit degrades to the honest magnitude.
+    expect(formatAxisValue(1_500_000, "hours")).toBe("1.5M");
+    expect(formatAxisValue(1_500_000, "")).toBe("1.5M");
   });
 
   it("does not round away precision the reader can still use below 1000", () => {

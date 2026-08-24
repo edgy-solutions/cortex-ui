@@ -25,6 +25,8 @@ interface ChartWidgetProps {
   type: 'BAR' | 'LINE' | 'PIE' | 'SCATTER';
   subject: string;
   sql: string;
+  /** ISO-4217 code or bare unit token from the payload. Absent → magnitude only. */
+  valueUnit?: string;
   onPublish: (sql: string, title: string) => void;
 }
 
@@ -274,29 +276,41 @@ const AXIS_TICK = { fill: "#94a3b8" };
  * 0 / 500K / 1M / 1.5M. It looks like a formatter bug and is really a truncation, which is
  * worse than unreadable: the digits that survive are a plausible wrong number.
  *
- * Deliberately UNIT-LESS. `CHART_WIDGET_CONTRACT` declares no unit, currency or value-kind
- * field, so there is nothing in the payload that says these are dollars. Rendering "$1.5M"
- * would be the axis asserting a unit the answer never claimed — the same defect as the
- * hardcoded engine name this commit removes from the footer, wearing a different costume.
- * When the contract grows a unit field, this reads it; until then it stays honest about
- * magnitude only.
+ * The unit is READ, never assumed. `value_unit` is an optional contract field carrying an
+ * ISO-4217 code or a bare unit token; when the payload declares one, the axis says so, and
+ * when it does not, the axis reports magnitude only. Printing "$" because a chart looks like
+ * money would be the axis asserting a unit the answer never sent — the same defect as the
+ * hardcoded engine name this component used to show in its footer. An unrecognised token is
+ * rendered as magnitude rather than pasted onto every tick: an unknown unit is a reason to
+ * say less, not to invent a layout.
  */
-export function formatAxisValue(v: number | string): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+};
+
+export function formatAxisValue(v: number | string, unit?: string): string {
   // An empty/blank string coerces to 0, which would print a ZERO the payload never sent —
   // a fabricated value is worse than a blank tick. Echo it instead.
   if (typeof v === "string" && v.trim() === "") return v;
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return String(v);
   const abs = Math.abs(n);
+  const symbol = unit ? (CURRENCY_SYMBOLS[unit.toUpperCase()] ?? "") : "";
+  // The symbol goes INSIDE the sign: -$1.5M, not $-1.5M. On a cost curve the sign carries
+  // the meaning, so it has to stay where a reader looks for it.
+  const withUnit = (body: string) => (n < 0 ? `-${symbol}${body.slice(1)}` : `${symbol}${body}`);
   // Trim a trailing ".0" so 1.0M reads 1M, but keep 1.5M.
   const compact = (scaled: number, suffix: string) =>
     `${scaled.toFixed(1).replace(/\.0$/, "")}${suffix}`;
-  if (abs >= 1e9) return compact(n / 1e9, "B");
-  if (abs >= 1e6) return compact(n / 1e6, "M");
-  if (abs >= 1e3) return compact(n / 1e3, "K");
+  if (abs >= 1e9) return withUnit(compact(n / 1e9, "B"));
+  if (abs >= 1e6) return withUnit(compact(n / 1e6, "M"));
+  if (abs >= 1e3) return withUnit(compact(n / 1e3, "K"));
   // Below 1000 the raw value already fits, and rounding it would destroy precision the
   // reader can still use.
-  return String(n);
+  return withUnit(String(n));
 }
 const TOOLTIP_STYLE = {
   backgroundColor: "rgba(15, 23, 42, 0.9)",
@@ -308,7 +322,10 @@ const TOOLTIP_STYLE = {
   color: "#f1f5f9",
 };
 
-export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidgetProps) => {
+export const ChartWidget = ({ data, type, subject, sql, valueUnit, onPublish }: ChartWidgetProps) => {
+  // One closure so every axis formats identically; the wiring guard asserts no value axis
+  // renders raw numbers, which is the half unit tests on the formatter cannot prove.
+  const tickFmt = (v: number | string) => formatAxisValue(v, valueUnit);
   // Parse + normalize once. Recharts is sensitive to re-creating
   // data arrays on every render (it triggers expensive re-layout);
   // useMemo guards against that.
@@ -438,7 +455,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 name={shape.yKey}
                 {...AXIS_STYLE}
                 tick={AXIS_TICK}
-                tickFormatter={formatAxisValue}
+                tickFormatter={tickFmt}
               />
               <ZAxis range={[60, 60]} />
               <Tooltip
@@ -482,7 +499,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 {(shape.kind === "single" || shape.kind === "multi") && (
                   <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
                 )}
-                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={formatAxisValue} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={tickFmt} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={{ color: '#22d3ee' }}
@@ -524,7 +541,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 {(shape.kind === "single" || shape.kind === "multi") && (
                   <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
                 )}
-                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={formatAxisValue} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={tickFmt} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   cursor={{ fill: 'rgba(6, 182, 212, 0.05)' }}

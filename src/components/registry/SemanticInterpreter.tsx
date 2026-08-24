@@ -418,6 +418,9 @@ const renderComponent = (
           type={comp.chart_type}
           subject={comp.subject_concept}
           sql={comp.sql_query}
+          // Declared by the producer, never inferred here — the axis says "$" only when the
+          // answer says it is money. See ChartWidget.contract.ts `value_unit`.
+          valueUnit={comp.value_unit}
           onPublish={onPublish}
         />
       );
