@@ -83,6 +83,17 @@ only so the session is planned against a complete list.
       funding-flavoured payload), not just the cost curve, so they all render alike.
       **No frontend change is needed when it lands.**
 
+- [ ] **Post-roll: re-ask a DA question and read the card's SQL footer.** One question, and it
+      discriminates stale-image from real defect — which is the only way anything gets
+      classified now. The footer showing a bare "SQL:" with nothing after it was fixed in
+      `e5cb7fb` (it now renders only when a query exists), so a card still showing the empty
+      label is proof the pod has not pulled. Once it HAS pulled, the check becomes a real one:
+      does the footer show the ANALYTICAL query (the GROUP BY the agent composed) or the
+      tool-level fetch (`SELECT * FROM dataset LIMIT 10`)? The evidence panel already carries
+      the fetch, so if the footer shows it too, the composed query never reached the
+      `sql_query` contract field and that is a payload-assembly item to file — honest
+      provenance, but the shallowest link in the chain.
+
 ---
 
 ## Runbook (during the demo)
@@ -176,7 +187,19 @@ If A, the fix is the PAIR (chrome signal + guard), never the chrome alone.
    `question_text` never compared, empty patches churning rows, unbounded provenance orphans,
    no dedupe by id, the write-only `isRevealing` latch with zero readers, and
    `createPendingArtifact` silently resetting `activeTab` to `"ALL"`.
-6. **The canvas's render economy** — a coherent cluster rather than scattered items, all
+6. **THE TWO TASK-ADAPTER DEFECTS LAND TOGETHER OR NOT AT ALL.** Read this before touching
+   either. `taskArtifactContentEqual` never compares `question_text`, so an edited task body
+   is judged unchanged. Separately, `rendered_output` is compared BY REFERENCE while
+   `taskToArtifact` mints a fresh object every poll, so the reuse optimisation is defeated and
+   cards churn. They MASK EACH OTHER: the churning object drags the edited text along, so the
+   comparison defect is invisible exactly where the churn defect operates. **Fixing the churn
+   alone converts a performance defect into a correctness defect** — edits would start
+   vanishing from cards that currently show them. The churn fix is the tempting one, because
+   it is the visible performance win in the cluster below, and the regression would ship
+   silently behind a faster canvas. Both tests are named for their findings, so fixing either
+   one turns exactly one test red; that is the gate, do not route around it.
+
+7. **The canvas's render economy** — a coherent cluster rather than scattered items, all
    characterized before anyone touches the code: the re-render storm (item 2 above), the
    defeated reuse optimisation in `taskArtifactContentEqual`, `updateArtifact` churning on
    empty patches, and `useCurrentArtifact` re-rendering on ANY patch to the foregrounded row
@@ -188,7 +211,7 @@ If A, the fix is the PAIR (chrome signal + guard), never the chrome alone.
    by recency of first appearance. The claim holds for TIME alone — so either the code or the
    comment is wrong, and both surfaces currently ship believing the comment.
 
-7. **The phantom card, and the non-null assertion behind it.** `connectedComponents` seeds
+8. **The phantom card, and the non-null assertion behind it.** `connectedComponents` seeds
    adjacency from the stage's ids but then adds whatever an edge NAMES, so a stale edge
    pointing at a removed or filtered row emits a `positions` entry for an artifact that does
    not exist — promoting a real singleton into a labelled 2-ring orbiting an empty slot. It
@@ -196,7 +219,7 @@ If A, the fix is the PAIR (chrome signal + guard), never the chrome alone.
    `byId.get(comp[0])!` safe today. That assertion is one traversal-order change away from a
    TypeError, so fix the seeding rather than the symptom.
 
-8. **Freeze the three `EMPTY_*` selector constants.** They are mutable and process-global: a
+9. **Freeze the three `EMPTY_*` selector constants.** They are mutable and process-global: a
    consumer's `.push()` or in-place `.sort()` poisons every later mount for the process
    lifetime. Cheap and well-pinned — and the test already says that freezing them will turn it
    red, that this is an improvement, and that the reader should update the test rather than
@@ -204,9 +227,9 @@ If A, the fix is the PAIR (chrome signal + guard), never the chrome alone.
    instances, so do NOT "tidy" them into one shared empty; that consolidation is pinned
    against.
 
-9. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
+10. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
    denial keep driving the HUD behind an access-denied surface.
-10. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
+11. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
    `edgy-solutions/cortex-ui`. Harmless while the redirect stands; every clone and CI
    reference breaks at once when it is retired. Fold into the next repo-touching chore.
 

@@ -164,23 +164,29 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     expect(taskKindDisplay("grouped_review").archetype).toBe("GROUPED_REVIEW");
   });
 
-  it("an INHERITED Object.prototype key is reported REGISTERED and yields a row of undefineds", () => {
-    // NEW FINDING, pinned as found and not fixed. `kind in REGISTRY` and `REGISTRY[kind]` both
-    // walk the prototype chain of a plain object literal, so `constructor` / `toString` /
-    // `valueOf` are "declared kinds" whose display row is a JS builtin. The `?? DEFAULT` never
-    // fires (the builtin is not nullish), so the badge is `undefined` — rendered as a blank
-    // chip, and `taskKindTitle` feeds `undefined` into the HUD. `kind` is a projection field,
-    // not a constant, so this is reachable from data. A `Object.create(null)` table or a
-    // `Object.hasOwn` guard would close it; neither is done here.
-    for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty"]) {
-      expect(isRegisteredKind(key), key).toBe(true);
-      expect(taskKindDisplay(key), key).not.toEqual({
+  it("an INHERITED Object.prototype key is NOT a task kind — it degrades to the default", () => {
+    // This test previously pinned the defect: `kind in REGISTRY` and `REGISTRY[kind]` walked
+    // the prototype chain of a plain object literal, so "constructor" / "toString" reported
+    // as declared kinds whose display row was a JS builtin. `?? DEFAULT` could not rescue it
+    // — a builtin is not nullish — so the badge came back `undefined`, rendering a blank chip
+    // and feeding `undefined` into the HUD. A lookup FAILING while presenting as success.
+    //
+    // Now closed with `Object.hasOwn`, and the test flipped to guard the fix rather than
+    // record the defect. It is kept (not deleted) because the defect is re-introduced by any
+    // return to `in` or bare index access, which are the natural things to write here.
+    //
+    // Reachability is the reason this was worth a line of code: `kind` is a PROJECTION FIELD.
+    // It arrives from data, so nothing upstream in this repo constrains it to the declared set.
+    for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
+      expect(isRegisteredKind(key), key).toBe(false);
+      expect(taskKindDisplay(key), key).toEqual({
         badge: DEFAULT_BADGE,
         title: DEFAULT_TITLE,
         archetype: "APPROVAL_TASK",
       });
-      expect(taskKindLabel(key), key).toBeUndefined();
-      expect(taskKindTitle(key), key).toBeUndefined();
+      // The visible symptom the fix removes: a blank chip and `undefined` in the HUD.
+      expect(taskKindLabel(key), key).toBe(DEFAULT_BADGE);
+      expect(taskKindTitle(key), key).toBe(DEFAULT_TITLE);
     }
   });
 });

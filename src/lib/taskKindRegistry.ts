@@ -59,11 +59,25 @@ const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task", archetype: "APP
 
 /** Is this kind explicitly declared, or is it riding the default? Consumers use this to
  *  degrade honestly rather than assert affordances they cannot justify. */
-export const isRegisteredKind = (kind: string): boolean => kind in REGISTRY;
+/**
+ * `Object.hasOwn`, not `in`, and not a bare `REGISTRY[kind]`.
+ *
+ * `kind` is a PROJECTION FIELD — it arrives from data, not from a constant in this repo —
+ * so a row carrying "constructor" or "toString" reaches these lookups. Both `in` and index
+ * access walk `Object.prototype`, which made those strings report as registered kinds; the
+ * `?? DEFAULT` below could not rescue it either, because a builtin is not nullish. The
+ * result was a blank badge and a literal `undefined` in the HUD — the failure of a lookup
+ * presented as a successful one.
+ */
+export const isRegisteredKind = (kind: string): boolean =>
+  Object.hasOwn(REGISTRY, kind);
 
 /** Resolve a kind's display hints — the honest default for an undeclared kind. */
 export function taskKindDisplay(kind: string): TaskKindDisplay {
-  return REGISTRY[kind] ?? DEFAULT;
+  // Ownership-checked for the same reason as above: `REGISTRY["toString"]` returns a
+  // function, which is not nullish, so `?? DEFAULT` never fires and the caller reads
+  // `.badge` off a builtin.
+  return Object.hasOwn(REGISTRY, kind) ? REGISTRY[kind] : DEFAULT;
 }
 
 export const taskKindLabel = (kind: string): string => taskKindDisplay(kind).badge;
