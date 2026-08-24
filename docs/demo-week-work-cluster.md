@@ -45,8 +45,11 @@ only so the session is planned against a complete list.
       handler does not abort and does not clear the turn refs (pinned,
       `useInterviewAgent.test.ts:566` and `:585`). Nothing in this repo documents cortex-bff's
       post-denial stream behaviour.
-      Fix shape if needed, proposed not applied: `InputBar` keys on the same signal the
-      surface keys on. Keeps the change in chrome, out of the turn's state machine.
+      Fix shape if needed, proposed not applied, and it is a PAIR: `InputBar` keys on the same
+      signal the surface keys on, AND `sendMessage`'s guard stops keying on
+      `mutation.isPending`. Chrome alone is worse than the defect — it produces a composer that
+      looks alive and silently eats input. See the open diagnostic below before shipping
+      either half.
 
 - [x] **Venue decision — DECIDED: work** (2026-08-22). The draft-persistence protection must
       therefore actually *deploy*, not merely exist in a registry. Everything below is live.
@@ -71,14 +74,64 @@ only so the session is planned against a complete list.
 
 ## Runbook (during the demo)
 
+- **The UI stops responding entirely — typing AND clicking** → **reload the tab.** The answers
+  persist (they are artifacts, rehydrated by Electric) and the wedged state is client-side
+  only. See the open diagnostic below; until it is resolved this is the only recovery.
+  *Free read attached:* if the half-typed prompt survives the reload, the pod is running the
+  post-`ec06052` image and draft persistence is live. If it does not, the pod has not pulled
+  the new image — which is the forced-rollout item, answered for free.
+- **Do not return to GRAPH mode after a new answer lands.** GRAPH is ordered by the input
+  array with no content key, and `GlobalCanvasStage.tsx:120` passes `artifacts` raw — so
+  component membership, tie-breaks and ring rotation all shift when an unrelated answer
+  arrives. Rings rotating under the room's gaze is unforced instability. TIME / TYPE / TOPIC
+  are order-independent and safe to revisit.
 - **Canvas blanks after clicking an answer** → `clearCanvas`. `setCurrentArtifact` accepts an
   id not in the collection and still latches `currentArtifactSetByUser`, which disables the
   auto-foreground that would otherwise recover.
-- **Composer stays disabled after the refusal beat** → it re-enables when the stream ends; do
-  not reload. Duration pending the denial observation above.
 - **Do not double-press Enter.** A second Enter during a turn is silently dropped by the
-  `mutation.isPending` guard — no message, no feedback. Plausibly the literal experience
-  users report as "frozen".
+  `mutation.isPending` guard — no message, no feedback.
+
+---
+
+## OPEN DIAGNOSTIC — the UI-wedges-entirely report
+
+Witnessed live: after a turn, the composer would not accept input **and** the persona picker
+would not respond. Two hypotheses, and they need different fixes, so nothing ships until one
+is ruled out.
+
+**Hypothesis A — latched turn state** (`mutation.isPending` never clears). *Contradicted by
+the code on two points:*
+  - `PersonaPicker.tsx` contains no reference to `isProcessing`, `phase`, or any turn state.
+    Its only gate is `hasEntitlements()`, and it renders as a SIBLING of the input, not inside
+    anything the composer disables. A latched turn cannot touch it.
+  - The reported placeholder ("Connected to mesh") only renders when `isProcessing` is FALSE
+    (`InputBar.tsx:66-74`), and `isDisabled` keys on that same flag. A composer showing that
+    string with `phase === "active"` is not disabled. The two reported symptoms are mutually
+    exclusive under A.
+
+**Hypothesis B — the main thread is not yielding** (render loop / re-render storm). Fits both
+symptoms: an ungated sibling going unresponsive alongside the input is what a loop looks like,
+and under a loop the placeholder keeps whatever the last committed render produced, which
+reconciles the observation A cannot. Candidate triggers, all already characterized:
+`useInterviewAgent`'s selectorless `useInterviewStore()` subscription; the `useCurrent*`
+identity loop the ceiling tests exist to catch; the mutable process-global `EMPTY_*` constants
+as a live perturbation path.
+
+**Three observations, any one decides it** (to be taken in the wedged tab or a reproduction):
+  1. **Console** — "Maximum update depth exceeded" or "getSnapshot should be cached" confirms
+     B outright.
+  2. **CPU** — pegged means B; idle-but-unresponsive means A.
+  3. **Does the persona bolt open its palette on click?** If yes, the picker is fine and the
+     two symptoms are separate reports. If no, it is B.
+
+**Why the fix cannot be guessed.** If B, keying the chrome on the surface's signal changes
+nothing — the page is not rendering — and the real fix is selector-scoping
+`useInterviewAgent`, the state-machine-adjacent change deferred as too risky for demo week;
+the demo-week disposition then becomes a runbook posture, not a hot fix. If A, the chrome-only
+fix is **actively harmful**: `sendMessage` drops on `mutation.isPending`
+(`useInterviewAgent.ts:638`), so re-enabling the input without also changing that guard yields
+a composer that looks alive and silently eats input — strictly worse than a visibly dead one.
+If A, the fix is the PAIR (chrome signal + guard), never the chrome alone.
 
 ---
 
@@ -116,8 +169,21 @@ only so the session is planned against a complete list.
    empty patches, and `useCurrentArtifact` re-rendering on ANY patch to the foregrounded row
    (panels needing one field should take the field hook). Mechanism, churn sources, and fix
    targets are all pinned.
+   Also in this group as a **correctness-of-claim** item: `stageLayout`'s header states the map
+   reuses the list's buckets "in the same order". Membership agrees; ORDER does not. The list
+   re-sorts clusters by size with unresolved last (`AnswersPanel:604-612`); the layout orders
+   by recency of first appearance. The claim holds for TIME alone — so either the code or the
+   comment is wrong, and both surfaces currently ship believing the comment.
 
-7. **Freeze the three `EMPTY_*` selector constants.** They are mutable and process-global: a
+7. **The phantom card, and the non-null assertion behind it.** `connectedComponents` seeds
+   adjacency from the stage's ids but then adds whatever an edge NAMES, so a stale edge
+   pointing at a removed or filtered row emits a `positions` entry for an artifact that does
+   not exist — promoting a real singleton into a labelled 2-ring orbiting an empty slot. It
+   stops short of a crash only because components always start from a real id, which makes
+   `byId.get(comp[0])!` safe today. That assertion is one traversal-order change away from a
+   TypeError, so fix the seeding rather than the symptom.
+
+8. **Freeze the three `EMPTY_*` selector constants.** They are mutable and process-global: a
    consumer's `.push()` or in-place `.sort()` poisons every later mount for the process
    lifetime. Cheap and well-pinned — and the test already says that freezing them will turn it
    red, that this is an improvement, and that the reader should update the test rather than
@@ -125,9 +191,9 @@ only so the session is planned against a complete list.
    instances, so do NOT "tidy" them into one shared empty; that consolidation is pinned
    against.
 
-8. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
+9. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
    denial keep driving the HUD behind an access-denied surface.
-9. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
+10. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
    `edgy-solutions/cortex-ui`. Harmless while the redirect stands; every clone and CI
    reference breaks at once when it is retired. Fold into the next repo-touching chore.
 
