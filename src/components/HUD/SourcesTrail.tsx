@@ -64,7 +64,14 @@ export function SourcesTrail() {
 
         {sources.length === 0 ? (
           <p className="text-xs text-slate-600 italic font-mono">
-            No citations yet. Evidence appears as engines return matches.
+            {/* "No citations YET ... evidence APPEARS as engines return matches" promises
+                an arrival. For a computed answer (a plan-state calculation, say) there is
+                no document to cite and nothing is ever coming, so the old copy read as a
+                panel stuck waiting — a successful answer wearing a pending state. This
+                says what is true in both cases without claiming which: no external source
+                backs this answer. Absence of citations is a fact about the answer, not a
+                stage in its lifecycle. */}
+            No external sources cited for this answer.
           </p>
         ) : (
           <div className="space-y-2">

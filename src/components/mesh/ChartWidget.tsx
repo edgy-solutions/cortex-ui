@@ -263,6 +263,41 @@ const AXIS_STYLE = {
   axisLine: false as const,
 };
 const AXIS_TICK = { fill: "#94a3b8" };
+
+/**
+ * Compact numeric axis ticks.
+ *
+ * The defect this fixes: the value axes render raw numbers into a NEGATIVE left margin
+ * (`left: -20` / `-10` below, deliberate, to buy plot width). A seven-digit tick like
+ * 1500000 is wider than the gutter that margin leaves, so its leading digits are clipped
+ * off the edge — an axis reading "000000 / 500000 / 000000" where the values are actually
+ * 0 / 500K / 1M / 1.5M. It looks like a formatter bug and is really a truncation, which is
+ * worse than unreadable: the digits that survive are a plausible wrong number.
+ *
+ * Deliberately UNIT-LESS. `CHART_WIDGET_CONTRACT` declares no unit, currency or value-kind
+ * field, so there is nothing in the payload that says these are dollars. Rendering "$1.5M"
+ * would be the axis asserting a unit the answer never claimed — the same defect as the
+ * hardcoded engine name this commit removes from the footer, wearing a different costume.
+ * When the contract grows a unit field, this reads it; until then it stays honest about
+ * magnitude only.
+ */
+export function formatAxisValue(v: number | string): string {
+  // An empty/blank string coerces to 0, which would print a ZERO the payload never sent —
+  // a fabricated value is worse than a blank tick. Echo it instead.
+  if (typeof v === "string" && v.trim() === "") return v;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  const abs = Math.abs(n);
+  // Trim a trailing ".0" so 1.0M reads 1M, but keep 1.5M.
+  const compact = (scaled: number, suffix: string) =>
+    `${scaled.toFixed(1).replace(/\.0$/, "")}${suffix}`;
+  if (abs >= 1e9) return compact(n / 1e9, "B");
+  if (abs >= 1e6) return compact(n / 1e6, "M");
+  if (abs >= 1e3) return compact(n / 1e3, "K");
+  // Below 1000 the raw value already fits, and rounding it would destroy precision the
+  // reader can still use.
+  return String(n);
+}
 const TOOLTIP_STYLE = {
   backgroundColor: "rgba(15, 23, 42, 0.9)",
   borderColor: "rgba(6, 182, 212, 0.4)",
@@ -302,8 +337,18 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
             <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
             <h3 className="text-xl font-bold text-white tracking-tight leading-none">{subject}</h3>
           </div>
+          {/* Descriptors only — never attribution. This line used to name a specific
+              producing engine unconditionally (see ChartWidget.attribution.test.ts, which
+              pins the removed literals), which the widget has no way to know:
+              SemanticInterpreter passes only
+              contract fields (chart_data / chart_type / subject_concept / sql_query), so
+              the label was a template's assumption about where answers come from. It was
+              wrong for every Engine P answer, which is precisely the demo's thesis
+              inverted — a provenance product mislabelling its own provenance. What
+              remains is derived from the parsed data and is therefore true. Real
+              attribution lives in the HUD, which reads it off the artifact's routing. */}
           <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold">
-            Headless Analyst Preview
+            Chart Preview
             {shape.kind === "multi" && (
               <span className="ml-2 text-violet-400/70">
                 · {shape.seriesKeys.length}-series pivot
@@ -393,6 +438,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 name={shape.yKey}
                 {...AXIS_STYLE}
                 tick={AXIS_TICK}
+                tickFormatter={formatAxisValue}
               />
               <ZAxis range={[60, 60]} />
               <Tooltip
@@ -436,7 +482,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 {(shape.kind === "single" || shape.kind === "multi") && (
                   <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
                 )}
-                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={formatAxisValue} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={{ color: '#22d3ee' }}
@@ -478,7 +524,7 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
                 {(shape.kind === "single" || shape.kind === "multi") && (
                   <XAxis dataKey={shape.xKey} {...AXIS_STYLE} tick={AXIS_TICK} />
                 )}
-                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} />
+                <YAxis {...AXIS_STYLE} tick={AXIS_TICK} tickFormatter={formatAxisValue} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   cursor={{ fill: 'rgba(6, 182, 212, 0.05)' }}
@@ -535,19 +581,24 @@ export const ChartWidget = ({ data, type, subject, sql, onPublish }: ChartWidget
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-tighter shrink-0 max-w-full overflow-hidden">
-          <div className="flex items-center gap-1 shrink-0 overflow-hidden">
-            <span className="text-cyan-500/50">SQL:</span>
-            <span className="truncate max-w-[200px]">{sql}</span>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-cyan-500/50">ENGINE:</span>
-            <span>ANALYST_A</span>
+      {/* Footer — renders ONLY what this answer actually carries.
+          Previously it printed a bare "SQL:" label with nothing after it (sql_query is
+          optional in the contract and absent for a computed answer) beside a hardcoded
+          hardcoded engine-name literal. That name was not read from anything — no
+          provenance reaches this component — so every plan-state answer was captioned with
+          the name of an engine that did not produce it. Attribution renders from the
+          answer's own provenance or not at all; a chart with nothing to disclose shows no
+          footer rather than an empty label. */}
+      {sql ? (
+        <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-tighter shrink-0 max-w-full overflow-hidden">
+            <div className="flex items-center gap-1 shrink-0 overflow-hidden">
+              <span className="text-cyan-500/50">SQL:</span>
+              <span className="truncate max-w-[200px]">{sql}</span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };
