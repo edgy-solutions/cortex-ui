@@ -72,6 +72,19 @@ only so the session is planned against a complete list.
 
 ---
 
+## Waiting on another lane
+
+- [ ] **Engine P emits `value_unit: "USD"` on the cost-curve payload.** The frontend half is
+      shipped (`a03a960`): `value_unit` is an optional contract field, registration picked it
+      up automatically because `expected_fields` derives from the contract, and the axis
+      renders `$1.5M` the moment an answer declares it. Until then it reads `1.5M` — correct,
+      just not money-flavoured — because the renderer will not guess a unit the payload never
+      sent. Worth doing for the whole money family at once (`planFundingGap` and any
+      funding-flavoured payload), not just the cost curve, so they all render alike.
+      **No frontend change is needed when it lands.**
+
+---
+
 ## Runbook (during the demo)
 
 - **The UI stops responding entirely — typing AND clicking** → **reload the tab.** The answers
@@ -222,6 +235,16 @@ Rules that carried the campaign, kept here because each was earned by a red-proo
 - **A completeness check needs a behavioural arm.** Presence-in-source and effect-at-runtime
   are different claims: importing a store and forgetting to call it satisfies the first and
   leaks anyway.
+- **When a guard blocks a legitimate change, ask what stronger property it was
+  approximating.** Threading the unit through a closure broke a wiring guard that named one
+  callback by name. Loosening it was the easy path; instead it became "a tickFormatter is
+  present" PLUS a new arm that every axis uses the SAME one — because two axes with different
+  formatters would render one in dollars and one bare on the same card. The refactor that
+  threatened the guard ended up extending its coverage.
+- **A formatter's unit tests prove it works; only a wiring guard proves it runs.** Deleting
+  `tickFormatter` from every axis left the whole formatter suite green. A correct, unused
+  formatter is exactly the broken axis you started with — the render-layer form of
+  presence-in-source versus effect-at-runtime.
 - **The red-proof is design feedback, not just verification.** A mutation that fails to go red
   means either a weak guard (add a test) or a weak mutation (rewrite the mutation) — telling
   those apart is the judgment the technique requires.
