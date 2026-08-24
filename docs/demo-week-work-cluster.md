@@ -110,9 +110,24 @@ only so the session is planned against a complete list.
    `question_text` never compared, empty patches churning rows, unbounded provenance orphans,
    no dedupe by id, the write-only `isRevealing` latch with zero readers, and
    `createPendingArtifact` silently resetting `activeTab` to `"ALL"`.
-6. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
+6. **The canvas's render economy** — a coherent cluster rather than scattered items, all
+   characterized before anyone touches the code: the re-render storm (item 2 above), the
+   defeated reuse optimisation in `taskArtifactContentEqual`, `updateArtifact` churning on
+   empty patches, and `useCurrentArtifact` re-rendering on ANY patch to the foregrounded row
+   (panels needing one field should take the field hook). Mechanism, churn sources, and fix
+   targets are all pinned.
+
+7. **Freeze the three `EMPTY_*` selector constants.** They are mutable and process-global: a
+   consumer's `.push()` or in-place `.sort()` poisons every later mount for the process
+   lifetime. Cheap and well-pinned — and the test already says that freezing them will turn it
+   red, that this is an improvement, and that the reader should update the test rather than
+   revert. The blast radius stays contained only because the three constants are separate
+   instances, so do NOT "tidy" them into one shared empty; that consolidation is pinned
+   against.
+
+8. **`access_denied` is not terminal** — it never clears the turn refs, so events after the
    denial keep driving the HUD behind an access-denied surface.
-7. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
+9. **Stale origin URL.** `origin` points at `process-spawner.git`; GitHub reports the repo as
    `edgy-solutions/cortex-ui`. Harmless while the redirect stands; every clone and CI
    reference breaks at once when it is retired. Fold into the next repo-touching chore.
 
@@ -120,19 +135,17 @@ only so the session is planned against a complete list.
 
 ## Characterization campaign
 
-Coverage: **7.12% → 13.21%** of lines in one night, measured against a clean tree with
+Coverage: **7.12% → 13.21% → 15.5%** of lines, each figure measured against a clean tree with
 `all: true` so untouched modules cannot be hidden from the denominator.
 
-Done: `useComposerDraft` (10), `useInterviewAgent` (33), `useCanvasStore` (50),
-`sessionIsolation` (13). Suite: 14 files / 210 tests.
+Done: `useComposerDraft` (10), `sessionIsolation` (13), `useInterviewAgent` (33),
+`useCanvasStore` (50), `useCanvasStore.selectors` (20). Suite: 15 files / 230 tests, ~7s.
 
-Next: **the `useCurrent*` selector slice** — `useCurrentArtifact`, `useCurrentRouting`,
-`useCurrentSources`, `useCurrentGraphTrace`, `useCurrentGraphAlternates`. Their real invariant
-is that hoisted `EMPTY_*` constants prevent a "Maximum update depth exceeded" loop, which is a
-render-loop property a store-level test cannot observe — `renderHook` territory, same class as
-the freeze finding.
-
-Then: `stageLayout` / `answerDisplay` in `lib/`.
+In flight: `answerDisplay` + `stageLayout` in `lib/` — pure functions, no mocking, and they
+decide what is literally read on screen. The invariants that matter there are
+never-synthesize (a missing summary degrades to the question as a LABEL, never dressed up as
+an answer) and list/map agreement (the canvas groups via the same helpers the sidebar list
+does, so a test asserting only coordinates would pass while the two surfaces disagreed).
 
 Rules that carried the campaign, kept here because each was earned by a red-proof:
 - **Characterize, don't repair.** Behaviour that looks wrong is filed, not fixed.
@@ -146,3 +159,15 @@ Rules that carried the campaign, kept here because each was earned by a red-proo
 - **The red-proof is design feedback, not just verification.** A mutation that fails to go red
   means either a weak guard (add a test) or a weak mutation (rewrite the mutation) — telling
   those apart is the judgment the technique requires.
+- **A test for a runaway condition must bound its own runaway.** A broken selector never
+  reaches an assertion — it renders forever — so a render-loop test without a ceiling fails by
+  hanging the suite, which is worse than not existing. The ceiling belongs above a stable
+  result and below the framework's own limit, so the error that fires NAMES the cause instead
+  of surfacing as a generic depth crash.
+- **A derived guard should enumerate, not enumerate-and-hope.** The selector sweep derives its
+  population from the module's exports, so a sixth selector carrying the trap fails by
+  existing rather than by someone remembering to add it to a list.
+- **A test may state its own obsolescence condition.** The mutable-empties test says plainly
+  that freezing those constants would turn it red, that this would be an improvement, and that
+  the reader should update the test rather than revert the fix — so a cheap improvement arrives
+  welcomed instead of fought.
