@@ -158,7 +158,20 @@ export function buildCorridorData(
     });
   }
   for (const a of captured.alternates) {
-    mark(a.outputLabel, a.outputUri);
+    // NO `mark()` here, deliberately. `classUris` (built in collectCapturedDecision) sends
+    // the subject, its ancestor, the chosen output and the subject candidates for
+    // verification — it does NOT send the alternates' output classes. So an alternate's URI
+    // can never appear in `liveSet`, and marking it diffed every alternate as "missing" on a
+    // perfectly healthy graph: the corridor drew the whole dashed fan as a dashed ring at
+    // 55% opacity, which the on-screen legend names "traversed, now missing". The surface
+    // whose pitch is "rendered from captured routing data, not synthesized" was reporting a
+    // deletion it had never checked for.
+    //
+    // The fix narrows the CLAIM rather than widening the query. Asking the server about
+    // alternates too would be the bigger change and the riskier one; not asserting a verdict
+    // about something never queried is the rule this module already enforces one branch
+    // above, where an unavailable live read marks nothing missing. Un-queried and unverified
+    // are the same epistemic state and now render the same way: captured, not verified.
     predicates.push({ name: a.verbLabel, object: a.outputLabel, score: a.score });
   }
 

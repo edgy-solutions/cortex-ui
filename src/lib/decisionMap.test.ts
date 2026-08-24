@@ -356,11 +356,11 @@ describe("buildCorridorData — the honesty states come from distinct captured c
     // both look like a working map.
     const data = buildCorridorData(ROUTING, TRACE, ALTS, live());
 
-    expect(data.nodeStates).toEqual({
-      Datamart: "missing",
-      "Data Steward": "missing",
-      Runbook: "missing",
-    });
+    // Datamart is a subject CANDIDATE: it was sent for verification and came back absent, so
+    // the staleness signal is earned. The alternates (Data Steward, Runbook) were never sent,
+    // so they get no verdict at all — see the alternates test below. Before that fix this
+    // assertion listed all three, and the two extra entries were the false alarm.
+    expect(data.nodeStates).toEqual({ Datamart: "missing" });
     expect(data.nodeStates).not.toHaveProperty("Report"); // live → verified present
     expect(data.nodeStates).not.toHaveProperty("Owning Team");
     expect(data.unverifiedAll).toBe(false);
@@ -475,21 +475,39 @@ describe("collectCapturedDecision — what the map asks the live graph about", (
     ]);
   });
 
-  it("does NOT send the alternates' output classes for verification", () => {
-    // Characterized as found. `classUris` covers the chosen path and the subject candidates;
-    // the alternate branch TARGETS (Steward, Runbook) are absent from the request while
-    // `buildCorridorData` still diffs them against the response. They are therefore marked
-    // "missing" unconditionally — the dashed fan reads as "every alternative has since been
-    // deleted" on a perfectly healthy graph. This is why the fixture's alternates come back
-    // missing above.
+  it("passes NO VERDICT on an alternate, because it never asked about one", () => {
+    // This test previously pinned the defect: `classUris` covers the chosen path and the
+    // subject candidates but NOT the alternate branch targets, while buildCorridorData diffed
+    // them anyway. An un-queried URI can never be in the live set, so every alternate came
+    // back "missing" — and the corridor draws that as a dashed ring at 55% opacity, which its
+    // own on-screen legend names "traversed, now missing". The demo's evidence that the
+    // system "considered and rejected alternatives" was reporting all of them as deleted, on
+    // a healthy graph, on the surface whose pitch is captured-not-synthesized.
+    //
+    // Fixed by NARROWING THE CLAIM rather than widening the query: un-queried and unverified
+    // are the same epistemic state, and this module already refuses to mark anything missing
+    // when the live read fails. Asking the server about alternates would be the larger and
+    // riskier change; it can still happen later, and this test is where that decision lands —
+    // if the request grows to include them, a real verdict becomes legitimate and this pins
+    // the wrong thing.
     const captured = collectCapturedDecision(ROUTING, TRACE, ALTS);
 
+    // The request still excludes them — that is the premise the rule above rests on.
     expect(captured.classUris).not.toContain("urn:x:Steward");
     expect(captured.classUris).not.toContain("urn:x:Runbook");
-    expect(buildCorridorData(ROUTING, TRACE, ALTS, live()).nodeStates).toMatchObject({
-      "Data Steward": "missing",
-      Runbook: "missing",
-    });
+
+    const states = buildCorridorData(ROUTING, TRACE, ALTS, live()).nodeStates;
+    expect(states).not.toHaveProperty("Data Steward");
+    expect(states).not.toHaveProperty("Runbook");
+  });
+
+  it("still marks a CAPTURED, QUERIED node missing — narrowing the claim did not blind the diff", () => {
+    // The other half, and the reason the fix is a narrowing rather than a disabling. Nodes
+    // that WERE sent for verification must still report honestly when the live layer says
+    // they are gone; a fix that silenced the whole diff would have traded a false alarm for
+    // a blind spot.
+    const states = buildCorridorData(ROUTING, TRACE, ALTS, live()).nodeStates ?? {};
+    expect(Object.keys(states).length).toBeGreaterThan(0);
   });
 
   it("degrades every label to its URI fragment rather than to an empty string", () => {
