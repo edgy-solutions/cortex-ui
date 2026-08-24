@@ -25,6 +25,7 @@ import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
 import { DeltaSet } from "@/components/planning/DeltaSet";
 import { IntervalTimeline } from "@/components/planning/IntervalTimeline";
+import { DecisionRecord } from "@/components/planning/DecisionRecord";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -480,6 +481,20 @@ const renderComponent = (
         />
       );
 
+    case "DECISION_RECORD":
+      // NOT a live view — the only planning card that is not. It describes an ACT, at a time,
+      // by a named actor, and recomputing it would let the record drift with the state it was
+      // decided against. `acted_at` is a fact, not a freshness stamp.
+      return (
+        <DecisionRecord
+          decision={comp.decision}
+          ops={comp.ops}
+          alternatives={comp.alternatives}
+          question_trail={comp.question_trail}
+          scope_label={comp.scope_label}
+        />
+      );
+
     case "INTERVAL_TIMELINE":
       // A LIVE VIEW (ADR-0042). Nested intervals whose TOP LEVEL MEANING is stated by the
       // payload (`group_kind`), never inferred here — guessing from whether an id looks like
@@ -587,6 +602,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "MATRIX_GRID" ||
   archetype === "DELTA_SET" ||
   archetype === "INTERVAL_TIMELINE" ||
+  archetype === "DECISION_RECORD" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
   // rendered as a corner postage-stamp (a half-grid cell) — presentation by
   // accident, not by decision. It fills its frame; the "compact" tier centers it.

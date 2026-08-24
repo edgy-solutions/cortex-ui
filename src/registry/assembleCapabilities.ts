@@ -37,6 +37,7 @@ import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.co
 import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
 import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
 import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimeline.contract";
+import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -217,6 +218,20 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: INTERVAL_TIMELINE_CONTRACT,
+  },
+  // Engine P's `mesh:planCommitScenario` declares `mesh:DecisionArtifact` — Beat 6.
+  //
+  // REGISTERED NOW, AND NOT BEFORE. This contract has existed since 2026-08-22 and was
+  // deliberately unbound while no verb emitted a DecisionArtifact: Contract D refuses a triple
+  // whose subject class does not exist, so registering early would have earned a refusal and
+  // taught nobody anything. The verb landed, so the binding lands with it — arrives-with-its-
+  // first-real-consumer, applied to a registration.
+  {
+    subject_uri: "mesh:DecisionArtifact",
+    object_uri: "mesh:DecisionRecord",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: DECISION_RECORD_CONTRACT,
   },
 ] as const;
 
