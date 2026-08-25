@@ -74,6 +74,23 @@ export const INTERVAL_TIMELINE_CONTRACT = {
     rows: { encoding: "array", parsesTo: "array-of-objects", required: true },
     /** Which pivot produced these rows. Stated by the verb; never inferred. */
     group_kind: { type: "string", required: false },
+    /**
+     * POINT-IN-TIME MARKERS on the same axis — target dates the intervals are read against.
+     * OPTIONAL: a schedule has none, a capability path is meaningless without them.
+     *
+     * WHY THIS IS A FIELD AND NOT A NEW ARCHETYPE. `ContributionSequence` was ruled into this
+     * archetype on 2026-08-25 by the instrument that SPLIT the three grids. Those were
+     * structurally interchangeable and semantically disjoint — same cells, different meaning
+     * of colour (breach/distance/deficit). This is the inverse: structurally different (two
+     * nesting levels, not three) but semantically IDENTICAL — position means time, and the
+     * reader asks "does this land before the date?" A milestone adds a reference mark to that
+     * reading; it does not change what the encoding means.
+     *
+     * The confirming evidence is that `PlateauTimeline` needs the same field. A property with
+     * two consumers is a family property, not a special case — and had this been built as a
+     * second timeline archetype, the third one would have made it three.
+     */
+    milestones: { encoding: "array", parsesTo: "array-of-objects", required: false },
     /** What the schedule was scoped to. Supplied; the renderer invents no framing. */
     scope_label: { type: "string", required: false },
   },
@@ -103,6 +120,25 @@ export interface IntervalRow {
   actual_end: string | null;
   /** Generic styling key. Value rides the payload; the renderer knows none of them. */
   risk_flag: string | null;
+}
+
+/**
+ * A point-in-time marker drawn on the shared axis.
+ *
+ * `overdue` is COMPUTED UPSTREAM and must not be re-derived from `date` against "now". Whether
+ * a target has been missed is a judgement about the PLAN's state, not about the reader's
+ * clock — a card opened in January and one opened in July must agree, and only the producer
+ * knows which state version it evaluated.
+ */
+export interface IntervalMilestone {
+  milestone_id: string;
+  label: string;
+  /** ISO date. The mark's position on the same axis the bars use. */
+  date: string;
+  /** Which group this marker belongs under, or absent for an axis-wide mark. */
+  group_id?: string;
+  /** Stated by the producer, never inferred here. See above. */
+  overdue?: boolean;
 }
 
 /** The row key, as a function, so no caller re-invents it. See the fan-out note. */
