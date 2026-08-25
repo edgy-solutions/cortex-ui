@@ -180,28 +180,34 @@ below is built, and the same payload-sourcing rule governs them as everything el
 **a field with no backing in the payload does not render.** If the mock shows a field the
 evaluation does not carry, that is a producer declaration to file, not a value to compose.
 
-### The drill-in drawer — field layout
+### The drill-in drawer — field layout (from the competitor mock's project drawer)
 
-Named field groups, in the order the mock presents them:
+Adopted as the spec. Layout, in order:
 
-1. **Breadcrumb** — where the drilled-in value sits in the structure it came from.
-2. **Funding table** — the rows behind the number.
-3. **Cap chips** — the governing cap(s) the value was measured against.
-4. **Target chips** — the target(s), distinct from caps.
-5. **Window / confidence** — the evaluation's period and its confidence.
+1. **Breadcrumb** — `Strategy / Initiative / Phase`.
+2. **Description.**
+3. **Fields** — owner, business owner, priority, status, type.
+4. **Window + phase confidence.**
+5. **Funding table** — `org · type · status · amount`, each row carrying its risk tag.
+6. **Capability chips** — `name → level`.
+7. **Target chips** — `name (type)`.
 
-**Underspecified and deliberately not guessed** — fill these from the mock before building,
-because inventing them here would put fabricated structure into a document someone builds
-against:
+**VIEW-ONLY for demo week.** The mock's editable fields — priority, status, per-row funding
+status — are typed ops and post-demo by standing ruling. Record them as the eventual write
+surface and **leave room in the layout for the controls without rendering them**, so the
+editable version is a behaviour change rather than a re-layout. Same discipline as the
+interpretation strip's per-slot elements, and for the same reason.
 
-- Which payload field backs each group. Only `window` and `confidence` have obvious homes
-  (`resolved_intent.parameters` and `routing.*.confidence`); the rest need naming.
-- Whether cap chips and target chips can both be absent, and what the drawer shows when they
-  are. Per the house rule the answer is "nothing, not a placeholder", but the mock may
-  disagree and it should be asked rather than assumed.
-- Whether the funding table is the same rows the card drew or a drill-in query. If the latter,
-  it is an evaluation and carries its own `valid_as_of` (ADR-0042 §4) — which changes the
-  drawer from a view into a live view.
+**Still to fill from the mock before building** — not guessed here, because fabricated
+structure in a spec is trusted precisely because it looks authoritative:
+
+- Which payload field backs each group. `window` and `confidence` have obvious homes
+  (`resolved_intent.parameters`, `routing.*.confidence`); the rest need naming.
+- Whether capability chips and target chips can both be absent, and what shows then. The house
+  rule says nothing-not-a-placeholder, but the mock may disagree and should be asked.
+- Whether the funding table is the rows the card already drew or a drill-in query. If it is a
+  query it is an evaluation, carries its own `valid_as_of` (ADR-0042 §4), and the drawer stops
+  being a view and becomes a **live view** — a materially different build, cheap to settle now.
 
 **Already available to build against:** the interpretation strip renders slots as discrete
 keyed elements (`data-slot`), so the drawer can reuse that vocabulary rather than inventing a
@@ -220,9 +226,48 @@ measured against and how it was derived — rather than restating the label.
   evaluation time. A tooltip must not fill a gap with a plausible default.
 - Structured values are not stringified at a reader (`…`, not `[object Object]`).
 
-**Underspecified:** the density itself — how many facts per tooltip before it stops being
-scannable — is a design call from the mock, not a rule this document can derive. Record the
-mock's actual counts when transcribing.
+**The bar, from the mock's own tooltips** — these are the standard, quoted:
+
+> "reaches Adopted by end of horizon, first delivery Q2 '27"
+> "3 capabilities, mean maturity 2.3/4"
+> "no funded activity in view"
+
+**One sentence stating the claim the cell makes, with its numbers.** Not the label restated.
+Note the third: the honest-empty case is itself a computed claim ("no funded activity **in
+view**"), not a shrug.
+
+**Every figure sourced from payload fields — never derived client-side.** The
+client-side-measures prohibition applies to tooltips too: a mean computed in the browser is a
+measurement with no verb behind it and no `output_uri`, which is exactly what ADR-0042 §3
+forbids. If the mock's tooltip shows a number the payload does not carry, that is a producer
+declaration to file, not an arithmetic to add.
+
+**Already shipped as the working model:** `ShortfallGrid`'s cell title reads
+"<committed> committed of <required> required, <secured> firm — short <shortfall>", every
+figure read from the payload and the shortfall never re-subtracted. `ThresholdGrid`'s
+"no contributors recorded" is the honest-empty form.
+
+---
+
+### Workspace chrome — warning→filter interaction (deferred build)
+
+**Threshold warnings click-apply their scope.** In the mock, a warning reading
+"Wichita · Q3–Q4 · up to 4 concurrent" is clickable: it applies that target's filter and
+navigates to the evidence. Builds when the chrome surface exists, not before.
+
+### Heads-up: `risk_flag` vocabulary is growing to five values
+
+Lane 1 is emitting `funded` / `at-risk` / `unfunded` as `risk_flag` VALUES on the schedule
+payload, alongside the constraint/move values, with precedence
+`constraint-violated > moved > at-risk/unfunded`.
+
+**No action.** `IntervalTimeline` styles the strings it knows and ignores the rest by
+construction — that is the generic-param pattern working as designed. Recorded only so the
+eventual badge work knows the vocabulary is five values rather than two.
+
+Worth noting for the competitive packet: the competitor mock colours its gantt bars by funding
+risk using **"At Risk" / "Unfunded"** — this renderer's incumbent `risk_flag` vocabulary,
+converged independently from the same customer prompt.
 
 ---
 
