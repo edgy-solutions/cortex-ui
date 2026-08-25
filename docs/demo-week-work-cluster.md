@@ -205,9 +205,19 @@ structure in a spec is trusted precisely because it looks authoritative:
   (`resolved_intent.parameters`, `routing.*.confidence`); the rest need naming.
 - Whether capability chips and target chips can both be absent, and what shows then. The house
   rule says nothing-not-a-placeholder, but the mock may disagree and should be asked.
-- Whether the funding table is the rows the card already drew or a drill-in query. If it is a
-  query it is an evaluation, carries its own `valid_as_of` (ADR-0042 §4), and the drawer stops
-  being a view and becomes a **live view** — a materially different build, cheap to settle now.
+
+**RULED (2026-08-25): the funding table is a DRILL-IN QUERY, so the drawer is a LIVE VIEW.**
+It is not the rows the card already drew. Consequences, all inherited rather than invented:
+
+- It carries its own `valid_as_of` per evaluation (ADR-0042 §4) and displays it — mount the
+  existing `FreshnessStamp` rather than writing a second one.
+- The statelessness rule applies at panel scale: **a drawer showing funding rows from
+  mount-time memory is the cached-label defect, one level up.** Re-evaluation replaces content
+  wholesale; the drawer keeps no rows of its own.
+- Its refusals are a live view's refusals — an evaluation that returns nothing renders the
+  deliberate-empty, not an empty table.
+
+The BUILD stays post-demo; only the ruling is settled, so the morning does not re-open it.
 
 **Already available to build against:** the interpretation strip renders slots as discrete
 keyed elements (`data-slot`), so the drawer can reuse that vocabulary rather than inventing a
