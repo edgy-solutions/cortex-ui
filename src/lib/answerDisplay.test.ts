@@ -98,7 +98,13 @@ const withArchetype = (raw: string) =>
  */
 const MODULE_SRC = readFileSync(path.join(__dirname, "answerDisplay.ts"), "utf8");
 const DECLARED_ARCHETYPES = (() => {
-  const block = MODULE_SRC.match(/export type AnswerArchetype\s*=([^;]*);/)?.[1] ?? "";
+  // Comments are STRIPPED before matching. The first version of this stopped at the first
+  // semicolon in the file, and a prose semicolon inside a doc comment can sit before the
+  // union's own — which is exactly what happened the day the union grew. A derivation that
+  // punctuation can defeat is a guard that silently narrows its own population; the positive
+  // control below is what turned that into a failure instead of a quiet six-member sweep.
+  const src = MODULE_SRC.replace(/\/\/[^\n]*/g, "");
+  const block = src.match(/export type AnswerArchetype\s*=([^;]*);/)?.[1] ?? "";
   return [...block.matchAll(/"([A-Z0-9_]+)"/g)].map((m) => m[1] as AnswerArchetype);
 })();
 const REAL_ARCHETYPES = DECLARED_ARCHETYPES.filter((t) => t !== "UNKNOWN");

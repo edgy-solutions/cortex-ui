@@ -30,7 +30,55 @@ export type AnswerArchetype =
   | "PROCESS_TOPOLOGY"
   | "HAZARD_DECLARATION"
   | "DIGITAL_TWIN_3D"
+  // The planning + task families. Added 2026-08-25, LATE: the interpreter had been
+  // dispatching these for weeks while this union had never heard of them, so every one of
+  // them fell through to UNKNOWN and drew a question mark in the answer list.
+  //
+  // It surfaced the moment routing started working. The cost curves showed a chart glyph
+  // because they came back through the DesignUI fallback AS CHART_WIDGET, which this union
+  // does know; the gantt was the first answer to arrive through the REGISTERED path carrying
+  // its real archetype — and the real archetype was the one the glyph table never learned.
+  // The question mark was evidence the routing fix worked.
+  | "INTERVAL_TIMELINE"
+  | "PERIOD_SERIES"
+  | "THRESHOLD_GRID"
+  | "MATRIX_GRID"
+  | "SHORTFALL_GRID"
+  | "DELTA_SET"
+  | "DECISION_RECORD"
+  | "INSTANCES_BY_PROPERTY"
+  | "WORKFLOW_OBSERVATION"
+  | "APPROVAL_TASK"
+  | "TRIAGE_TASK"
+  | "GROUPED_REVIEW"
   | "UNKNOWN";
+
+/**
+ * Every archetype above except UNKNOWN, derived so the glyph and label tables can be checked
+ * for completeness against it rather than trusted. UNKNOWN stays reachable on purpose — a
+ * genuinely unregistered payload must still render something — but no DISPATCHED archetype
+ * may fall into it, which is the drift this list exists to catch.
+ */
+export const DISPLAY_ARCHETYPES = [
+  "KNOWLEDGE_DOCUMENT",
+  "CHART_WIDGET",
+  "ASSET_STATE_METRIC",
+  "PROCESS_TOPOLOGY",
+  "HAZARD_DECLARATION",
+  "DIGITAL_TWIN_3D",
+  "INTERVAL_TIMELINE",
+  "PERIOD_SERIES",
+  "THRESHOLD_GRID",
+  "MATRIX_GRID",
+  "SHORTFALL_GRID",
+  "DELTA_SET",
+  "DECISION_RECORD",
+  "INSTANCES_BY_PROPERTY",
+  "WORKFLOW_OBSERVATION",
+  "APPROVAL_TASK",
+  "TRIAGE_TASK",
+  "GROUPED_REVIEW",
+] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
 /** SPO provenance the card carries forward (ADR-0028 Decision 2). */
 export interface AnswerSPO {
@@ -92,6 +140,12 @@ export function answerArchetype(a: Artifact): AnswerArchetype {
   ) {
     return "CHART_WIDGET";
   }
+  // Structural archetypes pass through under their own name — no aliasing, no family
+  // collapsing. The chart family above collapses sub-variants because CHART_WIDGET genuinely
+  // has them; these do not.
+  for (const known of DISPLAY_ARCHETYPES) {
+    if (A === known) return known;
+  }
   return "UNKNOWN";
 }
 
@@ -110,6 +164,30 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Hazard";
     case "DIGITAL_TWIN_3D":
       return "Digital Twin";
+    case "INTERVAL_TIMELINE":
+      return "Timeline";
+    case "PERIOD_SERIES":
+      return "Series";
+    case "THRESHOLD_GRID":
+      return "Threshold Grid";
+    case "MATRIX_GRID":
+      return "Matrix";
+    case "SHORTFALL_GRID":
+      return "Shortfall";
+    case "DELTA_SET":
+      return "Delta";
+    case "DECISION_RECORD":
+      return "Decision";
+    case "INSTANCES_BY_PROPERTY":
+      return "Instances";
+    case "WORKFLOW_OBSERVATION":
+      return "Observation";
+    case "APPROVAL_TASK":
+      return "Approval";
+    case "TRIAGE_TASK":
+      return "Triage";
+    case "GROUPED_REVIEW":
+      return "Review";
     default:
       return "Answer";
   }
