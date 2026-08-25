@@ -346,6 +346,59 @@ covered it.
 
 ---
 
+## INTERVAL_TIMELINE renders — two steps to make it look like the mockup
+
+**2026-08-25.** The gantt now mounts and draws (backend correct end to end: routing → verb →
+`mesh#IntervalSchedule` → `source=registered` → `INTERVAL_TIMELINE` → `render_ui 200`). What is
+on screen is a working left-hand table beside a chart region containing positioned labels and
+nothing else. Two distinct pieces of work, and only the first is a defect.
+
+### Step 1 — one line: the wrong stylesheet is imported
+
+`IntervalTimeline.tsx:31` imports `@svar-ui/react-gantt/style.css`. The package exports **two**
+sheets and this is the partial one:
+
+| Export | File | Size | Class selectors |
+|---|---|---|---|
+| `./style.css` | `dist/index.css` | 32 KB | **151** |
+| `./all.css` | `dist-full/index.css` | 150 KB | **478** |
+
+**Fix: `import "@svar-ui/react-gantt/all.css";`** — Lane 1's file, one token.
+
+Why the symptoms match exactly, recorded so the diagnosis is re-checkable rather than
+re-derived:
+
+- The **left table renders correctly** — the grid/table rules ARE in the partial sheet.
+- **Task labels sit at date-correct x positions** and move with horizontal scroll — so SVAR's
+  layout engine is working. Geometry is fine.
+- **No bars** — the bar element's background/height rules are among the 327 missing selectors.
+- **The scale reads literal `MMM yyyy` / `d`** — the scale-cell rules are in the full sheet too.
+
+**This is NOT a sizing problem, and the `minHeight` instinct would have been a dead end.**
+Nothing is collapsed; the elements are unstyled. A height fix would have papered over a
+stylesheet import and left the bars invisible. Recorded because the sizing hypothesis was
+reasonable, widely held for a day, and wrong.
+
+### Step 2 — the mockup treatment, which is real work
+
+Even fully styled, SVAR's default gantt looks like **SVAR's gantt**, not the mockup. The mockup
+carries bars coloured by funding risk, `MOVED` / FS-violation badges on bars, grouped initiative
+rows, and a dependency-violation marker. None of that is free.
+
+The mechanism exists: SVAR's `Gantt` accepts a **`taskTemplate`** prop (confirmed in
+`node_modules/@svar-ui/react-gantt/types/index.d.ts`), and the `--wx-gantt-*` theme custom
+properties are already loading, so colour is a variable override rather than a fork.
+
+This is the same work as the deferred `risk_flag` badge item, and it now has a live surface to
+apply to — which it did not before tonight. It stays deferred; it also stays blocked on the
+producer emitting the `risk_flag` vocabulary (see the producer-declarations entry above).
+
+**Sequencing: `all.css` makes it a working gantt; `taskTemplate` + theme variables make it
+yours.** Do not attempt the second before the first — styling an unstyled component means
+fighting defaults that are not actually applied.
+
+---
+
 ## Runbook (during the demo)
 
 - **The UI stops responding entirely — typing AND clicking** → **reload the tab.** The answers
