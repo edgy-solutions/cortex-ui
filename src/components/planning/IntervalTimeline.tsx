@@ -27,7 +27,7 @@
  * does not state, because it reads the rule from there.
  */
 import { useCallback, useMemo, useRef } from "react";
-import { Gantt } from "@svar-ui/react-gantt";
+import { Gantt, WillowDark } from "@svar-ui/react-gantt";
 // THE FULL SHEET, not `style.css`. The package exports two:
 //
 //   ./style.css   dist/index.css        32 KB   236 selectors   theme vars + grid/table
@@ -39,10 +39,17 @@ import { Gantt } from "@svar-ui/react-gantt";
 // scale read its literal format string (`MMM yyyy`). Four symptoms, one cause: the bar and
 // scale-cell rules live in the 690 selectors the partial sheet omits.
 //
+// NECESSARY BUT NOT SUFFICIENT, and the second half is `WillowDark` below. Loading this
+// sheet alone changed nothing visible, because the sheet is VARIABLE-DRIVEN: 1,513
+// `var(--wx-*)` references, and `.wx-bar` is literally `background:transparent` until a
+// theme supplies them. Only 18 of its 926 rule blocks mention a theme, and those are the
+// blocks that DEFINE the custom properties. So the rules match fine — their VALUES are
+// empty without the theme scope.
+//
 // Worth keeping because of what it ISN'T: this looked like a SIZING failure, and a
 // `minHeight` on the wrapper below was proposed twice. Nothing here is collapsed — the
-// elements are unstyled. That change would have papered over a stylesheet import, left the
-// bars invisible, and looked like progress.
+// elements are unstyled. That change would have papered over the real cause, left the bars
+// invisible, and looked like progress.
 import "@svar-ui/react-gantt/all.css";
 import {
   intervalRowKey,
@@ -175,8 +182,15 @@ export function IntervalTimeline({
         </p>
       </div>
 
+      {/* THE THEME SCOPE, and it is load-bearing rather than cosmetic. `WillowDark` defines
+          the `--wx-*` custom properties every rule in the stylesheet reads through `var()`.
+          Without it the CSS loads, the selectors match, and every value resolves to nothing —
+          which renders as a working table beside an empty chart region, the most misleading
+          shape this failure could take. Dark because the app is. */}
       <div style={{ height: 420 }}>
-        <Gantt tasks={tasks} links={[]} scales={SCALES} init={init} />
+        <WillowDark>
+          <Gantt tasks={tasks} links={[]} scales={SCALES} init={init} />
+        </WillowDark>
       </div>
 
       {(valid_as_of || state_version !== undefined) && (
