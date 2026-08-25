@@ -28,6 +28,7 @@ const USES: { value: CanvasUse | ""; label: string }[] = [
   { value: "aggregation", label: "Aggregation" },
   { value: "workflow", label: "Workflow seed" },
   { value: "relationship", label: "Relationship" },
+  { value: "portfolio_planning", label: "Portfolio planning" },
 ];
 
 export function DockBar() {

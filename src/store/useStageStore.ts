@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { STAGE_CARD } from "@/lib/stageConstants";
+import { STAGE_CARD, templateSlot } from "@/lib/stageConstants";
 
 /**
  * useStageStore — the CAMERA-STAGE state for the center canvas (ADR-0028
@@ -16,9 +16,25 @@ import { STAGE_CARD } from "@/lib/stageConstants";
  */
 export type StageFocusTab = "answer" | "map";
 
-/** ADR-0028 canvas "uses" — assignable at creation, carried as metadata only
- *  (label, no behavior) per the ADR's carry-forward-compute-later posture. */
-export type CanvasUse = "aggregation" | "workflow" | "relationship";
+/**
+ * ADR-0028 canvas "uses" — assignable at creation.
+ *
+ * This was documented as "metadata only (label, no behavior)", and that stopped being true
+ * when `relationship` began gating the arrange-by-relationship control. A type DOES dispatch
+ * behaviour, and there are now two instances of it: `relationship` gates a control, and
+ * `portfolio_planning` gates the planning chrome and carries a default arrangement.
+ *
+ * What a type governs: CHROME (what mounts around the canvas) and ARRANGEMENT (where its
+ * first cards land). What a type must never govern: what the canvas may HOLD. Every canvas
+ * takes the same SPO-tagged answer artifacts (ADR-0028 §2) and any card drags onto any
+ * canvas. A type that restricts content stops being a lens and becomes a container, and
+ * canvases stop being one substrate and become separate apps.
+ */
+export type CanvasUse =
+  | "aggregation"
+  | "workflow"
+  | "relationship"
+  | "portfolio_planning";
 
 export interface CanvasItem {
   id: string; // answer id
@@ -142,7 +158,12 @@ export const useStageStore = create<StageState>()(
           canvases: s.canvases.map((c) => {
             if (c.id !== canvasId) return c;
             if (c.items.some((it) => it.id === answerId)) return c; // dedupe
-            return { ...c, items: [...c.items, { id: answerId, ...slotFor(c.items.length) }] };
+            // A typed canvas places its first cards where its template says; everything else
+            // falls through to the generic slot. Routing the template through the ORDINARY
+            // add path is the point: a seeded canvas and a hand-built one differ by nothing
+            // a consumer can see.
+            const slot = templateSlot(c.use, c.items.length) ?? slotFor(c.items.length);
+            return { ...c, items: [...c.items, { id: answerId, ...slot }] };
           }),
         })),
       addItemAt: (canvasId, answerId, x, y) =>

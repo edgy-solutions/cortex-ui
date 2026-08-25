@@ -9,6 +9,7 @@ import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
 import { fetchLineageEdges } from "@/api/client";
 import { STAGE_CARD, cardSize } from "@/lib/stageConstants";
+import { PlanningChrome } from "./PlanningChrome";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
@@ -643,6 +644,13 @@ export function GlobalCanvasStage() {
           <LayoutGrid className="w-2.5 h-2.5" />
           Overview · Esc
         </button>
+      )}
+
+      {/* portfolio_planning use: the session strip. Chrome mounts on the SURFACE around the
+          canvas — never as a canvas item, which must be an SPO-tagged answer (ADR-0028 §2).
+          Same type-dispatch shape as the relationship control below. */}
+      {!isGlobal && activeCanvas?.use === "portfolio_planning" && !focusId && !fullPane && (
+        <PlanningChrome />
       )}
 
       {/* relationship-layout use: arrange the custom canvas by how items relate. */}

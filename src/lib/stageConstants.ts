@@ -11,6 +11,65 @@ export interface CardSize {
   h: number;
 }
 
+/** A placed card: world coords + footprint, the exact vocabulary `addItemAt` speaks. */
+export interface CardSlot extends CardSize {
+  x: number;
+  y: number;
+}
+
+const GUTTER = 40;
+const PAD = 90;
+/** Two default cards plus the gutter between them — the "full width" of this layout. */
+const WIDE = STAGE_CARD.w * 2 + GUTTER;
+
+/**
+ * The default arrangement a `portfolio_planning` canvas opens with: a full-width anchor
+ * above two pairs.
+ *
+ * Deliberately expressed in world coords + `w`/`h` — the same vocabulary `addItemAt` and
+ * `moveItem` speak — and NOT as a grid abstraction sitting beside them. A canvas seeded from
+ * this template and one a user dragged into the same shape are then byte-identical to every
+ * consumer, which is the property that makes "seeded" a starting point rather than a
+ * different kind of object. The moment a template needs its own coordinate system, seeded
+ * canvases stop being ordinary canvases.
+ *
+ * A STARTING point, never a constraint: arrangement is UI-owned (ADR-0042 §4), so the first
+ * drag overwrites any of this and the canvas persists whatever the user made of it.
+ */
+export const PORTFOLIO_PLANNING_TEMPLATE: CardSlot[] = [
+  // Anchor: the schedule/timeline, full width across the top.
+  { x: PAD, y: PAD, w: WIDE, h: 300 },
+  // The pair beneath it — cost curve beside site load.
+  { x: PAD, y: PAD + 340, w: STAGE_CARD.w, h: STAGE_CARD.h },
+  { x: PAD + STAGE_CARD.w + GUTTER, y: PAD + 340, w: STAGE_CARD.w, h: STAGE_CARD.h },
+  // The lower pair — funding gap beside the diff.
+  { x: PAD, y: PAD + 660, w: STAGE_CARD.w, h: STAGE_CARD.h },
+  { x: PAD + STAGE_CARD.w + GUTTER, y: PAD + 660, w: STAGE_CARD.w, h: STAGE_CARD.h },
+];
+
+/**
+ * Keyed by the canvas's `use`, as a plain string so this module stays dependency-free and
+ * `useStageStore` can import it without a cycle.
+ *
+ * One row today. It is the first row of what becomes a registry when a second type needs
+ * one — the arrives-with-its-first-consumer rule — and it governs only ARRANGEMENT. A type
+ * never restricts what a canvas may hold: the moment it does, canvases stop being one
+ * substrate and become separate apps.
+ */
+const TEMPLATES: Record<string, CardSlot[]> = {
+  portfolio_planning: PORTFOLIO_PLANNING_TEMPLATE,
+};
+
+/**
+ * The slot a type's template assigns to the nth card, or null when the type has no template
+ * or has run past its end. Null means "fall back to the generic placement" — a template
+ * declares where its FIRST cards go, and a canvas that outgrows it keeps working.
+ */
+export function templateSlot(use: string | undefined, n: number): CardSlot | null {
+  const t = use ? TEMPLATES[use] : undefined;
+  return t && n >= 0 && n < t.length ? t[n] : null;
+}
+
 /**
  * The size a card actually occupies, defaulting to `STAGE_CARD`.
  *
