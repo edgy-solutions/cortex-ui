@@ -172,6 +172,60 @@ Split recorded so nobody re-debugs reachable code looking for an archetype fault
 
 ---
 
+## SPEC (not built) — the drill-in drawer and the computed-context tooltip
+
+Captured while the mock's answers were fresh, so the build reads a spec instead of
+re-deriving one from a conversation. **These are specifications, not commitments** — nothing
+below is built, and the same payload-sourcing rule governs them as everything else on a card:
+**a field with no backing in the payload does not render.** If the mock shows a field the
+evaluation does not carry, that is a producer declaration to file, not a value to compose.
+
+### The drill-in drawer — field layout
+
+Named field groups, in the order the mock presents them:
+
+1. **Breadcrumb** — where the drilled-in value sits in the structure it came from.
+2. **Funding table** — the rows behind the number.
+3. **Cap chips** — the governing cap(s) the value was measured against.
+4. **Target chips** — the target(s), distinct from caps.
+5. **Window / confidence** — the evaluation's period and its confidence.
+
+**Underspecified and deliberately not guessed** — fill these from the mock before building,
+because inventing them here would put fabricated structure into a document someone builds
+against:
+
+- Which payload field backs each group. Only `window` and `confidence` have obvious homes
+  (`resolved_intent.parameters` and `routing.*.confidence`); the rest need naming.
+- Whether cap chips and target chips can both be absent, and what the drawer shows when they
+  are. Per the house rule the answer is "nothing, not a placeholder", but the mock may
+  disagree and it should be asked rather than assumed.
+- Whether the funding table is the same rows the card drew or a drill-in query. If the latter,
+  it is an evaluation and carries its own `valid_as_of` (ADR-0042 §4) — which changes the
+  drawer from a view into a live view.
+
+**Already available to build against:** the interpretation strip renders slots as discrete
+keyed elements (`data-slot`), so the drawer can reuse that vocabulary rather than inventing a
+second one, and the freshness stamp is a component the drawer can mount as-is.
+
+### The computed-context tooltip — density standard
+
+The standard as named: a tooltip carries the **computed context** behind a value — what it was
+measured against and how it was derived — rather than restating the label.
+
+**What this repo has already settled and the standard should inherit:**
+
+- A tooltip that cannot say anything true says nothing. `ThresholdGrid` already models it:
+  `"no contributors recorded"` rather than an empty tooltip or an invented cause.
+- Absence renders as absence — the em dash for an uncounted value, `as of —` for an unknown
+  evaluation time. A tooltip must not fill a gap with a plausible default.
+- Structured values are not stringified at a reader (`…`, not `[object Object]`).
+
+**Underspecified:** the density itself — how many facts per tooltip before it stops being
+scannable — is a design call from the mock, not a rule this document can derive. Record the
+mock's actual counts when transcribing.
+
+---
+
 ## Runbook (during the demo)
 
 - **The UI stops responding entirely — typing AND clicking** → **reload the tab.** The answers
