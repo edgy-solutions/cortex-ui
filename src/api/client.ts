@@ -52,7 +52,12 @@ export async function fetchEntitlements(): Promise<Entitlements> {
   const token = getOidcToken();
   const resp = await axios.get<Entitlements>(`${API_URL}/me/entitlements`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
-    timeout: 5000,
+    // 15s, not 5s. DEFENCE, not the fix: under HTTP/1.1 the browser caps ~6 connections per
+    // origin, Electric holds two live shapes, and a bootstrap request can sit unsent past a 5s
+    // deadline without the server ever seeing it. The ordering change (fetch on auth-ready,
+    // ahead of shape subscriptions) is the actual repair; this only stops a queued request from
+    // being abandoned before it is dispatched.
+    timeout: 15000,
   });
   return resp.data;
 }

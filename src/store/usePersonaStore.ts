@@ -50,8 +50,16 @@ interface PersonaState {
 
   // -- actions --------------------------------------------------------
 
-  /** Called on login by AuthProvider (or first mount that has a JWT). */
-  loadEntitlements: (fetchFn: () => Promise<Entitlements>) => Promise<void>;
+  /**
+   * Called on auth-ready by App — BOOTSTRAP data, deliberately not owned by the picker.
+   *
+   * `sleepFn` exists so tests can drive the backoff without waiting on it; production never
+   * passes it.
+   */
+  loadEntitlements: (
+    fetchFn: () => Promise<Entitlements>,
+    sleepFn?: (ms: number) => Promise<void>,
+  ) => Promise<void>;
 
   /** Manual selection changes from the picker component. */
   setSelectedPersona: (persona: string) => void;
@@ -72,6 +80,14 @@ interface PersonaState {
   personas: () => string[];
 }
 
+/**
+ * Two retries after the first attempt, then a VISIBLE failure. Bounded because an unbounded
+ * retry against a starved connection pool is indistinguishable from the storm it is reacting to.
+ */
+const ENTITLEMENT_RETRIES = 2;
+const ENTITLEMENT_BACKOFF_MS = 400;
+const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export const usePersonaStore = create<PersonaState>()(
   persist(
     (set, get) => ({
@@ -82,8 +98,17 @@ export const usePersonaStore = create<PersonaState>()(
       selectedDomains: [],
       ownerSub: null,
 
-      async loadEntitlements(fetchFn) {
+      async loadEntitlements(fetchFn, sleepFn = defaultSleep) {
         set({ entitlementsLoading: true, entitlementsError: null });
+        // BOUNDED retry. A single transient — a timeout under connection starvation, a cold
+        // backend — used to disable the picker for the whole session, because the caller's
+        // effect had no dependency that would change afterwards. Retrying here fixes it at the
+        // layer that knows the attempt failed, rather than making the effect re-fire.
+        //
+        // It must NOT resurrect the self-sealing trap it replaces: a TERMINAL failure still
+        // sets `entitlementsError`, which the picker renders as a visible reason. Silence is
+        // what made this cost a night; retries that end in silence would cost the next one.
+        for (let attempt = 0; ; attempt++) {
         try {
           const e = await fetchFn();
           const st = get();
@@ -110,11 +135,18 @@ export const usePersonaStore = create<PersonaState>()(
               selectedDomains: [e.cells[0].domain],
             });
           }
+          return;
         } catch (err: any) {
-          set({
-            entitlementsLoading: false,
-            entitlementsError: err?.message ?? String(err),
-          });
+          if (attempt >= ENTITLEMENT_RETRIES) {
+            set({
+              entitlementsLoading: false,
+              entitlementsError: err?.message ?? String(err),
+            });
+            return;
+          }
+          // Backoff, so a retry does not join the storm that caused the failure.
+          await sleepFn(ENTITLEMENT_BACKOFF_MS * Math.pow(3, attempt));
+        }
         }
       },
 

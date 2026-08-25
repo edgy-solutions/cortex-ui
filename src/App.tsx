@@ -20,6 +20,8 @@ import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
+import { usePersonaStore } from "@/store/usePersonaStore";
+import { fetchEntitlements } from "@/api/client";
 
 import { Toaster } from "sonner";
 
@@ -146,6 +148,37 @@ function useSessionIsolation(): boolean {
   return owner != null && readyOwner === owner;
 }
 
+/**
+ * Entitlements are SESSION BOOTSTRAP, so they are fetched here — on auth-ready, at the top of
+ * the tree — rather than by the picker that displays them.
+ *
+ * The picker mounts deep inside the answer surface, so owning the fetch there meant the request
+ * deciding whether a user may choose a persona went out AFTER the card tree rendered, behind
+ * however many artifacts the session had accumulated. Under HTTP/1.1 the browser caps ~6
+ * connections per origin and Electric holds two of them open for its live shapes, so on a
+ * session with dozens of cards the request could sit unsent until it timed out — and the picker,
+ * having no dependency that would change afterwards, stayed inert for the rest of the session.
+ *
+ * This is the correct ordering on the merits, not a workaround: bootstrap data should not queue
+ * behind card data in any protocol. HTTP/2 multiplexing (which the TLS-terminating venue gets
+ * for free) makes the old ordering survivable rather than correct.
+ */
+function useEntitlementsSync() {
+  const auth = useAuth();
+  const sub = auth.user?.profile?.sub ?? null;
+  const loadEntitlements = usePersonaStore((s) => s.loadEntitlements);
+  const loadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!auth.isAuthenticated || !sub) return;
+    // Keyed on the SUBJECT rather than on a boolean: a user switch must re-fetch, and a failed
+    // attempt must not be mistaken for a completed one. The store bounds its own retries and
+    // surfaces a terminal failure through the picker's visible error state.
+    if (loadedFor.current === sub) return;
+    loadedFor.current = sub;
+    void loadEntitlements(fetchEntitlements);
+  }, [auth.isAuthenticated, sub, loadEntitlements]);
+}
+
 export default function App() {
   // MUST be first — purges a prior user's cached state before the sync hooks
   // below start their subscriptions or the timeline renders.
@@ -153,6 +186,7 @@ export default function App() {
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
+  useEntitlementsSync();
   useArtifactSync();
   useHumanTaskSync();
   // Tasks are timeline citizens: mirror the HITL store into task-artifacts so

@@ -28,9 +28,6 @@
  *     untouched per the design's idle state).
  */
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "react-oidc-context";
-
-import { fetchEntitlements } from "@/api/client";
 import { usePersonaStore } from "@/store/usePersonaStore";
 
 // Design tokens — exact values from the handoff spec. The app's neon
@@ -60,7 +57,6 @@ const BoltSvg = () => (
 );
 
 export function PersonaPicker() {
-  const auth = useAuth();
   const {
     entitlements,
     entitlementsLoading,
@@ -72,25 +68,19 @@ export function PersonaPicker() {
     hasEntitlements,
     domainsFor,
     personas,
-    loadEntitlements,
   } = usePersonaStore();
 
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
 
-  // Load entitlements once we have a JWT — refetch on user switch.
-  useEffect(() => {
-    if (!auth.isAuthenticated) return;
-    const sub = auth.user?.profile?.sub;
-    if (!sub) return;
-    if (entitlements?.user_id === sub) return;
-    void loadEntitlements(fetchEntitlements);
-  }, [
-    auth.isAuthenticated,
-    auth.user?.profile?.sub,
-    entitlements?.user_id,
-    loadEntitlements,
-  ]);
+  // The fetch DELIBERATELY does not live here any more. Entitlements are session bootstrap
+  // data, not card data, and this component mounts deep inside the answer surface — so owning
+  // the fetch meant a request that decides whether the user can pick a persona was issued
+  // AFTER the card tree rendered, behind however many artifacts the session holds. Under
+  // HTTP/1.1 (~6 connections per origin, two held open by Electric shapes) it could sit unsent
+  // until it timed out. App fetches it on auth-ready instead; this component only READS.
+  //
+  // Wrong ordering in any protocol, incidentally — h2 makes it survivable, not correct.
 
   // Esc + outside-click close.
   useEffect(() => {
