@@ -79,16 +79,58 @@ export const PERIOD_SERIES_CONTRACT = {
    */
   recomputes: true,
   fields: {
-    /** The ordered series. Each row: period, capex, expense, total, cap, over_cap, overage. */
+    /** The ordered series. Each row: period, capex, expense, total, cap, over_cap, overage —
+     *  plus an optional nested `baseline`, see PeriodSeriesRow. */
     rows: { encoding: "array", parsesTo: "array-of-objects", required: true },
     /** Echoed so the card can label its own scope without a second lookup. */
     scope_label: { type: "string", required: false },
+    /**
+     * THE UNIT THE NUMBERS ARE IN, declared by the producer and NEVER inferred here.
+     *
+     * `total` is dollars in this payload and a count in `plan_site_load`, so a renderer that
+     * guessed money-ness from a field name would be right until it wasn't. ABSENT MEANS
+     * SILENT: with no `value_unit` the axis reads `1.5M` — correct, just not money-flavoured
+     * — rather than inventing a `$` the payload never sent.
+     *
+     * Producer side: `measures.VALUE_UNIT`, attached to the response envelope.
+     */
+    value_unit: { type: "string", required: false },
   },
   rowRequirements: PERIOD_SERIES_ROW_REQUIREMENTS,
   refusalReasons: PERIOD_SERIES_REFUSAL_REASONS,
 } as const;
 
 export type PeriodSeriesContract = typeof PERIOD_SERIES_CONTRACT;
+
+/**
+ * THE BASELINE SERIES — the ghost bars, and its three invariants live HERE because this file
+ * is the mirror both sides project from.
+ *
+ * 1. **ABSENT, NOT NULL, when the card is not a comparison.** A `baseline: null` on every row
+ *    would tell the renderer a comparison EXISTS and is empty; the key's absence says the card
+ *    is not a comparison at all. The ghost's presence keys on the key's presence — so a
+ *    renderer must test `"baseline" in row`, never `row.baseline != null`.
+ * 2. **ALL ROWS OR NO ROWS.** A payload where some periods carry it and some do not would draw
+ *    a ghost that appears and vanishes across the axis. The producer emits it for every row in
+ *    a comparison scope.
+ * 3. **NESTED, because the three numbers move together.** As three sibling columns
+ *    (`baseline_total`, `baseline_capex`, `baseline_expense`) the "add or drop them as one"
+ *    rule would live in a convention nobody enforces. One object cannot half-arrive.
+ *
+ * WHAT PRODUCES IT: `plan_cost_curve(state, baseline_state=…)`, resolved at the route from the
+ * store when `state_ref` names a scenario. It is the diff machinery reaching this payload —
+ * `plan_diff` pairs periods the same way — rather than a bolt-on column.
+ *
+ * WHAT WILL NOT MOVE IT: a bare project drag. Funding requirements are period-keyed and never
+ * re-derived from a project's interval, so `MoveProject` alone leaves both series identical
+ * and the ghost renders exactly behind its own bar. A visible cost comparison needs a funding
+ * op (`set_cost`) in the scenario.
+ */
+export interface PeriodSeriesBaseline {
+  capex: number;
+  expense: number;
+  total: number;
+}
 
 /** One row of the series, as the verb emits it. */
 export interface PeriodSeriesRow {
@@ -101,6 +143,11 @@ export interface PeriodSeriesRow {
   over_cap: boolean;
   /** null unless over_cap. */
   overage: number | null;
+  /**
+   * The ghost. ABSENT — not null — when the card is not a comparison. See
+   * PeriodSeriesBaseline for the three invariants a renderer must honour.
+   */
+  baseline?: PeriodSeriesBaseline;
 }
 
 export type PeriodSeriesRefusal = (typeof PERIOD_SERIES_REFUSAL_REASONS)[number];
