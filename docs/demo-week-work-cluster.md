@@ -83,6 +83,35 @@ only so the session is planned against a complete list.
       funding-flavoured payload), not just the cost curve, so they all render alike.
       **No frontend change is needed when it lands.**
 
+- [ ] **Three producer declarations complete the planning cards' data vocabulary.** All three
+      are Engine P payload-assembly work. The frontend half of each is built, tested, and
+      waiting — and each will render the moment a payload declares it, with no frontend change.
+      Grouped because they are one half-day for one owner, and because *one side done, the
+      other never asked* is the death this list exists to prevent.
+
+      1. **`value_unit`** on the money family (cost curve, funding gap). Shipped frontend:
+         `a03a960`. Until it arrives the axis reads `1.5M` rather than `$1.5M` — correct, just
+         not money-flavoured, because the renderer will not guess a unit the payload never
+         sent.
+      2. **A `baseline` series on `PeriodSeriesRow`.** The row today is
+         `{period, capex, expense, total, cap, over_cap, overage}` — there is no baseline, so
+         the mockup's ghost bars **cannot render at all**. This is not a bolt-on field: the
+         evaluation carries both series only when the card's scope includes a comparison, which
+         is scenario-dependent — the diff machinery reaching the period payload, `plan_diff`'s
+         sibling concern. The mockup's "ghost = baseline" annotation was quietly specifying a
+         contract extension.
+      3. **A `risk_flag` VOCABULARY from the schedule producer** — `MOVED` on op-touched bars,
+         the FS-violation value on constraint-breaching ones. **The mechanism already exists:**
+         `IntervalRow.risk_flag` is a generic styling key that the renderer deliberately never
+         interprets ("styles an unknown string and stops"), and it is already threaded through
+         to the task as `$risk_flag`. So: **emit values, do not add fields.** A parallel
+         violation field would duplicate a seam that is already generic by design.
+
+      *Not built on purpose:* the badge that renders `risk_flag`. A badge with nothing to badge
+      is declared-but-unwired manufactured deliberately — the shape this repo spent a week
+      converting from accident into finding. It is an hour's work whenever the flags exist, and
+      a better hour, because there will be a real value to red-proof against.
+
 - [ ] **Post-roll: re-ask a DA question and read the card's SQL footer.** One question, and it
       discriminates stale-image from real defect — which is the only way anything gets
       classified now. The footer showing a bare "SQL:" with nothing after it was fixed in
@@ -93,6 +122,53 @@ only so the session is planned against a complete list.
       the fetch, so if the footer shows it too, the composed query never reached the
       `sql_query` contract field and that is a payload-assembly item to file — honest
       provenance, but the shallowest link in the chain.
+
+---
+
+## The four planning archetypes are UNREACHABLE until the hardened renderers land
+
+Established by another lane, 2026-08-24. The registered archetype is selected correctly —
+`INTERVAL_TIMELINE`, `PERIOD_SERIES`, `THRESHOLD_GRID`, `MATRIX_GRID`, all `source=registered`
+— and then the `fallback-designui` path **discards it and emits a bar chart**. So all four
+components exist, are contract-tested, and **never receive a payload**.
+
+Two consequences for this lane:
+
+- **Hold verification, not confidence.** The card vocabulary built against those contracts is
+  not wasted — it is pre-verified and waiting. Components and hardened renderers are both
+  projections of the same `.contract.ts` shapes, so the vocabulary becomes reachable *already
+  correct* when the arms land. Unreachable-but-tested is the intended intermediate state of a
+  two-sided build.
+- **Do not screenshot-verify the four planning widgets** until the renderers land. Any visual
+  check today verifies the fallback's guesses, not the components.
+
+Note what this implies about behaviour already believed shipped: `PeriodSeries`'s cap line and
+`ThresholdGrid`'s breach treatment are both correct against their contracts and **have never
+actually rendered**. Their correctness is contract-verified, not observed.
+
+**The fallback is an LLM, and that makes it nondeterministic on the demo's critical path.**
+`b.DesignUI()` picks the chart shape generatively per request, so identical data renders or
+fails run to run — the gantt's "intermittent" failure was a fair coin landing differently, and
+CHART-DATA-NOT-RENDERABLE and a clean draw are the same coin's two faces. **A beat that worked
+in rehearsal can fail in the room, with no change anywhere.** This is a category nothing else
+here tolerates: counts predicted, phrasings certified at n≥3, and then the last hop rolls dice.
+
+**Measurement caveat for when the renderers land:** the before/after must hold the question set
+fixed and run n≥2 per side. A single-run comparison could catch the fallback on a lucky draw
+and understate the fix — the nondeterminism finding applies to measuring its own removal.
+
+---
+
+## What of tonight's work IS reachable
+
+Split recorded so nobody re-debugs reachable code looking for an archetype fault:
+
+- **Reachable now** — card sizing (`fd64749`), the `portfolio_planning` type + chrome +
+  template (`0827ad0`), and the interpretation strip + freshness stamp (`be9fe1a`). These live
+  on `StageCard` and the canvas, so they render regardless of which component draws the card
+  body.
+- **Unreachable until the arms land** — anything inside `PeriodSeries`, `ThresholdGrid`,
+  `IntervalTimeline`, `MatrixGrid`.
 
 ---
 
