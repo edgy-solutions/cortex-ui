@@ -28,7 +28,22 @@
  */
 import { useCallback, useMemo, useRef } from "react";
 import { Gantt } from "@svar-ui/react-gantt";
-import "@svar-ui/react-gantt/style.css";
+// THE FULL SHEET, not `style.css`. The package exports two:
+//
+//   ./style.css   dist/index.css        32 KB   236 selectors   theme vars + grid/table
+//   ./all.css     dist-full/index.css  150 KB   926 selectors   everything, incl. the bars
+//
+// Importing the partial one produced a gantt that looked BROKEN rather than unstyled: the
+// left task table rendered correctly, labels sat at date-correct x positions and tracked
+// scroll — so the layout engine was computing geometry fine — but no bars drew, and the
+// scale read its literal format string (`MMM yyyy`). Four symptoms, one cause: the bar and
+// scale-cell rules live in the 690 selectors the partial sheet omits.
+//
+// Worth keeping because of what it ISN'T: this looked like a SIZING failure, and a
+// `minHeight` on the wrapper below was proposed twice. Nothing here is collapsed — the
+// elements are unstyled. That change would have papered over a stylesheet import, left the
+// bars invisible, and looked like progress.
+import "@svar-ui/react-gantt/all.css";
 import {
   intervalRowKey,
   validateIntervalTimeline,
