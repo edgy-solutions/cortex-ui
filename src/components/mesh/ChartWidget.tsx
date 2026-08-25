@@ -19,6 +19,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { Share2 } from 'lucide-react';
+import { formatAmount } from "@/lib/formatAmount";
 
 interface ChartWidgetProps {
   data: string; // The stringified JSON array from Engine A/BAML
@@ -284,34 +285,13 @@ const AXIS_TICK = { fill: "#94a3b8" };
  * rendered as magnitude rather than pasted onto every tick: an unknown unit is a reason to
  * say less, not to invent a layout.
  */
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  JPY: "¥",
-};
+/**
+ * Re-exported from lib so the tick formatter and ShortfallGrid share ONE implementation.
+ * The rule is documented at its new home; this name is kept because the axis wiring guard and
+ * the formatter tests address it here.
+ */
+export { formatAmount as formatAxisValue } from "@/lib/formatAmount";
 
-export function formatAxisValue(v: number | string, unit?: string): string {
-  // An empty/blank string coerces to 0, which would print a ZERO the payload never sent —
-  // a fabricated value is worse than a blank tick. Echo it instead.
-  if (typeof v === "string" && v.trim() === "") return v;
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  const abs = Math.abs(n);
-  const symbol = unit ? (CURRENCY_SYMBOLS[unit.toUpperCase()] ?? "") : "";
-  // The symbol goes INSIDE the sign: -$1.5M, not $-1.5M. On a cost curve the sign carries
-  // the meaning, so it has to stay where a reader looks for it.
-  const withUnit = (body: string) => (n < 0 ? `-${symbol}${body.slice(1)}` : `${symbol}${body}`);
-  // Trim a trailing ".0" so 1.0M reads 1M, but keep 1.5M.
-  const compact = (scaled: number, suffix: string) =>
-    `${scaled.toFixed(1).replace(/\.0$/, "")}${suffix}`;
-  if (abs >= 1e9) return withUnit(compact(n / 1e9, "B"));
-  if (abs >= 1e6) return withUnit(compact(n / 1e6, "M"));
-  if (abs >= 1e3) return withUnit(compact(n / 1e3, "K"));
-  // Below 1000 the raw value already fits, and rounding it would destroy precision the
-  // reader can still use.
-  return withUnit(String(n));
-}
 const TOOLTIP_STYLE = {
   backgroundColor: "rgba(15, 23, 42, 0.9)",
   borderColor: "rgba(6, 182, 212, 0.4)",
@@ -325,7 +305,7 @@ const TOOLTIP_STYLE = {
 export const ChartWidget = ({ data, type, subject, sql, valueUnit, onPublish }: ChartWidgetProps) => {
   // One closure so every axis formats identically; the wiring guard asserts no value axis
   // renders raw numbers, which is the half unit tests on the formatter cannot prove.
-  const tickFmt = (v: number | string) => formatAxisValue(v, valueUnit);
+  const tickFmt = (v: number | string) => formatAmount(v, valueUnit);
   // Parse + normalize once. Recharts is sensitive to re-creating
   // data arrays on every render (it triggers expensive re-layout);
   // useMemo guards against that.

@@ -37,6 +37,7 @@ import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.co
 import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
 import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
 import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimeline.contract";
+import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.contract";
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import {
   APPROVAL_TASK_CONTRACT,
@@ -232,6 +233,17 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: DECISION_RECORD_CONTRACT,
+  },
+  // Same sequencing as DECISION_RECORD above: the contract, ontology class and admission
+  // vocabulary landed server-side, and the binding lands with the COMPONENT rather than ahead
+  // of it. The dispatch seal refuses to advertise an archetype whose renderer does not exist,
+  // so registering early would have earned a refusal and taught nobody anything.
+  {
+    subject_uri: "mesh:FundingGapSet",
+    object_uri: "mesh:ShortfallGrid",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: SHORTFALL_GRID_CONTRACT,
   },
 ] as const;
 

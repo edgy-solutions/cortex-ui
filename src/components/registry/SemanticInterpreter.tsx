@@ -21,6 +21,7 @@ import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPrope
 import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
 import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
 import { PeriodSeries } from "@/components/planning/PeriodSeries";
+import { ShortfallGrid } from "@/components/planning/ShortfallGrid";
 import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
 import { DeltaSet } from "@/components/planning/DeltaSet";
@@ -515,6 +516,23 @@ const renderComponent = (
         />
       );
 
+    case "SHORTFALL_GRID":
+      // A LIVE VIEW (ADR-0042). Subjects x periods, secured against needed. Its colour means
+      // DEFICIT -> RISK, which is why it is not THRESHOLD_GRID (breach -> danger, where
+      // over_threshold would have to carry true for "under") and not MATRIX_GRID (distance ->
+      // progress, which would make money wear level's name). Structural: the payload's first
+      // consumer is org funding gaps and nothing here knows that word.
+      return (
+        <ShortfallGrid
+          rows={comp.rows}
+          value_label={comp.value_label}
+          value_unit={comp.value_unit}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "THRESHOLD_GRID":
       // A LIVE VIEW (ADR-0042). Subjects x periods against a threshold each subject OWNS —
       // structural, so the payload's first consumer (site change-load) is invisible here.
@@ -602,6 +620,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "INSTANCES_BY_PROPERTY" ||
   archetype === "PERIOD_SERIES" ||
   archetype === "THRESHOLD_GRID" ||
+  archetype === "SHORTFALL_GRID" ||
   archetype === "MATRIX_GRID" ||
   archetype === "DELTA_SET" ||
   archetype === "INTERVAL_TIMELINE" ||
