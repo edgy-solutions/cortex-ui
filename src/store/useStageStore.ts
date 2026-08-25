@@ -94,6 +94,16 @@ interface StageState {
   /** Arrangement, per ADR-0042 §4 — persists with the canvas. Non-positive dims are refused. */
   resizeItem: (canvasId: string, answerId: string, w: number, h: number) => void;
   removeItem: (canvasId: string, answerId: string) => void;
+  /**
+   * The client half of "make me a portfolio canvas": receive an ordered set of already-minted
+   * artifacts and compose a typed canvas from them. Returns the new canvas id.
+   *
+   * Deliberately a COMPOSITION of createCanvas + addItemAuto rather than a placement routine
+   * of its own. The moment seeding computes its own coordinates, a seeded canvas and a
+   * hand-built one stop being the same object, and "built the way a user would build it"
+   * becomes a claim instead of a fact.
+   */
+  seedPortfolioCanvas: (artifactIds: string[], name?: string, enter?: boolean) => string;
 }
 
 const genId = () =>
@@ -107,7 +117,7 @@ const slotFor = (n: number) => ({
 
 export const useStageStore = create<StageState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       view: GLOBAL,
       canvases: [],
       focusId: null,
@@ -207,6 +217,22 @@ export const useStageStore = create<StageState>()(
             ),
           };
         }),
+      // The receiving end of the seeding intent. The catalog/BFF half asks the questions
+      // through the governed path and mints real artifacts; this takes their ids and
+      // arranges them. Everything it does, a user does by hand: create a typed canvas, then
+      // add cards in order. The template applies because addItemAuto consults it, not
+      // because seeding knows about slots — so a seeded canvas is byte-identical to a
+      // hand-built one, which is what makes it a starting point rather than a second kind
+      // of object.
+      //
+      // ORDER IS THE DECLARATION: the caller decides which measure lands in which slot by
+      // the order it passes them. That belongs to the seeding intent, not here — a template
+      // that assigned measures to slots would be reaching into the seeder's job.
+      seedPortfolioCanvas: (artifactIds, name = "Portfolio Planning", enter = true) => {
+        const id = get().createCanvas(name, "portfolio_planning", enter);
+        for (const artifactId of artifactIds) get().addItemAuto(id, artifactId);
+        return id;
+      },
       removeItem: (canvasId, answerId) =>
         set((s) => ({
           canvases: s.canvases.map((c) =>

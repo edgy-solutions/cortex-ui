@@ -104,6 +104,43 @@ describe("the template applies through the ORDINARY add path", () => {
     expect(items[n - 1].w).toBeUndefined();
   });
 
+  it("a SEEDED canvas is byte-identical to a hand-built one — the whole point", () => {
+    // The property that makes seeding a starting point rather than a second kind of object.
+    // If these ever diverge, "built the way a user would build it" has become a claim instead
+    // of a fact, and every consumer that reads canvases needs to learn about a special case.
+    const ids = ["a1", "a2", "a3"];
+
+    const seeded = useStageStore.getState().seedPortfolioCanvas(ids, "Seeded", false);
+    const byHand = useStageStore.getState().createCanvas("ByHand", "portfolio_planning", false);
+    for (const id of ids) useStageStore.getState().addItemAuto(byHand, id);
+
+    const all = useStageStore.getState().canvases;
+    const s = all.find((c) => c.id === seeded)!;
+    const h = all.find((c) => c.id === byHand)!;
+
+    expect(s.items).toEqual(h.items);
+    expect(s.use).toBe(h.use);
+    // Everything except the identity fields, which are the only things allowed to differ.
+    expect({ ...s, id: "", name: "" }).toEqual({ ...h, id: "", name: "" });
+  });
+
+  it("ORDER decides the slot — the caller's ordering is the declaration", () => {
+    // Which measure lands in the anchor is the seeding intent's business, expressed as the
+    // order it passes the ids. Nothing here assigns meaning to a slot.
+    const id = useStageStore.getState().seedPortfolioCanvas(["gantt", "cost", "load"], "P", false);
+    const items = useStageStore.getState().canvases.find((c) => c.id === id)!.items;
+    expect(items.map((i) => i.id)).toEqual(["gantt", "cost", "load"]);
+    expect({ ...items[0] }).toEqual({ id: "gantt", ...PORTFOLIO_PLANNING_TEMPLATE[0] });
+  });
+
+  it("seeds an EMPTY canvas without inventing rows", () => {
+    // A composition step that produced nothing must produce an empty canvas, not a canvas of
+    // placeholders. The seeding intent may legitimately come back with fewer answers than it
+    // asked for — a refusal is one of the outcomes.
+    const id = useStageStore.getState().seedPortfolioCanvas([], "P", false);
+    expect(useStageStore.getState().canvases.find((c) => c.id === id)!.items).toEqual([]);
+  });
+
   it("a TYPE never restricts what a canvas may hold — lens, not container", () => {
     // The rule that keeps canvases one substrate. Any artifact id goes onto any canvas; the
     // store has no notion of a card being wrong for a type, and must not grow one.
