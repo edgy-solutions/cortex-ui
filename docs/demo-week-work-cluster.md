@@ -281,6 +281,71 @@ converged independently from the same customer prompt.
 
 ---
 
+## Per-mount I/O in per-card components — swept 2026-08-25, ONE instance, now fixed
+
+Recorded because the result was NEGATIVE. "We looked and it is fine" leaves nothing behind
+and decays into folklore faster than any finding does; six months from now the difference
+between a ten-minute re-run and a one-line lookup is whether this table exists.
+
+### The species
+
+**A correct-looking `useEffect(..., [])` doing I/O is only correct if the component's mount
+count is bounded — and in a per-artifact component, mount count is a function of session
+data.** The hook's correctness therefore *degrades as the user uses the product*: invisible at
+seed scale, structural at real scale. It hides precisely because every individual mount is
+doing the right thing.
+
+One historical violation: `useMeshConfig` inside `SemanticInterpreter`, which mounts once per
+card. A session holding seventy answers issued ~seventy simultaneous `GET /mesh/config` for a
+global, immutable, byte-identical payload — enough to saturate cortex-bff's event loop, make
+`/health` miss its readiness window, get the pod pulled from the service endpoints, and have
+the edge answer 404 with no CORS headers while `kubectl get pods` read Running 1/1. Fixed in
+`a7ab9ae` with a module-level shared promise; the guard mounts seventy, because "one fetch" is
+trivially true for a single mount whether or not a cache exists.
+
+### Preference order for I/O in anything rendered per artifact
+
+1. **Handler-triggered** — mount count of zero by construction. Not a mitigation; a shape in
+   which the failure mode cannot exist. The task cards do this.
+2. **Effect keyed on the data's identity** — bounded by *distinct data*, not by mounts.
+3. **Module-level cached promise** — bounded to one per session, with failure clearing the
+   slot so a rejected promise cannot poison the cache.
+4. **Per-mount effect** — unbounded by session data. This is the defect.
+
+### The teaching case
+
+**`DecisionMap` is category 2 done right, and it is the sharpest example in the sweep:**
+genuinely per-card, genuinely fetching, and safe because its deps are the artifact's own
+identity (`[routing?.about.uri, graphTrace.length, alternates.length]`) plus a `cancelled`
+guard. It fetches per distinct routing rather than per mount. *Key the effect on what makes
+the data different, and mount count stops being the multiplier.* A reviewer who understands
+why `DecisionMap` is fine will not write the next `SemanticInterpreter`.
+
+### Sweep method and result (2026-08-25)
+
+Method: the sixteen modules importing `@/api/client` or `@/lib/electric`, cross-referenced
+against mount cardinality; plus a general grep for `}, []);` effects containing a
+fetch/subscribe across `src/`, which returned exactly one non-test match
+(`useCanvasPersistence`'s store subscription — App-level, correct).
+
+| Component | Mounts | Mount-time I/O | Verdict |
+|---|---|---|---|
+| `SemanticInterpreter` | per card | yes, `[]` deps | **the instance — fixed in `a7ab9ae`** |
+| `DecisionMap` | per card | yes, keyed on artifact identity | clean (category 2) |
+| `TriageTaskCard` | per task card | no — keydown listener; I/O in handler | clean |
+| `GroupedReviewTable` | per review card | no — local draft cache | clean |
+| `ApprovalTaskCard` | per task card | no — I/O in handler | clean |
+| `EvidencePane` | once | keyed `[noticeId]`, `live` guard | clean |
+| `PersonaPicker`, `GlobalCanvasStage`, `AccessDeniedCard` | once | — | clean |
+| `useCanvasPersistence`, `useTaskArtifactSync`, `useAgent`, `useInterviewAgent`, `seedHumanTasks` | App-level, once | — | clean |
+
+**Result: zero further hits.** `SemanticInterpreter` was the pattern's only instance, so this
+entry is prophylactic rather than remedial. A component added after this date is outside the
+covered set — judge it against the preference order above rather than assuming the sweep
+covered it.
+
+---
+
 ## Runbook (during the demo)
 
 - **The UI stops responding entirely — typing AND clicking** → **reload the tab.** The answers
