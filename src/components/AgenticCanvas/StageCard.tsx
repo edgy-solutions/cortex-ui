@@ -34,6 +34,7 @@ export function StageCard({
   selected,
   dragIds,
   onDragComplete,
+  size,
 }: {
   artifact: Artifact;
   focused: boolean;
@@ -51,7 +52,13 @@ export function StageCard({
   dragIds?: string[];
   /** Called after a successful MULTI drag-drop, so the caller can clear the
    *  lasso selection. */
+  /** Called after a successful MULTI drag-drop, so the caller can clear the
+   *  lasso selection. */
   onDragComplete?: () => void;
+  /** World-space footprint. ADR-0042 §4: size is ARRANGEMENT, owned by the UI and
+   *  persisted with the canvas. Absent → the default card size, which is what every
+   *  canvas authored before per-item dimensions existed carries. */
+  size?: { w: number; h: number };
 }) {
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
@@ -106,8 +113,8 @@ export function StageCard({
       }}
       style={{
         ...style,
-        width: STAGE_CARD.w,
-        height: STAGE_CARD.h,
+        width: size?.w ?? STAGE_CARD.w,
+        height: size?.h ?? STAGE_CARD.h,
         // Stage-2 morph rides these; opacity is the focus-dim.
         transition:
           "left 650ms cubic-bezier(.3,.75,.25,1), top 650ms cubic-bezier(.3,.75,.25,1), opacity 400ms ease, border-color 200ms ease",

@@ -24,6 +24,17 @@ export interface CanvasItem {
   id: string; // answer id
   x: number;
   y: number; // world coords, top-left of card
+  /**
+   * World-space footprint. OPTIONAL — absent means the default card size, which is what
+   * every canvas authored before this field existed carries. ADR-0042 §4 names size as
+   * arrangement (UI-owned, persisted with the canvas, never recomputed, never in a payload),
+   * so this implements a written ruling rather than introducing a concept.
+   *
+   * Read through `cardSize()` rather than these fields directly: it applies the default and
+   * refuses a zero, which a measuring container would render as an invalid size.
+   */
+  w?: number;
+  h?: number;
 }
 export interface CustomCanvas {
   id: string;
@@ -64,6 +75,8 @@ interface StageState {
   addItemAuto: (canvasId: string, answerId: string) => void; // auto-slot placement
   addItemAt: (canvasId: string, answerId: string, x: number, y: number) => void;
   moveItem: (canvasId: string, answerId: string, x: number, y: number) => void;
+  /** Arrangement, per ADR-0042 §4 — persists with the canvas. Non-positive dims are refused. */
+  resizeItem: (canvasId: string, answerId: string, w: number, h: number) => void;
   removeItem: (canvasId: string, answerId: string) => void;
 }
 
@@ -155,6 +168,24 @@ export const useStageStore = create<StageState>()(
               : c,
           ),
         })),
+      // Size is arrangement (ADR-0042 §4), so it lives here beside position and rides the
+      // same canvas persistence. A non-positive dimension is refused rather than stored:
+      // the default is recoverable, a zero-size card is not, and a card measuring zero takes
+      // any ResponsiveContainer inside it down with it.
+      resizeItem: (canvasId, answerId, w, h) =>
+        set((s) => {
+          // Same finiteness rule as cardSize: Infinity passes a bare > 0 check and would be
+          // persisted to /me/canvases, coming back on every device.
+          const ok = (v: number) => Number.isFinite(v) && v > 0;
+          if (!ok(w) || !ok(h)) return s;
+          return {
+            canvases: s.canvases.map((c) =>
+              c.id === canvasId
+                ? { ...c, items: c.items.map((it) => (it.id === answerId ? { ...it, w, h } : it)) }
+                : c,
+            ),
+          };
+        }),
       removeItem: (canvasId, answerId) =>
         set((s) => ({
           canvases: s.canvases.map((c) =>

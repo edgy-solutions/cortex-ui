@@ -8,7 +8,7 @@ import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
 import { fetchLineageEdges } from "@/api/client";
-import { STAGE_CARD } from "@/lib/stageConstants";
+import { STAGE_CARD, cardSize } from "@/lib/stageConstants";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
@@ -31,13 +31,16 @@ const CAM_MS = 620;
 const EASE = "cubic-bezier(.3,.75,.25,1)";
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-function customWorld(items: { x: number; y: number }[]) {
+function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) {
   if (!items.length) return { w: 1500, h: 950 };
   let mx = 0;
   let my = 0;
   for (const it of items) {
-    mx = Math.max(mx, it.x + STAGE_CARD.w);
-    my = Math.max(my, it.y + STAGE_CARD.h);
+    // Per-item footprint, not the constant: an oversized card must extend the world it
+    // sits in, or the camera fits a box that does not contain it and it clips off-stage.
+    const sz = cardSize(it);
+    mx = Math.max(mx, it.x + sz.w);
+    my = Math.max(my, it.y + sz.h);
   }
   return { w: Math.max(1500, mx + 140), h: Math.max(950, my + 140) };
 }
@@ -125,11 +128,12 @@ export function GlobalCanvasStage() {
   const entries = useMemo(() => {
     if (isGlobal) {
       return artifacts
-        .map((a) => ({ a, pos: globalLayout.positions[a.id], itemId: null as string | null }))
+        // GLOBAL is a computed view with no per-item arrangement, so every card is uniform.
+        .map((a) => ({ a, pos: globalLayout.positions[a.id], itemId: null as string | null, size: cardSize() }))
         .filter((e) => e.pos);
     }
     return activeCanvas!.items
-      .map((it) => ({ a: artifactById[it.id], pos: { x: it.x, y: it.y }, itemId: it.id }))
+      .map((it) => ({ a: artifactById[it.id], pos: { x: it.x, y: it.y }, itemId: it.id, size: cardSize(it) }))
       .filter((e) => e.a);
   }, [isGlobal, artifacts, globalLayout, activeCanvas, artifactById]);
 
@@ -139,6 +143,9 @@ export function GlobalCanvasStage() {
   }, [isGlobal, globalLayout, activeCanvas]);
 
   const posOf = (id: string) => entries.find((e) => e.a.id === id)?.pos ?? null;
+  // The focused card's own footprint — fitting the camera to the DEFAULT size would
+  // under- or over-zoom any card the user has resized.
+  const sizeOf = (id: string) => entries.find((e) => e.a.id === id)?.size ?? cardSize();
 
   useEffect(() => {
     const el = stageRef.current;
@@ -155,13 +162,14 @@ export function GlobalCanvasStage() {
     const { w: vw, h: vh } = vp;
     const fp = focusId ? posOf(focusId) : null;
     if (fp) {
+      const fs2 = sizeOf(focusId!);
       const s = clamp(
-        Math.min((vw * 0.6) / STAGE_CARD.w, (vh * 0.82) / STAGE_CARD.h),
+        Math.min((vw * 0.6) / fs2.w, (vh * 0.82) / fs2.h),
         1.1,
         2.6,
       );
-      const cx = fp.x + STAGE_CARD.w / 2;
-      const cy = fp.y + STAGE_CARD.h / 2;
+      const cx = fp.x + fs2.w / 2;
+      const cy = fp.y + fs2.h / 2;
       return { tx: vw / 2 - cx * s, ty: vh / 2 - cy * s, s };
     }
     const grp = isGlobal && groupKey ? globalLayout.groups.find((g) => g.id === groupKey) : null;
@@ -293,12 +301,12 @@ export function GlobalCanvasStage() {
       const c = camRef.current;
       setSel(
         entries
-          .filter(({ pos }) =>
+          .filter(({ pos, size }) =>
             rectsIntersect(m, {
               x: pos.x * c.s + c.tx,
               y: pos.y * c.s + c.ty,
-              w: STAGE_CARD.w * c.s,
-              h: STAGE_CARD.h * c.s,
+              w: size.w * c.s,
+              h: size.h * c.s,
             }),
           )
           .map((en) => en.a.id),
@@ -511,7 +519,7 @@ export function GlobalCanvasStage() {
           </div>
         )}
 
-        {entries.map(({ a, pos, itemId }) => {
+        {entries.map(({ a, pos, itemId, size }) => {
           const isFocused = focusId === a.id;
           const dim = focusId && !isFocused;
           return (
@@ -524,6 +532,7 @@ export function GlobalCanvasStage() {
               style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
               selected={sel.includes(a.id)}
               dragIds={sel.includes(a.id) ? sel : [a.id]}
+              size={size}
               onDragComplete={() => setSel([])}
               onGripDown={
                 !isGlobal && itemId
