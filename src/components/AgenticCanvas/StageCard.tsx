@@ -9,6 +9,7 @@ import { taskKindLabel } from "@/lib/taskArtifact";
 import { WorkflowLens } from "./WorkflowLens";
 import { STAGE_CARD } from "@/lib/stageConstants";
 import { overviewTier, DENSE_PREVIEW_ROWS } from "@/lib/overviewTier";
+import { InterpretationStrip, FreshnessStamp } from "./InterpretationStrip";
 
 export { STAGE_CARD };
 
@@ -153,6 +154,11 @@ export function StageCard({
           <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-slate-500">
             {taskPending ? "pending" : task.task_state}
           </span>
+        ) : custom ? (
+          /* ADR-0042 §4: the card displays the as-of of the evaluation it is showing. */
+          <span className="ml-auto flex-shrink-0">
+            <FreshnessStamp artifact={artifact} />
+          </span>
         ) : (
           !custom && spo.verbLabel && (
             <span className="ml-auto text-[10px] font-mono text-neon-purple/70 truncate max-w-[45%]">
@@ -187,6 +193,12 @@ export function StageCard({
           </button>
         )}
       </div>
+
+      {/* How the question was READ, as discrete slots — the view-control surface a live
+          view owes its reader. Renders nothing when the payload captured no interpretation;
+          a fabricated one is worse than none, because it is what a reader would trust.
+          Task cards have no resolved intent to show. */}
+      {!task && custom && <InterpretationStrip artifact={artifact} />}
 
       {/* Body: the content lens (answer / task card), or the provenance lens when
           toggled at focus — Decision Map for an answer, Workflow for a task. */}
