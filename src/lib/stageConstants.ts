@@ -19,8 +19,24 @@ export interface CardSlot extends CardSize {
 
 const GUTTER = 40;
 const PAD = 90;
-/** Two default cards plus the gutter between them — the "full width" of this layout. */
-const WIDE = STAGE_CARD.w * 2 + GUTTER;
+
+/**
+ * A planning PANEL is bigger than the default card, deliberately.
+ *
+ * `STAGE_CARD` (360x280) is sized for the global overview, where a card is a preview of an
+ * answer and the point is to see many at once. A workspace panel is the opposite: one answer,
+ * read at working size, with its chart filling the space rather than shrunk into it. Deriving
+ * these from `STAGE_CARD` would tie the two purposes together and make the preview size a
+ * constraint on the workspace, which is how the mini-card problem started.
+ *
+ * The anchor is tall because a gantt with a dozen rows needs the room; a 300px anchor was the
+ * template asking a timeline to fit in a chart's height.
+ */
+const PANEL_W = 520;
+const PANEL_H = 380;
+const ANCHOR_H = 460;
+/** Two panels plus the gutter between them — the "full width" of this layout. */
+const WIDE = PANEL_W * 2 + GUTTER;
 
 /**
  * The default arrangement a `portfolio_planning` canvas opens with: a full-width anchor
@@ -36,15 +52,19 @@ const WIDE = STAGE_CARD.w * 2 + GUTTER;
  * A STARTING point, never a constraint: arrangement is UI-owned (ADR-0042 §4), so the first
  * drag overwrites any of this and the canvas persists whatever the user made of it.
  */
+const ROW_2_Y = PAD + ANCHOR_H + GUTTER;
+const ROW_3_Y = ROW_2_Y + PANEL_H + GUTTER;
+const COL_2_X = PAD + PANEL_W + GUTTER;
+
 export const PORTFOLIO_PLANNING_TEMPLATE: CardSlot[] = [
   // Anchor: the schedule/timeline, full width across the top.
-  { x: PAD, y: PAD, w: WIDE, h: 300 },
+  { x: PAD, y: PAD, w: WIDE, h: ANCHOR_H },
   // The pair beneath it — cost curve beside site load.
-  { x: PAD, y: PAD + 340, w: STAGE_CARD.w, h: STAGE_CARD.h },
-  { x: PAD + STAGE_CARD.w + GUTTER, y: PAD + 340, w: STAGE_CARD.w, h: STAGE_CARD.h },
+  { x: PAD, y: ROW_2_Y, w: PANEL_W, h: PANEL_H },
+  { x: COL_2_X, y: ROW_2_Y, w: PANEL_W, h: PANEL_H },
   // The lower pair — funding gap beside the diff.
-  { x: PAD, y: PAD + 660, w: STAGE_CARD.w, h: STAGE_CARD.h },
-  { x: PAD + STAGE_CARD.w + GUTTER, y: PAD + 660, w: STAGE_CARD.w, h: STAGE_CARD.h },
+  { x: PAD, y: ROW_3_Y, w: PANEL_W, h: PANEL_H },
+  { x: COL_2_X, y: ROW_3_Y, w: PANEL_W, h: PANEL_H },
 ];
 
 /**

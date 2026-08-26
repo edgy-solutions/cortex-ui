@@ -153,6 +153,51 @@ describe("the template applies through the ORDINARY add path", () => {
   });
 });
 
+describe("a SIZED card renders its content; an unsized one previews it", () => {
+  const card = readFileSync(
+    path.join(__dirname, "../components/AgenticCanvas/StageCard.tsx"),
+    "utf8",
+  );
+
+  it("the card source is read — positive control", () => {
+    expect(card).toContain("export function StageCard");
+  });
+
+  it("decides on the ITEM's dimensions, not on which view it is in", () => {
+    // Arrangement is UI-owned (ADR-0042 §4), so a card given dimensions has already declared
+    // how much room its content gets. Keying on the view instead would make the same answer
+    // render differently depending on where it is looked at.
+    expect(card).toMatch(/const sized = Boolean\(size &&/);
+  });
+
+  it("a sized card does NOT go through FitBox — that is the letterboxing", () => {
+    // FitBox scales a fixed 640-wide block by the SMALLER of the width and height ratios, so
+    // content taller than the card's aspect ratio is scaled by height and then under-fills
+    // the width. On a workspace panel that reads as a thumbnail in margins.
+    const branch = card.slice(card.indexOf("hasRendered && sized"), card.indexOf(") : hasRendered ?"));
+    expect(branch.length).toBeGreaterThan(50); // positive control on the slice
+    expect(branch).not.toContain("FitBox");
+    expect(branch).toContain("SemanticInterpreter");
+  });
+
+  it("a sized card SCROLLS rather than clipping", () => {
+    // A panel sized slightly too small must stay readable. Silent clipping is content cut off
+    // with nothing saying so — the same failure as a chart that draws nothing.
+    const branch = card.slice(card.indexOf("hasRendered && sized"), card.indexOf(") : hasRendered ?"));
+    expect(branch).toMatch(/overflow-auto/);
+  });
+
+  it("the template anchor is tall enough to hold a timeline", () => {
+    // A 300px anchor was the template asking a gantt to fit in a chart's height. Panels are
+    // sized for their content, not derived from the overview card.
+    expect(PORTFOLIO_PLANNING_TEMPLATE[0].h).toBeGreaterThanOrEqual(420);
+    for (const s2 of PORTFOLIO_PLANNING_TEMPLATE.slice(1)) {
+      expect(s2.h).toBeGreaterThan(STAGE_CARD.h);
+      expect(s2.w).toBeGreaterThan(STAGE_CARD.w);
+    }
+  });
+});
+
 describe("the type gates CHROME, and the chrome is not a card", () => {
   const stage = readFileSync(
     path.join(__dirname, "../components/AgenticCanvas/GlobalCanvasStage.tsx"),
