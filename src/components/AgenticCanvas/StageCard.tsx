@@ -31,6 +31,7 @@ export function StageCard({
   onDoubleClick,
   style,
   onGripDown,
+  onResizeDown,
   onRemove,
   selected,
   dragIds,
@@ -44,6 +45,9 @@ export function StageCard({
   style: React.CSSProperties;
   /** Custom-canvas mode: a grip to pointer-drag the item within the canvas. */
   onGripDown?: (e: React.PointerEvent) => void;
+  /** Custom-canvas mode: drag the corner to resize. Size is arrangement (ADR-0042 section 4)
+   *  and persists with the canvas, so this writes through the store like a move does. */
+  onResizeDown?: (e: React.PointerEvent) => void;
   /** Custom-canvas mode: remove the item from the canvas. */
   onRemove?: () => void;
   /** Lasso multi-select highlight (global overview). */
@@ -277,6 +281,31 @@ export function StageCard({
           {artifact.question_text || "—"}
         </span>
       </div>
+
+      {/* Resize corner. Only on a custom canvas, because GLOBAL is a computed arrangement with
+          no per-item state to write a size into — a handle there would look like it worked and
+          persist nothing.
+
+          `onPointerDown` rather than a drag event, matching the move grip: the card is
+          `draggable` for the drag-to-chip gesture, and a native drag starting here would fight
+          the resize. `stopPropagation` in the handler keeps the click off the card's select. */}
+      {onResizeDown && (
+        <span
+          onPointerDown={onResizeDown}
+          onDragStart={(e) => e.preventDefault()}
+          draggable={false}
+          role="separator"
+          aria-label="Resize card"
+          title="Drag to resize"
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-40 hover:opacity-100 transition-opacity"
+          style={{
+            // A corner wedge rather than an icon: it reads as an affordance at any card size,
+            // and it does not compete with the footer text for the last few pixels.
+            background:
+              "linear-gradient(135deg, transparent 0 55%, rgba(45,212,191,.75) 55% 70%, transparent 70% 80%, rgba(45,212,191,.75) 80% 95%, transparent 95%)",
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -67,6 +67,7 @@ export function GlobalCanvasStage() {
   const addItemAt = useStageStore((s) => s.addItemAt);
   const addItemAuto = useStageStore((s) => s.addItemAuto);
   const moveItem = useStageStore((s) => s.moveItem);
+  const resizeItem = useStageStore((s) => s.resizeItem);
   const removeItem = useStageStore((s) => s.removeItem);
   const createCanvas = useStageStore((s) => s.createCanvas);
 
@@ -341,6 +342,42 @@ export function GlobalCanvasStage() {
       document.addEventListener("pointerup", onUp);
     };
 
+  /**
+   * Resize a card by dragging its corner. Arrangement is UI-owned (ADR-0042 section 4), so
+   * size lives beside position and rides the same canvas persistence.
+   *
+   * Deltas are divided by the camera scale for the same reason the move handler does it: the
+   * pointer moves in SCREEN pixels and the item is stored in WORLD coordinates, so a drag at
+   * 0.5 zoom would otherwise resize the card twice as fast as the cursor travels.
+   *
+   * A floor rather than a free drag: a card dragged to nothing is unrecoverable by dragging,
+   * because there is no corner left to grab. The store refuses non-positive dimensions too —
+   * this stops the gesture reaching a size a user cannot undo.
+   */
+  const MIN_CARD = { w: 220, h: 160 };
+  const resizeHandler =
+    (canvasId: string, itemId: string, start: { w: number; h: number }) =>
+    (e: React.PointerEvent) => {
+      e.stopPropagation();
+      const s0 = camRef.current.s;
+      const ox = e.clientX;
+      const oy = e.clientY;
+      const onMove = (ev: PointerEvent) => {
+        resizeItem(
+          canvasId,
+          itemId,
+          Math.max(MIN_CARD.w, start.w + (ev.clientX - ox) / s0),
+          Math.max(MIN_CARD.h, start.h + (ev.clientY - oy) / s0),
+        );
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    };
+
   // relationship-layout use (ADR-0028 Use 1): one-shot arrange the canvas's
   // items by how they RELATE (same-subject clusters via the real edges),
   // writing the graph-layout positions back as the items' positions (so it
@@ -535,6 +572,11 @@ export function GlobalCanvasStage() {
               dragIds={sel.includes(a.id) ? sel : [a.id]}
               size={size}
               onDragComplete={() => setSel([])}
+              onResizeDown={
+                !isGlobal && itemId
+                  ? resizeHandler(activeCanvas!.id, itemId, { w: size.w, h: size.h })
+                  : undefined
+              }
               onGripDown={
                 !isGlobal && itemId
                   ? gripHandler(activeCanvas!.id, itemId, { x: pos.x, y: pos.y })
