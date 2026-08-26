@@ -27,16 +27,55 @@ import { fetchPlanStateVersion } from "@/api/client";
 
 const POLL_MS = 15_000;
 
-type Listener = (version: number) => void;
+/**
+ * `stateRef` is the SECOND argument, not the first, purely so existing subscribers written
+ * as `(v) => ...` keep working. Version-then-ref reads slightly oddly and breaking every
+ * caller to fix the word order would be a worse trade.
+ */
+type Listener = (version: number, stateRef: string) => void;
 
-let current: number | null = null;
-let listeners: Listener[] = [];
+/** A subscriber plus, optionally, which refs it cares about. */
+type Watcher = { fn: Listener; refs?: () => string[] };
+
+/**
+ * VERSIONS ARE PER-REF and this map is why.
+ *
+ * A single `current` was correct only while the one watched ref was baseline. Ops apply to
+ * SCENARIOS, so a drag session watching baseline polls a number that never moves — the loop
+ * reports "nothing changed" forever, which is indistinguishable from a working loop with a
+ * quiet plan. Keeping one integer per ref is what makes "has MY plan moved" answerable.
+ */
+let versions = new Map<string, number>();
+let watchers: Watcher[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
 let inflight = false;
 
-/** The last version this client observed, or null before the first successful read. */
+/** Baseline's last observed version, or null before the first successful read. */
 export function currentPlanVersion(): number | null {
-  return current;
+  return versions.has("baseline") ? (versions.get("baseline") as number) : null;
+}
+
+/** A specific ref's last observed version, or null if never read. */
+export function currentPlanVersionOf(stateRef: string): number | null {
+  return versions.has(stateRef) ? (versions.get(stateRef) as number) : null;
+}
+
+/**
+ * The distinct refs to poll this tick.
+ *
+ * DISTINCT IS THE WHOLE POINT. Watchers name refs; the poller polls the SET. Twelve cards on
+ * one scenario is one request, not twelve — the count-becomes-fan-out guard, preserved now
+ * that there is more than one thing to watch. Refs are re-read every tick rather than captured
+ * at subscribe time, so a canvas that changes what it is showing does not need to resubscribe.
+ */
+function watchedRefs(): string[] {
+  const set = new Set<string>();
+  for (const w of watchers) {
+    for (const r of w.refs?.() ?? []) if (r) set.add(r);
+  }
+  // A watcher that names nothing still wants to know about the plan of record.
+  if (set.size === 0) set.add("baseline");
+  return [...set];
 }
 
 async function poll(): Promise<void> {
@@ -46,14 +85,17 @@ async function poll(): Promise<void> {
   if (inflight) return;
   inflight = true;
   try {
-    const v = await fetchPlanStateVersion();
-    if (typeof v !== "number" || !Number.isFinite(v)) return;
-    if (current !== null && v === current) return;
-    const previous = current;
-    current = v;
-    // Only a CHANGE notifies. The first successful read establishes the baseline without
-    // firing, or every card would re-request on load for a version that never moved.
-    if (previous !== null) for (const fn of [...listeners]) fn(v);
+    for (const ref of watchedRefs()) {
+      const v = await fetchPlanStateVersion(ref === "baseline" ? undefined : ref);
+      if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const previous = versions.has(ref) ? (versions.get(ref) as number) : null;
+      if (previous === v) continue;
+      versions.set(ref, v);
+      // Only a CHANGE notifies, and only the first read of EACH ref is the quiet one. A ref
+      // seen for the first time must not fire, or adding a card to the canvas would refresh
+      // every card already on it.
+      if (previous !== null) notify(ref, v);
+    }
   } catch {
     // A failed version read is not a version change. Staying quiet leaves every card showing
     // its last evaluation with its own stamp, which is the honest state: we do not know
@@ -69,15 +111,16 @@ async function poll(): Promise<void> {
  * The first subscriber starts the poller; the last one to leave stops it. Nothing here is
  * per-card except the callback.
  */
-export function subscribePlanVersion(fn: Listener): () => void {
-  listeners.push(fn);
+export function subscribePlanVersion(fn: Listener, refs?: () => string[]): () => void {
+  const watcher: Watcher = { fn, refs };
+  watchers.push(watcher);
   if (!timer) {
     timer = setInterval(poll, POLL_MS);
     void poll(); // establish the baseline immediately rather than one interval late
   }
   return () => {
-    listeners = listeners.filter((l) => l !== fn);
-    if (listeners.length === 0 && timer) {
+    watchers = watchers.filter((w) => w !== watcher);
+    if (watchers.length === 0 && timer) {
       clearInterval(timer);
       timer = null;
     }
@@ -93,29 +136,40 @@ export function subscribePlanVersion(fn: Listener): () => void {
  * would read as "the drag did nothing" for fifteen seconds — the exact interpretation the beat
  * cannot afford.
  *
- * `current` IS BASELINE'S VERSION AND IS NOT UPDATED FROM A SCENARIO. Versions are per-ref:
- * scenario SC-DEMO at version 3 says nothing about baseline, and writing 3 into `current`
- * would make the next baseline poll read 3, see no change, and go quiet — a poller silenced by
- * a number it borrowed from another plan. So a scenario announcement notifies listeners and
- * touches nothing; only a baseline write advances the tracker.
+ * VERSIONS ARE PER-REF, so this records against the ref that actually moved. Scenario SC-DEMO
+ * at version 3 says nothing about baseline; writing 3 into a shared tracker would make the next
+ * baseline poll read 3, see no change and go quiet — a poller silenced by a number borrowed
+ * from another plan. The map keyed by ref is what makes that impossible rather than merely
+ * avoided.
  *
- * KNOWN LIMIT, stated rather than papered over: the poller reads BASELINE (the endpoint's
- * default ref), so a scenario changed in ANOTHER session is not seen. Closing that needs the
- * poller to watch the ref each card was evaluated against — the server half already echoes
- * `state_ref` for exactly that, and the component now carries it.
+ * THAT LIMIT IS NOW CLOSED. This note used to end "the poller reads BASELINE, so a scenario
+ * changed in another session is not seen." The poller now watches the refs the cards on the
+ * canvas were actually evaluated against, so an external change to a watched scenario is seen
+ * on the next tick. This function remains for the local case, where waiting a tick to see your
+ * own drag is the thing that reads as "the drag did nothing".
  */
 export function announcePlanChanged(stateRef: string, version: number): void {
-  if (stateRef === "baseline" && typeof version === "number" && Number.isFinite(version)) {
-    current = version;
+  if (typeof version === "number" && Number.isFinite(version)) {
+    versions.set(stateRef, version);
   }
-  for (const fn of [...listeners]) fn(version);
+  notify(stateRef, version);
+}
+
+/** Notify the watchers that care about `ref` — those naming it, and those naming nothing. */
+function notify(ref: string, version: number): void {
+  for (const w of [...watchers]) {
+    const named = w.refs?.();
+    // A watcher with no ref provider hears everything: it has not told us what it cares
+    // about, and staying silent would be a guess in the direction of doing nothing.
+    if (!named || named.length === 0 || named.includes(ref)) w.fn(version, ref);
+  }
 }
 
 /** Test seam. Production never calls this; the poller is app-lifetime by design. */
 export function __resetPlanVersion(): void {
   if (timer) clearInterval(timer);
   timer = null;
-  listeners = [];
-  current = null;
+  watchers = [];
+  versions = new Map();
   inflight = false;
 }

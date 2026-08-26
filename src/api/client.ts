@@ -447,9 +447,22 @@ export async function requestPortfolioCanvasSeed(): Promise<string[]> {
  * write either.
  */
 
-/** The plan scenario's current state version. Bumps when an op changes plan state. */
-export async function fetchPlanStateVersion(): Promise<number> {
-  const { data } = await api.get<{ state_version: number }>("/plan/state_version");
+/**
+ * A plan ref's current state version. Bumps when an op changes that ref's state.
+ *
+ * `stateRef` IS NOT OPTIONAL DECORATION. Ops apply to SCENARIOS; baseline's version moves only
+ * through the commit ceremony. Polling without a ref reads baseline — which, during a drag
+ * session, never moves. That poll succeeds, reports no change, and the refresh loop stays
+ * silent while the plan it is supposed to be watching changes underneath it: a loop that looks
+ * like it works and never fires.
+ *
+ * The server echoes `state_ref` back so a caller can see which plan it was answered about.
+ */
+export async function fetchPlanStateVersion(stateRef?: string): Promise<number> {
+  const { data } = await api.get<{ state_ref: string; state_version: number }>(
+    "/plan/state_version",
+    stateRef ? { params: { state_ref: stateRef } } : undefined,
+  );
   return data.state_version;
 }
 

@@ -67,6 +67,33 @@ export function refreshableArtifactIds(): string[] {
     .map((a) => a.id);
 }
 
+/**
+ * The plan refs the on-canvas live views were EVALUATED AGAINST — what the poller must watch.
+ *
+ * WHY NOT JUST BASELINE. Ops apply to scenarios; baseline moves only through the commit
+ * ceremony. A poller watching baseline during a drag session reads a number that never
+ * changes, reports "nothing moved" forever, and is indistinguishable from a working loop over
+ * a quiet plan. The refs come off the components because that is where the producer stamped
+ * them — the same envelope field the refresh is comparing versions of.
+ *
+ * DISTINCT, and the poller polls the set: twelve cards on one scenario is one request.
+ * A card whose projection carries no `state_ref` contributes nothing rather than defaulting to
+ * baseline — a guessed ref would poll the wrong plan and look like it was watching the right one.
+ */
+export function refreshableStateRefs(): string[] {
+  const byId = new Map(useCanvasStore.getState().artifacts.map((a) => [a.id, a]));
+  const refs = new Set<string>();
+  for (const id of refreshableArtifactIds()) {
+    const ro = byId.get(id)?.rendered_output as
+      | { components?: Array<{ state_ref?: unknown }> }
+      | undefined;
+    for (const c of ro?.components ?? []) {
+      if (typeof c?.state_ref === "string" && c.state_ref) refs.add(c.state_ref);
+    }
+  }
+  return [...refs];
+}
+
 export function useLiveViewRefresh(): void {
   useEffect(() => {
     return subscribePlanVersion(() => {
@@ -75,6 +102,6 @@ export function useLiveViewRefresh(): void {
         // the previous evaluation and its stamp remain, which is the honest state.
         void requestReevaluation(id).catch(() => {});
       }
-    });
+    }, refreshableStateRefs);
   }, []);
 }

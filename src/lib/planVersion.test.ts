@@ -16,13 +16,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 const fetchPlanStateVersion = vi.fn();
 const requestReevaluation = vi.fn();
 vi.mock("@/api/client", () => ({
-  fetchPlanStateVersion: () => fetchPlanStateVersion(),
+  // FORWARDS THE REF. The first version of this mock dropped the argument, which meant no
+  // test could observe WHICH plan was being polled — the exact property that was wrong.
+  fetchPlanStateVersion: (ref?: string) => fetchPlanStateVersion(ref),
   requestReevaluation: (id: string) => requestReevaluation(id),
 }));
 
 import {
   subscribePlanVersion,
   currentPlanVersion,
+  currentPlanVersionOf,
   __resetPlanVersion,
 } from "./planVersion";
 
@@ -175,5 +178,122 @@ describe("the refresh triggers rather than writes", () => {
     for (const f of ["../components/AgenticCanvas/StageCard.tsx"]) {
       expect(readFileSync(path.join(__dirname, f), "utf8")).not.toContain("useLiveViewRefresh");
     }
+  });
+});
+
+
+/**
+ * THE SCENARIO-BLINDNESS FIX.
+ *
+ * Ops apply to SCENARIOS; baseline moves only through the commit ceremony. A poller reading
+ * baseline during a drag session watches a number that never changes — it reports "nothing
+ * moved" forever, which is indistinguishable from a working loop over a quiet plan. That is
+ * the worst shape a refresh loop can take: it cannot be told apart from success.
+ */
+describe("planVersion — watches the refs its subscribers name", () => {
+  it("polls the NAMED ref, not baseline", async () => {
+    fetchPlanStateVersion.mockResolvedValue(1);
+    const off = subscribePlanVersion(() => {}, () => ["SC-DEMO"]);
+    await flush();
+
+    expect(fetchPlanStateVersion).toHaveBeenCalledWith("SC-DEMO");
+    off();
+  });
+
+  it("polls baseline when a subscriber names nothing", async () => {
+    // The plan of record is the honest default for a watcher that has not said otherwise.
+    fetchPlanStateVersion.mockResolvedValue(1);
+    const off = subscribePlanVersion(() => {});
+    await flush();
+
+    expect(fetchPlanStateVersion).toHaveBeenCalledWith(undefined);
+    off();
+  });
+
+  it("polls the DISTINCT set — twelve cards on one scenario is ONE request", async () => {
+    // The count-becomes-fan-out guard, preserved now that there is more than one thing to
+    // watch. Watchers name refs; the poller polls the set.
+    fetchPlanStateVersion.mockResolvedValue(1);
+    const offs = Array.from({ length: 12 }, () =>
+      subscribePlanVersion(() => {}, () => ["SC-DEMO"]),
+    );
+    await flush();
+
+    expect(fetchPlanStateVersion).toHaveBeenCalledTimes(1);
+    offs.forEach((off) => off());
+  });
+
+  it("polls each distinct ref once when a canvas mixes two plans", async () => {
+    fetchPlanStateVersion.mockResolvedValue(1);
+    const off = subscribePlanVersion(() => {}, () => ["SC-A", "SC-B", "SC-A"]);
+    await flush();
+
+    const asked = fetchPlanStateVersion.mock.calls.map((c) => c[0]).sort();
+    expect(asked).toEqual(["SC-A", "SC-B"]);
+    off();
+  });
+
+  it("a BUMP on a watched scenario notifies, carrying the ref", async () => {
+    fetchPlanStateVersion.mockResolvedValueOnce(1).mockResolvedValue(2);
+    const seen: Array<[number, string]> = [];
+    const off = subscribePlanVersion((v, ref) => seen.push([v, ref]), () => ["SC-DEMO"]);
+    await flush();
+    expect(seen).toEqual([]); // first read is quiet
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(seen).toEqual([[2, "SC-DEMO"]]);
+    off();
+  });
+
+  it("the first read of a NEWLY watched ref does not fire", async () => {
+    // Otherwise dragging a card onto the canvas would refresh every card already on it — the
+    // load-time refresh storm, arriving one card at a time instead.
+    let refs = ["SC-A"];
+    fetchPlanStateVersion.mockResolvedValue(5);
+    const seen: string[] = [];
+    const off = subscribePlanVersion((_v, ref) => seen.push(ref), () => refs);
+    await flush();
+
+    refs = ["SC-A", "SC-B"];
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(seen).toEqual([]);
+    off();
+  });
+
+  it("re-reads its refs every tick, so a changed canvas needs no resubscribe", async () => {
+    let refs = ["SC-A"];
+    fetchPlanStateVersion.mockResolvedValue(1);
+    const off = subscribePlanVersion(() => {}, () => refs);
+    await flush();
+    expect(fetchPlanStateVersion).toHaveBeenLastCalledWith("SC-A");
+
+    refs = ["SC-B"];
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchPlanStateVersion).toHaveBeenLastCalledWith("SC-B");
+    off();
+  });
+
+  it("keeps versions PER REF — one plan's number never silences another's poll", async () => {
+    // The defect this map exists to prevent: storing SC-DEMO's 3 as the shared version makes
+    // the next baseline read of 3 look like no change, and the poller goes quiet.
+    fetchPlanStateVersion.mockImplementation((ref?: string) =>
+      Promise.resolve(ref === "SC-DEMO" ? 3 : 3),
+    );
+    const seen: string[] = [];
+    const off = subscribePlanVersion((_v, ref) => seen.push(ref), () => ["baseline", "SC-DEMO"]);
+    await flush();
+
+    expect(currentPlanVersion()).toBe(3);
+    expect(currentPlanVersionOf("SC-DEMO")).toBe(3);
+
+    fetchPlanStateVersion.mockImplementation((ref?: string) =>
+      Promise.resolve(ref === "SC-DEMO" ? 4 : 3),
+    );
+    await vi.advanceTimersByTimeAsync(15_000);
+    // Only the scenario moved, and only the scenario is announced.
+    expect(seen).toEqual(["SC-DEMO"]);
+    expect(currentPlanVersion()).toBe(3);
+    expect(currentPlanVersionOf("SC-DEMO")).toBe(4);
+    off();
   });
 });
