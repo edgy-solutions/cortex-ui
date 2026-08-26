@@ -35,10 +35,13 @@ import { Gantt, WillowDark } from "@svar-ui/react-gantt";
 //   @svar-ui/gantt-locales  { gantt: { "Task name", "Duration", "Milestone", ... } }  UI labels
 //   @svar-ui/core-locales   { calendar: { monthFull, monthShort, dayFull, ... } }     date words
 //
-// `format` accepts a CLDR pattern and the formatter understands the tokens fine. What it
-// lacked was the `calendar` block to substitute FROM, so it emitted the pattern verbatim and
-// the header read `yyyy` / `QQQ` as text. Passing gantt-locales alone supplied the labels and
-// none of the words — the failure looked identical to having no locale at all.
+// This comment used to end "so `yyyy`/`QQQ` rendered as text because the calendar was
+// missing". THAT WAS WRONG and is corrected here rather than left to contradict the SCALES
+// note below, which a reader would otherwise have to adjudicate between. The dialect is
+// strftime, not CLDR: react-gantt compiles a string format with `dateToString`, and a pattern
+// with no `%` matches no token and is printed verbatim. The missing calendar was real and a
+// SECOND defect — `%M`/`%F` substitute month names out of it — which is why fixing only the
+// locale changed nothing visible and looked like the locale was not the cause.
 import { Locale } from "@svar-ui/react-core";
 import { en as ganttWords } from "@svar-ui/gantt-locales";
 import { en as coreWords } from "@svar-ui/core-locales";
@@ -88,7 +91,17 @@ export interface IntervalTimelineProps {
    * timeline never applies it. Absent in read-only contexts, where the drop is simply refused
    * and nothing is raised — which is the correct behaviour, not a degraded one.
    */
-  onMoveProject?: (move: { group_id: string; project_id: string; start: string }) => void;
+  /**
+   * The drag's COMMIT, raised after the library's own update is refused.
+   *
+   * Carries `end` as well as `start` because a reschedule is an INTERVAL, not a point: the
+   * server's policy needs the span to derive the site-impact move offset-preserved, and a
+   * handler that sent only `start` would have to invent a duration — the same
+   * inventing-data-the-client-does-not-have that keeps impact derivation server-side.
+   */
+  onMoveProject?: (
+    move: { group_id: string; project_id: string; start: string; end: string },
+  ) => void;
 }
 
 function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
@@ -258,7 +271,11 @@ export function IntervalTimeline({
     // snaps back to the server's rows rather than sitting at the dragged position asserting a
     // move nobody governed. Verified by prototype + negative control.
     api.intercept("update-task", (config: unknown) => {
-      const c = (config ?? {}) as { id?: string; task?: { start?: Date }; inProgress?: boolean };
+      const c = (config ?? {}) as {
+        id?: string;
+        task?: { start?: Date; end?: Date };
+        inProgress?: boolean;
+      };
       // In-progress updates are the drag itself — let them through so the bar follows the
       // cursor. Only the FINAL commit is refused.
       if (c.inProgress) return true;
@@ -268,11 +285,20 @@ export function IntervalTimeline({
         | { $group_id?: string; $project_id?: string }
         | undefined;
       const start = c.task?.start;
-      if (node?.$group_id && node?.$project_id && start instanceof Date) {
+      const end = c.task?.end;
+      // BOTH ENDS OR NEITHER. A reschedule is an interval; raising a move with a start and no
+      // end would push the duration guess downstream, and the only honest guess available
+      // there is "the same length", which is an assumption this component has no standing to
+      // make on the plan's behalf.
+      if (
+        node?.$group_id && node?.$project_id
+        && start instanceof Date && end instanceof Date
+      ) {
         moveRef.current?.({
           group_id: node.$group_id,
           project_id: node.$project_id,
           start: start.toISOString().slice(0, 10),
+          end: end.toISOString().slice(0, 10),
         });
       }
       return false;

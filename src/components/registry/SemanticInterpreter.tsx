@@ -26,6 +26,7 @@ import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
 import { DeltaSet } from "@/components/planning/DeltaSet";
 import { IntervalTimeline } from "@/components/planning/IntervalTimeline";
+import { commitDrag } from "@/lib/planDrag";
 import { DecisionRecord } from "@/components/planning/DecisionRecord";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
@@ -514,6 +515,21 @@ const renderComponent = (
           scope_label={comp.scope_label}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
+          // THE DRAG'S COMMIT. Wired here rather than inside the component, because WHICH
+          // SCENARIO a drag lands in is app state, not card state — and the card must stay
+          // renderable by anything holding rows, including tests and a storybook.
+          //
+          // `comp.state_ref` is what the drag commits against: a card evaluated against a
+          // scenario drags THERE, and a baseline-evaluated card forks a sandbox first, because
+          // Engine P refuses a schedule op on baseline by design.
+          onMoveProject={(move) =>
+            void commitDrag({
+              stateRef: comp.state_ref,
+              projectId: move.project_id,
+              start: move.start,
+              end: move.end,
+            })
+          }
         />
       );
 
