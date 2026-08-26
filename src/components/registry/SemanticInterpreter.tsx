@@ -510,6 +510,7 @@ const renderComponent = (
       return (
         <IntervalTimeline
           rows={comp.rows}
+          milestones={comp.milestones}
           scope_label={comp.scope_label}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}

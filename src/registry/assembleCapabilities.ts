@@ -245,6 +245,21 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: SHORTFALL_GRID_CONTRACT,
   },
+  // A SECOND subject binding onto the SAME contract. INTERVAL_TIMELINE already serves the
+  // schedule pivot; a contribution sequence is the same STRUCTURE — nested intervals whose top
+  // level meaning the payload states — asked of a different subject. Binding it here rather
+  // than minting a second archetype is the point of the structural naming: two questions, one
+  // renderer, no new component.
+  //
+  // Same sequencing as the rows above: both endpoints pre-exist and Contract D is satisfied,
+  // so the binding lands rather than earning a refusal.
+  {
+    subject_uri: "mesh:ContributionSequence",
+    object_uri: "mesh:IntervalSchedule",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: INTERVAL_TIMELINE_CONTRACT,
+  },
 ] as const;
 
 /**

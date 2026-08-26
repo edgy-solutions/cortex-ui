@@ -73,6 +73,11 @@ import {
 
 export interface IntervalTimelineProps {
   rows: unknown;
+  /**
+   * Point-in-time marks on the SAME axis the bars use. Optional in the contract, so absent
+   * means no marks — never an invented one.
+   */
+  milestones?: unknown;
   /** What this schedule is OF. Supplied by the payload — never invented here. */
   scope_label?: string;
   /** The substrate sample-time THIS evaluation was true against, and the state version. */
@@ -197,12 +202,54 @@ export const ZOOM = {
 /** Row height the height calculation below assumes. Kept beside it so the two cannot drift. */
 const ROW_PX = 38;
 
+/**
+ * Milestones -> SVAR markers. Point-in-time marks on the SAME axis the bars use, which is why
+ * they are `markers` and not tasks: a marker has a date, not an interval, and drawing one as a
+ * zero-length bar would put it in the row tree as a thing that could be dragged.
+ *
+ * THE FLAG IS READ, NEVER DERIVED. `flag` is computed upstream and must not be recomputed from
+ * `date` against the reader's clock. Whether a marker is in trouble is a judgement about the
+ * PLAN's state, not about when someone opened the card — a session in January and one in July
+ * must agree, and only the producer knows which state version it evaluated.
+ *
+ * It also matters WHICH claim gets made. The field was `overdue?: boolean` for a day, and the
+ * verb that fills it refuses to say "missed" because the model holds no per-plateau maturity
+ * requirement. A clock comparison here would quietly reinstate exactly the claim the producer
+ * declined to make — the renderer overruling the measure by arithmetic.
+ *
+ * So the value is styling vocabulary this component never interprets: it is passed to the CSS
+ * class and stopped there. Today the only value is "contributions-outstanding" and nothing
+ * below knows that.
+ */
+export function toMarkers(milestones: unknown): { start: Date; text: string; css: string }[] {
+  if (!Array.isArray(milestones)) return [];
+  const out: { start: Date; text: string; css: string }[] = [];
+  for (const m of milestones) {
+    if (!m || typeof m !== "object") continue;
+    const { date, label, flag } = m as { date?: unknown; label?: unknown; flag?: unknown };
+    if (typeof date !== "string" || !date) continue;
+    const start = new Date(date);
+    // A mark whose date does not parse has no position on the axis. Dropping it is honest;
+    // placing it at the epoch would draw a marker years to the left of the plan.
+    if (Number.isNaN(start.getTime())) continue;
+    out.push({
+      start,
+      text: typeof label === "string" && label ? label : "",
+      // Generic styling key, same pattern as risk_flag on a row: the value rides the payload
+      // and this component styles an unknown string and stops.
+      css: typeof flag === "string" && flag ? `wx-milestone wx-flag-${flag}` : "wx-milestone",
+    });
+  }
+  return out;
+}
+
 export function IntervalTimeline({
-  rows, scope_label, valid_as_of, state_version, onMoveProject,
+  rows, milestones, scope_label, valid_as_of, state_version, onMoveProject,
 }: IntervalTimelineProps) {
   const result = validateIntervalTimeline(rows);
   const parsed = result.kind === "ok" ? result.rows : [];
   const tasks = useMemo(() => toTasks(parsed), [parsed]);
+  const markers = useMemo(() => toMarkers(milestones), [milestones]);
   const moveRef = useRef(onMoveProject);
   moveRef.current = onMoveProject;
 
@@ -272,7 +319,14 @@ export function IntervalTimeline({
       <div style={{ height: chartHeight, overflow: "auto" }}>
         <WillowDark>
           <Locale words={{ ...coreWords, ...ganttWords }}>
-            <Gantt tasks={tasks} links={[]} scales={SCALES} zoom={ZOOM} init={init} />
+            <Gantt
+              tasks={tasks}
+              links={[]}
+              scales={SCALES}
+              zoom={ZOOM}
+              markers={markers}
+              init={init}
+            />
           </Locale>
         </WillowDark>
       </div>

@@ -414,6 +414,26 @@ export async function streamInterviewResponse(
   });
 }
 
+// ── Canvas seeding ─────────────────────────────────────────────────────────────────────
+/**
+ * THE SEAM for "make me a portfolio canvas".
+ *
+ * The server half asks the five measures through the GOVERNED path — BFF, gateway,
+ * entitlements, select_presentation — and mints five real answer artifacts with real
+ * provenance. It returns their ids IN SLOT ORDER; the client arranges them and nothing else.
+ *
+ * Ids, not content, on purpose. The artifacts arrive the way every artifact arrives, through
+ * Electric, so a seeded card is a genuine answer with a decision path and a freshness stamp
+ * rather than a payload this call inlined. Returning content here would make seeding a second
+ * delivery path for answers, which is the thing the whole arrangement avoids.
+ */
+export async function requestPortfolioCanvasSeed(): Promise<string[]> {
+  const { data } = await api.post<{ artifact_ids: string[] }>("/canvas/seed", {
+    canvas_type: "portfolio_planning",
+  });
+  return Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
+}
+
 // ── ADR-0042 live views: the invalidation signal and the recomputation trigger ──────────
 /**
  * THE SEAM. Both functions below are the single place the live-view refresh loop touches the
@@ -431,6 +451,50 @@ export async function streamInterviewResponse(
 export async function fetchPlanStateVersion(): Promise<number> {
   const { data } = await api.get<{ state_version: number }>("/plan/state_version");
   return data.state_version;
+}
+
+/**
+ * Fork a scenario — the sandbox a drag happens in.
+ *
+ * Resolves on 409 rather than throwing. A duplicate id means the scenario this client wanted
+ * ALREADY EXISTS, which is the state the caller was trying to reach; treating "it is already
+ * there" as a failure would make the second drag of a session fail for having succeeded the
+ * first time.
+ */
+export async function forkPlanScenario(
+  scenarioId: string,
+  name: string,
+): Promise<void> {
+  try {
+    await api.post("/plan/scenario", { scenario_id: scenarioId, name });
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status !== 409) throw err;
+  }
+}
+
+/**
+ * THE DRAG. One call, TWO ops — and the second one is derived server-side.
+ *
+ * `MoveProject` alone moves the bar and not the load, because site-impact windows are
+ * deliberately independent of project windows. This client cannot derive the impact op: it
+ * holds no site-impact data at all, so a UI that sent one would be inventing it. The policy
+ * runs where the state is and appends both, offset-preserved.
+ *
+ * Returns the scenario's NEW VERSION, which is what makes the refresh immediate rather than
+ * poll-latent.
+ */
+export async function reschedulePlanProject(args: {
+  scenarioId: string;
+  projectId: string;
+  start: string;
+  end: string;
+}): Promise<{ scenario_id: string; version: number; ops: string[] }> {
+  const { data } = await api.post(
+    `/plan/scenario/${encodeURIComponent(args.scenarioId)}/reschedule`,
+    { project_id: args.projectId, start: args.start, end: args.end },
+  );
+  return data;
 }
 
 /**
