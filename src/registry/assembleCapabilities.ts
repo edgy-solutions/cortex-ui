@@ -251,11 +251,21 @@ const DERIVED_BINDINGS = [
   // than minting a second archetype is the point of the structural naming: two questions, one
   // renderer, no new component.
   //
-  // Same sequencing as the rows above: both endpoints pre-exist and Contract D is satisfied,
-  // so the binding lands rather than earning a refusal.
+  // THE OBJECT END IS THE ARCHETYPE, NOT THE OTHER PAYLOAD. This row shipped as
+  // `object_uri: "mesh:IntervalSchedule"` — the SUBJECT of the row directly above, copied into
+  // the object slot. The triple then read "a ContributionSequence renders as an
+  // IntervalSchedule": one payload rendering as another payload, which is not a claim the
+  // model can mean.
+  //
+  // IT PASSED EVERY GATE, and the comment that used to sit here says why in its own words:
+  // "both endpoints pre-exist and Contract D is satisfied." Both were true. CONTRACT D CHECKS
+  // EXISTENCE, NOT CLASSIFICATION — `mesh:IntervalSchedule` is a declared class, so a triple
+  // pointing at it is well-formed and meaningless at the same time. Sealed on the other side
+  // by tests/planning/test_bindings_point_at_archetypes.py, which reads the TTL's own
+  // subClassOf edges rather than trusting a name to look right.
   {
     subject_uri: "mesh:ContributionSequence",
-    object_uri: "mesh:IntervalSchedule",
+    object_uri: "mesh:IntervalTimeline",
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: INTERVAL_TIMELINE_CONTRACT,
