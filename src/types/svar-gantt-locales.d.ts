@@ -24,3 +24,9 @@ declare module "@svar-ui/gantt-locales" {
   export const en: Record<string, unknown>;
   export const cn: Record<string, unknown>;
 }
+
+declare module "@svar-ui/core-locales" {
+  /** Core locale: the `calendar` block (month and day names) the date formatter substitutes
+   *  from. Distinct from gantt-locales, which carries only the gantt's UI labels. */
+  export const en: Record<string, unknown>;
+}

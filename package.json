@@ -40,6 +40,7 @@
     "@electric-sql/client": "^1.5.22",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@platform/iagent-contracts": "github:edgy-solutions/invincible-agent#master",
+    "@svar-ui/core-locales": "^2.6.0",
     "@svar-ui/gantt-locales": "^2.7.1",
     "@svar-ui/react-core": "^2.6.0",
     "@svar-ui/react-gantt": "^2.7.1",

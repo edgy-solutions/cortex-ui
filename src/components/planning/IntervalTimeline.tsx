@@ -30,14 +30,18 @@ import { useCallback, useMemo, useRef } from "react";
 import { Gantt, WillowDark } from "@svar-ui/react-gantt";
 // THE LOCALE, and it is what turns a format STRING into a date.
 //
-// `format` legitimately accepts a pattern (`IScaleConfig` types it as
-// `string | ((date, next?) => string)`), but INTERPRETING that pattern is the locale's job.
-// With no Locale in the tree the scale rendered its pattern verbatim — the header read
-// `yyyy` and `QQQ` as literal text, which looks like a formatting bug in this file and is
-// not one. Third missing provider on this component; the first two were the stylesheet and
-// the theme, and each looked like a different kind of failure.
+// TWO LOCALE PACKAGES, and passing one is not enough — which cost an extra round trip.
+//
+//   @svar-ui/gantt-locales  { gantt: { "Task name", "Duration", "Milestone", ... } }  UI labels
+//   @svar-ui/core-locales   { calendar: { monthFull, monthShort, dayFull, ... } }     date words
+//
+// `format` accepts a CLDR pattern and the formatter understands the tokens fine. What it
+// lacked was the `calendar` block to substitute FROM, so it emitted the pattern verbatim and
+// the header read `yyyy` / `QQQ` as text. Passing gantt-locales alone supplied the labels and
+// none of the words — the failure looked identical to having no locale at all.
 import { Locale } from "@svar-ui/react-core";
-import { en } from "@svar-ui/gantt-locales";
+import { en as ganttWords } from "@svar-ui/gantt-locales";
+import { en as coreWords } from "@svar-ui/core-locales";
 // THE FULL SHEET, not `style.css`. The package exports two:
 //
 //   ./style.css   dist/index.css        32 KB   236 selectors   theme vars + grid/table
@@ -239,7 +243,7 @@ export function IntervalTimeline({
           space and a long one stays reachable. */}
       <div style={{ height: chartHeight, overflow: "auto" }}>
         <WillowDark>
-          <Locale words={en}>
+          <Locale words={{ ...coreWords, ...ganttWords }}>
             <Gantt tasks={tasks} links={[]} scales={SCALES} zoom={ZOOM} init={init} />
           </Locale>
         </WillowDark>
