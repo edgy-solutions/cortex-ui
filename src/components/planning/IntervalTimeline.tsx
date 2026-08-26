@@ -28,6 +28,16 @@
  */
 import { useCallback, useMemo, useRef } from "react";
 import { Gantt, WillowDark } from "@svar-ui/react-gantt";
+// THE LOCALE, and it is what turns a format STRING into a date.
+//
+// `format` legitimately accepts a pattern (`IScaleConfig` types it as
+// `string | ((date, next?) => string)`), but INTERPRETING that pattern is the locale's job.
+// With no Locale in the tree the scale rendered its pattern verbatim — the header read
+// `yyyy` and `QQQ` as literal text, which looks like a formatting bug in this file and is
+// not one. Third missing provider on this component; the first two were the stylesheet and
+// the theme, and each looked like a different kind of failure.
+import { Locale } from "@svar-ui/react-core";
+import { en } from "@svar-ui/gantt-locales";
 // THE FULL SHEET, not `style.css`. The package exports two:
 //
 //   ./style.css   dist/index.css        32 KB   236 selectors   theme vars + grid/table
@@ -134,6 +144,11 @@ const SCALES = [
  * change grain forces the room to squint at one or the other. Levels are declared rather than
  * computed because the useful stops are editorial: year for "where does this all sit", quarter
  * for the funding conversation, month for the drag.
+ *
+ * THE GESTURE IS CTRL + WHEEL — the store handles it (`ctrl`, `zoom`, `zoom-scale`); there is
+ * no button and none is needed. Recorded because a config without a stated gesture reads as
+ * a feature that does not work: it changes the DEFAULT grain and nothing else, which is
+ * exactly what it looked like.
  */
 const ZOOM = {
   level: 1,
@@ -224,7 +239,9 @@ export function IntervalTimeline({
           space and a long one stays reachable. */}
       <div style={{ height: chartHeight, overflow: "auto" }}>
         <WillowDark>
-          <Gantt tasks={tasks} links={[]} scales={SCALES} zoom={ZOOM} init={init} />
+          <Locale words={en}>
+            <Gantt tasks={tasks} links={[]} scales={SCALES} zoom={ZOOM} init={init} />
+          </Locale>
         </WillowDark>
       </div>
 
