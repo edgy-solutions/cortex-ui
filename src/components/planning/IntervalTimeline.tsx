@@ -135,10 +135,38 @@ function toTasks(rows: IntervalRow[]) {
   return tasks;
 }
 
-const SCALES = [
-  { unit: "month" as const, step: 1, format: "MMM yyyy" },
-  { unit: "day" as const, step: 7, format: "d" },
+/**
+ * THE DIALECT IS strftime, AND A STRING THAT MISSES IT FAILS SILENTLY AS TEXT.
+ *
+ * `gantt-store` decides the cell's text in one line:
+ *
+ *     const value = typeof s.format === "function" ? s.format(from, to) : s.format;
+ *
+ * A STRING IS NOT PARSED THERE — react-gantt compiles it first, with `dateToString` from
+ * `@svar-ui/lib-dom`, whose table is strftime: `%d %m %j %n %y %Y %D %l %M %F %h %g %G %H %i
+ * %a %A %s %S`. Anything without a `%` matches no token and arrives at that line unchanged,
+ * so the header renders the PATTERN. `"yyyy"` printed `yyyy`; `"QQQ"` printed `QQQ`.
+ *
+ * WHY THIS TOOK THREE ROLLS TO SEE. `gantt-store` also bundles a full date-fns CLDR
+ * formatter — `case"Q"`, `case"MMM"`, the lot. I found it, read it as the scale's formatter,
+ * and "corrected" working-directory strftime patterns INTO CLDR. The scale never calls it.
+ * Reading a formatter in the bundle is not the same as reading the one on this path, and the
+ * two differ precisely where I stopped looking.
+ *
+ * THE MISSING TOKEN IS QUARTER. There is no `%`-token for it at all, so a quarter scale has
+ * to be a FUNCTION — not a stylistic choice, the only expressible form.
+ *
+ * `%M`/`%F` read `monthShort`/`monthFull` off the locale calendar, which is why the `Locale`
+ * provider below still matters: wrong dialect and missing calendar produce the same blank-
+ * looking header, and this component had both at once.
+ */
+export const SCALES = [
+  { unit: "month" as const, step: 1, format: "%M %Y" },
+  { unit: "day" as const, step: 7, format: "%j" },
 ];
+
+/** Quarter has no strftime token — see above. Derived, not looked up: Jan-Mar is Q1. */
+const quarterOf = (d: Date) => `Q${Math.floor(d.getMonth() / 3) + 1}`;
 
 /**
  * ZOOM LEVELS, coarse to fine. The library supports zoom natively (`IZoomConfig`) and this
@@ -154,13 +182,13 @@ const SCALES = [
  * a feature that does not work: it changes the DEFAULT grain and nothing else, which is
  * exactly what it looked like.
  */
-const ZOOM = {
+export const ZOOM = {
   level: 1,
   levels: [
-    { minCellWidth: 60, maxCellWidth: 200, scales: [{ unit: "year" as const, step: 1, format: "yyyy" }] },
+    { minCellWidth: 60, maxCellWidth: 200, scales: [{ unit: "year" as const, step: 1, format: "%Y" }] },
     { minCellWidth: 50, maxCellWidth: 160, scales: [
-      { unit: "year" as const, step: 1, format: "yyyy" },
-      { unit: "quarter" as const, step: 1, format: "QQQ" },
+      { unit: "year" as const, step: 1, format: "%Y" },
+      { unit: "quarter" as const, step: 1, format: quarterOf },
     ] },
     { minCellWidth: 40, maxCellWidth: 140, scales: SCALES },
   ],
