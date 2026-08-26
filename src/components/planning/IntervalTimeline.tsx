@@ -126,6 +126,30 @@ const SCALES = [
   { unit: "day" as const, step: 7, format: "d" },
 ];
 
+/**
+ * ZOOM LEVELS, coarse to fine. The library supports zoom natively (`IZoomConfig`) and this
+ * component simply never passed one, so the axis was fixed at whatever SCALES said.
+ *
+ * A plan spans years and a reschedule argument happens in weeks, so a timeline that cannot
+ * change grain forces the room to squint at one or the other. Levels are declared rather than
+ * computed because the useful stops are editorial: year for "where does this all sit", quarter
+ * for the funding conversation, month for the drag.
+ */
+const ZOOM = {
+  level: 1,
+  levels: [
+    { minCellWidth: 60, maxCellWidth: 200, scales: [{ unit: "year" as const, step: 1, format: "yyyy" }] },
+    { minCellWidth: 50, maxCellWidth: 160, scales: [
+      { unit: "year" as const, step: 1, format: "yyyy" },
+      { unit: "quarter" as const, step: 1, format: "QQQ" },
+    ] },
+    { minCellWidth: 40, maxCellWidth: 140, scales: SCALES },
+  ],
+};
+
+/** Row height the height calculation below assumes. Kept beside it so the two cannot drift. */
+const ROW_PX = 38;
+
 export function IntervalTimeline({
   rows, scope_label, valid_as_of, state_version, onMoveProject,
 }: IntervalTimelineProps) {
@@ -166,6 +190,11 @@ export function IntervalTimeline({
   }
 
   const groups = new Set(parsed.map((r) => r.group_id)).size;
+  // Rows drawn = leaves + one summary per group + one per (group, phase) pair — which is what
+  // `toTasks` emits. Computed from the same shape rather than guessed, capped so a 200-row
+  // portfolio scrolls instead of pushing the rest of the card off screen.
+  const MAX_ROWS = 24;
+  const chartHeight = Math.min(tasks.length, MAX_ROWS) * ROW_PX + 90;
 
   return (
     <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
@@ -186,10 +215,16 @@ export function IntervalTimeline({
           the `--wx-*` custom properties every rule in the stylesheet reads through `var()`.
           Without it the CSS loads, the selectors match, and every value resolves to nothing —
           which renders as a working table beside an empty chart region, the most misleading
-          shape this failure could take. Dark because the app is. */}
-      <div style={{ height: 420 }}>
+          shape this failure could take. Dark because the app is.
+
+          HEIGHT IS DERIVED FROM THE ROW COUNT, not fixed. It was hardcoded to 420px, which
+          CLIPPED a 17-row tree instead of scrolling it — the panel's `overflow-hidden` hid
+          the overflow AND the scrollbar, so the plan simply appeared to stop at Wave 1
+          Cutover. Sized to fit up to MAX_ROWS and scroll beyond, so a short plan wastes no
+          space and a long one stays reachable. */}
+      <div style={{ height: chartHeight, overflow: "auto" }}>
         <WillowDark>
-          <Gantt tasks={tasks} links={[]} scales={SCALES} init={init} />
+          <Gantt tasks={tasks} links={[]} scales={SCALES} zoom={ZOOM} init={init} />
         </WillowDark>
       </div>
 
