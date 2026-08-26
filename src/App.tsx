@@ -21,6 +21,7 @@ import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { useLiveViewRefresh } from "@/lib/useLiveViewRefresh";
 import { fetchEntitlements } from "@/api/client";
 
 import { Toaster } from "sonner";
@@ -187,6 +188,9 @@ export default function App() {
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
   useEntitlementsSync();
+  // ADR-0042 OQ1: ONE subscription for the whole surface, not one per card — a per-card
+  // watcher on a global signal is the fan-out species swept for on 2026-08-25.
+  useLiveViewRefresh();
   useArtifactSync();
   useHumanTaskSync();
   // Tasks are timeline citizens: mirror the HITL store into task-artifacts so

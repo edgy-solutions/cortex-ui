@@ -414,6 +414,35 @@ export async function streamInterviewResponse(
   });
 }
 
+// ── ADR-0042 live views: the invalidation signal and the recomputation trigger ──────────
+/**
+ * THE SEAM. Both functions below are the single place the live-view refresh loop touches the
+ * network, so when the server half lands the change is here and nowhere else.
+ *
+ * Per ADR-0042 §3 the measure is a verb and runs where verbs run — so the client NEVER
+ * recomputes and never patches rows. It reads a version, and it asks the server to
+ * re-evaluate. The recomputed content comes back the way all content comes back: the writer
+ * persists it, the projector projects it, Electric delivers it.  and
+ * `rendered_output` and `valid_as_of` are Electric-covered fields and the client may not
+ * write either.
+ */
+
+/** The plan scenario's current state version. Bumps when an op changes plan state. */
+export async function fetchPlanStateVersion(): Promise<number> {
+  const { data } = await api.get<{ state_version: number }>("/plan/state_version");
+  return data.state_version;
+}
+
+/**
+ * Ask the server to re-evaluate one live view. Returns nothing on purpose: the answer does
+ * not come back through this call. It lands as an updated projection row via Electric,
+ * carrying its OWN valid_as_of stamped at evaluation — which is what makes a refreshed card
+ * visibly fresh rather than silently newer.
+ */
+export async function requestReevaluation(artifactId: string): Promise<void> {
+  await api.post("/artifacts/reevaluate", { artifact_id: artifactId });
+}
+
 // ── Compile Workflow ──────────────────────────────────────
 /**
  * Sends the final blueprint to the backend for compilation into
