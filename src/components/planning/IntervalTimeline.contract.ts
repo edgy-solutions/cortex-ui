@@ -125,10 +125,12 @@ export interface IntervalRow {
 /**
  * A point-in-time marker drawn on the shared axis.
  *
- * `overdue` is COMPUTED UPSTREAM and must not be re-derived from `date` against "now". Whether
- * a target has been missed is a judgement about the PLAN's state, not about the reader's
- * clock — a card opened in January and one opened in July must agree, and only the producer
- * knows which state version it evaluated.
+ * `flag` is COMPUTED UPSTREAM and must not be re-derived from `date` against "now". Whether a
+ * marker is in trouble is a judgement about the PLAN's state, not about the reader's clock —
+ * a card opened in January and one opened in July must agree, and only the producer knows
+ * which state version it evaluated. Re-deriving it here would also silently outrank the
+ * producer's refusal to overclaim: a clock comparison says "missed", which is precisely the
+ * claim the verb declines to make.
  */
 export interface IntervalMilestone {
   milestone_id: string;
@@ -137,8 +139,22 @@ export interface IntervalMilestone {
   date: string;
   /** Which group this marker belongs under, or absent for an axis-wide mark. */
   group_id?: string;
-  /** Stated by the producer, never inferred here. See above. */
-  overdue?: boolean;
+  /**
+   * GENERIC STYLING KEY, on the same pattern as `risk_flag` on a row: the VALUE is domain
+   * vocabulary riding the payload, and this component styles whatever string arrives while
+   * knowing none of them.
+   *
+   * THIS FIELD WAS `overdue?: boolean` FOR ONE DAY, and the producer is why it is not.
+   * `plan_capability_path` computes `last contribution end > target date` and its docstring
+   * refuses to call that `missed`, because the model holds no per-plateau maturity
+   * REQUIREMENT — a capability can reach the maturity an early plateau needs long before its
+   * last contributing project finishes. "Overdue" is that same refused claim wearing a
+   * different word, and this field was written a day before anyone read the verb that fills
+   * it. The producer was right and the contract was the newer, less-informed artifact.
+   *
+   * Today's only value is `"contributions-outstanding"`. The component must not learn that.
+   */
+  flag?: string | null;
 }
 
 /** The row key, as a function, so no caller re-invents it. See the fan-out note. */
