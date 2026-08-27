@@ -43,3 +43,22 @@ export async function seedPortfolioCanvasFromServer(
   if (ordered.length === 0) return null;
   return useStageStore.getState().seedPortfolioCanvas(ordered, name);
 }
+
+/**
+ * MANUAL TRIGGER, for bring-up only.
+ *
+ * The phrase does not route yet — no mesh capability exists for the seeding intent, so the
+ * router correctly returns NO_VERB_CLASSIFIED. Until the registration lands there is no way to
+ * start a seed from the browser at all, which blocks the persistence-across-reload check that
+ * does not depend on routing.
+ *
+ * Exposed on `window` deliberately and named so it reads as scaffolding rather than API. It
+ * calls the same function the answer path will, so what it proves is what the real path does —
+ * a mock here would prove nothing about the flow it is standing in for.
+ *
+ * Remove when the phrase routes end to end.
+ */
+if (typeof window !== "undefined") {
+  (window as unknown as Record<string, unknown>).__cortexSeedPortfolioCanvas =
+    seedPortfolioCanvasFromServer;
+}

@@ -22,6 +22,7 @@ import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { useLiveViewRefresh } from "@/lib/useLiveViewRefresh";
+import { useCanvasSeedFromAnswers } from "@/lib/canvasSeedFromAnswer";
 import { fetchEntitlements } from "@/api/client";
 
 import { Toaster } from "sonner";
@@ -191,6 +192,10 @@ export default function App() {
   // ADR-0042 OQ1: ONE subscription for the whole surface, not one per card — a per-card
   // watcher on a global signal is the fan-out species swept for on 2026-08-25.
   useLiveViewRefresh();
+  // The client end of "make me a portfolio canvas": watch for the seed ANSWER and arrange the
+  // artifacts it names. Mounted once — a per-card watcher on a global store is the fan-out
+  // species swept for on 2026-08-25.
+  useCanvasSeedFromAnswers();
   useArtifactSync();
   useHumanTaskSync();
   // Tasks are timeline citizens: mirror the HITL store into task-artifacts so
