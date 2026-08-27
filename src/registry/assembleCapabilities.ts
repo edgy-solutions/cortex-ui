@@ -252,8 +252,11 @@ const DERIVED_BINDINGS = [
   // renderer, no new component.
   //
   // THE OBJECT END IS THE ARCHETYPE, NOT THE OTHER PAYLOAD. This row shipped as
-  // `object_uri: "mesh:IntervalSchedule"` — the SUBJECT of the row directly above, copied into
-  // the object slot. The triple then read "a ContributionSequence renders as an
+  // an object end of mesh-colon-IntervalSchedule — the SUBJECT of the row directly above,
+  // copied into the object slot. (Written out longhand deliberately: quoting the wrong value
+  // verbatim put a live-looking `object_uri:` string in this file, and a sibling test derives
+  // the archetype list by regex over this source. The prose explaining the bug kept the bug's
+  // signature alive for anything reading the file rather than executing it.) The triple then read "a ContributionSequence renders as an
   // IntervalSchedule": one payload rendering as another payload, which is not a claim the
   // model can mean.
   //
