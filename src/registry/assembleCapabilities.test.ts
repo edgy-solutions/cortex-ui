@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 /**
  * The registration payload is ASSEMBLED from component contracts, not authored.
@@ -110,11 +110,48 @@ describe("assembleCapabilities", () => {
     // over nothing — the guard-gone-quiet shape this file is otherwise full of warnings about.
     expect(dispatchedBy.size).toBeGreaterThanOrEqual(10);
 
-    for (const c of assembleDerivedCapabilities()) {
+    // DRAWN rows only. A row whose answer is ACTED ON declares a consumer instead and is
+    // checked by the next test — inventing a placeholder component so it would pass here
+    // would assert that a renderable thing exists when nothing draws it.
+    const drawn = assembleDerivedCapabilities().filter((c) => !c.consumer);
+    expect(drawn.length).toBeGreaterThanOrEqual(10);
+
+    for (const c of drawn) {
       expect(
         dispatchedBy.get(c.archetype),
         `${c.archetype} advertises ${c.component}; interpreter dispatches ${dispatchedBy.get(c.archetype) ?? "NOTHING"}`,
       ).toBe(c.component);
+    }
+  });
+
+  it("every ACTED-ON row names a consumer that is really exported", () => {
+    // The consumer half of the same guard. A component name that goes stale is caught above;
+    // a consumer name that goes stale would otherwise be caught by nothing at all, because no
+    // interpreter case mentions it and no card fails to render — the seed would simply stop
+    // seeding, silently, which is the failure this whole model exists to make impossible.
+    const acted = assembleDerivedCapabilities().filter((c) => c.consumer);
+
+    // Positive control: if the category ever empties, say so rather than passing over nothing.
+    expect(acted.length).toBeGreaterThanOrEqual(1);
+
+    const libDir = path.join(__dirname, "../lib");
+    const exported = new Set<string>();
+    for (const f of readdirSync(libDir)) {
+      if (!f.endsWith(".ts") || f.endsWith(".test.ts")) continue;
+      const src = readFileSync(path.join(libDir, f), "utf8");
+      for (const m of src.matchAll(/export\s+function\s+(\w+)/g)) exported.add(m[1]);
+    }
+    expect(exported.size).toBeGreaterThanOrEqual(5);
+
+    for (const c of acted) {
+      expect(
+        exported.has(c.consumer as string),
+        `${c.archetype} names consumer ${c.consumer}, which src/lib exports nowhere`,
+      ).toBe(true);
+      expect(
+        c.component,
+        `${c.archetype} declares BOTH a component and a consumer — one row, one treatment`,
+      ).toBe("");
     }
   });
 

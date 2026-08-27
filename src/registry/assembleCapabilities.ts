@@ -39,6 +39,7 @@ import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
 import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimeline.contract";
 import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.contract";
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
+import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -273,6 +274,25 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: INTERVAL_TIMELINE_CONTRACT,
   },
+  // THE FIRST BINDING WHOSE ANSWER IS ACTED ON RATHER THAN DRAWN.
+  //
+  // `mesh:CanvasSeedResult` is what the seeding orchestration PRODUCES — slot-ordered artifact
+  // ids — and `mesh:CanvasSeed` is the treatment it receives. Both ends pre-exist in
+  // mesh_system.ttl, and the parents are the load-bearing part: the subject is a Response and
+  // the object is an Archetype. Filing the result under mesh:Archetype was proposed and
+  // refused, because Contract D would have accepted it — it checks that a class EXISTS and
+  // never what KIND it is.
+  //
+  // This row declares no component. `CANVAS_SEED_CONTRACT` names a `consumer` instead, and the
+  // dispatch seal checks whichever was declared. Nothing renders a seed answer: the five cards
+  // it places are the visible result.
+  {
+    subject_uri: "mesh:CanvasSeedResult",
+    object_uri: "mesh:CanvasSeed",
+    persona_fit: ["PORTFOLIO_LEAD"],
+    domain_fit: ["PORTFOLIO_PLANNING"],
+    contract: CANVAS_SEED_CONTRACT,
+  },
 ] as const;
 
 /**
@@ -285,7 +305,11 @@ export function assembleDerivedCapabilities(): AssembledCapability[] {
     subject_uri: b.subject_uri,
     object_uri: b.object_uri,
     archetype: b.contract.archetype,
-    component: b.contract.component,
+    // A contract declares a component (drawn) or a consumer (acted on), never both. The
+    // empty string is deliberate rather than a default: it pairs with a named consumer to
+    // say "nothing renders this", which is a claim, not a missing value.
+    component: (b.contract as { component?: string }).component ?? "",
+    consumer: (b.contract as { consumer?: string }).consumer,
     layout: b.contract.layout as FrontendCapability["layout"],
     expected_fields: Object.keys(b.contract.fields),
     persona_fit: [...b.persona_fit],

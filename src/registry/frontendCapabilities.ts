@@ -26,10 +26,31 @@ export interface FrontendCapability {
   object_uri: string;
   /** BAML archetype name passed to the renderer. */
   archetype: string;
-  /** React component name that handles this archetype. Diagnostic. */
+  /**
+   * React component name that handles this archetype. Diagnostic.
+   *
+   * EMPTY WHEN THE ANSWER IS ACTED ON RATHER THAN DRAWN — see `consumer`. It stays a required
+   * string rather than becoming optional so every existing reader keeps working; an empty
+   * component paired with a named consumer is the honest encoding of "nothing renders this".
+   */
   component: string;
-  /** Layout hint — "full-width" for diagrams/topology, "grid-col-1" for cards. */
-  layout: "full-width" | "grid-col-1";
+  /**
+   * The module-level reader that CONSUMES this archetype, for answers that are acted on
+   * instead of rendered. Exactly one of `component` / `consumer` is meaningful per row, and
+   * the dispatch seal checks whichever was declared.
+   *
+   * CANVAS_SEED is the first: its answer carries slot-ordered artifact ids and
+   * `canvasSeedFromArtifact` arranges them onto a canvas. Inventing a placeholder component so
+   * the component-shaped seal would pass is `classification-is-not-existence` on purpose.
+   */
+  consumer?: string;
+  /**
+   * Layout hint — "full-width" for diagrams/topology, "grid-col-1" for cards, and "none" for
+   * an answer that is ACTED ON rather than drawn. "none" is honest rather than a default: a
+   * consumed answer occupies no space because it produces no card, and borrowing a card's
+   * layout would describe a placement that never happens.
+   */
+  layout: "full-width" | "grid-col-1" | "none";
   /** Field names this archetype expects to find in structured_data. */
   expected_fields: string[];
   /** Persona affinities — used for ranking when multiple frontends compete. */
