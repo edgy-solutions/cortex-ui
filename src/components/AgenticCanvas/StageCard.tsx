@@ -166,44 +166,6 @@ export function StageCard({
         onClick();
       }}
       onDoubleClick={onDoubleClick}
-      // Not draggable DURING a pointer gesture. The two input systems are mutually exclusive:
-      // whichever starts first owns the interaction, and a native drag starting under a resize
-      // silently stops the pointer events the resize depends on.
-      draggable={!gesturing.current}
-      onDragStart={(e) => {
-        if (gesturing.current) {
-          e.preventDefault();
-          return;
-        }
-        // Drag a card onto a dock chip to add it. If this card is part of a
-        // lasso selection, drag the WHOLE selection (comma-joined ids);
-        // otherwise just this card. dataTransfer is the source of truth.
-        const ids = dragIds && dragIds.length ? dragIds : [artifact.id];
-        e.dataTransfer.setData("text/plain", ids.join(","));
-        e.dataTransfer.effectAllowed = "copyMove";
-        // The card lives inside the camera's CSS transform (translate+scale),
-        // which breaks the browser's DEFAULT drag ghost — it renders far off to
-        // the side / off-screen. Supply a small custom drag image pinned under
-        // the cursor so the drag is legible and tracks the hand.
-        const ghost = document.createElement("div");
-        ghost.textContent =
-          ids.length > 1 ? `${ids.length} answers` : spo.subjectLabel || "answer";
-        ghost.style.cssText =
-          "position:fixed;top:-1000px;left:-1000px;padding:6px 10px;border-radius:8px;" +
-          "background:#0C1D24;border:1px solid rgba(44,217,238,.55);color:#EAF7F9;" +
-          "font:600 11px 'JetBrains Mono',ui-monospace,monospace;white-space:nowrap;" +
-          "pointer-events:none;z-index:9999;box-shadow:0 8px 20px rgba(0,0,0,.5)";
-        document.body.appendChild(ghost);
-        e.dataTransfer.setDragImage(ghost, 14, 14);
-        // Remove after the browser has snapshotted it for the drag image.
-        setTimeout(() => ghost.remove(), 0);
-      }}
-      onDragEnd={(e) => {
-        // After a successful MULTI drop, clear the lasso selection.
-        if (dragIds && dragIds.length > 1 && e.dataTransfer.dropEffect !== "none") {
-          onDragComplete?.();
-        }
-      }}
       style={{
         ...style,
         width: size?.w ?? STAGE_CARD.w,
@@ -222,8 +184,69 @@ export function StageCard({
           : "border-neon-cyan/25 hover:border-neon-cyan/50"
       }`}
     >
-      {/* Header: subject identifier + TRACE hint (answer) — or task kind + state. */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 flex-shrink-0">
+      {/* Header: subject identifier + TRACE hint (answer) — or task kind + state.
+          ON A CANVAS IT IS ALSO THE MOVE HANDLE, like a window title bar. The grip icon stays
+          as the affordance, but the whole strip is grabbable — hunting a 14px icon to move a
+          card is a target nobody should have to hit. The BODY stays free for text selection,
+          which is the reason the move lives here and not on the card as a whole. */}
+      <div
+        onPointerDown={custom ? beginGesture(onGripDown) : undefined}
+        onPointerUp={custom ? endGesture : undefined}
+        onPointerCancel={custom ? endGesture : undefined}
+        // THE HEADER IS THE GRAB AREA, in BOTH views, and that is what makes the body selectable.
+        //
+        // A draggable element cannot have its text selected. While the whole card carried
+        // `draggable`, no card body could be swept and copied — in global OR on a canvas — and
+        // dragging a body started a chip-drag, so the thing that followed the cursor was the drag
+        // IMAGE while the card sat still. That was the "pill".
+        //
+        // Now the grab area is the header strip in both views: in GLOBAL it starts the
+        // drag-onto-a-dock-chip gesture; on a CANVAS it moves the card. Same place, same mental
+        // model, and the body below it is content the reader can select.
+        //
+        // (An earlier attempt gated `draggable` on `!gesturing.current`. That could never work:
+        // `gesturing` is a REF, and mutating a ref does not re-render, so the rendered attribute
+        // kept whatever value it had at the last render. The `onDragStart` bail is the guard
+        // that actually runs.)
+        draggable={!custom}
+        onDragStart={(e) => {
+          if (gesturing.current) {
+            e.preventDefault();
+            return;
+          }
+          // Drag a card onto a dock chip to add it. If this card is part of a
+          // lasso selection, drag the WHOLE selection (comma-joined ids);
+          // otherwise just this card. dataTransfer is the source of truth.
+          const ids = dragIds && dragIds.length ? dragIds : [artifact.id];
+          e.dataTransfer.setData("text/plain", ids.join(","));
+          e.dataTransfer.effectAllowed = "copyMove";
+          // The card lives inside the camera's CSS transform (translate+scale),
+          // which breaks the browser's DEFAULT drag ghost — it renders far off to
+          // the side / off-screen. Supply a small custom drag image pinned under
+          // the cursor so the drag is legible and tracks the hand.
+          const ghost = document.createElement("div");
+          ghost.textContent =
+            ids.length > 1 ? `${ids.length} answers` : spo.subjectLabel || "answer";
+          ghost.style.cssText =
+            "position:fixed;top:-1000px;left:-1000px;padding:6px 10px;border-radius:8px;" +
+            "background:#0C1D24;border:1px solid rgba(44,217,238,.55);color:#EAF7F9;" +
+            "font:600 11px 'JetBrains Mono',ui-monospace,monospace;white-space:nowrap;" +
+            "pointer-events:none;z-index:9999;box-shadow:0 8px 20px rgba(0,0,0,.5)";
+          document.body.appendChild(ghost);
+          e.dataTransfer.setDragImage(ghost, 14, 14);
+          // Remove after the browser has snapshotted it for the drag image.
+          setTimeout(() => ghost.remove(), 0);
+        }}
+        onDragEnd={(e) => {
+          // After a successful MULTI drop, clear the lasso selection.
+          if (dragIds && dragIds.length > 1 && e.dataTransfer.dropEffect !== "none") {
+            onDragComplete?.();
+          }
+        }}
+        className={`flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 flex-shrink-0 ${
+          custom ? "cursor-grab active:cursor-grabbing select-none" : ""
+        }`}
+      >
         <span
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
             task
@@ -277,6 +300,9 @@ export function StageCard({
         )}
         {onRemove && (
           <button
+            // The header is a move handle now, so a press on this button must not also start a
+            // drag — otherwise removing a card nudges it first.
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onRemove();

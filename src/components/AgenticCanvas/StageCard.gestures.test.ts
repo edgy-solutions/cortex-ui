@@ -30,11 +30,38 @@ describe("a pointer gesture and the native drag are mutually exclusive", () => {
     expect(STAGE).toContain("export function GlobalCanvasStage");
   });
 
-  it("the card is NOT unconditionally draggable", () => {
-    // A bare `draggable` is the defect: the corner sits inside a draggable ancestor, and
-    // `draggable={false}` on the child does not reliably stop the ancestor from starting.
-    expect(CARD).toMatch(/draggable=\{!gesturing\.current\}/);
+  it("the card is draggable ONLY in the global view", () => {
+    // `draggable` exists for one gesture — drag a card onto a dock chip — and that is a
+    // GLOBAL-view action. On a canvas the card is already placed and dragging it should MOVE
+    // it, so the attribute is off there.
+    //
+    // This assertion previously pinned `draggable={!gesturing.current}`, which could never
+    // work: `gesturing` is a REF, and mutating a ref does not re-render, so the rendered
+    // attribute kept whatever value it had at the last render. The guard was pinning a
+    // mechanism rather than a property, and it passed while the behaviour was wrong.
+    expect(CARD).toMatch(/draggable=\{!custom\}/);
     expect(CARD).not.toMatch(/^\s+draggable$/m);
+  });
+
+  it("the drag lives on the HEADER, not on the card — the body must stay selectable", () => {
+    // A draggable element cannot have its text selected. While the whole card carried the
+    // attribute, no card body could be swept and copied in EITHER view. The header is the grab
+    // area in both: in global it starts the chip-drag, on a canvas it moves the card.
+    // Everything from the card element's opening tag up to the header — i.e. the attributes
+    // that belong to the CARD itself.
+    const cardOpen = CARD.slice(
+      CARD.indexOf("data-stage-card"),
+      CARD.indexOf("Header: subject identifier"),
+    );
+    expect(cardOpen.length).toBeGreaterThan(100); // positive control on the slice
+    expect(cardOpen).not.toContain("onDragStart");
+    expect(cardOpen).not.toMatch(/draggable=/);
+  });
+
+  it("the HEADER moves the card, so the BODY stays selectable", () => {
+    // A draggable element cannot have its text selected. Moving from the header rather than
+    // from the whole card is what lets a reader sweep a number off a card and copy it.
+    expect(CARD).toContain("onPointerDown={custom ? beginGesture(onGripDown) : undefined}");
   });
 
   it("dragStart BAILS while a gesture is in flight", () => {
