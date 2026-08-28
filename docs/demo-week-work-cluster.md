@@ -346,24 +346,44 @@ covered it.
 
 ---
 
-## INTERVAL_TIMELINE renders — two steps to make it look like the mockup
+## INTERVAL_TIMELINE — step 1 DONE, step 2 outstanding
 
-**2026-08-25.** The gantt now mounts and draws (backend correct end to end: routing → verb →
-`mesh#IntervalSchedule` → `source=registered` → `INTERVAL_TIMELINE` → `render_ui 200`). What is
-on screen is a working left-hand table beside a chart region containing positioned labels and
-nothing else. Two distinct pieces of work, and only the first is a defect.
+**2026-08-25, corrected 2026-08-27.** The backend was correct end to end (routing → verb →
+`mesh#IntervalSchedule` → `source=registered` → `INTERVAL_TIMELINE` → `render_ui 200`) while
+the card drew a left-hand table beside an empty chart region. Two distinct pieces of work, and
+only the first was a defect. The first is now fixed; the second is still deferred.
 
-### Step 1 — one line: the wrong stylesheet is imported
+### Step 1 — THREE things, not one. RESOLVED 2026-08-25; corrected 2026-08-27.
 
-`IntervalTimeline.tsx:31` imports `@svar-ui/react-gantt/style.css`. The package exports **two**
-sheets and this is the partial one:
+**This entry originally said `all.css` makes a working gantt. That was false**, and it stayed
+in the document for two days as a confident one-line fix that would not have worked. Corrected
+here rather than deleted, because the shape of the error is the useful part: a diagnosis that
+explains SOME of the evidence reads as complete, and the missing pieces are invisible until
+someone applies the fix and finds it insufficient. The stylesheet WAS wrong. It was also not
+sufficient, and the entry did not say so.
+
+What it actually took, all three:
+
+1. **`all.css`, not `style.css`** — the package exports two sheets and the partial one carries
+   the grid/table rules but not the bar rules (see the table below). Necessary, not sufficient.
+2. **A `WillowDark` theme wrapper** — SVAR's stylesheet is written against a theme scope. Load
+   the CSS without the provider and the rules exist and match nothing, which is why the bars
+   stayed invisible after step 1 alone.
+3. **A `Locale` provider, with BOTH locale packages** — `gantt-locales` carries the UI labels,
+   `core-locales` carries the calendar words. Passing one is not enough. And the scale dialect
+   is **strftime** (`%M %Y`), not `MMM yyyy` — a pattern with no `%` prints itself, which is
+   exactly what the header was doing.
+
+The last one is worth keeping for its own sake: wrong dialect and missing calendar produce the
+**same blank-looking header**, and this component had both at once. Two independent faults with
+one symptom is why the first two diagnoses each looked right and each left the header wrong.
 
 | Export | File | Size | Class selectors |
 |---|---|---|---|
 | `./style.css` | `dist/index.css` | 32 KB | **151** |
 | `./all.css` | `dist-full/index.css` | 150 KB | **478** |
 
-**Fix: `import "@svar-ui/react-gantt/all.css";`** — Lane 1's file, one token.
+**Landed in `50b986d` (all.css), `4cba2ae` (WillowDark), `8e5a4b8` + `015dd9f` (Locale, both packages), `2b714aa` (the strftime dialect).**
 
 Why the symptoms match exactly, recorded so the diagnosis is re-checkable rather than
 re-derived:
@@ -371,8 +391,11 @@ re-derived:
 - The **left table renders correctly** — the grid/table rules ARE in the partial sheet.
 - **Task labels sit at date-correct x positions** and move with horizontal scroll — so SVAR's
   layout engine is working. Geometry is fine.
-- **No bars** — the bar element's background/height rules are among the 327 missing selectors.
-- **The scale reads literal `MMM yyyy` / `d`** — the scale-cell rules are in the full sheet too.
+- **No bars** — the bar rules are among the 327 missing selectors AND the theme scope they are
+  written against was absent. Both had to be fixed; the stylesheet alone left them invisible.
+- **The scale reads literal `MMM yyyy`** — NOT a stylesheet problem, which is the half the
+  original entry got wrong. Formatting a date is the LOCALE's job, and the pattern was in the
+  wrong dialect besides. CSS could never have fixed it, and saying it would have was the error.
 
 **This is NOT a sizing problem, and the `minHeight` instinct would have been a dead end.**
 Nothing is collapsed; the elements are unstyled. A height fix would have papered over a
@@ -393,9 +416,10 @@ This is the same work as the deferred `risk_flag` badge item, and it now has a l
 apply to — which it did not before tonight. It stays deferred; it also stays blocked on the
 producer emitting the `risk_flag` vocabulary (see the producer-declarations entry above).
 
-**Sequencing: `all.css` makes it a working gantt; `taskTemplate` + theme variables make it
-yours.** Do not attempt the second before the first — styling an unstyled component means
-fighting defaults that are not actually applied.
+**Sequencing: the three fixes above make it a working gantt; `taskTemplate` + theme variables
+make it yours.** Do not attempt the second before the first — styling a component whose
+stylesheet, theme scope and locale are not applied means fighting defaults that are not in
+effect.
 
 ---
 
