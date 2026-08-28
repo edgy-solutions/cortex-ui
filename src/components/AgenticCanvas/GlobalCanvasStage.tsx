@@ -423,7 +423,11 @@ export function GlobalCanvasStage() {
   return (
     <div
       ref={stageRef}
-      className="h-full w-full relative overflow-hidden select-none"
+      // Selection is suppressed only while a LASSO is actually being dragged. A blanket
+      // `select-none` here made every card on the canvas uncopyable — you could read a number
+      // off a card and not take it with you, which is a strange property for a surface whose
+      // job is showing you numbers.
+      className={`h-full w-full relative overflow-hidden ${marquee ? "select-none" : ""}`}
       style={{
         background:
           "radial-gradient(rgba(80,200,220,.10) 1px, transparent 1.5px) 0 0 / 44px 44px, #070F13",

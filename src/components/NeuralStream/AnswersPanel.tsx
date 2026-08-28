@@ -124,13 +124,18 @@ export function AnswersPanel() {
   const onRowPointerDown = useCallback(
     (e: React.PointerEvent, id: string) => {
       if (e.button !== 0) return;
-      // The row drag is a custom pin gesture, not a text selection — stop the
-      // browser from starting a native selection as the pointer moves across
-      // the list rows (preventDefault blocks selection initiation; the list
-      // also carries `select-none` while a drag is active, below). Clear any
-      // stray existing selection so nothing stays highlighted.
-      e.preventDefault();
-      window.getSelection()?.removeAllRanges();
+      // NO preventDefault here, deliberately.
+      //
+      // It used to fire on every pointerdown, which killed text selection across the whole
+      // answer list — you could not copy a summary or a question off the screen. The problem
+      // it was solving is real (dragging a row to a canvas would also paint a selection
+      // behind it) but the remedy was scoped to the wrong event: a pointerdown is not yet a
+      // drag, it is only a press, and most presses are the start of a selection or a click.
+      //
+      // A press and a drag are told apart by DISTANCE, not by intent declared up front. So
+      // selection is left alone here and suppressed at the moment the pointer crosses the
+      // drag threshold — see the move handler, which clears whatever selection had begun.
+      // Before that threshold the browser does what a browser does.
       startRef.current = { x: e.clientX, y: e.clientY, id };
       setDrag({ id, x: e.clientX, y: e.clientY, moved: false });
     },
@@ -144,7 +149,15 @@ export function AnswersPanel() {
       if (!s) return;
       const moved =
         Math.abs(e.clientX - s.x) > 6 || Math.abs(e.clientY - s.y) > 6;
-      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY, moved } : d));
+      // THIS is where a press becomes a drag, so this is where selection stops being what the
+      // user meant. Any range the browser started during the first few pixels is cleared once,
+      // on the transition — not on every move, which would fight a selection the user is
+      // legitimately making elsewhere on the page.
+      setDrag((d) => {
+        if (!d) return d;
+        if (moved && !d.moved) window.getSelection()?.removeAllRanges();
+        return { ...d, x: e.clientX, y: e.clientY, moved };
+      });
     };
     const onUp = (e: PointerEvent) => {
       const s = startRef.current;
@@ -233,11 +246,13 @@ export function AnswersPanel() {
         </div>
       )}
 
-      {/* List — suppress text selection while a row drag is in flight so
-          dragging a card doesn't highlight the list text. */}
+      {/* Selection is suppressed only once a drag is ACTUALLY under way (`drag.moved`), not
+          from the moment a row is pressed. Gating on `drag` alone made every press disable
+          selection, so a click-and-sweep to copy a summary never got started — the list was
+          uncopyable and the reason looked like a CSS choice rather than a gesture guard. */}
       <div
         className={`flex-1 min-h-0 overflow-y-auto px-2 py-3 ${
-          drag ? "select-none" : ""
+          drag?.moved ? "select-none" : ""
         }`}
       >
         <div className="px-1">
