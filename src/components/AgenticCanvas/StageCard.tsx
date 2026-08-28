@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
@@ -57,8 +58,6 @@ export function StageCard({
   dragIds?: string[];
   /** Called after a successful MULTI drag-drop, so the caller can clear the
    *  lasso selection. */
-  /** Called after a successful MULTI drag-drop, so the caller can clear the
-   *  lasso selection. */
   onDragComplete?: () => void;
   /** World-space footprint. ADR-0042 §4: size is ARRANGEMENT, owned by the UI and
    *  persisted with the canvas. Absent → the default card size, which is what every
@@ -94,13 +93,88 @@ export function StageCard({
   // real width and let the content lay itself out, exactly as it does in the full pane.
   const sized = Boolean(size && (size.w !== STAGE_CARD.w || size.h !== STAGE_CARD.h));
 
+  /**
+   * POINTER GESTURES vs THE NATIVE DRAG, and why the resize corner behaved so strangely.
+   *
+   * The card is `draggable` for the drag-onto-a-dock-chip gesture. HTML5 drag and pointer
+   * events are two different input systems on the same element, and the drag wins: once a
+   * native drag starts, the browser STOPS firing pointermove and pointerup and fires drag
+   * events instead.
+   *
+   * That single fact produced every symptom of the broken resize:
+   *
+   *   - Grabbing the corner started a native drag (the handle is inside a draggable ancestor,
+   *     and `draggable={false}` on the child is not reliably enough). The "pill" that moved
+   *     was this card's custom drag IMAGE, not the card.
+   *   - The card did not resize, because the resize listens on pointermove and pointermove had
+   *     stopped firing.
+   *   - Its pointerup never arrived either, so the resize listeners were never removed. They
+   *     sat armed on the document.
+   *   - After the drop, the next mouse movement reached those stale listeners and the card
+   *     began resizing from the ORIGINAL pointerdown coordinates — which is why the anchor was
+   *     nowhere near the corner and the drop point became the new origin.
+   *   - Ending that phantom resize meant clicking, which landed on the card and selected it.
+   *
+   * The fix is to make the two systems mutually exclusive rather than to fight the symptoms:
+   * a pointer gesture PREVENTS the native drag from starting at all, and captures the pointer
+   * so its move and up events cannot be stolen. `preventDefault` on pointerdown suppresses
+   * drag initiation; the ref is belt-and-braces for browsers that start the drag anyway.
+   */
+  const gesturing = useRef(false);
+
+  const beginGesture =
+    (handler?: (e: React.PointerEvent) => void) => (e: React.PointerEvent) => {
+      if (!handler) return;
+      gesturing.current = true;
+      // Stops the native drag before it starts, and keeps the gesture off the card's select.
+      e.preventDefault();
+      e.stopPropagation();
+      // Route every subsequent move/up to this element, so a fast drag that leaves the handle
+      // does not hand the gesture to whatever is underneath.
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      } catch {
+        /* capture is an optimisation, not a requirement */
+      }
+      handler(e);
+    };
+
+  /** A gesture that MOVED must not also register as a click on the card. */
+  const endGesture = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    // Cleared on the next tick so the click event that follows pointerup still sees it.
+    setTimeout(() => {
+      gesturing.current = false;
+    }, 0);
+  };
+
   return (
     <div
       data-stage-card
-      onClick={onClick}
+      onClick={(e) => {
+        // A move or resize ends in a pointerup, which the browser follows with a click. Without
+        // this, finishing a resize selects (and at focus zoom, enlarges) the card — the gesture
+        // reporting itself as a decision the user did not make.
+        if (gesturing.current) {
+          e.stopPropagation();
+          return;
+        }
+        onClick();
+      }}
       onDoubleClick={onDoubleClick}
-      draggable
+      // Not draggable DURING a pointer gesture. The two input systems are mutually exclusive:
+      // whichever starts first owns the interaction, and a native drag starting under a resize
+      // silently stops the pointer events the resize depends on.
+      draggable={!gesturing.current}
       onDragStart={(e) => {
+        if (gesturing.current) {
+          e.preventDefault();
+          return;
+        }
         // Drag a card onto a dock chip to add it. If this card is part of a
         // lasso selection, drag the WHOLE selection (comma-joined ids);
         // otherwise just this card. dataTransfer is the source of truth.
@@ -186,10 +260,13 @@ export function StageCard({
         )}
         {onGripDown && (
           <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onGripDown(e);
-            }}
+            // Same gesture contract as the resize corner. The move grip had the identical
+            // latent bug — `draggable={false}` on the child does not reliably stop the
+            // draggable ANCESTOR from starting a drag, and a drag that starts here kills the
+            // pointermove the move depends on.
+            onPointerDown={beginGesture(onGripDown)}
+            onPointerUp={endGesture}
+            onPointerCancel={endGesture}
             onDragStart={(e) => e.preventDefault()}
             draggable={false}
             className="ml-auto text-slate-600 hover:text-neon-cyan cursor-grab active:cursor-grabbing flex-shrink-0"
@@ -291,7 +368,9 @@ export function StageCard({
           the resize. `stopPropagation` in the handler keeps the click off the card's select. */}
       {onResizeDown && (
         <span
-          onPointerDown={onResizeDown}
+          onPointerDown={beginGesture(onResizeDown)}
+          onPointerUp={endGesture}
+          onPointerCancel={endGesture}
           onDragStart={(e) => e.preventDefault()}
           draggable={false}
           role="separator"

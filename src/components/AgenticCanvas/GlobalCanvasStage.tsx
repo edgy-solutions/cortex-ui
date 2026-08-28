@@ -317,11 +317,16 @@ export function GlobalCanvasStage() {
     const onUp = () => {
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
       setMarquee(null);
       if (!last || last.w * last.h < 40) setSel([]); // a tiny drag = background click → clear
     };
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
+    // The lasso has the same leak as the move and resize gestures: a pointerup that never
+    // arrives leaves this handler armed, and the marquee then follows the cursor around a
+    // canvas nobody is dragging on. Found by a guard written for the other two.
+    document.addEventListener("pointercancel", onUp);
   };
 
   // Custom-canvas: grip pointer-drag to move an item (screen delta → world).
@@ -337,9 +342,13 @@ export function GlobalCanvasStage() {
       const onUp = () => {
         document.removeEventListener("pointermove", onMove);
         document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
       };
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
+      // A lost capture must not leave a move listener armed on the document — that is exactly
+      // how a finished gesture kept resizing on the next unrelated mouse movement.
+      document.addEventListener("pointercancel", onUp);
     };
 
   /**
@@ -373,9 +382,13 @@ export function GlobalCanvasStage() {
       const onUp = () => {
         document.removeEventListener("pointermove", onMove);
         document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
       };
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
+      // A lost capture must not leave a move listener armed on the document — that is exactly
+      // how a finished gesture kept resizing on the next unrelated mouse movement.
+      document.addEventListener("pointercancel", onUp);
     };
 
   // relationship-layout use (ADR-0028 Use 1): one-shot arrange the canvas's
