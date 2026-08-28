@@ -24,6 +24,14 @@ import { usePersonaStore } from "@/store/usePersonaStore";
 import { useLiveViewRefresh } from "@/lib/useLiveViewRefresh";
 import { useCanvasSeedFromAnswers } from "@/lib/canvasSeedFromAnswer";
 import { fetchEntitlements } from "@/api/client";
+// SIDE-EFFECT IMPORT, and the bare form is load-bearing. This module installs the
+// `window.__cortexSeedPortfolioCanvas` bring-up trigger and exports nothing App needs, so an
+// unused named import would be a binding a bundler may drop. A module no one imports at all is
+// dropped outright — which is what happened here: the module claimed in its own comment to
+// expose a global, six tests passed by importing the function directly, and the global was
+// absent from every built bundle for two days because nothing on the entry path referenced it.
+// Guarded by `seedPortfolioCanvas.reachability.test.ts`. Remove when the phrase routes.
+import "@/lib/seedPortfolioCanvas";
 
 import { Toaster } from "sonner";
 
