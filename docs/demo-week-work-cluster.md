@@ -172,6 +172,45 @@ Split recorded so nobody re-debugs reachable code looking for an archetype fault
 
 ---
 
+## The manual seed trigger EXISTS now — do not hand-drag the five cards
+
+**2026-08-27, `bc55a48`.** Lane 1's `manual-seed-trigger-tonight.md` says *"no store is
+exposed on `window` — I checked, there is no debug global"* and on that basis has the operator
+drag the five returned artifacts onto a canvas by hand, in slot order.
+
+**That check was correct about the running app, and the fault was ours.**
+`src/lib/seedPortfolioCanvas.ts` installed `window.__cortexSeedPortfolioCanvas` and said so in
+its own comment, but nothing on the entry path imported the module, so the bundler dropped it
+whole and the side effect never ran. Measured against the artifact, not argued: building the
+previous `App.tsx` gives 0 occurrences of the global in `dist/`, the current one gives 1.
+They checked the running app; our comment described the source. **The bundle is the truth.**
+
+It is fixed. After the next rollout, replace the hand-composition step with:
+
+```js
+await window.__cortexSeedPortfolioCanvas();  // returns the new canvas id, or null
+```
+
+This matters beyond convenience. Hand-dragging tests the operator's dexterity and re-asserts a
+slot order a human retyped; the call composes through the same receiver the answer path uses, in
+the order the server declared. It converts the half that plan honestly conceded it could not
+test — *the seeder's own placement* — into the half it does.
+
+**Requires the rollout.** `imagePullPolicy: IfNotPresent` means a pod already holding `:latest`
+will not re-pull, and the failure mode is silent: the global is simply undefined and the console
+call reads as if the fix were never made. If `typeof window.__cortexSeedPortfolioCanvas` is
+`"undefined"`, that is a stale image, not a broken fix — fall back to hand-composition and roll.
+
+*The guard, not the import, is the finding.* The module's six tests passed the entire time: a
+test importing the function directly creates the very edge the application was missing, so it
+proves the mechanism and never that anything can reach it. Same species as
+`draggable={!gesturing.current}`. `seedPortfolioCanvas.reachability.test.ts` now walks the
+import graph from `main.tsx` and requires EVERY module installing a `__cortex*` global to be on
+it — the law rather than the path, because the next scaffolding global is the one that will be
+unreachable.
+
+---
+
 ## SPEC (not built) — the drill-in drawer and the computed-context tooltip
 
 Captured while the mock's answers were fresh, so the build reads a spec instead of
