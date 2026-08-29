@@ -1,10 +1,11 @@
 import React from "react";
-import { AlertCircle, FileText } from "lucide-react";
+import { AlertCircle, FileText, Zap } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 // Lazy-loaded or imported directly for interpretation
 import { WarningCard } from "../NeuralStream/WarningCard";
+import { isActedOn } from "@/registry/actedOnArchetypes";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -601,6 +602,41 @@ const renderComponent = (
     // for the future revisit.
 
     default:
+      // ACTED ON, not drawn — and therefore not missing.
+      //
+      // The registry has a category for answers nothing renders: a binding declares a
+      // `consumer` instead of a `component`, and CANVAS_SEED`s contract says outright that
+      // "nothing renders that answer as a card". The interpreter was never told, so the one
+      // archetype the model deliberately has no component for reported itself as a component
+      // that could not be found — an alarm raised by a successful operation.
+      //
+      // The contract`s own header refuses to invent a placeholder component, calling that
+      // `classification-is-not-existence committed on purpose`. This is the inverse error and
+      // worth naming as one: claiming something is ABSENT when nothing was ever meant to be
+      // there. Both mistake the map for the territory; they just point opposite ways.
+      if (isActedOn(comp.archetype)) {
+        // WHAT THIS MAY AND MAY NOT SAY. It states what the answer IS — a seed carrying N
+        // ids — and never that the act HAPPENED. A historical seed re-read on a later page
+        // load places nothing (the consumer primes its seen-set at mount so scrollback cannot
+        // re-seed), so "seeded 5 cards" would be false on exactly the rows most likely to be
+        // read. The count is verbatim from the payload; the destination is not in the payload
+        // at all and is not guessed.
+        const ids = Array.isArray(comp.artifact_ids) ? comp.artifact_ids.length : null;
+        return (
+          <div className="p-4 glass-panel flex items-start gap-3">
+            <Zap className="w-4 h-4 text-teal-400/70 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-mono text-xs text-slate-300">
+                {comp.archetype}
+                {ids !== null ? ` · ${ids} artifacts` : ""}
+              </p>
+              <p className="font-mono text-[10px] text-slate-500">
+                Acted on rather than drawn — the cards it placed are the visible result.
+              </p>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="p-4 glass-panel border-amber-500/30 flex flex-col gap-3">
           <div className="flex items-start gap-3 border-b border-amber-500/20 pb-3">

@@ -29,6 +29,43 @@ const seedArtifact = (id: string, ids: string[], name?: string) =>
     },
   }) as unknown as Artifact;
 
+/**
+ * CAPTURED PAYLOAD — 2026-08-28, the first real seed answer to route end to end.
+ *
+ * Replaces an invented fixture. Everything here is the shape the producer actually sent, and
+ * two things about it were news:
+ *
+ *   - There is no `name` and no `canvas_type`. Both are declared optional by the contract and
+ *     both are read by the consumer, and the producer sends NEITHER. They are consumer-side
+ *     inventions with no producer — the same species as `elapsed_ms`, harmless only because
+ *     they are optional and the consumer already has a default.
+ *   - There ARE two fields nothing here knew about: `source_persona` and `subject_concept`.
+ *     They are kept in the fixture precisely because the recognizer must ignore them; a
+ *     fixture trimmed to the fields we read would prove nothing about the bytes on the wire.
+ *
+ * The ids are truncated as captured (the panel elides them mid-urn). The PREFIX is verbatim,
+ * which is the part that matters: these are answerArtifact urns, not bare uuids, so anything
+ * downstream that assumed a plain id would break on the real thing.
+ */
+const CAPTURED_SEED_PAYLOAD = {
+  archetype: "CANVAS_SEED",
+  artifact_ids: [
+    "urn:li:answerArtifact:canvas-seed-0414904c-s1",
+    "urn:li:answerArtifact:canvas-seed-0414904c-s2",
+    "urn:li:answerArtifact:canvas-seed-0414904c-s3",
+    "urn:li:answerArtifact:canvas-seed-0414904c-s4",
+    "urn:li:answerArtifact:canvas-seed-0414904c-s5",
+  ],
+  source_persona: "PORTFOLIO_LEAD",
+  subject_concept: null,
+};
+
+const capturedArtifact = () =>
+  ({
+    id: "captured",
+    status: "complete",
+    rendered_output: { components: [CAPTURED_SEED_PAYLOAD] },
+  }) as unknown as Artifact;
 const plainArtifact = (id: string) =>
   ({
     id,
@@ -51,6 +88,28 @@ describe("canvasSeedFromArtifact — the payload shape, declared in one place", 
     });
   });
 
+
+  it("reads the CAPTURED payload — real bytes, not a shape we invented", () => {
+    // The whole reason this file waited on a live run. An invented fixture proves the
+    // recognizer matches what we imagined the producer sends.
+    const seed = canvasSeedFromArtifact(capturedArtifact());
+    expect(seed?.ids).toEqual(CAPTURED_SEED_PAYLOAD.artifact_ids);
+    expect(seed?.ids).toHaveLength(5);
+  });
+
+  it("the real payload carries NO name — the consumer default is what actually ships", () => {
+    // `name` is declared optional and read here, and the producer does not send it. Pinned so
+    // that if a producer ever starts sending one, this test fails and someone decides whether
+    // that was intended rather than discovering it from a renamed board.
+    expect("name" in CAPTURED_SEED_PAYLOAD).toBe(false);
+    expect(canvasSeedFromArtifact(capturedArtifact())?.name).toBeUndefined();
+  });
+
+  it("ignores producer fields it does not know about", () => {
+    // `source_persona` and `subject_concept` arrived unannounced. A recognizer that choked on
+    // an unrecognised sibling field would break every time the producer grew one.
+    expect(canvasSeedFromArtifact(capturedArtifact())).not.toBeNull();
+  });
   it("is null for anything that is not a seed answer", () => {
     expect(canvasSeedFromArtifact(plainArtifact("a"))).toBeNull();
     expect(canvasSeedFromArtifact({ id: "a" } as unknown as Artifact)).toBeNull();
