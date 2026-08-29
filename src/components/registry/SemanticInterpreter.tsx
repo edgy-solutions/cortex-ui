@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 // Lazy-loaded or imported directly for interpretation
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { isActedOn } from "@/registry/actedOnArchetypes";
+import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -615,6 +616,11 @@ const renderComponent = (
       // worth naming as one: claiming something is ABSENT when nothing was ever meant to be
       // there. Both mistake the map for the territory; they just point opposite ways.
       if (isActedOn(comp.archetype)) {
+        // A bespoke receipt where one exists; the category fallback where one does not. The CASE
+        // is the PRESENTATION, never the escape from the alarm — the not-found branch is avoided
+        // by the CATEGORY check above it, so the next consumer binding is covered the day it is
+        // declared even though nobody has written it a card yet.
+        if (comp.archetype === "CANVAS_SEED") return <CanvasSeedReceipt comp={comp} />;
         // WHAT THIS MAY AND MAY NOT SAY. It states what the answer IS — a seed carrying N
         // ids — and never that the act HAPPENED. A historical seed re-read on a later page
         // load places nothing (the consumer primes its seen-set at mount so scrollback cannot

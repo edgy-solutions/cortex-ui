@@ -22,8 +22,12 @@ import { afterEach } from "vitest";
 import { SemanticInterpreter } from "./SemanticInterpreter";
 import { ACTED_ON_ARCHETYPES } from "@/registry/actedOnArchetypes";
 import { assembleDerivedCapabilities } from "@/registry/assembleCapabilities";
+import { useStageStore } from "@/store/useStageStore";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useStageStore.setState({ canvases: [] } as never);
+});
 
 const NOT_FOUND = /UI COMPONENT NOT FOUND/i;
 
@@ -62,18 +66,114 @@ describe("the interpreter knows the difference between undrawn and missing", () 
   it("says what the answer IS, and never that the act happened", () => {
     // A seed answer re-read from scrollback places nothing — the consumer primes its seen-set
     // at mount so history cannot re-seed. "Seeded 5 cards onto Portfolio Planning" would be
-    // false on exactly the rows most likely to be read, and it would also name a destination
-    // that is not in the payload. The count is captured; the effect and the destination are not.
+    // false on exactly the rows most likely to be read.
+    //
+    // This assertion used to ban the STRING "Portfolio Planning", which was too blunt and
+    // would have blocked the receipt from naming the canvas at all. The thing that must not
+    // appear is a claim that an act OCCURRED — the past tense, the placement, the effect.
     render(
       <SemanticInterpreter
         payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a", "b"] }] }}
       />,
     );
-    expect(screen.getByText(/2 artifacts/)).toBeTruthy();
-    expect(screen.queryByText(/seeded/i)).toBeNull();
-    expect(screen.queryByText(/Portfolio Planning/i)).toBeNull();
+    expect(screen.queryByText(/seeded|placed onto|added to|composed onto/i)).toBeNull();
   });
 
+  it("names the canvas, and marks a default name AS a default", () => {
+    // The producer sends no `name` today. Showing the consumer default is honest; showing it
+    // as though the seed chose it is not, and the difference is one label.
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a"] }] }}
+      />,
+    );
+    expect(screen.getByText(/default name/i)).toBeTruthy();
+  });
+
+  it("a payload that DOES carry a name shows it, unmarked", () => {
+    // The other half — without it the assertion above passes on a card that always prints
+    // "default name" regardless of what arrived.
+    render(
+      <SemanticInterpreter
+        payload={{
+          components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a"], name: "Q3 Review" }],
+        }}
+      />,
+    );
+    expect(screen.getByText(/Q3 Review/)).toBeTruthy();
+    expect(screen.queryByText(/default name/i)).toBeNull();
+  });
+
+  it("lists a slot per id, anchor first — the order IS the slot assignment", () => {
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["x", "y", "z"] }] }}
+      />,
+    );
+    expect(screen.getByText(/anchor/i)).toBeTruthy();
+    expect(screen.getByText(/slot 2/i)).toBeTruthy();
+    expect(screen.getByText(/slot 3/i)).toBeTruthy();
+  });
+
+  it("shows the raw id for an artifact this client does not hold, rather than a label", () => {
+    // History not hydrated, or another browser. Inventing a readable name for an id we cannot
+    // resolve is the manufactured-confidence failure in miniature.
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["urn:li:nope"] }] }}
+      />,
+    );
+    expect(screen.getByText("urn:li:nope")).toBeTruthy();
+  });
+
+  it("offers the link when a local board holds EXACTLY these artifacts", () => {
+    // Positive control for the two negatives below — without it they would pass on a receipt
+    // that never offers a link at all.
+    useStageStore.setState({
+      canvases: [{ id: "cv1", name: "b", items: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 0, y: 0 }] }],
+    });
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a", "b"] }] }}
+      />,
+    );
+    expect(screen.getByText(/view canvas/i)).toBeTruthy();
+  });
+
+  it("does NOT offer a board that merely CONTAINS these artifacts among others", () => {
+    // A board holding the five among twenty is a different board. Offering it would send the
+    // reader somewhere they did not ask to go, which is worse than offering nothing.
+    useStageStore.setState({
+      canvases: [
+        {
+          id: "cv1",
+          name: "b",
+          items: [
+            { id: "a", x: 0, y: 0 },
+            { id: "b", x: 0, y: 0 },
+            { id: "unrelated", x: 0, y: 0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a", "b"] }] }}
+      />,
+    );
+    expect(screen.queryByText(/view canvas/i)).toBeNull();
+  });
+
+  it("offers NO canvas link when no local board holds exactly these artifacts", () => {
+    // Absence means "this client cannot offer a link", never "the seed did not run", so
+    // nothing is rendered to mark it.
+    render(
+      <SemanticInterpreter
+        payload={{ components: [{ archetype: "CANVAS_SEED", artifact_ids: ["a", "b"] }] }}
+      />,
+    );
+    expect(screen.queryByText(/view canvas/i)).toBeNull();
+  });
   it("renders without an id list rather than asserting a count it does not have", () => {
     render(<SemanticInterpreter payload={{ components: [{ archetype: "CANVAS_SEED" }] }} />);
     expect(screen.queryByText(NOT_FOUND)).toBeNull();
