@@ -5,6 +5,7 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
 import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
 import { taskKindLabel } from "@/lib/taskArtifact";
+import { artifactDuration } from "@/lib/formatDuration";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -376,6 +377,9 @@ function DayHeader({ label, onClick }: { label: string; onClick?: () => void }) 
 }
 
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
+  // null when the producer never measured it — the row then shows no duration
+  // at all, which is the honest rendering of "not recorded".
+  const took = artifactDuration(a.duration_ms);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);
@@ -416,9 +420,18 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
           : undefined
       }
     >
-      {/* Time */}
+      {/* Time — and, under it, how long the answer took to produce.
+          Stacked rather than inline because this column is fixed-width and the
+          two are different KINDS of fact: when it happened, and how long it ran.
+          Rendered only when the producer measured it; an artifact with no
+          duration shows the clock alone, never a `0s` that would read as fast. */}
       <span className="w-11 flex-shrink-0 text-right text-[10px] font-mono text-slate-500 tabular-nums pt-2">
         {formatTime(a.created_at)}
+        {took && (
+          <span className="block text-[9px] text-slate-600" title={`Took ${took} to answer`}>
+            {took}
+          </span>
+        )}
       </span>
 
       {/* Spine rail + node */}
@@ -666,6 +679,9 @@ function ClusterHeader({
 }
 
 function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
+  // null when the producer never measured it — the row then shows no duration
+  // at all, which is the honest rendering of "not recorded".
+  const took = artifactDuration(a.duration_ms);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);
@@ -707,6 +723,7 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
             </>
           )}
           <span className="text-slate-600">{formatTime(a.created_at)}</span>
+          {took && <span className="text-slate-600"> · {took}</span>}
         </p>
       </div>
       {pinned && (

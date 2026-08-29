@@ -74,6 +74,10 @@ const serverRow = (id: string, overrides: Partial<Artifact> = {}): Artifact => (
   id,
   created_at: 500,
   updated_at: 600,
+  // Differs from the pending row`s honest `null` on purpose — the sweep above
+  // refuses a fixture whose server value matches the pending one, because such a
+  // field would pass its assertion without anything having actually arrived.
+  duration_ms: 4200,
   valid_as_of: 500,
   valid_until: null,
   question_text: "who owns the alpha dashboard?",

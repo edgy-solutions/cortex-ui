@@ -97,12 +97,11 @@ export function useLiveStages(): LiveStageInfo {
   };
 }
 
-/** Compact elapsed formatter: "2.5s" under 10s, "12s" under 60s, "1m 03s". */
-export function formatElapsed(ms: number): string {
-  const s = ms / 1000;
-  if (s < 10) return `${s.toFixed(1)}s`;
-  if (s < 60) return `${Math.floor(s)}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.floor(s % 60);
-  return `${m}m ${String(rem).padStart(2, "0")}s`;
-}
+/**
+ * Compact elapsed formatter: "2.5s" under 10s, "12s" under 60s, "1m 03s".
+ *
+ * MOVED to `@/lib/formatDuration` when the answers list became a second consumer.
+ * Re-exported under the old name so the live ticker and a finished answer`s stamp
+ * are the same function rather than two that agree today.
+ */
+export { formatDuration as formatElapsed } from "@/lib/formatDuration";

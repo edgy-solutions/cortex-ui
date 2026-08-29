@@ -60,7 +60,13 @@ import { config } from "@/config";
  *     NULL in the projection schema. If absent, that's a schema-drift
  *     bug that should not be papered over with a default.
  */
-function rowToArtifact(row: Row): Artifact {
+/**
+ * Exported for its tests. This is the one place a projection row becomes an
+ * Artifact, so it is where a wire value that is absent, malformed or nonsensical
+ * has to be turned into something the UI can render honestly — and that is worth
+ * testing against real shapes rather than pinning with a source regex.
+ */
+export function rowToArtifact(row: Row): Artifact {
   // Electric sends jsonb columns as JSON strings; bigint as strings.
   // The conversions here are intentional and explicit.
   const parseJsonbOrNull = <T,>(v: unknown): T | null => {
@@ -87,6 +93,23 @@ function rowToArtifact(row: Row): Artifact {
     if (typeof v === "string") return Number(v);
     return null;
   };
+  /**
+   * A duration is not just a number — it is a number that CANNOT be negative and
+   * cannot be NaN, and both are reachable from the wire (`Number("abc")`, a
+   * producer subtracting timestamps in the wrong order). Either would render as a
+   * confident `-3s` or `NaNs` beside a real answer, which is worse than showing
+   * nothing: an absent duration reads as "not recorded", a wrong one reads as a
+   * measurement. Refuse to absence, the same way `cardSize` refuses a non-finite
+   * dimension rather than laying out a broken card.
+   *
+   * Zero is allowed through deliberately — a sub-millisecond cache hit is a real
+   * measurement, and swallowing it would make the fastest answers look unmeasured.
+   */
+  const parseDurationMs = (v: unknown): number | null => {
+    const n = parseBigIntOrNull(v);
+    if (n === null || !Number.isFinite(n) || n < 0) return null;
+    return n;
+  };
   // Electric's JS client decodes jsonb columns to native JS objects
   // (not JSON strings) — so the parseJsonbOrNull helpers below
   // tolerate BOTH shapes. Defensive against client-version drift.
@@ -102,6 +125,8 @@ function rowToArtifact(row: Row): Artifact {
     id: row.id as string,
     created_at: parseBigInt(row.created_at),
     updated_at: parseBigInt(row.updated_at),
+    // Absent until the producer emits it; absence is rendered as absence.
+    duration_ms: parseDurationMs(row.duration_ms),
     valid_as_of: parseBigInt(row.valid_as_of),
     valid_until: parseBigIntOrNull(row.valid_until),
     question_text: (row.question_text as string) ?? "",

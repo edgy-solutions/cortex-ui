@@ -117,6 +117,10 @@ export const ELECTRIC_COVERED_FIELDS: readonly (keyof Artifact)[] = [
   "produced_by",
   "resolved_intent",
   "summary",
+  // The producer`s own measurement of how long the answer took. Listed here
+  // because it arrives ONLY via the projection — no local path writes it, and
+  // the absence probe should say so if one ever starts.
+  "duration_ms",
 ] as const;
 
 /**
@@ -374,6 +378,12 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         message_id: seed.message_id,
         status: "pending",
         rendered_output: null,
+        // Honest-absent, and present as a KEY rather than omitted: an answer that
+        // has not finished has no duration, and the provenance map can only tag a
+        // field the object actually carries. Omitting it would leave the row
+        // claiming no local baseline for a field the Electric boundary later
+        // writes — which is precisely what the absence probe exists to catch.
+        duration_ms: null,
         // produced_by starts as a pending sentinel because the agent
         // identity isn't known at turn-start; refined when the
         // route_decision event arrives carrying real handled_by.

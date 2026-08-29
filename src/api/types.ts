@@ -402,6 +402,31 @@ export interface Artifact {
   created_at: number;
   /** Last update — bumps when pending→complete or on substrate-stale mark. */
   updated_at: number;
+  /**
+   * How long the pipeline took to produce this answer, in milliseconds, AS THE
+   * PRODUCER MEASURED IT. Optional because it is capture-or-lose-forever: rows
+   * written before the producer emits it have no duration and never will, so the
+   * UI must render their absence rather than a number.
+   *
+   * WHY A DECLARED DURATION AND NOT A DERIVED ONE. The tempting version is
+   * `updated_at - created_at`, and it is wrong four ways. `updated_at` is
+   * overwritten with the CLIENT clock on merge (useCanvasStore), so it records when
+   * this browser last saw a row rather than when the pipeline finished. It bumps
+   * again on every later update, including substrate-stale marks, so the duration
+   * grows after the fact. It mixes the server clock with the client one, so the
+   * difference carries unbounded skew and can come out negative. And the live path
+   * and the reload path disagree — a row with no local match keeps the server value
+   * while a merge overwrites it — so the same answer shows two different durations
+   * depending on whether the tab happened to be open. A measurement belongs to the
+   * producer. This field is read VERBATIM and never re-derived, the same rule
+   * ShortfallGrid follows for `shortfall`.
+   *
+   * NOT the live ticker. `useLiveStages` computes an elapsed while the answer is
+   * streaming and returns 0 the instant it completes — a client observation of a
+   * stream, discarded at exactly the moment it would start being worth keeping.
+   * This is the durable fact, and the two are allowed to disagree.
+   */
+  duration_ms?: number | null;
 
   /**
    * As-of of the grounding. Semantically "the time-point the substrate
