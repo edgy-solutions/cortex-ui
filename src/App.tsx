@@ -103,6 +103,10 @@ function useFrontendCapabilityRegistration() {
   useEffect(() => {
     if (!auth.isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
+    // Assembled once and kept, so the log can name what was SENT. Recomputing it inside the
+    // handler would report what the assembler produces now rather than what this request
+    // carried — the same value today, and a lie the first time the two can differ.
+    const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
     registerFrontendCapabilities({
       frontend_id: CORTEX_UI_FRONTEND_ID,
       // Read at runtime from Vite's build-time injected version string;
@@ -111,16 +115,42 @@ function useFrontendCapabilityRegistration() {
       // ASSEMBLED from component contract exports, not hand-authored (ADR-0017
       // amendment 2026-08-20). Rows whose component exports a contract are derived;
       // the rest stay legacy until their export lands, one row at a time.
-      capabilities: assembleCapabilities(CORTEX_UI_CAPABILITIES),
+      capabilities: sent,
     }).then(
       (resp) => {
+        // SENT AND ACCEPTED, SIDE BY SIDE, AND THE ROWS BY NAME.
+        //
+        // This line used to print `resp.accepted` alone. That is the SERVER's count, not what
+        // the client offered, and a row the client sent and the server silently dropped was
+        // invisible — the two numbers never appeared together, so there was nothing to compare.
+        // A count can also be exactly right for the wrong state: 22 offered, 22 accepted, one
+        // refused, and the number is correct FOR THE REJECTION.
+        //
+        // So: the names of what was sent (the console's instrument) beside both counts, and the
+        // graph query confirms what landed (the other instrument). The gap between them is now
+        // visible rather than inferred.
+        const names = sent.map((c) => c.archetype + " | " + c.subject_uri).sort();
         // eslint-disable-next-line no-console
         console.info(
-          "[ADR-0017] frontend capabilities registered:",
+          "[ADR-0017] frontend capabilities — sent:",
+          sent.length,
+          "accepted:",
           resp.accepted,
           "for",
           resp.frontend_id,
+          names,
         );
+        if (resp.accepted !== sent.length) {
+          // Not an error — the server is entitled to refuse a row. It must not do so QUIETLY,
+          // because the failure is indistinguishable from a row that was never sent.
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[ADR-0017] REGISTRATION MISMATCH — " +
+              (sent.length - resp.accepted) +
+              " row(s) offered but not accepted. Compare the names above against the graph; the" +
+              " count alone cannot say WHICH.",
+          );
+        }
       },
       (err) => {
         // Best-effort: a failed registration just means Engine F's

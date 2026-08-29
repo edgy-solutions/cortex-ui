@@ -283,6 +283,77 @@ unreachable.
 
 ---
 
+## ADR-0017 registration — the baseline, and how to verify a new row
+
+**2026-08-29, `pending`.** Recorded here rather than re-derived: the finance bindings
+are coming, and "the count incremented" needs something to increment FROM.
+
+### Baseline — 23 rows, 17 distinct archetypes, keyed on `subject_uri`
+
+```
+APPROVAL_TASK | ApprovalTaskCard | mesh:HumanApprovalTask
+ASSET_STATE_METRIC | SupplyTable | mesh:FreshnessReport
+CANVAS_SEED | consumer:canvasSeedFromArtifact | mesh:CanvasSeedResult
+CHART_WIDGET | ChartWidget | mesh:DatasetAnalysisReport
+DECISION_RECORD | DecisionRecord | mesh:DecisionArtifact
+DELTA_SET | DeltaSet | mesh:EffectSet
+GROUPED_REVIEW | GroupedReviewTable | mesh:PartObsolescenceReviewBatch
+HAZARD_DECLARATION | WarningCard | mesh:TagFilterResult
+INSTANCES_BY_PROPERTY | InstancesByPropertyView | mesh:InstancesByProperty
+INTERVAL_TIMELINE | IntervalTimeline | mesh:ContributionSequence
+INTERVAL_TIMELINE | IntervalTimeline | mesh:IntervalSchedule
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:AssetProfile
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:CatalogListing
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:ImpactSet
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:KnowledgeRetrievalResponse
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:OwnershipFact
+KNOWLEDGE_DOCUMENT | MarkdownRenderer | mesh:SchemaDescription
+MATRIX_GRID | MatrixGrid | mesh:MaturityMatrix
+PERIOD_SERIES | PeriodSeries | mesh:PeriodCostSeries
+PROCESS_TOPOLOGY | ProcessTopologyCard | mesh:LineageTopology
+SHORTFALL_GRID | ShortfallGrid | mesh:FundingGapSet
+THRESHOLD_GRID | ThresholdGrid | mesh:LoadThresholdGrid
+WORKFLOW_OBSERVATION | WorkflowObservationView | mesh:WorkflowObservation
+```
+
+**The precedent in that table is the argument against minting new finance archetypes.**
+`INTERVAL_TIMELINE` already serves two subjects and `KNOWLEDGE_DOCUMENT` six. One archetype
+serving many output classes is the NORMAL case here, not the exception — so the bar for a new
+component is not *"this output class is new"*, it is **"no existing archetype's contract can
+carry these fields"**. The grid-splitting ruling refused a fourth deficit-coloured grid on
+exactly this reasoning.
+
+### The log now reports both sides
+
+It used to print `resp.accepted` alone — the SERVER's count, not what the client offered, and
+no names either way. A row the client sent and the server silently dropped was invisible,
+because the two numbers never appeared together. **And a count can be exactly right for the
+wrong state:** 22 offered, 22 accepted, one refused, and the number is correct FOR THE
+REJECTION. That cost a session on `CANVAS_SEED`.
+
+The console now names what was SENT beside both counts, and warns when they disagree. Two
+instruments: the console says what left, a graph query says what landed, and the gap between
+them is visible instead of inferred. **Verify by name. A count still cannot say WHICH.**
+
+### Two laws this verification runs into
+
+1. **A genuine RELOAD, not an HMR refresh.** `registeredRef` fires the registration once per
+   authenticated page load and nothing server-side triggers it. An HMR update leaves the ref
+   set, so the effect never re-runs and the console shows the OLD row set — indistinguishable
+   from a row that failed to register.
+2. **A stale pod serves the old bundle with the old row set**, which looks *exactly* like a row
+   that failed to register. This is the check-the-running-image law meeting the lazy-trigger
+   law in one sentence, and it is the failure mode that will bite the Engine F verification
+   first. Read the pod's resolved image digest before concluding anything about a missing row.
+
+### What counts as evidence that a row RENDERS
+
+A real Engine F payload after its prime. **Not a fixture, and not a screenshot.** A captured
+payload was acceptable for verifying a recognizer's SHAPE — that is a claim about parsing. A
+render is a claim about a component's behaviour against real data, and the only honest evidence
+is the real thing on screen.
+---
+
 ## SPEC (not built) — the drill-in drawer and the computed-context tooltip
 
 Captured while the mock's answers were fresh, so the build reads a spec instead of
