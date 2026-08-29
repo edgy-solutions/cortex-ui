@@ -83,10 +83,11 @@ only so the session is planned against a complete list.
       funding-flavoured payload), not just the cost curve, so they all render alike.
       **No frontend change is needed when it lands.**
 
-- [ ] **Three producer declarations complete the planning cards' data vocabulary.** All three
-      are Engine P payload-assembly work. The frontend half of each is built, tested, and
-      waiting — and each will render the moment a payload declares it, with no frontend change.
-      Grouped because they are one half-day for one owner, and because *one side done, the
+- [ ] **Four producer declarations the frontend is already waiting on.** Three complete the
+      planning cards' data vocabulary and are Engine P payload-assembly work; the fourth is a
+      gateway write-point field for the answers list. The frontend half of each is built,
+      tested, and waiting — each renders the moment a producer declares it, with no frontend
+      change. Grouped because they are one half-day of work, and because *one side done, the
       other never asked* is the death this list exists to prevent.
 
       1. **`value_unit`** on the money family (cost curve, funding gap). Shipped frontend:
@@ -107,6 +108,22 @@ only so the session is planned against a complete list.
          to the task as `$risk_flag`. So: **emit values, do not add fields.** A parallel
          violation field would duplicate a seam that is already generic by design.
 
+      4. **`duration_ms` on the answer artifact** — how long the pipeline took, stamped at the
+         same write point that flips `status` → `complete`. Shipped frontend: `340c969`; the
+         answers list renders it under the clock time the day it arrives and shows nothing
+         until then.
+
+         **Why the producer and not us.** `updated_at - created_at` is free and wrong four
+         ways: `updated_at` is overwritten with the CLIENT clock on merge so it records when a
+         browser saw a row, it bumps again on substrate-stale marks so the duration grows after
+         the fact, it mixes server and client clocks so the difference can come out negative,
+         and the live and reload paths disagree — the same answer showing two durations
+         depending on whether the tab was open.
+
+         **Capture-or-lose-forever, and this one is visible.** Every artifact already in the
+         substrate will read with no duration, permanently. The list shows absence as absence
+         rather than `0s`, so the effect is a mixed list, not a wrong one — but the sooner it
+         lands the smaller the permanent hole.
       *Not built on purpose:* the badge that renders `risk_flag`. A badge with nothing to badge
       is declared-but-unwired manufactured deliberately — the shape this repo spent a week
       converting from accident into finding. It is an hour's work whenever the flags exist, and
@@ -169,6 +186,46 @@ Split recorded so nobody re-debugs reachable code looking for an archetype fault
   body.
 - **Unreachable until the arms land** — anything inside `PeriodSeries`, `ThresholdGrid`,
   `IntervalTimeline`, `MatrixGrid`.
+
+---
+
+## FINDING — `elapsed_ms` is declared on BOTH sides and has never been sent
+
+**2026-08-28.** Found while scoping answer durations. Not fixed: it is a one-line producer
+change in another lane, and it is not what makes a duration appear in the list.
+
+`gateway.py:2323` — the `_stage()` helper that emits every `pipeline_stage` SSE event — takes
+`elapsed_ms: int | None = None` and includes it only when non-None. **No call site anywhere in
+the file passes it.** So the field is omitted from every event ever emitted.
+
+The frontend has been ready the whole time: `client.ts:276` parses it, `api/types.ts:342`
+declares it (*"ms since pipeline_start; used by ThinkingCard for elapsed display"*), and
+`ThinkingCard` has an `elapsedMsOverride` branch that exists solely to consume it. That branch
+has never executed.
+
+**Why it is worth a line of theirs.** The live ticker currently derives elapsed from the
+CLIENT`s clock — earliest observed step `startedAt` to now — so it measures browser-observed
+stream time, not pipeline time, and it starts whenever the first event happens to arrive.
+Passing the value the gateway already has replaces an approximation with a measurement.
+
+**What it does NOT do:** put a number in the answers list. `elapsed_ms` rides an SSE event and
+dies with the stream, so it is unavailable on reload and for any answer you were not watching.
+That is `duration_ms` on the artifact — separate ask, filed above.
+
+**Third species of the same shape this week**, after the tree-shaken seed global and the
+`risk_flag` badge: a seam declared at both ends, consumed by working code, and never produced.
+The recurring tell is that nothing is broken — the optional field is simply absent, the
+fallback path is reasonable, and no test can fail. **A consumer is not evidence of a producer.**
+
+### Adjacent, same file: two `formatElapsed` implementations that disagree
+
+`ThinkingCard.tsx:59` and `@/lib/formatDuration` format the same elapsed differently — 2500ms
+reads `2s` in the thinking card and `2.5s` in the answers list and the live capsule; 63s reads
+`1m 3s` versus `1m 03s`. The lib version is now the shared one (`useLiveStages` re-exports it
+as `formatElapsed`); `ThinkingCard` keeps its private copy because unifying them changes a
+shipped display and `<1s` becoming `0.4s` is a visible change during demo week. **Post-demo:**
+delete the private copy — one import, and the two surfaces stop disagreeing about the same
+number.
 
 ---
 
