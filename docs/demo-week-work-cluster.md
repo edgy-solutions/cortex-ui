@@ -229,7 +229,22 @@ number.
 
 ---
 
-## The manual seed trigger EXISTS now — do not hand-drag the five cards
+## SUPERSEDED 2026-08-28 — the phrase routes, so neither trigger is needed
+
+**The seeding intent now routes end to end.** `build the portfolio canvas` classified as
+`seed Portfolio Canvas` at high confidence via `seedPortfolioCanvas`, Engine F projected
+`CANVAS_SEED` with five slot-ordered ids, and the consumer composed the board. Compare
+2026-08-26 21:38 in the answers rail — *No direct match — no verb classified* on the same
+phrase. The capability registration landed between them.
+
+So the console trigger below is scaffolding for a gap that is closed, and
+`seedPortfolioCanvas.ts` says in its own header *"Remove when the phrase routes end to end."*
+**Not removed during demo week** — it is inert unless called, and deleting it also deletes the
+subject of the reachability guard. Post-demo cleanup, filed here so it is not forgotten.
+
+The entry below is kept for the finding it carries, which outlived its procedure.
+
+### Original entry — the manual trigger existed and Lane 1 could not see it
 
 **2026-08-27, `bc55a48`.** Lane 1's `manual-seed-trigger-tonight.md` says *"no store is
 exposed on `window` — I checked, there is no debug global"* and on that basis has the operator
