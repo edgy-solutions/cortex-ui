@@ -44,75 +44,89 @@ export interface CardSlot extends CardSize {
  * drag overwrites any of this and the canvas persists whatever the user made of it.
  */
 
-/** How much world one board spans. Arbitrary and load-bearing only in ratio — see above. */
-const WORLD_W = 1440;
-
-/** Gutter and outer margin as fractions of world width, so they scale with the board. */
-const GUTTER_F = 0.025;
-const MARGIN_F = 0.02;
+/** World-space gap between cards. Absolute size is arbitrary; only its ratio to a card matters. */
+const GUTTER = 24;
 
 /**
- * The anchor's share of the board's height.
+ * THE HEIGHTS ARE CONTENT-DRIVEN, AND THE FIRST VERSION OF THIS FILE GOT THAT WRONG.
  *
- * Tuned for the card that actually sits there: a schedule gantt. Twelve rows plus their group
- * headers need roughly half the board, and the failure when it is too small is not cosmetic —
- * the card body scrolls, so a reader sees a row cut in half and a scrollbar where the mock
- * shows a whole timeline.
+ * That version made the board take the pane's proportions exactly, which does fill the pane
+ * and is the wrong objective on its own: on a landscape pane it gives each lower card about a
+ * fifth of the board's height, and a planning card's content does not fit in that. A card's
+ * body does not scale to its box — `StageCard`'s panel branch renders at natural size and
+ * scrolls — so the visible result was a header, a title, and a chart below the fold. Filling
+ * the pane by starving the cards is not filling the pane.
  *
- * NOT yet derived from the content. An INTERVAL_TIMELINE's natural height IS knowable from
- * its row count, and this fraction should eventually come from that rather than from a
- * constant tuned against one screenshot. Left as a constant deliberately instead of
- * half-built: the hint would have to reach the store from the artifact collection, and
- * inventing that seam to carry a number nothing yet computes is the shape this codebase
- * keeps filing findings about.
+ * The numbers below are what a planning card actually needs. They are measured against the
+ * components, not chosen: `PeriodSeries` (and its siblings) render `ResponsiveContainer` at a
+ * FIXED `height={260}`, and above it sit the card chrome, the interpretation strip and the
+ * component's own title — about 440 together. The anchor is a schedule gantt whose rows are
+ * roughly 30 apiece, so a dozen rows plus its header and column head is about 620.
+ *
+ * These are a floor, not a target. When the pane is roomy the board stretches to fill it and
+ * every card gets more than its minimum; when the pane is short the board stays taller than
+ * the pane and the camera scales it down, which is the trade this file now makes on purpose:
+ * a whole card rendered small beats the top third of a card rendered large.
+ *
+ * THE HONEST WEAKNESS: 260 is a constant in another file, and this constant knows it. If a
+ * chart's height changes there, the room reserved here is wrong and nothing fails. Making the
+ * card's content flex to its box is the real fix and it is not a demo-week change — it means
+ * a bounded-height panel layout and a `ResponsiveContainer` that fills it, which alters how
+ * every archetype renders in both the panel and the scaled preview.
  */
-const ANCHOR_F = 0.5;
+const CARD_CONTENT_H = 440;
+const ANCHOR_CONTENT_H = 620;
 
-/** A card's world-space footprint, as the size the default card takes when nothing else says. */
-export const PANEL_MIN = { w: 260, h: 180 };
+/** Below this a card cannot show anything but its own chrome. */
+export const PANEL_MIN = { w: 260, h: 200 };
 
 /**
- * The default arrangement a `portfolio_planning` canvas opens with, sized to the pane it will
- * be read in: a full-width anchor above two rows of two, tiling the board edge to edge.
+ * The default arrangement a `portfolio_planning` canvas opens with: a full-width anchor above
+ * two rows of two, tiling the pane's WIDTH edge to edge and taking whatever HEIGHT its cards
+ * need.
  *
- * The reference is the planning-workspace mock — schedule across the top, the cost curve
- * beside the site load, the funding gap beside the diff. A dashboard fills its viewport; a
- * corkboard does not, and the difference is whether the cards were told how much room they
- * have.
+ * The width tracks the pane because a horizontal gap is pure waste — nothing needs it. The
+ * height does not, because the cards do need it. That asymmetry is the whole design: the two
+ * axes are answering different questions.
+ *
+ * The reference is the planning-workspace mock — schedule across the top, cost curve beside
+ * site load, funding gap beside the maturity grid.
  */
 export function portfolioPlanningTemplate(vp: CardSize): CardSlot[] {
-  // Refuse a viewport that cannot produce a layout rather than emitting NaN coordinates that
-  // would persist into the canvas and render cards nowhere. A square board is a reasonable
-  // fallback: wrong proportions are recoverable by dragging, invalid ones are not.
-  const ratio =
-    Number.isFinite(vp.w) && Number.isFinite(vp.h) && vp.w > 0 && vp.h > 0 ? vp.h / vp.w : 1;
+  // Refuse a measure that cannot produce a layout rather than emitting NaN coordinates, which
+  // would PERSIST into the canvas — arrangement is durable, so a bad measure is a saved layout,
+  // not a transient glitch. A 3:2 pane is the fallback.
+  const aspect =
+    Number.isFinite(vp.w) && Number.isFinite(vp.h) && vp.w > 0 && vp.h > 0
+      ? vp.w / vp.h
+      : 3 / 2;
 
-  const W = WORLD_W;
-  const H = W * ratio;
-  const g = W * GUTTER_F;
-  const m = W * MARGIN_F;
+  // HEIGHT FIRST, because height is what the cards are short of. Width follows from it and
+  // the pane`s shape, which is what makes the board fill horizontally with no gap: the camera
+  // fits by the SMALLER of the two ratios, so a board narrower in proportion than its pane is
+  // fitted by height and leaves the sides empty. Deriving width from height removes that case
+  // rather than tuning around it.
+  //
+  // Widening a card does NOT starve it the way shortening one does. Card content flows to the
+  // width it is given — charts render at width 100% — so a wide card is a wide chart, while a
+  // short card is a chart below the fold. The two axes are genuinely not symmetric here.
+  const boardH = ANCHOR_CONTENT_H + CARD_CONTENT_H * 2 + GUTTER * 2;
+  const boardW = Math.max(PANEL_MIN.w * 2 + GUTTER, boardH * aspect);
 
-  const innerW = W - m * 2;
-  const innerH = H - m * 2;
-
-  const anchorH = Math.max(PANEL_MIN.h, innerH * ANCHOR_F);
-  // Whatever the anchor leaves, split between the two rows with a gutter between them.
-  const rowH = Math.max(PANEL_MIN.h, (innerH - anchorH - g * 2) / 2);
-  const colW = Math.max(PANEL_MIN.w, (innerW - g) / 2);
-
-  const row2Y = m + anchorH + g;
-  const row3Y = row2Y + rowH + g;
-  const col2X = m + colW + g;
+  const colW = (boardW - GUTTER) / 2;
+  const row2Y = ANCHOR_CONTENT_H + GUTTER;
+  const row3Y = row2Y + CARD_CONTENT_H + GUTTER;
+  const col2X = colW + GUTTER;
 
   return [
     // Anchor: the schedule, full width across the top.
-    { x: m, y: m, w: innerW, h: anchorH },
+    { x: 0, y: 0, w: boardW, h: ANCHOR_CONTENT_H },
     // The pair beneath it — cost curve beside site load.
-    { x: m, y: row2Y, w: colW, h: rowH },
-    { x: col2X, y: row2Y, w: colW, h: rowH },
-    // The lower pair — funding gap beside the diff.
-    { x: m, y: row3Y, w: colW, h: rowH },
-    { x: col2X, y: row3Y, w: colW, h: rowH },
+    { x: 0, y: row2Y, w: colW, h: CARD_CONTENT_H },
+    { x: col2X, y: row2Y, w: colW, h: CARD_CONTENT_H },
+    // The lower pair — funding gap beside the maturity grid.
+    { x: 0, y: row3Y, w: colW, h: CARD_CONTENT_H },
+    { x: col2X, y: row3Y, w: colW, h: CARD_CONTENT_H },
   ];
 }
 

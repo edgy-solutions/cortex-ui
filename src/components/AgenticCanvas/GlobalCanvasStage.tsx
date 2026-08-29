@@ -43,7 +43,12 @@ function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) 
     mx = Math.max(mx, it.x + sz.w);
     my = Math.max(my, it.y + sz.h);
   }
-  return { w: Math.max(1500, mx + 140), h: Math.max(950, my + 140) };
+  // Pad PROPORTIONALLY, not by a flat 140. A fixed pad is a large share of a small board
+  // and a rounding error on a big one, and — worse for a template — it distorts the aspect,
+  // so a board deliberately shaped to the pane arrives at the camera a different shape than
+  // it left. The floors stay: they stop a one-card canvas from zooming to a wall of pixels.
+  const pad = 0.03;
+  return { w: Math.max(1500, mx * (1 + pad)), h: Math.max(950, my * (1 + pad)) };
 }
 
 export function GlobalCanvasStage() {
@@ -191,8 +196,13 @@ export function GlobalCanvasStage() {
       const cy = b.y + b.h / 2;
       return { tx: vw / 2 - cx * s, ty: vh / 2 - cy * s - 10, s };
     }
-    const s = Math.min(vw / world.w, vh / world.h) * 0.9; // margin for the dock
-    return { tx: (vw - world.w * s) / 2, ty: (vh - world.h * s) / 2 - 20, s };
+    // The global overview keeps a generous margin — it is a wall of many cards and the dock
+    // overlaps its lower edge. A CUSTOM canvas is a laid-out board that was built to the pane
+    // on purpose, so the same margin is just unused width: three insets compounded (this one,
+    // the world pad, and the template margin) left a seeded board at 78% of its pane.
+    const fill = isGlobal ? 0.9 : 0.97;
+    const s = Math.min(vw / world.w, vh / world.h) * fill;
+    return { tx: (vw - world.w * s) / 2, ty: (vh - world.h * s) / 2 - (isGlobal ? 20 : 6), s };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h]);
 

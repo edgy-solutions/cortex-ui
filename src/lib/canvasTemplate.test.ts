@@ -210,46 +210,70 @@ describe("a SIZED card renders its content; an unsized one previews it", () => {
   });
 
   it("the anchor gets the largest share of the board — a timeline needs the room", () => {
-    // This assertion used to read `TEMPLATE[0].h >= 420`, an absolute world height. That
-    // number stopped meaning anything when the template became proportional: world units now
-    // cancel out of the on-screen size entirely (the camera fits the board to the pane), so
-    // an absolute threshold tests the arbitrary constant WORLD_W and nothing a reader sees.
-    //
-    // What survives the change is the CLAIM: a schedule gantt needs more room than a chart,
-    // and it must not be asked to fit in a chart`s height — the failure being a card body
-    // that scrolls, showing a row cut in half where the mock shows a whole timeline.
+    // This once read `anchor.h >= 420`, an absolute world height that stopped meaning
+    // anything when world units cancelled out of on-screen size. What survives is the CLAIM:
+    // a schedule gantt must not be asked to fit in a chart`s height.
     const [anchor, ...rest] = TEMPLATE;
     for (const s2 of rest) {
       expect(anchor.h).toBeGreaterThan(s2.h);
       expect(anchor.w).toBeGreaterThan(s2.w);
     }
-    // And it is a real share of the board, not merely the biggest of five small things.
-    const boardH = Math.max(...TEMPLATE.map((s2) => s2.y + s2.h));
-    expect(anchor.h / boardH).toBeGreaterThan(0.4);
   });
 
-  it("TILES the pane: the board takes the viewport`s proportions", () => {
-    // The defect this template was rewritten for. A fixed-coordinate board is portrait; the
-    // pane is landscape; the camera fits by the smaller ratio and leaves the width empty.
-    for (const vp of [{ w: 1600, h: 900 }, { w: 1200, h: 1000 }, { w: 1920, h: 1080 }]) {
+  it("tiles the pane`s WIDTH, and takes the height its CONTENT needs", () => {
+    // The asymmetry is the design, and it replaces an earlier rule that made the board match
+    // the pane`s aspect on BOTH axes. That rule filled the pane and starved the cards: on a
+    // landscape pane each lower card got about a fifth of the board, and a planning card`s
+    // content does not fit in that. A card body does not scale to its box — the panel renders
+    // at natural size and scrolls — so the result was a title with the chart below the fold.
+    //
+    // Horizontal gap is pure waste, so the width always tracks. Vertical room is what the
+    // cards are actually short of, so the height never goes below what they need.
+    for (const vp of [{ w: 1600, h: 900 }, { w: 2560, h: 700 }, { w: 1200, h: 1400 }]) {
       const t = portfolioPlanningTemplate(vp);
       const boardW = Math.max(...t.map((s2) => s2.x + s2.w));
-      const boardH = Math.max(...t.map((s2) => s2.y + s2.h));
-      expect(Math.abs(boardW / boardH - vp.w / vp.h)).toBeLessThan(0.25);
+      // Every board is the same width — the columns tile it whatever the pane is doing.
+      expect(t[0].w).toBe(boardW);
+      // And no card is ever below the height its content needs.
+      for (const s2 of t) expect(s2.h).toBeGreaterThanOrEqual(PANEL_MIN.h);
     }
   });
 
-  it("goes TALLER than an extreme pane rather than shipping unreadable rows", () => {
-    // A deliberate limit on the rule above, found by writing it: on a very wide short pane,
-    // tracking the aspect exactly would give the two lower rows about 7% of the board each —
-    // cards a few dozen pixels tall, which fills the pane and cannot be read. The minimum row
-    // height wins there and the board becomes taller than the pane, which the camera answers
-    // by scaling down a little. Legible and slightly inset beats edge-to-edge and useless.
-    const t = portfolioPlanningTemplate({ w: 2560, h: 700 });
-    const boardH = Math.max(...t.map((s2) => s2.y + s2.h));
-    const boardW = Math.max(...t.map((s2) => s2.x + s2.w));
-    expect(boardW / boardH).toBeLessThan(2560 / 700); // taller than the pane, on purpose
-    for (const s2 of t.slice(1)) expect(s2.h).toBeGreaterThanOrEqual(PANEL_MIN.h);
+  it("the board MATCHES the pane aspect, so nothing is left over on either side", () => {
+    // The whole point of deriving width from height. The camera fits by the SMALLER ratio, so
+    // a board narrower in proportion than its pane is fitted by height and the sides go empty
+    // — the original defect. Equal aspect means both ratios are the same and neither axis is
+    // the loser.
+    for (const vp of [{ w: 1600, h: 900 }, { w: 2560, h: 700 }, { w: 1400, h: 1000 }]) {
+      const t = portfolioPlanningTemplate(vp);
+      const boardW = Math.max(...t.map((s2) => s2.x + s2.w));
+      const boardH = Math.max(...t.map((s2) => s2.y + s2.h));
+      expect(boardW / boardH).toBeCloseTo(vp.w / vp.h, 1);
+    }
+  });
+
+  it("gives every card the height its CONTENT needs, whatever the pane does", () => {
+    // The half the aspect rule cannot be allowed to compromise. A planning card renders a
+    // fixed-height chart under its chrome and does not scale to its box, so a card shorter
+    // than its content shows a title and hides the chart. Height is therefore a constant of
+    // the content, and only the WIDTH answers to the pane.
+    const heights = new Set<number>();
+    for (const vp of [{ w: 1600, h: 900 }, { w: 2560, h: 700 }, { w: 1400, h: 1000 }]) {
+      const t = portfolioPlanningTemplate(vp);
+      t.forEach((s2) => heights.add(s2.h));
+      for (const s2 of t) expect(s2.h).toBeGreaterThanOrEqual(PANEL_MIN.h);
+    }
+    // Two heights across every pane — the anchor`s and the row`s — because they do not vary.
+    expect(heights.size).toBe(2);
+  });
+
+  it("a WIDER pane widens the cards rather than shrinking them", () => {
+    // Widening is safe where shortening is not: content flows to the width it is given, so a
+    // wide card is a wide chart. This is why the two axes are treated differently at all.
+    const narrow = portfolioPlanningTemplate({ w: 1200, h: 900 });
+    const wide = portfolioPlanningTemplate({ w: 2400, h: 900 });
+    expect(wide[0].w).toBeGreaterThan(narrow[0].w);
+    expect(wide[1].h).toBe(narrow[1].h);
   });
   it("the two lower rows tile the width — no gap down the middle", () => {
     const [anchor, a, b] = TEMPLATE;
