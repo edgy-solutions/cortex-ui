@@ -17,67 +17,120 @@ export interface CardSlot extends CardSize {
   y: number;
 }
 
-const GUTTER = 40;
-const PAD = 90;
-
 /**
- * A planning PANEL is bigger than the default card, deliberately.
+ * THE TEMPLATE IS PROPORTIONAL, NOT ABSOLUTE — and that is the whole fix.
  *
- * `STAGE_CARD` (360x280) is sized for the global overview, where a card is a preview of an
- * answer and the point is to see many at once. A workspace panel is the opposite: one answer,
- * read at working size, with its chart filling the space rather than shrunk into it. Deriving
- * these from `STAGE_CARD` would tie the two purposes together and make the preview size a
- * constraint on the workspace, which is how the mini-card problem started.
+ * The first version laid five cards out at fixed world coordinates: a 1080-wide board
+ * 1480 tall. The camera fits a canvas to its content (`min(vw/world.w, vh/world.h) * 0.9`),
+ * so a PORTRAIT board inside a LANDSCAPE pane scales to the height and leaves the width
+ * unused. That is the empty space either side of a seeded canvas: not a placement bug, an
+ * ASPECT bug, and no amount of nudging the coordinates fixes it because the mismatch is
+ * between the board's shape and the window's.
  *
- * The anchor is tall because a gantt with a dozen rows needs the room; a 300px anchor was the
- * template asking a timeline to fit in a chart's height.
- */
-const PANEL_W = 520;
-const PANEL_H = 380;
-const ANCHOR_H = 460;
-/** Two panels plus the gutter between them — the "full width" of this layout. */
-const WIDE = PANEL_W * 2 + GUTTER;
-
-/**
- * The default arrangement a `portfolio_planning` canvas opens with: a full-width anchor
- * above two pairs.
+ * So the slots are computed from the viewport's proportions. World units still exist — the
+ * canvas is one coordinate space and a seeded card must stay byte-identical to a dragged one
+ * — but their absolute size cancels out: when the board's aspect matches the pane's, the fit
+ * scale is `0.9 * vw / WORLD_W` whatever WORLD_W is, so a full-width card always occupies 90%
+ * of the pane. The constant below sets how much world a card spans, never how big it looks.
  *
- * Deliberately expressed in world coords + `w`/`h` — the same vocabulary `addItemAt` and
- * `moveItem` speak — and NOT as a grid abstraction sitting beside them. A canvas seeded from
- * this template and one a user dragged into the same shape are then byte-identical to every
- * consumer, which is the property that makes "seeded" a starting point rather than a
- * different kind of object. The moment a template needs its own coordinate system, seeded
- * canvases stop being ordinary canvases.
+ * ── WHY FRACTIONS AND NOT A GRID LIBRARY ─────────────────────────────────────────────────
+ *
+ * Still expressed as `CardSlot` — the exact vocabulary `addItemAt` and `moveItem` speak — so
+ * a seeded canvas and a hand-dragged one remain the same object to every consumer. A grid
+ * abstraction living beside the coordinates would make seeded canvases a second kind of
+ * thing, and the first user drag would drop them back into world coords anyway.
  *
  * A STARTING point, never a constraint: arrangement is UI-owned (ADR-0042 §4), so the first
  * drag overwrites any of this and the canvas persists whatever the user made of it.
  */
-const ROW_2_Y = PAD + ANCHOR_H + GUTTER;
-const ROW_3_Y = ROW_2_Y + PANEL_H + GUTTER;
-const COL_2_X = PAD + PANEL_W + GUTTER;
 
-export const PORTFOLIO_PLANNING_TEMPLATE: CardSlot[] = [
-  // Anchor: the schedule/timeline, full width across the top.
-  { x: PAD, y: PAD, w: WIDE, h: ANCHOR_H },
-  // The pair beneath it — cost curve beside site load.
-  { x: PAD, y: ROW_2_Y, w: PANEL_W, h: PANEL_H },
-  { x: COL_2_X, y: ROW_2_Y, w: PANEL_W, h: PANEL_H },
-  // The lower pair — funding gap beside the diff.
-  { x: PAD, y: ROW_3_Y, w: PANEL_W, h: PANEL_H },
-  { x: COL_2_X, y: ROW_3_Y, w: PANEL_W, h: PANEL_H },
-];
+/** How much world one board spans. Arbitrary and load-bearing only in ratio — see above. */
+const WORLD_W = 1440;
+
+/** Gutter and outer margin as fractions of world width, so they scale with the board. */
+const GUTTER_F = 0.025;
+const MARGIN_F = 0.02;
+
+/**
+ * The anchor's share of the board's height.
+ *
+ * Tuned for the card that actually sits there: a schedule gantt. Twelve rows plus their group
+ * headers need roughly half the board, and the failure when it is too small is not cosmetic —
+ * the card body scrolls, so a reader sees a row cut in half and a scrollbar where the mock
+ * shows a whole timeline.
+ *
+ * NOT yet derived from the content. An INTERVAL_TIMELINE's natural height IS knowable from
+ * its row count, and this fraction should eventually come from that rather than from a
+ * constant tuned against one screenshot. Left as a constant deliberately instead of
+ * half-built: the hint would have to reach the store from the artifact collection, and
+ * inventing that seam to carry a number nothing yet computes is the shape this codebase
+ * keeps filing findings about.
+ */
+const ANCHOR_F = 0.5;
+
+/** A card's world-space footprint, as the size the default card takes when nothing else says. */
+export const PANEL_MIN = { w: 260, h: 180 };
+
+/**
+ * The default arrangement a `portfolio_planning` canvas opens with, sized to the pane it will
+ * be read in: a full-width anchor above two rows of two, tiling the board edge to edge.
+ *
+ * The reference is the planning-workspace mock — schedule across the top, the cost curve
+ * beside the site load, the funding gap beside the diff. A dashboard fills its viewport; a
+ * corkboard does not, and the difference is whether the cards were told how much room they
+ * have.
+ */
+export function portfolioPlanningTemplate(vp: CardSize): CardSlot[] {
+  // Refuse a viewport that cannot produce a layout rather than emitting NaN coordinates that
+  // would persist into the canvas and render cards nowhere. A square board is a reasonable
+  // fallback: wrong proportions are recoverable by dragging, invalid ones are not.
+  const ratio =
+    Number.isFinite(vp.w) && Number.isFinite(vp.h) && vp.w > 0 && vp.h > 0 ? vp.h / vp.w : 1;
+
+  const W = WORLD_W;
+  const H = W * ratio;
+  const g = W * GUTTER_F;
+  const m = W * MARGIN_F;
+
+  const innerW = W - m * 2;
+  const innerH = H - m * 2;
+
+  const anchorH = Math.max(PANEL_MIN.h, innerH * ANCHOR_F);
+  // Whatever the anchor leaves, split between the two rows with a gutter between them.
+  const rowH = Math.max(PANEL_MIN.h, (innerH - anchorH - g * 2) / 2);
+  const colW = Math.max(PANEL_MIN.w, (innerW - g) / 2);
+
+  const row2Y = m + anchorH + g;
+  const row3Y = row2Y + rowH + g;
+  const col2X = m + colW + g;
+
+  return [
+    // Anchor: the schedule, full width across the top.
+    { x: m, y: m, w: innerW, h: anchorH },
+    // The pair beneath it — cost curve beside site load.
+    { x: m, y: row2Y, w: colW, h: rowH },
+    { x: col2X, y: row2Y, w: colW, h: rowH },
+    // The lower pair — funding gap beside the diff.
+    { x: m, y: row3Y, w: colW, h: rowH },
+    { x: col2X, y: row3Y, w: colW, h: rowH },
+  ];
+}
+
+/** The number of slots a template declares, without needing a viewport to ask. */
+export const PORTFOLIO_PLANNING_SLOTS = 5;
 
 /**
  * Keyed by the canvas's `use`, as a plain string so this module stays dependency-free and
  * `useStageStore` can import it without a cycle.
  *
- * One row today. It is the first row of what becomes a registry when a second type needs
- * one — the arrives-with-its-first-consumer rule — and it governs only ARRANGEMENT. A type
- * never restricts what a canvas may hold: the moment it does, canvases stop being one
- * substrate and become separate apps.
+ * The value is a BUILDER rather than an array, because a template is now a function of the
+ * pane it will be read in. One row today — the first row of what becomes a registry when a
+ * second type needs one — and it governs only ARRANGEMENT. A type never restricts what a
+ * canvas may hold: the moment it does, canvases stop being one substrate and become
+ * separate apps.
  */
-const TEMPLATES: Record<string, CardSlot[]> = {
-  portfolio_planning: PORTFOLIO_PLANNING_TEMPLATE,
+const TEMPLATES: Record<string, (vp: CardSize) => CardSlot[]> = {
+  portfolio_planning: portfolioPlanningTemplate,
 };
 
 /**
@@ -85,9 +138,15 @@ const TEMPLATES: Record<string, CardSlot[]> = {
  * or has run past its end. Null means "fall back to the generic placement" — a template
  * declares where its FIRST cards go, and a canvas that outgrows it keeps working.
  */
-export function templateSlot(use: string | undefined, n: number): CardSlot | null {
-  const t = use ? TEMPLATES[use] : undefined;
-  return t && n >= 0 && n < t.length ? t[n] : null;
+export function templateSlot(
+  use: string | undefined,
+  n: number,
+  vp: CardSize,
+): CardSlot | null {
+  const build = use ? TEMPLATES[use] : undefined;
+  if (!build) return null;
+  const t = build(vp);
+  return n >= 0 && n < t.length ? t[n] : null;
 }
 
 /**

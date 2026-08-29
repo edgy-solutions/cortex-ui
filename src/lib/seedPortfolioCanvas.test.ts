@@ -20,7 +20,7 @@ vi.mock("@/api/client", () => ({
 
 import { seedPortfolioCanvasFromServer } from "./seedPortfolioCanvas";
 import { useStageStore } from "@/store/useStageStore";
-import { PORTFOLIO_PLANNING_TEMPLATE } from "./stageConstants";
+import { portfolioPlanningTemplate } from "./stageConstants";
 
 beforeEach(() => {
   requestPortfolioCanvasSeed.mockReset();
@@ -42,7 +42,7 @@ describe("seedPortfolioCanvasFromServer", () => {
     expect(c.name).toBe("Q3 Review");
     expect(c.items.map((i) => i.id)).toEqual(ids);
     // The anchor slot came from the template, not from anything computed here.
-    expect({ ...c.items[0] }).toEqual({ id: "gantt", ...PORTFOLIO_PLANNING_TEMPLATE[0] });
+    expect({ ...c.items[0] }).toEqual({ id: "gantt", ...portfolioPlanningTemplate(useStageStore.getState().viewport)[0] });
   });
 
   it("preserves the SERVER's order — it does not sort or reorder", async () => {

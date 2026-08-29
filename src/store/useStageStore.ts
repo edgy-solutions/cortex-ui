@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { STAGE_CARD, templateSlot } from "@/lib/stageConstants";
+import { STAGE_CARD, templateSlot, type CardSize } from "@/lib/stageConstants";
 
 /**
  * useStageStore — the CAMERA-STAGE state for the center canvas (ADR-0028
@@ -80,6 +80,19 @@ interface StageState {
   closeFullPane: () => void;
   setFocusTab: (t: StageFocusTab) => void;
   setView: (v: string) => void;
+  /**
+   * The stage pane`s pixel size, published by the stage on mount and on resize.
+   *
+   * EPHEMERAL AND NOT PERSISTED. It describes the window a canvas is being read in, not the
+   * canvas — persisting it would restore one machine`s window shape onto another`s. A
+   * template needs it because a board laid out in the wrong proportions leaves the pane`s
+   * width unused, which is what the fixed-coordinate template did.
+   *
+   * The default is a plausible landscape pane rather than 0x0: a template asked for a slot
+   * before the first measure should produce a usable board, not a degenerate one.
+   */
+  viewport: CardSize;
+  setViewport: (vp: CardSize) => void;
   setGroup: (id: string | null) => void;
   clearGroup: () => void;
 
@@ -119,6 +132,7 @@ export const useStageStore = create<StageState>()(
   persist(
     (set, get) => ({
       view: GLOBAL,
+      viewport: { w: 1440, h: 900 },
       canvases: [],
       focusId: null,
       fullPane: false,
@@ -137,6 +151,16 @@ export const useStageStore = create<StageState>()(
       setFocusTab: (t) => set({ focusTab: t }),
       // Entering any canvas zooms out (per the design: chip click clears focus).
       setView: (v) => set({ view: v, focusId: null, fullPane: false, groupKey: null }),
+      setViewport: (vp) => {
+        // Refuse a degenerate measure rather than storing it. A ResizeObserver fires with 0x0
+        // for a hidden pane, and a template built from that would emit slots of zero size that
+        // then PERSIST into the canvas — arrangement is durable, so a bad measure is not a
+        // transient glitch, it is a saved layout.
+        if (!Number.isFinite(vp.w) || !Number.isFinite(vp.h) || vp.w <= 0 || vp.h <= 0) return;
+        const cur = get().viewport;
+        if (cur.w === vp.w && cur.h === vp.h) return;
+        set({ viewport: vp });
+      },
       // Zoom into a group (clears any single-card focus).
       setGroup: (id) => set({ groupKey: id, focusId: null, fullPane: false }),
       clearGroup: () => set({ groupKey: null }),
@@ -172,7 +196,7 @@ export const useStageStore = create<StageState>()(
             // falls through to the generic slot. Routing the template through the ORDINARY
             // add path is the point: a seeded canvas and a hand-built one differ by nothing
             // a consumer can see.
-            const slot = templateSlot(c.use, c.items.length) ?? slotFor(c.items.length);
+            const slot = templateSlot(c.use, c.items.length, get().viewport) ?? slotFor(c.items.length);
             return { ...c, items: [...c.items, { id: answerId, ...slot }] };
           }),
         })),

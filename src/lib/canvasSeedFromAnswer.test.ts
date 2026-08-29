@@ -17,7 +17,7 @@ import { renderHook } from "@testing-library/react";
 import { canvasSeedFromArtifact, useCanvasSeedFromAnswers } from "./canvasSeedFromAnswer";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
-import { PORTFOLIO_PLANNING_TEMPLATE } from "./stageConstants";
+import { portfolioPlanningTemplate } from "./stageConstants";
 import type { Artifact } from "@/api/types";
 
 const seedArtifact = (id: string, ids: string[], name?: string) =>
@@ -159,7 +159,7 @@ describe("useCanvasSeedFromAnswers — seeds once, and never from history", () =
     expect(c.name).toBe("Seeded");
     expect(c.items.map((i) => i.id)).toEqual(["gantt", "cost", "load"]);
     // Placement came from the template through the ordinary add path, not from anything here.
-    expect({ ...c.items[0] }).toEqual({ id: "gantt", ...PORTFOLIO_PLANNING_TEMPLATE[0] });
+    expect({ ...c.items[0] }).toEqual({ id: "gantt", ...portfolioPlanningTemplate(useStageStore.getState().viewport)[0] });
     r.unmount();
   });
 

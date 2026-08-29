@@ -152,9 +152,18 @@ export function GlobalCanvasStage() {
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
+    // The measure serves two readers: the camera, which fits the world to the pane, and the
+    // TEMPLATE, which lays a seeded board out in the pane`s proportions. Publishing it to the
+    // store is what lets a template be a function of the window rather than a fixed board that
+    // leaves the width unused. The store refuses a degenerate measure — see setViewport.
+    const publish = () => {
+      const vp = { w: el.clientWidth, h: el.clientHeight };
+      setVp(vp);
+      useStageStore.getState().setViewport(vp);
+    };
+    const ro = new ResizeObserver(publish);
     ro.observe(el);
-    setVp({ w: el.clientWidth, h: el.clientHeight });
+    publish();
     return () => ro.disconnect();
   }, []);
 
