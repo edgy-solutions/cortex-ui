@@ -288,7 +288,7 @@ unreachable.
 **2026-08-29, `pending`.** Recorded here rather than re-derived: the finance bindings
 are coming, and "the count incremented" needs something to increment FROM.
 
-### Baseline — 23 rows, 17 distinct archetypes, keyed on `subject_uri`
+### Baseline — was 23 rows / 17 archetypes; now **26 rows** after Engine F
 
 ```
 APPROVAL_TASK | ApprovalTaskCard | mesh:HumanApprovalTask
@@ -323,6 +323,32 @@ component is not *"this output class is new"*, it is **"no existing archetype's 
 carry these fields"**. The grid-splitting ruling refused a fourth deficit-coloured grid on
 exactly this reasoning.
 
+### Engine F added three rows, not six — and the shortfall is the finding
+
+| verb | subject | archetype | status |
+|---|---|---|---|
+| `fin_burn_rate` | `fin:BurnRateSeries` | `PERIOD_SERIES` | bound |
+| `fin_funding_status` | `fin:FundingStatusGrid` | `SHORTFALL_GRID` | bound (accommodation A1) |
+| `fin_performance_indices` | `fin:PerformanceIndexSeries` | `PERIOD_SERIES` | bound (accommodation A2) |
+| `fin_variance_analysis` | — | none | **build** — emits a TREE; nothing in the arm nests |
+| `fin_eac_calculation` | — | none | **build** — METHOD is half the answer |
+| `fin_variance_drivers` | — | none | **build** — a RANKING, not a filtered instance table |
+
+`persona_fit` / `domain_fit` are READ from the finance agent's own `OWNER_PERSONA` and
+`DOMAINS` (`agent_fleet/finance_agent/main.py`), not inferred from the subject matter. A
+guessed persona advertises to the wrong audience and nothing here fails.
+
+**The cortex-side question the table could not answer is YES, for a better reason than
+assumed.** `PERIOD_SERIES` tolerates an absent `value_unit` because **it never reads the field
+at all** — see the characterization test beside the component. The contract declares it,
+`expected_fields` advertises it, and neither the interpreter nor the component touches it.
+
+**That corrects an entry in this document.** The producer queue says Engine P emitting
+`value_unit` on the cost curve needs *"no frontend change"*. True for `CHART_WIDGET` and
+`SHORTFALL_GRID`, which thread it to `formatAmount`. **False for `PERIOD_SERIES`, which is the
+cost curve's own archetype.** Wiring it is also not the obvious one-liner: Engine F's CPI/SPI
+are dimensionless ratios and its `amount_unit` rename is the only thing today preventing a
+currency being promoted onto a ratio chart. Whoever connects the field owns that case.
 ### The log now reports both sides
 
 It used to print `resp.accepted` alone — the SERVER's count, not what the client offered, and

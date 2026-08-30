@@ -274,6 +274,52 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: INTERVAL_TIMELINE_CONTRACT,
   },
+  // ── ENGINE F, PROGRAM FINANCE (ADR-0045) ───────────────────────────────────────────────
+  //
+  // THREE ROWS FROM SIX VERBS, and the gap is the finding rather than an oversight. Engine F's
+  // binding table read the payloads off the running verbs instead of asserting a fit, and only
+  // three of the six land on an archetype that has a projection arm. The other three are
+  // component builds filed back against ADR-0045 — a variance TREE nothing in the arm accepts,
+  // an EAC whose METHOD is half the answer and which no archetype carries, and a RANKING whose
+  // assigned archetype turned out to be a filtered instance table fed by a hand-set BFF feeder.
+  //
+  // Advertising rows for those three would be the failure this registry is built to refuse: an
+  // archetype named in a table is not an archetype that draws.
+  //
+  // `persona_fit` and `domain_fit` are READ from the finance agent's own declarations
+  // (`OWNER_PERSONA` / `DOMAINS` in agent_fleet/finance_agent/main.py), not inferred from the
+  // subject matter. A guessed persona advertises to the wrong audience and nothing here fails.
+  {
+    subject_uri: "fin:BurnRateSeries",
+    object_uri: "mesh:PeriodSeries",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: PERIOD_SERIES_CONTRACT,
+  },
+  {
+    subject_uri: "fin:FundingStatusGrid",
+    object_uri: "mesh:ShortfallGrid",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: SHORTFALL_GRID_CONTRACT,
+  },
+  // A SECOND subject onto PERIOD_SERIES, and this one arrives with a cost stated by its
+  // producer: CPI/SPI are dimensionless ratios, so the verb deliberately emits NO
+  // `value_unit`, and its row field is named `amount_unit` SPECIFICALLY to defeat the
+  // projector's `rows[0]` lift — which would otherwise promote a currency onto a ratio chart.
+  // That rename looks like a naming inconsistency and "tidying" it puts a dollar sign on CPI.
+  //
+  // The cortex-side question the table could not answer — does PERIOD_SERIES tolerate an
+  // absent `value_unit`? — is YES, and for a reason worth knowing rather than the reason
+  // assumed: this component never reads the field at all. See PERIOD_SERIES_CONTRACT's
+  // `value_unit`, which is advertised and unconsumed.
+  {
+    subject_uri: "fin:PerformanceIndexSeries",
+    object_uri: "mesh:PeriodSeries",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: PERIOD_SERIES_CONTRACT,
+  },
   // THE FIRST BINDING WHOSE ANSWER IS ACTED ON RATHER THAN DRAWN.
   //
   // `mesh:CanvasSeedResult` is what the seeding orchestration PRODUCES — slot-ordered artifact
