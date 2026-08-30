@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 
 /**
@@ -35,6 +36,8 @@ interface PresentationState {
   toggleFullScreen: () => void;
   toggleLeft: () => void;
   toggleRight: () => void;
+  /** Open the HUD because the reader just selected a card. See revealRightOnSelection. */
+  revealRight: () => void;
 }
 
 export const usePresentationStore = create<PresentationState>((set) => ({
@@ -55,6 +58,7 @@ export const usePresentationStore = create<PresentationState>((set) => ({
     ),
   toggleLeft: () => set((s) => ({ leftPinned: !s.leftPinned })),
   toggleRight: () => set((s) => ({ rightPinned: !s.rightPinned })),
+  revealRight: () => set({ rightPinned: true }),
 }));
 
 /**
@@ -62,18 +66,49 @@ export const usePresentationStore = create<PresentationState>((set) => ({
  *
  * Derived rather than stored, so there is no state to get out of sync and no effect to fire.
  *
- * THE RIGHT RAIL OPENS ON SELECTION, and that is a deliberate asymmetry rather than a
- * convenience. The HUD is the evidence that the system reasoned rather than guessed, and the
- * moment that matters is when someone asks "how did it know that" — which is a click on a
- * card. An answer list has no such moment, so the left rail waits to be asked for.
+ * THE RIGHT RAIL OPENS ON SELECTION — but selection is a MOMENT, not a state, and the first
+ * version of this got that wrong in a way worth keeping written down.
+ *
+ * It read `Boolean(currentArtifactId)` as an input here. That is true from the first answer
+ * onwards and never goes back to false, so the rail was permanently open and the mode gave the
+ * board only the left rail's width back. The condition described "a card is current", which is
+ * almost always; the intent was "a card was just chosen", which is almost never.
+ *
+ * So the transition drives it instead — see `revealRightOnSelection` — and this stays a pure
+ * function of the mode, the pin and the pointer. The HUD is the evidence the system reasoned
+ * rather than guessed, and the moment that matters is when someone asks "how did it know
+ * that", which is a click. An answer list has no equivalent moment, so the left rail waits to
+ * be asked for.
  */
 export function railOpen(opts: {
   fullScreen: boolean;
   pinned: boolean;
   hovering: boolean;
-  /** Right rail only: a selected card is itself a request for context. */
-  selection?: boolean;
 }): boolean {
   if (!opts.fullScreen) return true;
-  return opts.pinned || opts.hovering || Boolean(opts.selection);
+  return opts.pinned || opts.hovering;
+}
+
+/**
+ * Open the HUD when the reader CHANGES selection, and only then.
+ *
+ * A hook rather than a `railOpen` input because the trigger is a transition and `railOpen`
+ * must stay a pure function of state. It pins rather than inventing a third visibility mode:
+ * the reader closes it with the same chevron they would use for a rail they pinned themselves,
+ * so there is one mechanism and not two that look alike.
+ *
+ * IT DOES NOT FIRE ON MOUNT. Entering presentation mode with a card already current is not a
+ * request for context — it is the state the reader was already in, and opening the rail then
+ * would reproduce the bug this replaced.
+ */
+export function revealRightOnSelection(currentArtifactId: string | null, fullScreen: boolean) {
+  const seen = useRef<string | null | undefined>(undefined);
+  const reveal = usePresentationStore((s) => s.revealRight);
+  useEffect(() => {
+    const first = seen.current === undefined;
+    const changed = seen.current !== currentArtifactId;
+    seen.current = currentArtifactId;
+    if (first || !changed || !fullScreen || !currentArtifactId) return;
+    reveal();
+  }, [currentArtifactId, fullScreen, reveal]);
 }

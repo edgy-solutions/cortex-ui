@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Brain, Minimize2, Maximize2 } from "lucide-react";
-import { usePresentationStore, railOpen } from "@/store/usePresentationStore";
+import { usePresentationStore, railOpen, revealRightOnSelection } from "@/store/usePresentationStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { RailStrip } from "@/components/RailStrip";
 import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
@@ -28,16 +28,12 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
   const [rightHover, setRightHover] = useState(false);
 
   const answerCount = useCanvasStore((s) => s.artifacts.length);
-  // A selected card IS a request for context — see railOpen.
-  const hasSelection = useCanvasStore((s) => Boolean(s.currentArtifactId));
+  // CHANGING selection opens the HUD; merely having one does not. See the store.
+  const currentArtifactId = useCanvasStore((s) => s.currentArtifactId);
+  revealRightOnSelection(currentArtifactId, fullScreen);
 
   const leftOpen = railOpen({ fullScreen, pinned: leftPinned, hovering: leftHover });
-  const rightOpen = railOpen({
-    fullScreen,
-    pinned: rightPinned,
-    hovering: rightHover,
-    selection: hasSelection,
-  });
+  const rightOpen = railOpen({ fullScreen, pinned: rightPinned, hovering: rightHover });
 
   return (
     <div className="h-full w-full flex flex-col bg-surface-dark overflow-hidden">

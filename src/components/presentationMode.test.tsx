@@ -85,13 +85,59 @@ describe("railOpen — derived, so there is no state to fall out of sync", () =>
     expect(railOpen({ fullScreen: true, pinned: false, hovering: true })).toBe(true);
   });
 
-  it("a SELECTION opens the right rail — the asymmetry is deliberate", () => {
-    // The HUD is the evidence the system reasoned rather than guessed, and the moment that
-    // matters is a click on a card. An answer list has no equivalent moment.
-    expect(railOpen({ fullScreen: true, pinned: false, hovering: false, selection: true })).toBe(true);
+  it("a mere CURRENT card does not hold the rail open", () => {
+    // The bug this replaced. `railOpen` once took a `selection` input read from
+    // `Boolean(currentArtifactId)` — true from the first answer onwards and never false
+    // again, so the rail was permanently open and presentation mode gave the board only the
+    // LEFT rail`s width back. The condition described "a card is current", which is almost
+    // always; the intent was "a card was just chosen", which is almost never.
+    //
+    // So this function knows nothing about selection at all. The transition drives the rail,
+    // through revealRightOnSelection, and this stays pure.
+    expect(railOpen({ fullScreen: true, pinned: false, hovering: false })).toBe(false);
   });
 });
 
+describe("the HUD opens on a CHANGE of selection, not on having one", () => {
+  it("a card already current when the mode is entered does NOT open it", () => {
+    // Entering with a card current is the state the reader was already in, not a request for
+    // context. Opening then is exactly the bug this replaced, one layer down.
+    useCanvasStore.setState({ currentArtifactId: "a1" } as never);
+    usePresentationStore.getState().enterFullScreen();
+    mount();
+    expect(document.querySelector('[data-rail-strip="right"]')).not.toBeNull();
+    expect(screen.queryByText("HUD")).toBeNull();
+  });
+
+  it("selecting a DIFFERENT card opens it", () => {
+    useCanvasStore.setState({ currentArtifactId: "a1" } as never);
+    usePresentationStore.getState().enterFullScreen();
+    const view = mount();
+    expect(screen.queryByText("HUD")).toBeNull(); // positive control: closed first
+
+    useCanvasStore.setState({ currentArtifactId: "a2" } as never);
+    view.rerender(<Layout stream={<div>STREAM</div>} canvas={<div>CANVAS</div>} hud={<div>HUD</div>} />);
+    expect(screen.getByText("HUD")).toBeTruthy();
+  });
+
+  it("a selection change OUTSIDE the mode pins nothing", () => {
+    // Outside presentation mode both rails are open anyway, so pinning would be an invisible
+    // state change that then surprises the reader the next time they present.
+    useCanvasStore.setState({ currentArtifactId: "a1" } as never);
+    const view = mount();
+    useCanvasStore.setState({ currentArtifactId: "a2" } as never);
+    view.rerender(<Layout stream={<div>STREAM</div>} canvas={<div>CANVAS</div>} hud={<div>HUD</div>} />);
+    expect(usePresentationStore.getState().rightPinned).toBe(false);
+  });
+  it("and the reader closes it with the SAME chevron as any pinned rail", () => {
+    // One mechanism, not two that look alike: revealing pins, so unpinning closes.
+    usePresentationStore.setState({ fullScreen: true, rightPinned: true });
+    mount();
+    expect(screen.getByText("HUD")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Unpin live context"));
+    expect(usePresentationStore.getState().rightPinned).toBe(false);
+  });
+});
 describe("nothing is reachable only by hovering", () => {
   it("the mode control is drawn whether or not the mode is on", () => {
     mount();
