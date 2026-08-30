@@ -18,6 +18,7 @@
  * a description: this component cannot enforce a rule the contract does not state, because it
  * reads the rule from there.
  */
+import { ACCENT, ACCENT_DEEP, OVER, LIMIT, MUTED, GRID_LINE } from "@/lib/chartPalette";
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -100,9 +101,9 @@ export function PeriodSeries({
         <div style={{ minWidth: Math.max(320, series.length * 90) }}>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-              <XAxis dataKey="period" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <YAxis tickFormatter={fmt} tick={{ fill: "#94a3b8", fontSize: 11 }} width={64} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_LINE} />
+              <XAxis dataKey="period" tick={{ fill: MUTED, fontSize: 11 }} />
+              <YAxis tickFormatter={fmt} tick={{ fill: MUTED, fontSize: 11 }} width={64} />
               <Tooltip
                 // Typed loosely because recharts' Formatter admits undefined and non-numeric
                 // values; narrowing here rather than casting the whole formatter keeps the
@@ -119,20 +120,20 @@ export function PeriodSeries({
               <Legend wrapperStyle={{ fontSize: 11, fontFamily: "monospace" }} />
               {/* Stacked, because "capex or expense?" is its own question (Q17) and a single
                   total would answer it by erasing it. */}
-              <Bar dataKey="capex" stackId="a" name="capex" fill="#22d3ee">
+              <Bar dataKey="capex" stackId="a" name="capex" fill={ACCENT}>
                 {series.map((r, i) => (
-                  <Cell key={i} fill={r.over_cap ? "#fb7185" : "#22d3ee"} />
+                  <Cell key={i} fill={r.over_cap ? OVER : ACCENT} />
                 ))}
               </Bar>
-              <Bar dataKey="expense" stackId="a" name="expense" fill="#38bdf8">
+              <Bar dataKey="expense" stackId="a" name="expense" fill={ACCENT_DEEP}>
                 {series.map((r, i) => (
-                  <Cell key={i} fill={r.over_cap ? "#f43f5e" : "#38bdf8"} />
+                  <Cell key={i} fill={r.over_cap ? OVER : ACCENT_DEEP} />
                 ))}
               </Bar>
               {uniformCap !== null && (
                 <ReferenceLine
-                  y={uniformCap} stroke="#fbbf24" strokeDasharray="4 4"
-                  label={{ value: `cap ${fmt(uniformCap)}`, fill: "#fbbf24",
+                  y={uniformCap} stroke={LIMIT} strokeDasharray="4 4"
+                  label={{ value: `cap ${fmt(uniformCap)}`, fill: LIMIT,
                            fontSize: 10, fontFamily: "monospace", position: "right" }}
                 />
               )}

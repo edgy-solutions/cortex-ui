@@ -13,6 +13,7 @@
  * IT KNOWS NO DOMAIN. "Capability", "maturity", "site" appear nowhere; the payload supplies
  * `level_label` and the axis names.
  */
+import { showMeasure } from "@/lib/showMeasure";
 import { useState } from "react";
 import {
   matrixAxes, validateMatrixGrid, type MatrixCell,
@@ -120,8 +121,10 @@ export function MatrixGrid({
                         className={`w-full px-3 py-3 rounded font-mono text-sm text-center transition-colors ${cellStyle(cell)}`}
                         title={`${cell.level} of ${cell.target_level}`}
                       >
-                        {cell.level}
-                        <span className="block text-[9px] opacity-60">/ {cell.target_level}</span>
+                        {showMeasure(cell.level)}
+                        <span className="block text-[9px] opacity-60">
+                          / {showMeasure(cell.target_level)}
+                        </span>
                       </button>
                     </td>
                   );

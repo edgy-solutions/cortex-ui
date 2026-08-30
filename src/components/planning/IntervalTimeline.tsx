@@ -28,6 +28,7 @@
  */
 import { useCallback, useMemo, useRef } from "react";
 import { Gantt, WillowDark } from "@svar-ui/react-gantt";
+import { GANTT_THEME_VARS } from "@/lib/chartPalette";
 // THE LOCALE, and it is what turns a format STRING into a date.
 //
 // TWO LOCALE PACKAGES, and passing one is not enough — which cost an extra round trip.
@@ -344,6 +345,15 @@ export function IntervalTimeline({
           space and a long one stays reachable. */}
       <div style={{ height: chartHeight, overflow: "auto" }}>
         <WillowDark>
+          {/* OUR PALETTE, LAYERED ON WILLOWDARK RATHER THAN REPLACING IT.
+              WillowDark stays because it is what makes the gantt render at all — it supplies
+              the full `--wx-*` set, and without it every rule resolves to nothing and the bars
+              are invisible. This div re-declares only the COLOUR subset, and it must sit INSIDE
+              the theme: custom properties resolve innermost-first, so the same declarations on
+              an ancestor would be overridden by WillowDark's own.
+              Every variable not listed still comes from the theme, which is the point — this is
+              a recolour, not a fork. */}
+          <div style={GANTT_THEME_VARS as React.CSSProperties}>
           <Locale words={{ ...coreWords, ...ganttWords }}>
             <Gantt
               tasks={tasks}
@@ -354,6 +364,7 @@ export function IntervalTimeline({
               init={init}
             />
           </Locale>
+          </div>
         </WillowDark>
       </div>
 

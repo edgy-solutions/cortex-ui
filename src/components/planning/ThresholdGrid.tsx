@@ -15,6 +15,7 @@
  *   - an absent cell renders as a GAP, never as 0. A 0.0 in a heat grid reads as
  *     "measured, and fine", which is a different claim from "nothing was happening".
  */
+import { showMeasure } from "@/lib/showMeasure";
 import { useState } from "react";
 import {
   gridAxes, validateThresholdGrid, type ThresholdCell,
@@ -122,8 +123,10 @@ export function ThresholdGrid({
                         className={`w-full px-3 py-3 rounded font-mono text-sm text-center transition-colors ${cellStyle(cell)}`}
                         title={`${cell.value} of ${cell.threshold}`}
                       >
-                        {cell.value}
-                        <span className="block text-[9px] opacity-60">/ {cell.threshold}</span>
+                        {showMeasure(cell.value)}
+                        <span className="block text-[9px] opacity-60">
+                          / {showMeasure(cell.threshold)}
+                        </span>
                       </button>
                     </td>
                   );
