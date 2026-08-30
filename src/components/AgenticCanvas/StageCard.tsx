@@ -264,6 +264,15 @@ export function StageCard({
           }`}
         >
           {task ? taskKindLabel(task.kind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
+          {/* SUBJECT · VERB, on one line, and only where there is room for it.
+              The header used to carry the subject alone and push the verb into a separate strip
+              below, which cost a whole row of vertical for two words. Read together they are
+              the card's provenance in a glance — "portfolio, cost curve" — and the archetype
+              title underneath becomes the thing the eye lands on, which is the contrast a
+              reader actually navigates by. */}
+          {!task && custom && spo.verbLabel && (
+            <span className="text-slate-600"> · {spo.verbLabel}</span>
+          )}
         </span>
         {task ? (
           <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-slate-500">
@@ -315,12 +324,7 @@ export function StageCard({
         )}
       </div>
 
-      {/* How the question was READ, as discrete slots — the view-control surface a live
-          view owes its reader. Renders nothing when the payload captured no interpretation;
-          a fabricated one is worse than none, because it is what a reader would trust.
-          Task cards have no resolved intent to show. */}
-      {!task && custom && <InterpretationStrip artifact={artifact} />}
-
+      {/* Body first, provenance after — see the footer below. */}
       {/* Body: the content lens (answer / task card), or the provenance lens when
           toggled at focus — Decision Map for an answer, Workflow for a task. */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
@@ -377,10 +381,23 @@ export function StageCard({
         )}
       </div>
 
-      {/* Footer: question + trace glyph (identification, not the body). */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-slate-800/60 flex-shrink-0">
-        <GitBranch className="w-2.5 h-2.5 text-slate-600 flex-shrink-0" />
-        <span className="text-[10px] font-mono text-slate-500 truncate">
+      {/* FOOTER: how the question was read, and the question itself.
+          The interpretation strip used to sit ABOVE the body, between the header and the
+          content, where it cost a full row of vertical before the reader reached the answer.
+          It is provenance — the thing you look at second, when you want to know how the system
+          read you — so it belongs after the content rather than in front of it. Same
+          information, and the card's own title is now the first thing under the eyebrow.
+          It renders nothing when the payload captured no interpretation; a fabricated one is
+          worse than none, because it is what a reader would trust. */}
+      <div className="flex items-end justify-between gap-3 px-3 py-1.5 border-t border-slate-800/60 flex-shrink-0">
+        <div className="min-w-0 flex-1">
+          {!task && custom && <InterpretationStrip artifact={artifact} />}
+        </div>
+        <span
+          className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 truncate max-w-[55%] italic"
+          title={artifact.question_text || undefined}
+        >
+          <GitBranch className="w-2.5 h-2.5 text-slate-600 flex-shrink-0 not-italic" />
           {artifact.question_text || "—"}
         </span>
       </div>

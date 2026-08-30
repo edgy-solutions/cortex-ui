@@ -196,6 +196,17 @@ const quarterOf = (d: Date) => `Q${Math.floor(d.getMonth() / 3) + 1}`;
  * computed because the useful stops are editorial: year for "where does this all sit", quarter
  * for the funding conversation, month for the drag.
  *
+ * MAX CELL WIDTH IS WHY THE RIGHT HALF WAS EMPTY. The store computes
+ * `cellWidth: Math.min(available, maxCellWidth)` — the width is CLAMPED — so when a chart is
+ * wider than its plan needs, the cells cannot stretch and the library pads the axis with
+ * further periods instead. A six-quarter plan in a wide card therefore drew six bars and then
+ * two years of empty columns, and the wider the card got the more empty it drew. Making the
+ * cards fill the pane made this worse, not better.
+ *
+ * The caps below are deliberately generous rather than tuned: they only bind when a plan is
+ * SHORT relative to its card, which is exactly the case where stretching is wanted. A long
+ * plan never reaches them and is unaffected.
+ *
  * THE GESTURE IS CTRL + WHEEL — the store handles it (`ctrl`, `zoom`, `zoom-scale`); there is
  * no button and none is needed. Recorded because a config without a stated gesture reads as
  * a feature that does not work: it changes the DEFAULT grain and nothing else, which is
@@ -204,12 +215,12 @@ const quarterOf = (d: Date) => `Q${Math.floor(d.getMonth() / 3) + 1}`;
 export const ZOOM = {
   level: 1,
   levels: [
-    { minCellWidth: 60, maxCellWidth: 200, scales: [{ unit: "year" as const, step: 1, format: "%Y" }] },
-    { minCellWidth: 50, maxCellWidth: 160, scales: [
+    { minCellWidth: 60, maxCellWidth: 640, scales: [{ unit: "year" as const, step: 1, format: "%Y" }] },
+    { minCellWidth: 50, maxCellWidth: 420, scales: [
       { unit: "year" as const, step: 1, format: "%Y" },
       { unit: "quarter" as const, step: 1, format: quarterOf },
     ] },
-    { minCellWidth: 40, maxCellWidth: 140, scales: SCALES },
+    { minCellWidth: 40, maxCellWidth: 260, scales: SCALES },
   ],
 };
 

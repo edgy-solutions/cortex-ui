@@ -62,3 +62,44 @@ describe("interval timeline scale formats", () => {
     expect(q(new Date(2026, 11, 31))).toBe("Q4");
   });
 });
+
+/**
+ * THE AXIS MUST NOT PAD ITSELF WITH EMPTY PERIODS.
+ *
+ * The store computes `cellWidth: Math.min(available, maxCellWidth)` — CLAMPED — so when a chart
+ * is wider than its plan needs, the cells cannot stretch and the library adds further periods
+ * to fill the space. A six-quarter plan in a wide card drew six bars and then two years of
+ * empty columns, and making the cards fill the pane made it worse rather than better.
+ *
+ * This does not assert a pixel value; it asserts the RELATION that must hold — that a realistic
+ * wide card showing a realistic short plan can reach the width it needs without hitting the cap.
+ * A tuned constant would go stale the first time the card size changed; the relation is what
+ * actually has to be true.
+ */
+describe("the zoom levels let cells stretch rather than padding the axis", () => {
+  // A planning card on a wide pane, less the task table on the left.
+  const CHART_PX = 1200;
+  // The shortest plan we expect to present. Fewer periods need WIDER cells, so this is the
+  // demanding case, not the average one.
+  const SHORT_PLAN_PERIODS = 6;
+
+  it("every level can fill a wide card with a short plan", () => {
+    expect(ZOOM.levels.length).toBeGreaterThan(0); // positive control
+    const needed = CHART_PX / SHORT_PLAN_PERIODS;
+    for (const [i, level] of ZOOM.levels.entries()) {
+      expect(
+        level.maxCellWidth,
+        `zoom level ${i} caps cells at ${level.maxCellWidth}px, below the ${Math.round(
+          needed,
+        )}px a ${SHORT_PLAN_PERIODS}-period plan needs to fill a ${CHART_PX}px chart — the axis will pad with empty periods instead`,
+      ).toBeGreaterThanOrEqual(needed);
+    }
+  });
+
+  it("and the cap still sits above the floor it is paired with", () => {
+    // A max below its min is a config that cannot be satisfied at any width.
+    for (const level of ZOOM.levels) {
+      expect(level.maxCellWidth).toBeGreaterThan(level.minCellWidth);
+    }
+  });
+});
