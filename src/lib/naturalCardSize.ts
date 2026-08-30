@@ -45,7 +45,11 @@ function rowCount(c: Record<string, unknown>): number {
   const subjects = new Set<string>();
   for (const r of rows) {
     if (typeof r === "object" && r !== null) {
-      const id = (r as Record<string, unknown>).subject_id;
+      // THRESHOLD_GRID and SHORTFALL_GRID key rows on `subject_id`; MATRIX_GRID keys them on
+      // `row_id`. Reading only one name silently falls through to counting CELLS, which sizes a
+      // 5x4 matrix as though it had twenty rows — caught by a render test, not by this file.
+      const rec = r as Record<string, unknown>;
+      const id = typeof rec.subject_id === "string" ? rec.subject_id : rec.row_id;
       if (typeof id === "string") subjects.add(id);
     }
   }

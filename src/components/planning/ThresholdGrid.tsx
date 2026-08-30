@@ -4,6 +4,24 @@
  * A LIVE VIEW (ADR-0042). Content is replaced wholesale on re-evaluation; the freshness stamp
  * is the one THIS evaluation carried, never the mint-time one.
  *
+ *
+ * ── DIFFERENTIATE THE CELL TREATMENT, SHARE THE INTERACTION ──────────────────────────────
+ *
+ * This grid and its sibling sat adjacent on a board reading as ONE chart split in two: same
+ * cell form, same padding, same big-number-over-small-number, differing only in colour ramp —
+ * and a ramp is the first thing a projector washes out.
+ *
+ * So the FORM now carries the distinction, and it carries the RIGHT one. A ratio is
+ * continuous: a subject can sit at 1.8 of a 2.0 line, anywhere along it. A maturity level is
+ * ordinal: level 2 of 4 is a rung, not a position. A continuous bar under both would have
+ * asserted that maturity is a smooth quantity, which is the same class of error as colouring
+ * a maturity gap red — a claim about the measurement that the measurement does not make.
+ *
+ * The INTERACTION stays identical on purpose: click a cell, get its detail. The inspection
+ * layer replaces both detail lines with one panel, and it can only do that if both surfaces
+ * behave the same way. Diverging the interaction here would hand that build two patterns to
+ * unify instead of one.
+ *
  * IT KNOWS NO DOMAIN. "Site", "load", "saturation" appear nowhere — the payload supplies
  * `value_label` and the subject names. That is what lets the same renderer serve a second
  * question of this shape without being edited.
@@ -127,6 +145,24 @@ export function ThresholdGrid({
                         <span className="block text-[9px] opacity-60">
                           / {showMeasure(cell.threshold)}
                         </span>
+                        {/* CONTINUOUS, because a ratio is. Clamped at the line so a breach
+                            does not draw outside its own cell — the overflow is already said
+                            by the colour and by `over_threshold`, which is the payload's
+                            claim and not this bar's. */}
+                        <span className="mt-1 block h-0.5 w-full rounded-sm bg-slate-100/10">
+                          <span
+                            className={`block h-full rounded-sm ${
+                              cell.over_threshold ? "bg-rose-300/80" : "bg-current opacity-60"
+                            }`}
+                            style={{
+                              width: `${
+                                cell.threshold > 0
+                                  ? Math.max(0, Math.min(1, cell.value / cell.threshold)) * 100
+                                  : 0
+                              }%`,
+                            }}
+                          />
+                        </span>
                       </button>
                     </td>
                   );
@@ -136,6 +172,23 @@ export function ThresholdGrid({
           </tbody>
         </table>
       </div>
+
+      {/* WHAT THE MARKS MEAN, said once rather than inferred five times.
+          A grid of coloured rectangles is unreadable to anyone who did not build it, and the
+          reader most likely to be looking at it is the one who did not. The wording names the
+          MEASUREMENT, never the domain — this component does not know it is about sites. */}
+      <p className="mt-2 font-mono text-[9px] text-slate-500 flex items-center gap-3 flex-wrap">
+        <span>bar = value ÷ threshold</span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-slate-500/40" /> under
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-amber-500/50" /> near
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-rose-500/60" /> over
+        </span>
+      </p>
 
       {/* WHY a cell is what it is. The contributors are the actionable half — "Site B is over"
           sends someone to open a schedule; "over, because P8 + P12 + P13 overlap" does not. */}

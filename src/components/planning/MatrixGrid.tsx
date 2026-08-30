@@ -10,6 +10,24 @@
  * failing. Attainment (level/target) drives the ramp, and the palette runs cool-to-warm
  * rather than safe-to-danger.
  *
+ *
+ * ── DIFFERENTIATE THE CELL TREATMENT, SHARE THE INTERACTION ──────────────────────────────
+ *
+ * This grid and its sibling sat adjacent on a board reading as ONE chart split in two: same
+ * cell form, same padding, same big-number-over-small-number, differing only in colour ramp —
+ * and a ramp is the first thing a projector washes out.
+ *
+ * So the FORM now carries the distinction, and it carries the RIGHT one. A ratio is
+ * continuous: a subject can sit at 1.8 of a 2.0 line, anywhere along it. A maturity level is
+ * ordinal: level 2 of 4 is a rung, not a position. A continuous bar under both would have
+ * asserted that maturity is a smooth quantity, which is the same class of error as colouring
+ * a maturity gap red — a claim about the measurement that the measurement does not make.
+ *
+ * The INTERACTION stays identical on purpose: click a cell, get its detail. The inspection
+ * layer replaces both detail lines with one panel, and it can only do that if both surfaces
+ * behave the same way. Diverging the interaction here would hand that build two patterns to
+ * unify instead of one.
+ *
  * IT KNOWS NO DOMAIN. "Capability", "maturity", "site" appear nowhere; the payload supplies
  * `level_label` and the axis names.
  */
@@ -27,6 +45,23 @@ export interface MatrixGridProps {
   as_of?: string;
   valid_as_of?: string;
   state_version?: number;
+}
+
+/**
+ * The rungs of an ordinal scale, and how much of each one the level has reached.
+ *
+ * Levels arrive fractional (1.2 of 4), so a segment is filled PROPORTIONALLY rather than
+ * on/off: rung 1 full, rung 2 at a fifth. That says "part way up the second rung" without
+ * either rounding a real measurement away or pretending the scale is continuous.
+ *
+ * A non-positive or non-finite target yields no rungs rather than a guessed four — the scale
+ * is the payload's to declare.
+ */
+function rungs(level: number, target: number): number[] {
+  if (!Number.isFinite(target) || target <= 0) return [];
+  const n = Math.min(12, Math.max(1, Math.ceil(target)));
+  const lv = Number.isFinite(level) ? level : 0;
+  return Array.from({ length: n }, (_, i) => Math.max(0, Math.min(1, lv - i)));
 }
 
 function cellStyle(cell: MatrixCell): string {
@@ -125,6 +160,21 @@ export function MatrixGrid({
                         <span className="block text-[9px] opacity-60">
                           / {showMeasure(cell.target_level)}
                         </span>
+                        {/* RUNGS, because a maturity level is ordinal. A continuous bar here
+                            would assert that maturity is a smooth quantity. */}
+                        <span className="mt-1 flex w-full gap-px">
+                          {rungs(cell.level, cell.target_level).map((fill, i) => (
+                            <span
+                              key={i}
+                              className="h-0.5 flex-1 rounded-sm bg-slate-100/10 overflow-hidden"
+                            >
+                              <span
+                                className="block h-full bg-current opacity-70"
+                                style={{ width: `${fill * 100}%` }}
+                              />
+                            </span>
+                          ))}
+                        </span>
                       </button>
                     </td>
                   );
@@ -134,6 +184,18 @@ export function MatrixGrid({
           </tbody>
         </table>
       </div>
+
+      {/* The rungs need naming or they read as a broken bar. `level_label` is the payload's
+          word for what is being levelled; absent, the legend says only what the marks are. */}
+      <p className="mt-2 font-mono text-[9px] text-slate-500 flex items-center gap-3 flex-wrap">
+        <span>segments = rungs toward target</span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/50" /> at target
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-slate-500/40" /> below
+        </span>
+      </p>
 
       {selected && (
         <div className="mt-4 p-3 rounded glass-panel-sm border-cyan-500/20">

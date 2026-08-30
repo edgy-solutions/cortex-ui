@@ -38,6 +38,21 @@ describe("naturalContentHeight", () => {
     expect(h5).toBeGreaterThan(h3);
   });
 
+  it("knows BOTH row-identity field names — matrix rows key on row_id", () => {
+    // The grids do not agree: THRESHOLD_GRID and SHORTFALL_GRID key rows on `subject_id`,
+    // MATRIX_GRID on `row_id`. Reading only one silently falls through to counting CELLS, so a
+    // 5x4 matrix sized as twenty rows — a card four times too tall, arrived at confidently.
+    const matrix = [
+      {
+        archetype: "MATRIX_GRID",
+        rows: ["r1", "r2", "r3"].flatMap((r) =>
+          ["c1", "c2", "c3", "c4"].map((c) => ({ row_id: r, column_id: c, level: 1, target_level: 4 })),
+        ),
+      },
+    ];
+    const threeRows = naturalContentHeight(grid(["a", "b", "c"], ["p1"]));
+    expect(naturalContentHeight(matrix)).toBe(threeRows);
+  });
   it("returns NULL for an archetype it does not know", () => {
     // A plausible number computed from an unknown shape would size cards confidently and
     // wrongly, and the failure would read as a layout bug rather than a missing case.
