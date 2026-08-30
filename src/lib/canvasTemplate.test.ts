@@ -28,6 +28,7 @@ import {
 const VP = { w: 1600, h: 900 };
 const TEMPLATE = portfolioPlanningTemplate(VP);
 import { useStageStore } from "@/store/useStageStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
 
 const overlaps = (a: CardSlot, b: CardSlot) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -83,6 +84,7 @@ describe("the template applies through the ORDINARY add path", () => {
     // The template is a function of the pane, so the store must be looking at the SAME pane
     // these assertions were computed against — otherwise the two disagree by a viewport.
     useStageStore.setState({ canvases: [], view: "global", viewport: VP } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
   });
 
   it("the store REFUSES a degenerate measure — a bad viewport becomes a saved layout", () => {
@@ -98,6 +100,92 @@ describe("the template applies through the ORDINARY add path", () => {
     useStageStore.getState().setViewport({ w: 1234, h: 777 });
     expect(useStageStore.getState().viewport).toEqual({ w: 1234, h: 777 });
   });
+  it("a SEED gives every card the same row height, whatever order they arrive in", () => {
+    // The ragged-board failure, and it is why seeding measures the whole set before placing
+    // any of it. Measured incrementally, the tallest card arriving LAST gets a taller slot
+    // than the neighbours already placed, and the two lower rows stop lining up — a board
+    // that looks hand-broken rather than arranged.
+    const tall = ["s1", "s2", "s3", "s4", "s5", "s6"].map((s2) => ({
+      subject_id: s2,
+      period: "p1",
+      value: 1,
+      threshold: 2,
+    }));
+    useCanvasStore.setState({
+      artifacts: [
+        { id: "a1", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } },
+        { id: "a2", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } },
+        { id: "a3", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } },
+        { id: "a4", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } },
+        // The tall one arrives LAST, which is the case that used to go ragged.
+        { id: "a5", rendered_output: { components: [{ archetype: "THRESHOLD_GRID", rows: tall }] } },
+      ],
+    } as never);
+
+    const id = useStageStore.getState().seedPortfolioCanvas(["a1", "a2", "a3", "a4", "a5"], "P", false);
+    const items = useStageStore.getState().canvases.find((c) => c.id === id)!.items;
+
+    // The four non-anchor cards share one height...
+    const heights = new Set(items.slice(1).map((it) => it.h));
+    expect(heights.size).toBe(1);
+    // ...and it is the TALL one's, not the default.
+    expect(items[1].h).toBeGreaterThan(portfolioPlanningTemplate(VP)[1].h);
+    // ...and the two lower rows line up rather than overlapping.
+    expect(items[3].y).toBeGreaterThanOrEqual(items[1].y + (items[1].h ?? 0));
+    expect(items[1].y).toBe(items[2].y);
+    expect(items[3].y).toBe(items[4].y);
+  });
+
+  it("the placed card is sized for the CONTENT it holds, not the constant", () => {
+    // The wiring, not the arithmetic. `naturalCardSize` can be perfect and the store can fail
+    // to call it, and every unit test still passes — the same unreachable-path shape as a
+    // module nothing imports. This asserts the store actually consults it.
+    useCanvasStore.setState({
+      artifacts: [
+        {
+          id: "big",
+          rendered_output: {
+            components: [
+              {
+                archetype: "THRESHOLD_GRID",
+                rows: ["s1", "s2", "s3", "s4", "s5", "s6"].map((s2) => ({
+                  subject_id: s2,
+                  period: "p1",
+                  value: 1,
+                  threshold: 2,
+                })),
+              },
+            ],
+          },
+        },
+      ],
+    } as never);
+
+    const withContent = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    useStageStore.getState().addItemAuto(withContent, "anchor");
+    useStageStore.getState().addItemAuto(withContent, "big");
+    const placed = useStageStore
+      .getState()
+      .canvases.find((c) => c.id === withContent)!
+      .items.find((it) => it.id === "big")!;
+
+    // A six-subject grid needs more than the template's chart-shaped default.
+    expect(placed.h).toBeGreaterThan(portfolioPlanningTemplate(VP)[1].h);
+  });
+
+  it("an artifact the sizer does not recognise leaves the default intact", () => {
+    // The other half: unknown content must not shrink or inflate a card. Without this the
+    // assertion above would pass on a store that made every card enormous.
+    useCanvasStore.setState({
+      artifacts: [{ id: "plain", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } }],
+    } as never);
+    const c = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    useStageStore.getState().addItemAuto(c, "a");
+    useStageStore.getState().addItemAuto(c, "plain");
+    const placed = useStageStore.getState().canvases.find((x) => x.id === c)!.items[1];
+    expect(placed.h).toBe(portfolioPlanningTemplate(VP)[1].h);
+  });
+
   it("a typed canvas seeds into its template; an untyped one does not", () => {
     // The load-bearing property of the whole approach: a seeded canvas and a hand-built one
     // must be indistinguishable to every consumer, so the template rides `addItemAuto` rather

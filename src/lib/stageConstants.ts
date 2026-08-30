@@ -92,7 +92,7 @@ export const PANEL_MIN = { w: 260, h: 200 };
  * The reference is the planning-workspace mock — schedule across the top, cost curve beside
  * site load, funding gap beside the maturity grid.
  */
-export function portfolioPlanningTemplate(vp: CardSize): CardSlot[] {
+export function portfolioPlanningTemplate(vp: CardSize, rowContentH?: number): CardSlot[] {
   // Refuse a measure that cannot produce a layout rather than emitting NaN coordinates, which
   // would PERSIST into the canvas — arrangement is durable, so a bad measure is a saved layout,
   // not a transient glitch. A 3:2 pane is the fallback.
@@ -110,23 +110,32 @@ export function portfolioPlanningTemplate(vp: CardSize): CardSlot[] {
   // Widening a card does NOT starve it the way shortening one does. Card content flows to the
   // width it is given — charts render at width 100% — so a wide card is a wide chart, while a
   // short card is a chart below the fold. The two axes are genuinely not symmetric here.
-  const boardH = ANCHOR_CONTENT_H + CARD_CONTENT_H * 2 + GUTTER * 2;
+  // The caller may know better than the constant: a grid's height is a function of its ROW
+  // COUNT, and a card sized for three subjects showing four hides one — along with any period
+  // column whose only cells belong to it, which then reads as missing data rather than a
+  // hidden row. A supplied height is honoured when it is LARGER; the constant is a floor, so
+  // an unknown archetype can never shrink a card below what a chart needs.
+  const rowH =
+    typeof rowContentH === "number" && Number.isFinite(rowContentH) && rowContentH > CARD_CONTENT_H
+      ? rowContentH
+      : CARD_CONTENT_H;
+  const boardH = ANCHOR_CONTENT_H + rowH * 2 + GUTTER * 2;
   const boardW = Math.max(PANEL_MIN.w * 2 + GUTTER, boardH * aspect);
 
   const colW = (boardW - GUTTER) / 2;
   const row2Y = ANCHOR_CONTENT_H + GUTTER;
-  const row3Y = row2Y + CARD_CONTENT_H + GUTTER;
+  const row3Y = row2Y + rowH + GUTTER;
   const col2X = colW + GUTTER;
 
   return [
     // Anchor: the schedule, full width across the top.
     { x: 0, y: 0, w: boardW, h: ANCHOR_CONTENT_H },
     // The pair beneath it — cost curve beside site load.
-    { x: 0, y: row2Y, w: colW, h: CARD_CONTENT_H },
-    { x: col2X, y: row2Y, w: colW, h: CARD_CONTENT_H },
+    { x: 0, y: row2Y, w: colW, h: rowH },
+    { x: col2X, y: row2Y, w: colW, h: rowH },
     // The lower pair — funding gap beside the maturity grid.
-    { x: 0, y: row3Y, w: colW, h: CARD_CONTENT_H },
-    { x: col2X, y: row3Y, w: colW, h: CARD_CONTENT_H },
+    { x: 0, y: row3Y, w: colW, h: rowH },
+    { x: col2X, y: row3Y, w: colW, h: rowH },
   ];
 }
 
@@ -143,7 +152,7 @@ export const PORTFOLIO_PLANNING_SLOTS = 5;
  * canvas may hold: the moment it does, canvases stop being one substrate and become
  * separate apps.
  */
-const TEMPLATES: Record<string, (vp: CardSize) => CardSlot[]> = {
+const TEMPLATES: Record<string, (vp: CardSize, rowContentH?: number) => CardSlot[]> = {
   portfolio_planning: portfolioPlanningTemplate,
 };
 
@@ -156,10 +165,11 @@ export function templateSlot(
   use: string | undefined,
   n: number,
   vp: CardSize,
+  rowContentH?: number,
 ): CardSlot | null {
   const build = use ? TEMPLATES[use] : undefined;
   if (!build) return null;
-  const t = build(vp);
+  const t = build(vp, rowContentH);
   return n >= 0 && n < t.length ? t[n] : null;
 }
 

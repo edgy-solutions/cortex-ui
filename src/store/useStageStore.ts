@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { STAGE_CARD, templateSlot, type CardSize } from "@/lib/stageConstants";
+import { tallestContentHeight } from "@/lib/naturalCardSize";
+import { useCanvasStore } from "@/store/useCanvasStore";
 
 /**
  * useStageStore — the CAMERA-STAGE state for the center canvas (ADR-0028
@@ -101,7 +103,13 @@ interface StageState {
   createCanvas: (name: string, use?: CanvasUse, enter?: boolean) => string;
   renameCanvas: (id: string, name: string) => void;
   deleteCanvas: (id: string) => void;
-  addItemAuto: (canvasId: string, answerId: string) => void; // auto-slot placement
+  /**
+   * Auto-slot placement. `rowContentH` lets a BATCH size every card it places against the
+   * tallest content in the batch — without it each card is measured against only what is
+   * already on the canvas, so a tall card arriving last gets a taller slot while its
+   * neighbours keep short ones and the rows go ragged.
+   */
+  addItemAuto: (canvasId: string, answerId: string, rowContentH?: number) => void;
   addItemAt: (canvasId: string, answerId: string, x: number, y: number) => void;
   moveItem: (canvasId: string, answerId: string, x: number, y: number) => void;
   /** Arrangement, per ADR-0042 §4 — persists with the canvas. Non-positive dims are refused. */
@@ -187,7 +195,7 @@ export const useStageStore = create<StageState>()(
           view: s.view === id ? GLOBAL : s.view,
         })),
 
-      addItemAuto: (canvasId, answerId) =>
+      addItemAuto: (canvasId, answerId, rowContentH) =>
         set((s) => ({
           canvases: s.canvases.map((c) => {
             if (c.id !== canvasId) return c;
@@ -196,7 +204,21 @@ export const useStageStore = create<StageState>()(
             // falls through to the generic slot. Routing the template through the ORDINARY
             // add path is the point: a seeded canvas and a hand-built one differ by nothing
             // a consumer can see.
-            const slot = templateSlot(c.use, c.items.length, get().viewport) ?? slotFor(c.items.length);
+            // ROW HEIGHT FOLLOWS THE CONTENT, over every card already on this canvas plus
+            // the one arriving. A grid renders all its rows and the panel scrolls, so a card
+            // sized for three subjects showing four hides one silently — and any period column
+            // whose only cells belong to that row then reads as missing data rather than a
+            // hidden row. The template treats this as a FLOOR-raising hint, never a shrink.
+            const held = [...c.items.map((it) => it.id), answerId];
+            const arts = useCanvasStore.getState().artifacts;
+            const natural =
+              rowContentH ??
+              tallestContentHeight(
+                held.map((id) => arts.find((a) => a.id === id)?.rendered_output?.components),
+              );
+            const slot =
+              templateSlot(c.use, c.items.length, get().viewport, natural ?? undefined) ??
+              slotFor(c.items.length);
             return { ...c, items: [...c.items, { id: answerId, ...slot }] };
           }),
         })),
@@ -254,7 +276,16 @@ export const useStageStore = create<StageState>()(
       // that assigned measures to slots would be reaching into the seeder's job.
       seedPortfolioCanvas: (artifactIds, name = "Portfolio Planning", enter = true) => {
         const id = get().createCanvas(name, "portfolio_planning", enter);
-        for (const artifactId of artifactIds) get().addItemAuto(id, artifactId);
+        // MEASURED ONCE, OVER THE WHOLE SET, BEFORE ANYTHING IS PLACED. Measuring
+        // incrementally would size each card against only what preceded it, so the tallest
+        // card arriving last would get a taller slot than its neighbours and the two lower
+        // rows would not line up. One board, one row height.
+        const arts = useCanvasStore.getState().artifacts;
+        const rowContentH =
+          tallestContentHeight(
+            artifactIds.map((a) => arts.find((x) => x.id === a)?.rendered_output?.components),
+          ) ?? undefined;
+        for (const artifactId of artifactIds) get().addItemAuto(id, artifactId, rowContentH);
         return id;
       },
       removeItem: (canvasId, answerId) =>
