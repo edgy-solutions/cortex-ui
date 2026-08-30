@@ -31,6 +31,7 @@
  * IT KNOWS NO DOMAIN. "Capability", "maturity", "site" appear nowhere; the payload supplies
  * `level_label` and the axis names.
  */
+import { CellInspector } from "./CellInspector";
 import { showMeasure } from "@/lib/showMeasure";
 import { useState } from "react";
 import {
@@ -198,32 +199,43 @@ export function MatrixGrid({
       </p>
 
       {selected && (
-        <div className="mt-4 p-3 rounded glass-panel-sm border-cyan-500/20">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/70 mb-1">
-            {rowNames.get(selected.row_id)} · {colNames.get(selected.column_id)}
-          </p>
-          <p className="font-mono text-sm text-slate-200">
-            level {selected.level} of {selected.target_level}
-            {selected.gap > 0
-              ? <span className="text-sky-300"> · {selected.gap} to go</span>
-              : <span className="text-emerald-300"> · at target</span>}
-          </p>
-          {/* PROVENANCE, not decoration. A level with no as-of is a number with no shelf life,
-              and a room reading a two-year-old assessment as current is the failure the
-              append-only history exists to prevent. */}
-          <p className="mt-1 font-mono text-[11px] text-slate-400">
-            {selected.assessed_at
-              ? <>assessed {selected.assessed_at}{selected.assessed_by ? ` by ${selected.assessed_by}` : ""}</>
-              : <span className="text-slate-600">no assessment date recorded</span>}
-            {typeof selected.assessment_count === "number" && (
-              <span className="text-slate-600">
-                {" "}· {selected.assessment_count === 1
-                  ? "first assessment — no trajectory yet"
-                  : `${selected.assessment_count} assessments`}
-              </span>
-            )}
-          </p>
-        </div>
+        <CellInspector
+          onDismiss={() => setSelected(null)}
+          title={<>{rowNames.get(selected.row_id)} · {colNames.get(selected.column_id)}</>}
+          headline={
+            <>
+              level {selected.level} of {selected.target_level}
+              {selected.gap > 0 ? (
+                <span className="text-sky-300"> · {selected.gap} to go</span>
+              ) : (
+                <span className="text-emerald-300"> · at target</span>
+              )}
+            </>
+          }
+          lines={[
+            // PROVENANCE, not decoration. A level with no as-of is a number with no shelf
+            // life, and a room reading a two-year-old assessment as current is the failure
+            // the append-only history exists to prevent.
+            <>
+              {selected.assessed_at ? (
+                <>
+                  assessed {selected.assessed_at}
+                  {selected.assessed_by ? ` by ${selected.assessed_by}` : ""}
+                </>
+              ) : (
+                <span className="text-slate-600">no assessment date recorded</span>
+              )}
+              {typeof selected.assessment_count === "number" && (
+                <span className="text-slate-600">
+                  {" "}
+                  {selected.assessment_count === 1
+                    ? "· first assessment — no trajectory yet"
+                    : `· ${selected.assessment_count} assessments`}
+                </span>
+              )}
+            </>,
+          ]}
+        />
       )}
 
       {(valid_as_of || state_version !== undefined) && (

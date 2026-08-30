@@ -33,6 +33,7 @@
  *   - an absent cell renders as a GAP, never as 0. A 0.0 in a heat grid reads as
  *     "measured, and fine", which is a different claim from "nothing was happening".
  */
+import { CellInspector } from "./CellInspector";
 import { showMeasure } from "@/lib/showMeasure";
 import { useState } from "react";
 import {
@@ -193,26 +194,30 @@ export function ThresholdGrid({
       {/* WHY a cell is what it is. The contributors are the actionable half — "Site B is over"
           sends someone to open a schedule; "over, because P8 + P12 + P13 overlap" does not. */}
       {selected && (
-        <div className="mt-4 p-3 rounded glass-panel-sm border-cyan-500/20">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/70 mb-1">
-            {names.get(selected.subject_id)} · {selected.period}
-          </p>
-          <p className="font-mono text-sm text-slate-200">
-            {selected.value} of {selected.threshold}
-            {selected.over_threshold && (
-              <span className="text-rose-400">
-                {" "}· over by {(selected.value - selected.threshold).toFixed(2)}
-              </span>
-            )}
-          </p>
-          {selected.contributors?.length ? (
-            <p className="mt-1 font-mono text-[11px] text-slate-400">
-              from {selected.contributors.join(", ")}
-            </p>
-          ) : (
-            <p className="mt-1 font-mono text-[11px] text-slate-600">no contributors recorded</p>
-          )}
-        </div>
+        <CellInspector
+          onDismiss={() => setSelected(null)}
+          title={<>{names.get(selected.subject_id)} · {selected.period}</>}
+          headline={
+            <>
+              {selected.value} of {selected.threshold}
+              {selected.over_threshold && (
+                <span className="text-rose-400">
+                  {" "}· over by {(selected.value - selected.threshold).toFixed(2)}
+                </span>
+              )}
+            </>
+          }
+          lines={[
+            selected.contributors?.length ? (
+              <>from {selected.contributors.join(", ")}</>
+            ) : (
+              // The actionable half is the contributors — "Site B is over" sends someone to
+              // open a schedule; "over, because P8 + P12 + P13 overlap" does not. Their
+              // absence is stated rather than left as a blank space.
+              <span className="text-slate-600">no contributors recorded</span>
+            ),
+          ]}
+        />
       )}
 
       {(valid_as_of || state_version !== undefined) && (

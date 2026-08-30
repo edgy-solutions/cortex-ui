@@ -283,6 +283,32 @@ unreachable.
 
 ---
 
+## FINDING — three grids, two row-identity field names
+
+**2026-08-30.** Filed, not chased. `THRESHOLD_GRID` and `SHORTFALL_GRID` key their rows on
+`subject_id`; `MATRIX_GRID` keys them on `row_id`. Anything that walks grid rows GENERICALLY
+hits this, and the first thing that did got it wrong.
+
+`naturalContentHeight` read only `subject_id`, so for a matrix it fell through to counting
+CELLS — sizing a 5×4 matrix as though it had twenty rows, a card four times too tall,
+**arrived at confidently**. Fixed there; the underlying disagreement stands.
+
+### The failure shape is new and belongs beside the oracle law
+
+**A fixture authored from the implementation tests the implementation against itself.** The
+unit tests could not see the bug because the fixture used the field name the code expected —
+expectation and system shared a source, so their agreement proved nothing. The render test
+caught it immediately, because the real component was the independent source.
+
+Same confound as the oracle law in a different costume, and the same resolution: the check
+must not derive from the thing being checked.
+
+### Why it is filed rather than fixed
+
+Renaming a payload field is a producer decision with a migration behind it, and the demo does
+not need it. What the next generic row-walker needs is to KNOW, which is what this entry is.
+---
+
 ## CORRECTION — nothing writes filled slots into `resolved_intent`
 
 **2026-08-29.** The dispatch for `a-resolved-relative-period-must-be-disclosed` said

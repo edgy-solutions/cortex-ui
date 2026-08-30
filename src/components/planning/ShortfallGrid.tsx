@@ -35,6 +35,7 @@
  * redundant is the evacuated-population error the contract names, so the detail panel shows
  * `secured` always and the cell surfaces it whenever it differs from `committed`.
  */
+import { CellInspector } from "./CellInspector";
 import { useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
 import {
@@ -224,28 +225,28 @@ export function ShortfallGrid({
           it equals `committed`, because its absence from the panel is what would teach a reader
           that the distinction does not exist. */}
       {selected && (
-        <div className="mt-4 p-3 rounded glass-panel-sm border-cyan-500/20">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/70 mb-1">
-            {names.get(selected.subject_id)} · {selected.period}
-          </p>
-          <p className="font-mono text-sm text-slate-200">
-            {amount(selected.committed)} committed of {amount(selected.required)} required
-          </p>
-          <p className="mt-1 font-mono text-[11px] text-slate-400">
-            {amount(selected.secured)} firm
-            {selected.secured !== selected.committed && (
-              <span className="text-amber-400">
-                {" "}
-                · {amount(selected.committed - selected.secured)} pledged but not firm
-              </span>
-            )}
-          </p>
-          {selected.shortfall > 0 && (
-            <p className="mt-1 font-mono text-[11px] text-rose-400">
-              short {amount(selected.shortfall)}
-            </p>
-          )}
-        </div>
+        <CellInspector
+          onDismiss={() => setSelected(null)}
+          title={<>{names.get(selected.subject_id)} · {selected.period}</>}
+          headline={
+            <>
+              {amount(selected.committed)} committed of {amount(selected.required)} required
+            </>
+          }
+          lines={[
+            <>
+              {amount(selected.secured)} firm
+              {selected.secured !== selected.committed && (
+                <span className="text-amber-400">
+                  {" "}· {amount(selected.committed - selected.secured)} pledged but not firm
+                </span>
+              )}
+            </>,
+            selected.shortfall > 0 ? (
+              <span className="text-rose-400">short {amount(selected.shortfall)}</span>
+            ) : null,
+          ]}
+        />
       )}
 
       {(valid_as_of || state_version !== undefined) && (
