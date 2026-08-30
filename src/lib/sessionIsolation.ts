@@ -36,6 +36,12 @@ const USER_SCOPED_STORAGE_KEYS = ["cortex-answers-panel-v1", "cortex-stage"];
  * visible enough to disagree with.
  */
 export const PURGE_EXEMPT_STORES: Record<string, string> = {
+  usePresentationStore:
+    "Holds NO user data. Three booleans describing how the shell is arranged right now — " +
+    "full screen, and whether each rail is pinned. Nothing in it is derived from an answer, " +
+    "a board or an identity, so there is nothing for the next caller to see. It is also not " +
+    "persisted, so an owner change starts it at its defaults anyway. Purging it would be " +
+    "harmless and would say, falsely, that it carried something worth wiping.",
   usePersonaStore:
     "Isolates itself by a different mechanism, verified: it persists to sessionStorage " +
     "(not localStorage, so this key list has no remit over it), deliberately does NOT " +
