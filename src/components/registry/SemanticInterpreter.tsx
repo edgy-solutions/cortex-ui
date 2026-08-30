@@ -359,6 +359,18 @@ interface SemanticInterpreterProps {
   // Dense archetypes (tables) render first N rows + a "⌄ K more" affordance so
   // the frame scales by width, not height. Unset (focus/full view) = render all.
   previewRows?: number;
+  /**
+   * Suppress the per-component persona badge, because the SURFACE is already showing it.
+   *
+   * A canvas card renders the persona as a small tag in its own eyebrow, beside the subject
+   * and verb, where it costs nothing. The badge here is a block above the component and costs
+   * a full row of a card that is already short of vertical — the same row the interpretation
+   * strip used to cost before it moved to the footer.
+   *
+   * A PROP AND NOT A DELETION. Surfaces that are not cards — the pane, a pinned answer — have
+   * no eyebrow to put it in, and for them the badge is the only attribution there is.
+   */
+  hidePersona?: boolean;
 }
 
 // Render a single semantic component by archetype
@@ -692,7 +704,7 @@ const isFullWidth = (archetype: string) =>
   // than inherit a corner postage-stamp by omission.
   archetype === "TRIAGE_TASK";
 
-export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows }) => {
+export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona }) => {
   const { personaConfig } = useMeshConfig();
 
   const handlePublish = async (sql: string, title: string) => {
@@ -748,10 +760,12 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
             key={stableKey}
             className={isFullWidth(comp.archetype) ? "col-span-full" : "col-span-1"}
           >
-            {/* Persona attribution badge */}
-            {pCfg && (
-              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-md border text-[10px] font-mono font-bold uppercase tracking-wider ${pCfg.bg} ${pCfg.color}`}>
-                <DynamicIcon name={pCfg.icon} className="w-3 h-3" />
+            {/* Persona attribution. Sized as a TAG, not a button: it is a label on the answer,
+                not something to press, and at the previous 10px/bold/2.5-padding it read as the
+                loudest element on a card whose actual content is a chart. */}
+            {pCfg && !hidePersona && (
+              <div className={`inline-flex items-center gap-1 px-1.5 py-px mb-1 rounded border text-[8px] font-mono uppercase tracking-widest ${pCfg.bg} ${pCfg.color}`}>
+                <DynamicIcon name={pCfg.icon} className="w-2.5 h-2.5" />
                 {pCfg.label}
               </div>
             )}

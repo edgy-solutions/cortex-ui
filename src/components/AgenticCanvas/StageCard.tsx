@@ -11,6 +11,7 @@ import { WorkflowLens } from "./WorkflowLens";
 import { STAGE_CARD } from "@/lib/stageConstants";
 import { overviewTier, DENSE_PREVIEW_ROWS } from "@/lib/overviewTier";
 import { InterpretationStrip, FreshnessStamp } from "./InterpretationStrip";
+import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 
 export { STAGE_CARD };
 
@@ -73,9 +74,16 @@ export function StageCard({
   // supplies the body — same citizenship, different costume.
   const task = artifact.task_ref;
   const taskPending = task?.task_state === "pending";
+  // Read from the FIRST component's captured attribution, the same field the interpreter
+  // reads. Not inferred from the answer, and absent when the payload declared none.
+  const { personaConfig } = useMeshConfig();
   const components =
     (artifact.rendered_output?.components as unknown[] | undefined) ?? [];
   const hasRendered = components.length > 0;
+  // Absent when the payload declared no persona — the eyebrow then shows subject and verb and
+  // nothing else, rather than a chip captioned with a guess.
+  const sourcePersona = (components[0] as { source_persona?: string } | undefined)?.source_persona;
+  const personaCfg = sourcePersona ? personaConfig[sourcePersona] : null;
 
   const showMap = focused && focusTab === "map";
 
@@ -274,6 +282,20 @@ export function StageCard({
             <span className="text-slate-600"> · {spo.verbLabel}</span>
           )}
         </span>
+        {/* PERSONA, as a tag in the eyebrow rather than a block above the content.
+            It was rendered by SemanticInterpreter as a bold 10px pill on its own line, which
+            cost a full row per card and read as the loudest thing on a card whose content is a
+            chart. Here it sits beside the subject and verb — the same line of provenance — and
+            costs nothing. The interpreter still draws it on surfaces that have no eyebrow. */}
+        {!task && personaCfg && (
+          <span
+            className={`flex-shrink-0 inline-flex items-center gap-1 px-1 py-px rounded border text-[8px] font-mono uppercase tracking-widest ${personaCfg.bg} ${personaCfg.color}`}
+            title={personaCfg.label}
+          >
+            <DynamicIcon name={personaCfg.icon} className="w-2.5 h-2.5" />
+            {personaCfg.label}
+          </span>
+        )}
         {task ? (
           <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-slate-500">
             {taskPending ? "pending" : task.task_state}
@@ -343,7 +365,7 @@ export function StageCard({
           // readable — the alternative is content silently cut off with nothing saying so.
           <div className="absolute inset-0 overflow-auto custom-scrollbar p-3">
             <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
-              <SemanticInterpreter payload={{ components }} />
+              <SemanticInterpreter payload={{ components }} hidePersona />
             </div>
           </div>
         ) : hasRendered ? (
@@ -359,6 +381,7 @@ export function StageCard({
                     centers the compact card and scales the visual one. */}
                 <SemanticInterpreter
                   payload={{ components }}
+                  hidePersona
                   previewRows={
                     overviewTier((components?.[0] as { archetype?: string } | undefined)?.archetype) === "dense"
                       ? DENSE_PREVIEW_ROWS
