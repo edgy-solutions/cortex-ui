@@ -39,16 +39,23 @@ afterEach(cleanup);
 const mount = () =>
   render(<Layout stream={<div>STREAM</div>} canvas={<div>CANVAS</div>} hud={<div>HUD</div>} />);
 
-describe("entering and leaving changes NO card", () => {
-  it("the board is byte-identical across a full round trip", () => {
-    // The invariant, asserted against the actual stored arrangement rather than by reading the
-    // code. If presentation mode ever grows a layout side effect, this is what catches it.
+describe("presenting never rearranges a board the reader arranged", () => {
+  it("an ARRANGED board is byte-identical across a full round trip", () => {
+    // The invariant, and it is narrower than the one this test first claimed. It used to say
+    // "entering and leaving changes NO card", which stopped being true the day untouched
+    // boards began re-fitting to the pane — and a test that overstates its subject is a test
+    // that will one day be weakened to fit reality instead of the reality being questioned.
+    //
+    // What must hold is this: the moment a human moves, resizes or drops a card, the board is
+    // THEIRS, and presenting it must never rearrange it. An untouched board has no
+    // arrangement to preserve.
     useStageStore.setState({
       canvases: [
         {
           id: "c1",
           name: "P",
           use: "portfolio_planning",
+          arranged: true,
           items: [
             { id: "a", x: 10, y: 20, w: 300, h: 400 },
             { id: "b", x: 330, y: 20, w: 300, h: 400 },
@@ -56,13 +63,18 @@ describe("entering and leaving changes NO card", () => {
         },
       ],
       view: "c1",
+      viewport: { w: 1280, h: 1000 },
     } as never);
     const before = JSON.stringify(useStageStore.getState().canvases);
 
     usePresentationStore.getState().enterFullScreen();
+    // The real consequence of entering: the pane gets wider. Simulated directly, because
+    // jsdom fires no ResizeObserver and a test that skips this would prove nothing.
+    useStageStore.getState().setViewport({ w: 1854, h: 1000 });
     expect(JSON.stringify(useStageStore.getState().canvases)).toBe(before);
 
     usePresentationStore.getState().exitFullScreen();
+    useStageStore.getState().setViewport({ w: 1280, h: 1000 });
     expect(JSON.stringify(useStageStore.getState().canvases)).toBe(before);
   });
 
@@ -73,7 +85,6 @@ describe("entering and leaving changes NO card", () => {
     expect(useStageStore.getState().fullPane).toBe(false);
   });
 });
-
 describe("railOpen — derived, so there is no state to fall out of sync", () => {
   it("outside presentation mode both rails are always open", () => {
     expect(railOpen({ fullScreen: false, pinned: false, hovering: false })).toBe(true);

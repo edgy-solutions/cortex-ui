@@ -59,6 +59,19 @@ export interface CustomCanvas {
   name: string;
   use?: CanvasUse;
   items: CanvasItem[];
+  /**
+   * TRUE once a HUMAN has placed, moved or resized a card here.
+   *
+   * The distinction is what makes re-fitting a template safe at all. A board the reader
+   * arranged is theirs and must never be reflowed — presenting it would rearrange the room's
+   * board, which is the failure presentation mode exists not to cause. A board still in the
+   * arrangement its template gave it has NO arrangement to preserve, so re-fitting it to a
+   * differently-shaped pane takes nothing from anyone.
+   *
+   * Set by the gestures that ARE arrangement — drop-at, move, resize. Never by seeding or
+   * auto-placement, which are the template speaking rather than a person.
+   */
+  arranged?: boolean;
 }
 
 const GLOBAL = "global";
@@ -167,7 +180,43 @@ export const useStageStore = create<StageState>()(
         if (!Number.isFinite(vp.w) || !Number.isFinite(vp.h) || vp.w <= 0 || vp.h <= 0) return;
         const cur = get().viewport;
         if (cur.w === vp.w && cur.h === vp.h) return;
-        set({ viewport: vp });
+
+        // RE-FIT THE BOARDS NOBODY HAS ARRANGED.
+        //
+        // A template's board is shaped to the pane it was built for. Collapsing the rails makes
+        // the pane far wider without making it taller, and the camera fits by the SMALLER
+        // ratio — so a board built at 1.28 sitting in a pane at 1.85 is fitted by height and
+        // simply cannot use the new width. Giving the pane more room does nothing visible,
+        // which is exactly what presentation mode looked like it was doing.
+        //
+        // Re-fitting is not a layout change in the sense that matters: an untouched board has
+        // no arrangement to lose. One that a human has moved, resized or dropped into is left
+        // exactly alone — that is the promise, and `arranged` is what keeps it.
+        set((s2) => ({
+          viewport: vp,
+          canvases: s2.canvases.map((c) => {
+            if (c.arranged || !c.use) return c;
+            const rowContentH =
+              tallestContentHeight(
+                c.items.map(
+                  (it) =>
+                    useCanvasStore.getState().artifacts.find((a) => a.id === it.id)
+                      ?.rendered_output?.components,
+                ),
+              ) ?? undefined;
+            let changed = false;
+            const items = c.items.map((it, i) => {
+              const slot = templateSlot(c.use, i, vp, rowContentH);
+              if (!slot) return it;
+              if (it.x === slot.x && it.y === slot.y && it.w === slot.w && it.h === slot.h) {
+                return it;
+              }
+              changed = true;
+              return { ...it, ...slot };
+            });
+            return changed ? { ...c, items } : c;
+          }),
+        }));
       },
       // Zoom into a group (clears any single-card focus).
       setGroup: (id) => set({ groupKey: id, focusId: null, fullPane: false }),
@@ -231,17 +280,18 @@ export const useStageStore = create<StageState>()(
               // already here → MOVE it (don't duplicate)
               return {
                 ...c,
+                arranged: true,
                 items: c.items.map((it) => (it.id === answerId ? { ...it, x, y } : it)),
               };
             }
-            return { ...c, items: [...c.items, { id: answerId, x, y }] };
+            return { ...c, arranged: true, items: [...c.items, { id: answerId, x, y }] };
           }),
         })),
       moveItem: (canvasId, answerId, x, y) =>
         set((s) => ({
           canvases: s.canvases.map((c) =>
             c.id === canvasId
-              ? { ...c, items: c.items.map((it) => (it.id === answerId ? { ...it, x, y } : it)) }
+              ? { ...c, arranged: true, items: c.items.map((it) => (it.id === answerId ? { ...it, x, y } : it)) }
               : c,
           ),
         })),
@@ -258,7 +308,7 @@ export const useStageStore = create<StageState>()(
           return {
             canvases: s.canvases.map((c) =>
               c.id === canvasId
-                ? { ...c, items: c.items.map((it) => (it.id === answerId ? { ...it, w, h } : it)) }
+                ? { ...c, arranged: true, items: c.items.map((it) => (it.id === answerId ? { ...it, w, h } : it)) }
                 : c,
             ),
           };

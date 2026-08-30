@@ -421,3 +421,102 @@ describe("the type gates CHROME, and the chrome is not a card", () => {
     expect(chrome).toContain("value={null}");
   });
 });
+
+/**
+ * A BOARD NOBODY ARRANGED IS RE-FITTED; A BOARD SOMEBODY ARRANGED IS NOT.
+ *
+ * Collapsing the rails makes the pane far wider without making it taller, and the camera fits
+ * by the SMALLER ratio — so a board shaped for the old pane is fitted by height and cannot use
+ * the new width. Presentation mode gave the pane room and the board could not take it, which
+ * looked exactly like the mode doing nothing.
+ *
+ * Re-fitting is safe only where there is nothing to lose. That is the whole content of
+ * `arranged`: the moment a human moves, resizes or drops a card, the board is theirs and
+ * presenting it must never rearrange it.
+ */
+describe("re-fitting a template to a differently-shaped pane", () => {
+  const NARROW = { w: 1280, h: 1000 };
+  const WIDE = { w: 1854, h: 1000 };
+
+  beforeEach(() => {
+    useStageStore.setState({ canvases: [], view: "global", viewport: NARROW } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
+  });
+
+  it("an UNTOUCHED typed board follows the pane", () => {
+    const id = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    for (const a of ["a1", "a2", "a3"]) useStageStore.getState().addItemAuto(id, a);
+    const before = useStageStore.getState().canvases[0].items[0].w;
+
+    useStageStore.getState().setViewport(WIDE);
+
+    const after = useStageStore.getState().canvases[0].items[0].w;
+    expect(after).toBeGreaterThan(before!);
+    // And it matches what the template would build for the new pane — not merely "bigger".
+    expect(after).toBe(portfolioPlanningTemplate(WIDE)[0].w);
+  });
+
+  it("a board a HUMAN arranged is left exactly alone", () => {
+    const id = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    for (const a of ["a1", "a2", "a3"]) useStageStore.getState().addItemAuto(id, a);
+    // One drag is enough to make the board theirs.
+    useStageStore.getState().moveItem(id, "a2", 5, 7);
+    const before = JSON.stringify(useStageStore.getState().canvases[0].items);
+
+    useStageStore.getState().setViewport(WIDE);
+
+    expect(JSON.stringify(useStageStore.getState().canvases[0].items)).toBe(before);
+  });
+
+  it("a RESIZE also makes it theirs", () => {
+    const id = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    useStageStore.getState().addItemAuto(id, "a1");
+    useStageStore.getState().resizeItem(id, "a1", 123, 456);
+    const before = JSON.stringify(useStageStore.getState().canvases[0].items);
+    useStageStore.getState().setViewport(WIDE);
+    expect(JSON.stringify(useStageStore.getState().canvases[0].items)).toBe(before);
+  });
+
+  it("a DROP at a point also makes it theirs", () => {
+    const id = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    useStageStore.getState().addItemAuto(id, "a1");
+    useStageStore.getState().addItemAt(id, "a2", 40, 50);
+    const before = JSON.stringify(useStageStore.getState().canvases[0].items);
+    useStageStore.getState().setViewport(WIDE);
+    expect(JSON.stringify(useStageStore.getState().canvases[0].items)).toBe(before);
+  });
+
+  it("SEEDING does not count as arranging — it is the template speaking", () => {
+    // The distinction that makes the feature work at all. If seeding marked a board arranged,
+    // every seeded board would be frozen at its birth pane and nothing would ever re-fit.
+    useCanvasStore.setState({
+      artifacts: ["a1", "a2", "a3"].map((id) => ({
+        id,
+        rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] },
+      })),
+    } as never);
+    useStageStore.getState().seedPortfolioCanvas(["a1", "a2", "a3"], "P", false);
+    expect(useStageStore.getState().canvases[0].arranged).toBeFalsy();
+
+    const before = useStageStore.getState().canvases[0].items[0].w;
+    useStageStore.getState().setViewport(WIDE);
+    expect(useStageStore.getState().canvases[0].items[0].w).toBeGreaterThan(before!);
+  });
+
+  it("an UNTYPED canvas is never re-fitted — it has no template to fit to", () => {
+    const id = useStageStore.getState().createCanvas("G", undefined, false);
+    useStageStore.getState().addItemAuto(id, "a1");
+    const before = JSON.stringify(useStageStore.getState().canvases[0].items);
+    useStageStore.getState().setViewport(WIDE);
+    expect(JSON.stringify(useStageStore.getState().canvases[0].items)).toBe(before);
+  });
+
+  it("a viewport that does not actually change re-fits nothing", () => {
+    const id = useStageStore.getState().createCanvas("P", "portfolio_planning", false);
+    useStageStore.getState().addItemAuto(id, "a1");
+    const before = useStageStore.getState().canvases;
+    useStageStore.getState().setViewport(NARROW);
+    // Same object identity: no work was done, so no consumer re-renders.
+    expect(useStageStore.getState().canvases).toBe(before);
+  });
+});
