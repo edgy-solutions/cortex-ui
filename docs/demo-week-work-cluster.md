@@ -283,6 +283,47 @@ unreachable.
 
 ---
 
+## CORRECTION — nothing writes filled slots into `resolved_intent`
+
+**2026-08-29.** The dispatch for `a-resolved-relative-period-must-be-disclosed` said
+*"everything needed is on the wire"*. **It is not**, and the frontend half was built anyway —
+to the producer's own declared shape — so this is a waiting consumer, not a broken renderer.
+
+What was verified, in the engine repo rather than inferred:
+
+- `gateway.py` sets `resolved_intent` ONCE, from `/plan`'s `intent_extraction`, which runs
+  **before** slot filling.
+- `git grep 'resolved_intent['` over the engine repo returns **nothing**. No code path updates
+  it after the slots are filled.
+- The ontology service DOES produce the disclosure data — `{outcome, spoken, instance_id,
+  instance_label, candidates}` — but it lives on `fill_slots`' response and never reaches the
+  artifact bundle.
+- `accepted[name] = resolved_id` is a plain string, so `parameters` values are scalars. The
+  claim that *"referent cases carry `spoken` beside `instance_id`"* is true of the RESOLUTION
+  MAP, not of the artifact the card reads.
+
+**This is why live cards show an action and no slots.** Not a rendering bug — there is nothing
+to render. Recorded so it is not re-diagnosed as one.
+
+### The frontend half, shipped and waiting
+
+`slotValue` previously rendered any object slot as a single `…`, so a referent disclosed
+nothing even when one arrived. It now renders **`spoken → resolved`**, because the disclosure
+is BOTH: only the resolved value hides that a narrowing happened, only the spoken form hides
+that it succeeded. An unresolved referent renders `spoken (unresolved)` and never a resolution
+that did not occur.
+
+### The producer ask
+
+**Write the slot resolution onto the artifact's `resolved_intent`** — the accepted values plus
+the resolution map, at the point the slots are filled. Capture-or-lose-forever: an artifact
+written without it can never be told what the reader actually said.
+
+A resolved PERIOD has no declared shape at all yet. The renderer reads a `value` key as a
+fallback so a plausible shape is not dead on arrival, but that name is **read, never required**
+— the producer decides it, and this entry should be corrected when they do.
+---
+
 ## ADR-0017 registration — the baseline, and how to verify a new row
 
 **2026-08-29, `pending`.** Recorded here rather than re-derived: the finance bindings

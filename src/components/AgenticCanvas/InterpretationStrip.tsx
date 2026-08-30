@@ -24,6 +24,27 @@ import type { Artifact } from "@/api/types";
  * worse than none because it is exactly what a reader would trust.
  */
 
+/**
+ * A SLOT THAT WAS RESOLVED MUST SAY SO, AND SAY FROM WHAT.
+ *
+ * The reader asked in their own words and the system narrowed them to something specific:
+ * "Brandon" became site S2, "last quarter" became FY26-Q3. Showing only the resolved value
+ * hides that a narrowing happened; showing only the spoken form hides that it succeeded. The
+ * disclosure is BOTH, with the resolved value authoritative — which is the mitigation for the
+ * whole silent-narrowing class, not a nicety.
+ *
+ * The shape is the ontology service's, read from its own declaration rather than guessed:
+ * `{outcome, spoken, instance_id, instance_label, candidates}`.
+ *
+ * AN UNRESOLVED REFERENT IS NOT A RESOLVED ONE. When `instance_id` is null the service
+ * REMOVED the slot rather than passing the raw string through, precisely so a failure is not
+ * indistinguishable from a fill. If such a row ever reaches here it renders the spoken form
+ * marked unresolved — never a resolution that did not happen.
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /** Formats a slot value without asserting a type the payload never declared. */
 function slotValue(v: unknown): string {
   if (v === null) return "null";
@@ -31,7 +52,23 @@ function slotValue(v: unknown): string {
   if (typeof v === "number") return Number.isFinite(v) ? String(v) : String(v);
   if (typeof v === "boolean") return String(v);
   if (Array.isArray(v)) return v.map(slotValue).join(", ");
-  // An object slot has no agreed one-line rendering; say so rather than print "[object Object]".
+  if (isRecord(v)) {
+    const spoken = typeof v.spoken === "string" ? v.spoken.trim() : "";
+    // The resolved side, in order of how much it tells a reader. `value` is not a documented
+    // referent field; it is accepted because a resolved PERIOD has no declared shape yet and
+    // this is the name it would plausibly arrive under — but it is read, never required.
+    const resolved =
+      (typeof v.instance_label === "string" && v.instance_label.trim()) ||
+      (typeof v.instance_id === "string" && v.instance_id.trim()) ||
+      (typeof v.value === "string" && v.value.trim()) ||
+      "";
+    if (spoken && resolved) return `${spoken} → ${resolved}`;
+    if (resolved) return resolved;
+    // Spoken with nothing resolved: the narrowing did NOT happen, and the card says which.
+    if (spoken) return `${spoken} (unresolved)`;
+  }
+  // An object with none of those has no agreed one-line rendering; say so rather than print
+  // "[object Object]".
   return "…";
 }
 
