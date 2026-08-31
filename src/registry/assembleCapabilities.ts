@@ -40,6 +40,7 @@ import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimel
 import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.contract";
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
+import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -289,6 +290,20 @@ const DERIVED_BINDINGS = [
   // `persona_fit` and `domain_fit` are READ from the finance agent's own declarations
   // (`OWNER_PERSONA` / `DOMAINS` in agent_fleet/finance_agent/main.py), not inferred from the
   // subject matter. A guessed persona advertises to the wrong audience and nothing here fails.
+  // THE FOURTH FINANCE ROW, and the first that needed a component built for it.
+  //
+  // `fin_eac_calculation` was assigned "period series or single measure" by ADR-0045 and fits
+  // neither: it is ONE forecast whose METHOD is half the answer, and no existing archetype
+  // carries a method. The nearest candidate, ASSET_STATE_METRIC, is outside the projection arm
+  // and dispatches to an LLM renderer whose fallback chain begins at an external provider —
+  // the wrong path for a program cost forecast, and it has no method slot to drop anyway.
+  {
+    subject_uri: "fin:EstimateAtCompletion",
+    object_uri: "mesh:ForecastMeasure",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: FORECAST_MEASURE_CONTRACT,
+  },
   {
     subject_uri: "fin:BurnRateSeries",
     object_uri: "mesh:PeriodSeries",

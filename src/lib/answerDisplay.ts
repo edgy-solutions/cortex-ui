@@ -44,6 +44,7 @@ export type AnswerArchetype =
   | "THRESHOLD_GRID"
   | "MATRIX_GRID"
   | "SHORTFALL_GRID"
+  | "FORECAST_MEASURE"
   | "DELTA_SET"
   | "DECISION_RECORD"
   | "INSTANCES_BY_PROPERTY"
@@ -71,6 +72,7 @@ export const DISPLAY_ARCHETYPES = [
   "THRESHOLD_GRID",
   "MATRIX_GRID",
   "SHORTFALL_GRID",
+  "FORECAST_MEASURE",
   "DELTA_SET",
   "DECISION_RECORD",
   "INSTANCES_BY_PROPERTY",
@@ -174,6 +176,8 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Matrix";
     case "SHORTFALL_GRID":
       return "Shortfall";
+    case "FORECAST_MEASURE":
+      return "Forecast";
     case "DELTA_SET":
       return "Delta";
     case "DECISION_RECORD":

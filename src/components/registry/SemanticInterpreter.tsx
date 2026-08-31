@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
+import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -593,6 +594,21 @@ const renderComponent = (
         />
       );
 
+    case "FORECAST_MEASURE":
+      // ONE forecast, and the METHOD that produced it — rendered together, or not at all.
+      // Engine F's three EAC formulas span about 14% of the budget on the same program, which
+      // is why its method slot is mandatory and the router refuses a bare ask. A card showing
+      // the figure without the method would make that choice silently at the last step.
+      return (
+        <ForecastMeasure
+          rows={comp.rows}
+          value_unit={comp.value_unit}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "DELTA_SET":
       // INV-3's card and a LIVE VIEW (ADR-0042). Renders a COMPARISON, never a state: the
       // room sees the price of a change beside its benefit, which a before-and-after leaves
@@ -694,6 +710,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "SHORTFALL_GRID" ||
   archetype === "MATRIX_GRID" ||
   archetype === "DELTA_SET" ||
+  archetype === "FORECAST_MEASURE" ||
   archetype === "INTERVAL_TIMELINE" ||
   archetype === "DECISION_RECORD" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and
