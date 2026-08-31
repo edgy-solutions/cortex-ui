@@ -559,12 +559,6 @@ export function GlobalCanvasStage() {
               className="absolute rounded-xl border-2 border-dashed border-neon-cyan/20 pointer-events-none"
               style={{ left: 24, top: 24, width: world.w - 48, height: world.h - 48 }}
             />
-            <div
-              className="absolute font-mono uppercase tracking-[.18em] text-neon-cyan/30 pointer-events-none"
-              style={{ right: 44, bottom: 44, fontSize: 22 }}
-            >
-              Freeform — yours to arrange
-            </div>
           </>
         )}
 
@@ -625,6 +619,24 @@ export function GlobalCanvasStage() {
           );
         })}
       </div>
+
+      {/* THE INVITATION IS CHROME, NOT WORLD CONTENT — and it used to be the other way round.
+          It sat inside the camera transform at `fontSize: 22` in world units, positioned at the
+          world's bottom-right corner. So it scaled with the zoom and, once the board began
+          filling the pane, it landed underneath the bottom-right card: the reader saw "…ANGE"
+          clipped behind a matrix. A label about the canvas belongs beside the canvas.
+
+          It also stops once it is no longer true. The invitation is to ARRANGE, and a board the
+          reader has already arranged does not need inviting — `arranged` is exactly that fact,
+          and this is its second reader after the re-fit rule. */}
+      {!isGlobal && !activeCanvas?.arranged && activeCanvas!.items.length > 0 && (
+        <div
+          className="absolute bottom-3 right-3 z-10 font-mono uppercase tracking-[.18em] text-[9px] text-neon-cyan/25 pointer-events-none"
+          data-freeform-hint
+        >
+          Freeform — yours to arrange
+        </div>
+      )}
 
       {/* Lasso marquee (viewport space). */}
       {marquee && (
