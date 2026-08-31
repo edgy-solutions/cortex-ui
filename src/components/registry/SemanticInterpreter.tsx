@@ -9,6 +9,7 @@ import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
+import { VarianceTree } from "../planning/VarianceTree";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -595,6 +596,21 @@ const renderComponent = (
         />
       );
 
+    case "VARIANCE_TREE":
+      // THE FIRST ARCHETYPE WITH DEPTH. Nothing in the projection arm nests, and nesting is not
+      // a field that can be added to a series, a grid or a ranking — the producer's own words:
+      // "the decomposition is the output type rather than a rendering choice".
+      return (
+        <VarianceTree
+          rows={comp.rows}
+          value_label={comp.value_label}
+          value_unit={comp.value_unit}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "CONTRIBUTION_RANKING":
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -728,6 +744,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "DELTA_SET" ||
   archetype === "FORECAST_MEASURE" ||
   archetype === "CONTRIBUTION_RANKING" ||
+  archetype === "VARIANCE_TREE" ||
   archetype === "INTERVAL_TIMELINE" ||
   archetype === "DECISION_RECORD" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and

@@ -42,6 +42,7 @@ import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
+import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -304,6 +305,18 @@ const DERIVED_BINDINGS = [
   // of. DELTA_SET was tested by mapping the real fields and fails on four: no slot for
   // `share_of_total`, a permanently-empty `affected[]`, `metric` carrying an entity name, and
   // no ordering at all. See ContributionRanking.contract.ts.
+  // THE SIXTH FINANCE ROW, and the one ADR-0045 deferred pending a payload read. The read
+  // happened: `fin_variance_analysis` emits a TREE, and no archetype in the projection arm
+  // takes nesting. Ruled Option B — build the hierarchical archetype — rather than flattening
+  // at the engine, because the finance group does the recursion and flattening would discard
+  // work their engine already did.
+  {
+    subject_uri: "fin:VarianceDecomposition",
+    object_uri: "mesh:VarianceTree",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: VARIANCE_TREE_CONTRACT,
+  },
   {
     subject_uri: "fin:VarianceDriverRanking",
     object_uri: "mesh:ContributionRanking",

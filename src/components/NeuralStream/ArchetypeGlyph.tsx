@@ -20,6 +20,7 @@ import {
   HelpCircle,
   Target,
   ListOrdered,
+  Workflow,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -86,6 +87,9 @@ export function glyphFor(t: AnswerArchetype): {
       return { Icon: Grid2x2, color: "text-neon-green/80" };
     case "SHORTFALL_GRID":
       return { Icon: Scale, color: "text-neon-pink/80" };
+    case "VARIANCE_TREE":
+      // Depth is what distinguishes it from everything else in the list.
+      return { Icon: Workflow, color: "text-neon-blue/80" };
     case "CONTRIBUTION_RANKING":
       // An ordered list where the order carries meaning — distinct at a glance from the grids
       // and series it sits beside.
