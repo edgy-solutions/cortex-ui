@@ -35,6 +35,14 @@ const GRID_ROW = 58;
 const GRID_HEAD = 34;
 /** One gantt row, matching what IntervalTimeline already assumes for itself. */
 const GANTT_ROW = 30;
+/**
+ * The gantt`s own head: its title block ("Schedule / 14 rows · 3 groups") AND the task table`s
+ * column header, which are two separate bands. Charging it the grid`s single head undercounted
+ * by enough that a fourteen-row schedule computed BELOW the anchor floor and never grew — so
+ * the measuring was in place, correct in shape, and inert. Counted separately because they are
+ * separately present in the markup.
+ */
+const GANTT_HEAD = 90;
 
 function rowCount(c: Record<string, unknown>): number {
   const rows = c.rows;
@@ -79,7 +87,7 @@ export function naturalContentHeight(components: unknown): number | null {
     if (rows <= 0) return null;
     // Its own body already scrolls past a cap; this only asks the CARD to be a reasonable size
     // for it, not to grow without bound for a hundred-row plan.
-    return CHROME + Math.min(rows, 14) * GANTT_ROW + GRID_HEAD;
+    return CHROME + Math.min(rows, 14) * GANTT_ROW + GANTT_HEAD;
   }
 
   // PERIOD_SERIES and anything chart-shaped: a fixed-height chart, already reserved for by the

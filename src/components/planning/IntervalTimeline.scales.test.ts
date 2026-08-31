@@ -64,40 +64,54 @@ describe("interval timeline scale formats", () => {
 });
 
 /**
- * THE AXIS MUST NOT PAD ITSELF WITH EMPTY PERIODS.
+ * THE AXIS MUST NOT SPRAWL — AND THE FIRST VERSION OF THIS TEST MEASURED THE WRONG LEVER.
  *
- * The store computes `cellWidth: Math.min(available, maxCellWidth)` — CLAMPED — so when a chart
- * is wider than its plan needs, the cells cannot stretch and the library adds further periods
- * to fill the space. A six-quarter plan in a wide card drew six bars and then two years of
- * empty columns, and making the cards fill the pane made it worse rather than better.
+ * It asserted that `maxCellWidth` was large enough for a short plan to fill a wide card,
+ * reasoning that cells were being CLAMPED from stretching. The behaviour says otherwise: the
+ * column count follows the available WIDTH, so cell width sits near the MINIMUM and the
+ * maximum never binds. The same board went from an axis ending in 2028 to one ending in 2032
+ * purely because the pane got wider — after the fix, and with the fix in the bundle.
  *
- * This does not assert a pixel value; it asserts the RELATION that must hold — that a realistic
- * wide card showing a realistic short plan can reach the width it needs without hitting the cap.
- * A tuned constant would go stale the first time the card size changed; the relation is what
- * actually has to be true.
+ * That test was green the whole time. It is the day`s clearest case of a guard that reads as
+ * obviously correct and constrains nothing, because it asserted a relation about a constant
+ * the behaviour does not consult.
+ *
+ * What actually bounds the sprawl is the FLOOR: a wider cell means fewer fit, which means
+ * fewer empty periods. This asserts the floors are big enough to keep a realistic pane from
+ * drawing decades, and it names the pane width so the arithmetic is checkable rather than
+ * taken on trust.
  */
-describe("the zoom levels let cells stretch rather than padding the axis", () => {
-  // A planning card on a wide pane, less the task table on the left.
-  const CHART_PX = 1200;
-  // The shortest plan we expect to present. Fewer periods need WIDER cells, so this is the
-  // demanding case, not the average one.
-  const SHORT_PLAN_PERIODS = 6;
+describe("the zoom floors bound how far the axis can sprawl", () => {
+  // A planning card on a full-screen pane, less the task table on the left.
+  const CHART_PX = 1540;
+  // Beyond this a reader is looking at more empty axis than plan.
+  const MAX_COLUMNS = 12;
 
-  it("every level can fill a wide card with a short plan", () => {
-    expect(ZOOM.levels.length).toBeGreaterThan(0); // positive control
-    const needed = CHART_PX / SHORT_PLAN_PERIODS;
-    for (const [i, level] of ZOOM.levels.entries()) {
-      expect(
-        level.maxCellWidth,
-        `zoom level ${i} caps cells at ${level.maxCellWidth}px, below the ${Math.round(
-          needed,
-        )}px a ${SHORT_PLAN_PERIODS}-period plan needs to fill a ${CHART_PX}px chart — the axis will pad with empty periods instead`,
-      ).toBeGreaterThanOrEqual(needed);
-    }
+  it("the DEFAULT grain cannot draw more than a dozen columns in a full-screen card", () => {
+    // Bounded on the default level specifically, because that is the one a card opens at and
+    // therefore the one a room sees. The finer grains legitimately draw more columns — 17
+    // months is a reasonable month-scale view and would be a nonsense year-scale one — so a
+    // single cap across all three would either be too loose for the default or too strict for
+    // the rest, and would have to be weakened to fit. Bounding the one that matters is the
+    // claim that survives.
+    const level = ZOOM.levels[ZOOM.level];
+    expect(level, "the default zoom level does not exist").toBeTruthy(); // positive control
+    const columns = CHART_PX / level.minCellWidth;
+    expect(
+      columns,
+      `the default grain allows ${Math.round(columns)} columns in a ${CHART_PX}px chart — the axis sprawls past the plan`,
+    ).toBeLessThanOrEqual(MAX_COLUMNS);
   });
 
-  it("and the cap still sits above the floor it is paired with", () => {
-    // A max below its min is a config that cannot be satisfied at any width.
+  it("and no grain is so fine that a full-screen card becomes a wall of columns", () => {
+    // A weaker bound on the rest: they are reachable by ctrl+wheel and must stay readable,
+    // but a month view is allowed to show months.
+    for (const [i, level] of ZOOM.levels.entries()) {
+      expect(CHART_PX / level.minCellWidth, `zoom level ${i}`).toBeLessThanOrEqual(24);
+    }
+  });
+  it("and every floor still sits below its own ceiling", () => {
+    // A min above its max is a config that cannot be satisfied at any width.
     for (const level of ZOOM.levels) {
       expect(level.maxCellWidth).toBeGreaterThan(level.minCellWidth);
     }

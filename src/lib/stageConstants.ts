@@ -92,7 +92,11 @@ export const PANEL_MIN = { w: 260, h: 200 };
  * The reference is the planning-workspace mock — schedule across the top, cost curve beside
  * site load, funding gap beside the maturity grid.
  */
-export function portfolioPlanningTemplate(vp: CardSize, rowContentH?: number): CardSlot[] {
+export function portfolioPlanningTemplate(
+  vp: CardSize,
+  rowContentH?: number,
+  anchorContentH?: number,
+): CardSlot[] {
   // Refuse a measure that cannot produce a layout rather than emitting NaN coordinates, which
   // would PERSIST into the canvas — arrangement is durable, so a bad measure is a saved layout,
   // not a transient glitch. A 3:2 pane is the fallback.
@@ -119,17 +123,28 @@ export function portfolioPlanningTemplate(vp: CardSize, rowContentH?: number): C
     typeof rowContentH === "number" && Number.isFinite(rowContentH) && rowContentH > CARD_CONTENT_H
       ? rowContentH
       : CARD_CONTENT_H;
-  const boardH = ANCHOR_CONTENT_H + rowH * 2 + GUTTER * 2;
+  // THE ANCHOR HAS ITS OWN CONTENT AND ITS OWN HEIGHT, and conflating the two was a real bug:
+  // the gantt's natural height was measured, folded into the single "tallest content" figure,
+  // and then applied to the LOWER ROWS — inflating three cards that did not need it while the
+  // card that did kept a constant. The schedule still clipped mid-row, which is exactly the
+  // defect the measuring was added to fix, reached by the opposite path.
+  const anchorH =
+    typeof anchorContentH === "number" &&
+    Number.isFinite(anchorContentH) &&
+    anchorContentH > ANCHOR_CONTENT_H
+      ? anchorContentH
+      : ANCHOR_CONTENT_H;
+  const boardH = anchorH + rowH * 2 + GUTTER * 2;
   const boardW = Math.max(PANEL_MIN.w * 2 + GUTTER, boardH * aspect);
 
   const colW = (boardW - GUTTER) / 2;
-  const row2Y = ANCHOR_CONTENT_H + GUTTER;
+  const row2Y = anchorH + GUTTER;
   const row3Y = row2Y + rowH + GUTTER;
   const col2X = colW + GUTTER;
 
   return [
     // Anchor: the schedule, full width across the top.
-    { x: 0, y: 0, w: boardW, h: ANCHOR_CONTENT_H },
+    { x: 0, y: 0, w: boardW, h: anchorH },
     // The pair beneath it — cost curve beside site load.
     { x: 0, y: row2Y, w: colW, h: rowH },
     { x: col2X, y: row2Y, w: colW, h: rowH },
@@ -152,7 +167,10 @@ export const PORTFOLIO_PLANNING_SLOTS = 5;
  * canvas may hold: the moment it does, canvases stop being one substrate and become
  * separate apps.
  */
-const TEMPLATES: Record<string, (vp: CardSize, rowContentH?: number) => CardSlot[]> = {
+const TEMPLATES: Record<
+  string,
+  (vp: CardSize, rowContentH?: number, anchorContentH?: number) => CardSlot[]
+> = {
   portfolio_planning: portfolioPlanningTemplate,
 };
 
@@ -166,10 +184,11 @@ export function templateSlot(
   n: number,
   vp: CardSize,
   rowContentH?: number,
+  anchorContentH?: number,
 ): CardSlot | null {
   const build = use ? TEMPLATES[use] : undefined;
   if (!build) return null;
-  const t = build(vp, rowContentH);
+  const t = build(vp, rowContentH, anchorContentH);
   return n >= 0 && n < t.length ? t[n] : null;
 }
 

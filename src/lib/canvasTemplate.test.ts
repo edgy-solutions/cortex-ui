@@ -520,3 +520,73 @@ describe("re-fitting a template to a differently-shaped pane", () => {
     expect(useStageStore.getState().canvases).toBe(before);
   });
 });
+
+/**
+ * THE STORE MEASURES THE ANCHOR SEPARATELY FROM THE ROWS.
+ *
+ * The arithmetic can be perfect and the store can still hand both figures to the wrong slots —
+ * which is exactly what it did: the gantt's height was folded into the single "tallest
+ * content" number and applied to the LOWER ROWS, inflating three cards that did not need it
+ * while the schedule kept a constant and went on clipping mid-row. Every unit test was green,
+ * because none of them asked which slot each figure reached.
+ */
+describe("seeding sizes the anchor and the rows from their own content", () => {
+  const VP = { w: 1854, h: 1000 };
+
+  beforeEach(() => {
+    useStageStore.setState({ canvases: [], view: "global", viewport: VP } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
+  });
+
+  it("a tall ANCHOR does not inflate the rows", () => {
+    useCanvasStore.setState({
+      artifacts: [
+        {
+          id: "gantt",
+          rendered_output: {
+            components: [
+              { archetype: "INTERVAL_TIMELINE", rows: Array.from({ length: 14 }, () => ({})) },
+            ],
+          },
+        },
+        ...["b", "c", "d", "e"].map((id) => ({
+          id,
+          rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] },
+        })),
+      ],
+    } as never);
+
+    const id = useStageStore.getState().seedPortfolioCanvas(["gantt", "b", "c", "d", "e"], "P", false);
+    const items = useStageStore.getState().canvases.find((c) => c.id === id)!.items;
+
+    // The anchor grew past its floor...
+    expect(items[0].h).toBeGreaterThan(portfolioPlanningTemplate(VP)[0].h);
+    // ...and the rows did not move at all.
+    expect(items[1].h).toBe(portfolioPlanningTemplate(VP)[1].h);
+  });
+
+  it("a tall ROW does not inflate the anchor", () => {
+    const tall = ["s1", "s2", "s3", "s4", "s5", "s6"].map((s) => ({
+      subject_id: s,
+      period: "p1",
+      value: 1,
+      threshold: 2,
+    }));
+    useCanvasStore.setState({
+      artifacts: [
+        { id: "a", rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] } },
+        { id: "grid", rendered_output: { components: [{ archetype: "THRESHOLD_GRID", rows: tall }] } },
+        ...["c", "d"].map((id) => ({
+          id,
+          rendered_output: { components: [{ archetype: "PERIOD_SERIES" }] },
+        })),
+      ],
+    } as never);
+
+    const id = useStageStore.getState().seedPortfolioCanvas(["a", "grid", "c", "d"], "P", false);
+    const items = useStageStore.getState().canvases.find((c) => c.id === id)!.items;
+
+    expect(items[1].h).toBeGreaterThan(portfolioPlanningTemplate(VP)[1].h);
+    expect(items[0].h).toBe(portfolioPlanningTemplate(VP)[0].h);
+  });
+});

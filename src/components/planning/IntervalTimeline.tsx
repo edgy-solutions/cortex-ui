@@ -196,16 +196,27 @@ const quarterOf = (d: Date) => `Q${Math.floor(d.getMonth() / 3) + 1}`;
  * computed because the useful stops are editorial: year for "where does this all sit", quarter
  * for the funding conversation, month for the drag.
  *
- * MAX CELL WIDTH IS WHY THE RIGHT HALF WAS EMPTY. The store computes
- * `cellWidth: Math.min(available, maxCellWidth)` — the width is CLAMPED — so when a chart is
- * wider than its plan needs, the cells cannot stretch and the library pads the axis with
- * further periods instead. A six-quarter plan in a wide card therefore drew six bars and then
- * two years of empty columns, and the wider the card got the more empty it drew. Making the
- * cards fill the pane made this worse, not better.
+ * MIN CELL WIDTH BOUNDS THE AXIS — AND I GOT THIS WRONG ONCE, WHICH IS WHY IT IS SPELT OUT.
  *
- * The caps below are deliberately generous rather than tuned: they only bind when a plan is
- * SHORT relative to its card, which is exactly the case where stretching is wanted. A long
- * plan never reaches them and is unaffected.
+ * The library fills the chart's WIDTH with periods: the column count follows the available
+ * pixels, not the plan. A five-quarter plan in a wide card drew five bars and then years of
+ * empty columns, and collapsing the rails made it worse — the same board went from an axis
+ * ending in 2028 to one ending in 2032 purely because the pane got wider.
+ *
+ * The first fix raised `maxCellWidth`, reasoning from `cellWidth: Math.min(available, max)`
+ * that cells were being prevented from stretching. That was wrong: the width sits near the
+ * MINIMUM, so the maximum was never the binding constraint and raising it changed nothing.
+ * The test written alongside it asserted a relation about `maxCellWidth` and passed while the
+ * behaviour was untouched — a guard measuring the wrong lever.
+ *
+ * So the floors are what bound the sprawl: a wider cell means fewer of them fit, which means
+ * fewer empty periods. Sized so a plan of a few years reads at quarter grain without the axis
+ * running off into blank decades.
+ *
+ * WHAT THIS IS NOT: an exact fit. Fitting the axis to the data needs an explicit start/end on
+ * the chart, and I could not confirm from the distributed build that those props are accepted.
+ * Bounding the sprawl is honest and verifiable; claiming a fit would not be. Filed as the
+ * follow-up rather than guessed at here.
  *
  * THE GESTURE IS CTRL + WHEEL — the store handles it (`ctrl`, `zoom`, `zoom-scale`); there is
  * no button and none is needed. Recorded because a config without a stated gesture reads as
@@ -215,12 +226,12 @@ const quarterOf = (d: Date) => `Q${Math.floor(d.getMonth() / 3) + 1}`;
 export const ZOOM = {
   level: 1,
   levels: [
-    { minCellWidth: 60, maxCellWidth: 640, scales: [{ unit: "year" as const, step: 1, format: "%Y" }] },
-    { minCellWidth: 50, maxCellWidth: 420, scales: [
+    { minCellWidth: 220, maxCellWidth: 640, scales: [{ unit: "year" as const, step: 1, format: "%Y" }] },
+    { minCellWidth: 150, maxCellWidth: 420, scales: [
       { unit: "year" as const, step: 1, format: "%Y" },
       { unit: "quarter" as const, step: 1, format: quarterOf },
     ] },
-    { minCellWidth: 40, maxCellWidth: 260, scales: SCALES },
+    { minCellWidth: 90, maxCellWidth: 260, scales: SCALES },
   ],
 };
 

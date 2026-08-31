@@ -120,3 +120,46 @@ describe("the template treats a content height as a FLOOR-raiser, never a shrink
     expect(w / h).toBeCloseTo(VP.w / VP.h, 1);
   });
 });
+
+/**
+ * THE ANCHOR IS MEASURED ALONE.
+ *
+ * Conflating it with the rows was a real bug and a quiet one: the gantt's natural height was
+ * folded into a single "tallest content" figure and applied to the LOWER ROWS, inflating three
+ * cards that did not need the room while the one that did kept a constant. The schedule still
+ * clipped mid-row — the exact defect the measuring was added to fix, reached from the opposite
+ * direction, with every test green.
+ */
+describe("the anchor's height and the rows' heights are separate questions", () => {
+  const VP = { w: 1854, h: 1000 };
+  const tallGantt = [
+    { archetype: "INTERVAL_TIMELINE", rows: Array.from({ length: 14 }, () => ({})) },
+  ];
+
+  it("a tall anchor raises the ANCHOR and leaves the rows alone", () => {
+    const base = portfolioPlanningTemplate(VP);
+    const withAnchor = portfolioPlanningTemplate(VP, undefined, naturalContentHeight(tallGantt)!);
+    expect(withAnchor[0].h).toBeGreaterThan(base[0].h);
+    expect(withAnchor[1].h).toBe(base[1].h);
+  });
+
+  it("a tall ROW raises the rows and leaves the anchor alone", () => {
+    const base = portfolioPlanningTemplate(VP);
+    const withRows = portfolioPlanningTemplate(VP, 900);
+    expect(withRows[1].h).toBeGreaterThan(base[1].h);
+    expect(withRows[0].h).toBe(base[0].h);
+  });
+
+  it("a taller anchor pushes the rows DOWN rather than overlapping them", () => {
+    const t = portfolioPlanningTemplate(VP, undefined, 1200);
+    expect(t[1].y).toBeGreaterThanOrEqual(t[0].y + t[0].h);
+    expect(t[3].y).toBeGreaterThanOrEqual(t[1].y + t[1].h);
+  });
+
+  it("an anchor SHORTER than the floor cannot shrink the card", () => {
+    // A two-row schedule must not collapse the anchor to nothing; the floor is what a gantt
+    // needs before its own header is counted.
+    const base = portfolioPlanningTemplate(VP);
+    expect(portfolioPlanningTemplate(VP, undefined, 50)[0].h).toBe(base[0].h);
+  });
+});

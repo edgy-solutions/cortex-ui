@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { STAGE_CARD, templateSlot, type CardSize } from "@/lib/stageConstants";
-import { tallestContentHeight } from "@/lib/naturalCardSize";
+import { naturalContentHeight, tallestContentHeight } from "@/lib/naturalCardSize";
 import { useCanvasStore } from "@/store/useCanvasStore";
 
 /**
@@ -196,17 +196,15 @@ export const useStageStore = create<StageState>()(
           viewport: vp,
           canvases: s2.canvases.map((c) => {
             if (c.arranged || !c.use) return c;
+            const comps = (id: string) =>
+              useCanvasStore.getState().artifacts.find((a) => a.id === id)?.rendered_output
+                ?.components;
             const rowContentH =
-              tallestContentHeight(
-                c.items.map(
-                  (it) =>
-                    useCanvasStore.getState().artifacts.find((a) => a.id === it.id)
-                      ?.rendered_output?.components,
-                ),
-              ) ?? undefined;
+              tallestContentHeight(c.items.slice(1).map((it) => comps(it.id))) ?? undefined;
+            const anchorContentH = naturalContentHeight(comps(c.items[0]?.id ?? "")) ?? undefined;
             let changed = false;
             const items = c.items.map((it, i) => {
-              const slot = templateSlot(c.use, i, vp, rowContentH);
+              const slot = templateSlot(c.use, i, vp, rowContentH, anchorContentH);
               if (!slot) return it;
               if (it.x === slot.x && it.y === slot.y && it.w === slot.w && it.h === slot.h) {
                 return it;
@@ -260,13 +258,23 @@ export const useStageStore = create<StageState>()(
             // hidden row. The template treats this as a FLOOR-raising hint, never a shrink.
             const held = [...c.items.map((it) => it.id), answerId];
             const arts = useCanvasStore.getState().artifacts;
+            const comps = (id: string) =>
+              arts.find((a) => a.id === id)?.rendered_output?.components;
+            // Slot 0 is the anchor and is measured ALONE. Folding it into the row figure
+            // inflated the three cards that did not need the room and left the one that did
+            // on a constant.
+            const anchorNatural = naturalContentHeight(comps(held[0]));
             const natural =
               rowContentH ??
-              tallestContentHeight(
-                held.map((id) => arts.find((a) => a.id === id)?.rendered_output?.components),
-              );
+              tallestContentHeight(held.slice(1).map(comps));
             const slot =
-              templateSlot(c.use, c.items.length, get().viewport, natural ?? undefined) ??
+              templateSlot(
+                c.use,
+                c.items.length,
+                get().viewport,
+                natural ?? undefined,
+                anchorNatural ?? undefined,
+              ) ??
               slotFor(c.items.length);
             return { ...c, items: [...c.items, { id: answerId, ...slot }] };
           }),
@@ -331,10 +339,9 @@ export const useStageStore = create<StageState>()(
         // card arriving last would get a taller slot than its neighbours and the two lower
         // rows would not line up. One board, one row height.
         const arts = useCanvasStore.getState().artifacts;
-        const rowContentH =
-          tallestContentHeight(
-            artifactIds.map((a) => arts.find((x) => x.id === a)?.rendered_output?.components),
-          ) ?? undefined;
+        const comps = (a: string) =>
+          arts.find((x) => x.id === a)?.rendered_output?.components;
+        const rowContentH = tallestContentHeight(artifactIds.slice(1).map(comps)) ?? undefined;
         for (const artifactId of artifactIds) get().addItemAuto(id, artifactId, rowContentH);
         return id;
       },
