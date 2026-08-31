@@ -65,8 +65,17 @@ export function canvasSeedFromArtifact(
 export function useCanvasSeedFromAnswers(): void {
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
-    // Prime SYNCHRONOUSLY from whatever is already loaded, so history cannot seed. Doing this
-    // inside the first subscription callback would race Electric's first delivery.
+    // Prime SYNCHRONOUSLY from whatever is already loaded. This is a CHURN guard, not the
+    // safety one, and saying so matters because it was mistaken for the safety one.
+    //
+    // It was written to stop history seeding, and it cannot: on a fresh load this set is EMPTY,
+    // because artifacts hydrate from Electric AFTER mount. Every historical seed answer then
+    // arrived looking brand new and minted another board — one per seed answer, every reload.
+    // A guard whose premise is "the data is already here" is worth nothing at the exact moment
+    // the data is arriving.
+    //
+    // The real protection is idempotency in the store: a seed answer that already has a board
+    // does not get another, whatever order anything loads in.
     seen.current = new Set(useCanvasStore.getState().artifacts.map((a) => a.id));
     return useCanvasStore.subscribe((state) => {
       const known = seen.current;
@@ -76,7 +85,11 @@ export function useCanvasSeedFromAnswers(): void {
         known.add(a.id);
         const seed = canvasSeedFromArtifact(a);
         if (!seed) continue;
-        useStageStore.getState().seedPortfolioCanvas(seed.ids, seed.name ?? "Portfolio Planning");
+        // The seed answer's own id travels with the composition, and it is what stops boards
+        // multiplying: a seed that already has a board does not get another.
+        useStageStore
+          .getState()
+          .seedPortfolioCanvas(seed.ids, seed.name ?? "Portfolio Planning", true, a.id);
       }
     });
   }, []);

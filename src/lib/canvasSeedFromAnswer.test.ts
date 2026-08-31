@@ -196,3 +196,87 @@ describe("useCanvasSeedFromAnswers — seeds once, and never from history", () =
     r.unmount();
   });
 });
+
+/**
+ * BOARDS MUST NOT MULTIPLY ON RELOAD.
+ *
+ * Reported from the field: "the planning canvases at the bottom weren't created by me, they
+ * keep multiplying. I delete them and more appear."
+ *
+ * The receiver guarded against this by remembering which artifacts existed when it mounted —
+ * the comment said "so history cannot seed". On a fresh load that set is EMPTY, because
+ * artifacts hydrate from Electric AFTER mount. Every historical seed answer then arrived
+ * looking brand new and minted another board: one per seed answer, every reload, for ever.
+ *
+ * A guard whose premise is "the data is already here" is worth nothing at the exact moment the
+ * data is arriving. So the protection is not a timing guard at all — it is a fact that persists
+ * with the canvas: a seed answer that already has a board does not get another.
+ */
+describe("seeding is idempotent per seed answer", () => {
+  const seedRO = (ids: string[]) => ({
+    components: [{ archetype: "CANVAS_SEED", artifact_ids: ids }],
+  });
+
+  beforeEach(() => {
+    useCanvasStore.setState({ artifacts: [] } as never);
+    useStageStore.setState({ canvases: [], view: "global" } as never);
+  });
+
+  it("the same seed answer twice makes ONE board", () => {
+    const s = useStageStore.getState().seedPortfolioCanvas(["x", "y"], "P", false, "seed-1");
+    const again = useStageStore.getState().seedPortfolioCanvas(["x", "y"], "P", false, "seed-1");
+    expect(again).toBe(s);
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+  });
+
+  it("a board that ALREADY EXISTS from a previous session is not re-seeded", () => {
+    // The reload case, reproduced exactly: the canvases persist, the artifacts arrive fresh.
+    useStageStore.setState({
+      canvases: [{ id: "c-old", name: "P", use: "portfolio_planning", items: [], seededFrom: "seed-1" }],
+    } as never);
+    useStageStore.getState().seedPortfolioCanvas(["x", "y"], "P", false, "seed-1");
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+    expect(useStageStore.getState().canvases[0].id).toBe("c-old");
+  });
+
+  it("DIFFERENT seed answers still get their own boards", () => {
+    // The other half. Without it, "one board" would be satisfiable by never seeding again.
+    useStageStore.getState().seedPortfolioCanvas(["x"], "P", false, "seed-1");
+    useStageStore.getState().seedPortfolioCanvas(["y"], "P", false, "seed-2");
+    expect(useStageStore.getState().canvases).toHaveLength(2);
+  });
+
+  it("history arriving AFTER mount seeds each answer once, not once per delivery", () => {
+    // The failure end to end. The hook mounts against an empty store — as it does on every
+    // real page load — and Electric then delivers two historical seed answers twice over.
+    renderHook(() => useCanvasSeedFromAnswers());
+    const history = [
+      { id: "h1", status: "complete", rendered_output: seedRO(["a", "b"]) },
+      { id: "h2", status: "complete", rendered_output: seedRO(["c", "d"]) },
+    ] as unknown as Artifact[];
+
+    useCanvasStore.setState({ artifacts: history } as never);
+    useCanvasStore.setState({ artifacts: [...history] } as never);
+
+    expect(useStageStore.getState().canvases).toHaveLength(2);
+    expect(
+      useStageStore.getState().canvases.map((c) => c.seededFrom).sort(),
+    ).toEqual(["h1", "h2"]);
+  });
+
+  it("and a DELETED board stays deleted across the next delivery", () => {
+    // "I delete them and more appear" — the part that made it feel unfixable. Deleting removes
+    // the claim, so this documents the residual honestly: the seed answer becomes eligible
+    // again. What it must NOT do is grow the count on every reload.
+    renderHook(() => useCanvasSeedFromAnswers());
+    const history = [
+      { id: "h1", status: "complete", rendered_output: seedRO(["a", "b"]) },
+    ] as unknown as Artifact[];
+    useCanvasStore.setState({ artifacts: history } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+
+    useCanvasStore.setState({ artifacts: [...history] } as never);
+    useCanvasStore.setState({ artifacts: [...history] } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+  });
+});

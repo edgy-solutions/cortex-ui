@@ -72,6 +72,21 @@ export interface CustomCanvas {
    * auto-placement, which are the template speaking rather than a person.
    */
   arranged?: boolean;
+
+  /**
+   * The seed answer this canvas was composed from, and the reason boards stopped multiplying.
+   *
+   * IT EXISTS TO MAKE SEEDING IDEMPOTENT. The receiver used to guard against re-seeding by
+   * remembering which artifacts were present when it mounted — "so history cannot seed". On a
+   * fresh load that set is EMPTY, because artifacts hydrate from Electric after mount, so every
+   * historical seed answer arrived looking brand new and minted another board. One per seed
+   * answer, every reload, for ever.
+   *
+   * A timing guard cannot fix a timing assumption. This is a fact instead: a seed answer that
+   * already has a board does not get another, whatever order anything loads in, across reloads
+   * and across tabs, because it persists with the canvas.
+   */
+  seededFrom?: string;
 }
 
 const GLOBAL = "global";
@@ -137,7 +152,13 @@ interface StageState {
    * hand-built one stop being the same object, and "built the way a user would build it"
    * becomes a claim instead of a fact.
    */
-  seedPortfolioCanvas: (artifactIds: string[], name?: string, enter?: boolean) => string;
+  seedPortfolioCanvas: (
+    artifactIds: string[],
+    name?: string,
+    enter?: boolean,
+    /** The seed ANSWER this board comes from. Makes seeding idempotent — see CustomCanvas. */
+    seededFrom?: string,
+  ) => string;
 }
 
 const genId = () =>
@@ -332,7 +353,17 @@ export const useStageStore = create<StageState>()(
       // ORDER IS THE DECLARATION: the caller decides which measure lands in which slot by
       // the order it passes them. That belongs to the seeding intent, not here — a template
       // that assigned measures to slots would be reaching into the seeder's job.
-      seedPortfolioCanvas: (artifactIds, name = "Portfolio Planning", enter = true) => {
+      seedPortfolioCanvas: (artifactIds, name = "Portfolio Planning", enter = true, seededFrom) => {
+        // ALREADY SEEDED IS A NO-OP that returns the board it made last time rather than a
+        // second one. The check lives HERE, not only in the receiver, because this is the one
+        // place a board is minted — a guard at a caller protects that caller and nothing else.
+        if (seededFrom) {
+          const existing = get().canvases.find((c) => c.seededFrom === seededFrom);
+          if (existing) {
+            if (enter) set({ view: existing.id, focusId: null, fullPane: false });
+            return existing.id;
+          }
+        }
         const id = get().createCanvas(name, "portfolio_planning", enter);
         // MEASURED ONCE, OVER THE WHOLE SET, BEFORE ANYTHING IS PLACED. Measuring
         // incrementally would size each card against only what preceded it, so the tallest
@@ -343,6 +374,12 @@ export const useStageStore = create<StageState>()(
           arts.find((x) => x.id === a)?.rendered_output?.components;
         const rowContentH = tallestContentHeight(artifactIds.slice(1).map(comps)) ?? undefined;
         for (const artifactId of artifactIds) get().addItemAuto(id, artifactId, rowContentH);
+        // Stamped AFTER composition, so a board only claims a seed it was actually built from.
+        if (seededFrom) {
+          set((z) => ({
+            canvases: z.canvases.map((c) => (c.id === id ? { ...c, seededFrom } : c)),
+          }));
+        }
         return id;
       },
       removeItem: (canvasId, answerId) =>
