@@ -104,3 +104,47 @@ describe("every archetype the interpreter renders has a display identity", () =>
     expect(archetypeLabel("UNKNOWN")).toBe("Answer");
   });
 });
+
+/**
+ * A GLYPH BELONGS TO ITS ARCHETYPE, AND CHANGING ONE MUST BE DELIBERATE.
+ *
+ * The existing seals here require every archetype to HAVE a glyph and no two to SHARE one.
+ * Both passed while `PERIOD_SERIES` silently lost its icon: adding `FORECAST_MEASURE` involved
+ * a string replace on `Icon: TrendingUp`, which matched PERIOD_SERIES's line first. The result
+ * was still complete and still distinct, so nothing fired — and a shipped commit whose message
+ * claimed to add one archetype had also reassigned another's glyph.
+ *
+ * Readers navigate that list by shape. An icon that changes under them is a small betrayal of
+ * exactly the affordance the glyphs exist to provide, and it is invisible in a diff that is
+ * mostly additions.
+ *
+ * So the ASSIGNMENTS are pinned. This is deliberately rigid: a redesign updates this list, and
+ * that edit is the review the change deserves.
+ */
+describe("each archetype keeps its own glyph", () => {
+  const PINNED: Record<string, string> = {
+    PERIOD_SERIES: "TrendingUp",
+    FORECAST_MEASURE: "Target",
+    CONTRIBUTION_RANKING: "ListOrdered",
+    THRESHOLD_GRID: "Grid3x3",
+    MATRIX_GRID: "Grid2x2",
+    SHORTFALL_GRID: "Scale",
+    DELTA_SET: "GitCompare",
+    INTERVAL_TIMELINE: "GanttChartSquare",
+  };
+
+  const SRC = readFileSync(path.join(__dirname, "ArchetypeGlyph.tsx"), "utf8");
+
+  it("the source is read — positive control", () => {
+    expect(SRC).toContain("case \"PERIOD_SERIES\":");
+  });
+
+  for (const [archetype, icon] of Object.entries(PINNED)) {
+    it(`${archetype} uses ${icon}`, () => {
+      const start = SRC.indexOf(`case "${archetype}":`);
+      expect(start, `${archetype} has no case`).toBeGreaterThan(0);
+      const block = SRC.slice(start, SRC.indexOf("case ", start + 10));
+      expect(block, `${archetype} no longer uses ${icon}`).toContain(`Icon: ${icon}`);
+    });
+  }
+});

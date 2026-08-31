@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   HelpCircle,
   Target,
+  ListOrdered,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -78,17 +79,21 @@ export function glyphFor(t: AnswerArchetype): {
     case "INTERVAL_TIMELINE":
       return { Icon: GanttChartSquare, color: "text-neon-cyan/80" };
     case "PERIOD_SERIES":
-      return { Icon: Target, color: "text-neon-purple/80" };
+      return { Icon: TrendingUp, color: "text-neon-purple/80" };
     case "THRESHOLD_GRID":
       return { Icon: Grid3x3, color: "text-amber-400/90" };
     case "MATRIX_GRID":
       return { Icon: Grid2x2, color: "text-neon-green/80" };
     case "SHORTFALL_GRID":
       return { Icon: Scale, color: "text-neon-pink/80" };
+    case "CONTRIBUTION_RANKING":
+      // An ordered list where the order carries meaning — distinct at a glance from the grids
+      // and series it sits beside.
+      return { Icon: ListOrdered, color: "text-neon-green/80" };
     case "FORECAST_MEASURE":
       // A projection forward, not a measurement of now — which is what separates it at a
       // glance from the grids and series around it in the list.
-      return { Icon: TrendingUp, color: "text-neon-purple/80" };
+      return { Icon: Target, color: "text-neon-purple/80" };
     case "DELTA_SET":
       return { Icon: GitCompare, color: "text-neon-blue/80" };
     case "DECISION_RECORD":

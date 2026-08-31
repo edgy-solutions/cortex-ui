@@ -8,6 +8,7 @@ import { WarningCard } from "../NeuralStream/WarningCard";
 import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
+import { ContributionRanking } from "../planning/ContributionRanking";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -594,6 +595,21 @@ const renderComponent = (
         />
       );
 
+    case "CONTRIBUTION_RANKING":
+      // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
+      // one comparison, grouped by direction and deliberately unordered. Here the order IS the
+      // answer and `share_of_total` has no slot there — see the contract's axis test.
+      return (
+        <ContributionRanking
+          rows={comp.rows}
+          value_label={comp.value_label}
+          value_unit={comp.value_unit}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "FORECAST_MEASURE":
       // ONE forecast, and the METHOD that produced it — rendered together, or not at all.
       // Engine F's three EAC formulas span about 14% of the budget on the same program, which
@@ -711,6 +727,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "MATRIX_GRID" ||
   archetype === "DELTA_SET" ||
   archetype === "FORECAST_MEASURE" ||
+  archetype === "CONTRIBUTION_RANKING" ||
   archetype === "INTERVAL_TIMELINE" ||
   archetype === "DECISION_RECORD" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and

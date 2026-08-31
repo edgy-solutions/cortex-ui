@@ -41,6 +41,7 @@ import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.co
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
+import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -297,6 +298,19 @@ const DERIVED_BINDINGS = [
   // carries a method. The nearest candidate, ASSET_STATE_METRIC, is outside the projection arm
   // and dispatches to an LLM renderer whose fallback chain begins at an external provider —
   // the wrong path for a program cost forecast, and it has no method slot to drop anyway.
+  // THE FIFTH FINANCE ROW. ADR-0045 assigned INSTANCES_BY_PROPERTY and it does not fit — that
+  // archetype is a filtered instance table fed by a hand-set BFF feeder, absent from the
+  // projection arm, requiring target/columns/row_identity/state_vocabulary a ranking has none
+  // of. DELTA_SET was tested by mapping the real fields and fails on four: no slot for
+  // `share_of_total`, a permanently-empty `affected[]`, `metric` carrying an entity name, and
+  // no ordering at all. See ContributionRanking.contract.ts.
+  {
+    subject_uri: "fin:VarianceDriverRanking",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
   {
     subject_uri: "fin:EstimateAtCompletion",
     object_uri: "mesh:ForecastMeasure",
