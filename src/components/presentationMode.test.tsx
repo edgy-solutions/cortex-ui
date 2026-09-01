@@ -168,23 +168,49 @@ describe("nothing is reachable only by hovering", () => {
     expect(screen.getByLabelText("Open Live context")).toBeTruthy();
   });
 
-  it("and neither way out is GATED on hover", () => {
-    // ASSERTED AGAINST THE SOURCE, and the reason is worth recording: the obvious version of
-    // this reads the rendered class list, and I could not make it bite. Applying a
-    // `className="hidden"` mutation to the rail chevron — cache cleared, mutation confirmed
-    // on disk — left the DOM assertion green. I do not know why, and a guard I cannot prove
-    // catches the change it names is not a guard; it is a comment with a green tick.
+  it("and neither way out is GATED on hover — asserted on the RENDERED classes", () => {
+    // THIS ASSERTION WAS ONCE ABANDONED, AND THE ABANDONMENT WAS WRONG.
     //
-    // So this reads the files. Weaker in principle, PROVEN to bite in practice — the same
-    // trade the other source-level seals here make, and made explicit rather than dressed up
-    // as a render test.
+    // A previous version of this file replaced it with a source-text check and said, in a
+    // comment, that the DOM version "could not be made to bite" and that I did not know why.
+    // That was investigated properly and the claim is false: rendering the collapsed rails and
+    // reading `getAttribute("class")` sees exactly what you would expect — the real classes on
+    // correct code, and `"hidden"` the moment the chevron is mutated. Green then red, same
+    // file, same mechanism.
+    //
+    // So there is no jsdom boundary here and no category of blind DOM guards to audit. What
+    // actually happened is duller and more useful: an edit that did not land the way I believed
+    // it had. Three of those in one day is a tooling problem, not a framework one — hence the
+    // note in the source guard below, which now says what it is for rather than apologising for
+    // this one.
+    usePresentationStore.getState().enterFullScreen();
+    mount();
+    const ways = [
+      ...document.querySelectorAll("[data-mode-toggle]"),
+      ...document.querySelectorAll("[data-rail-toggle]"),
+    ];
+    // Positive control: the exit control plus one chevron per collapsed rail.
+    expect(ways.length).toBe(3);
+    for (const el of ways) {
+      // getAttribute, not `.className` — for an SVG that property is an SVGAnimatedString, and
+      // an assertion that silently receives an object is an assertion that stops checking.
+      const cls = el.getAttribute("class") ?? "";
+      expect(cls, `a way out is hover-gated: ${cls}`).not.toMatch(/hidden/);
+      expect(cls, `a way out is hover-gated: ${cls}`).not.toMatch(/hover:(flex|block|inline)/);
+      expect(cls).not.toMatch(/group-hover/);
+    }
+  });
+
+  it("and no control ANYWHERE in these files is hover-gated — the wider net", () => {
+    // Kept alongside the DOM assertion rather than replaced by it. They catch different things:
+    // the DOM one covers the controls that actually render in this state, this one covers every
+    // control in these files including states this test does not mount. Neither subsumes the
+    // other, which is why both stay.
     const files = {
       "Layout.tsx": readFileSync(path.join(__dirname, "Layout.tsx"), "utf8"),
       "RailStrip.tsx": readFileSync(path.join(__dirname, "RailStrip.tsx"), "utf8"),
     };
     for (const [name, src] of Object.entries(files)) {
-      // A control revealed only on hover traps anyone who did not build it, and in a demo the
-      // person driving may be exactly that person.
       expect(src, name + " gates a control on hover").not.toMatch(/hover:(flex|block|inline|visible)/);
       expect(src, name + " hides a control").not.toMatch(/className="hidden"/);
       expect(src, name + " gates a control on a parent hover").not.toMatch(/group-hover:/);
@@ -193,6 +219,7 @@ describe("nothing is reachable only by hovering", () => {
     expect(files["Layout.tsx"]).toContain("data-mode-toggle");
     expect(files["RailStrip.tsx"]).toContain("data-rail-toggle");
   });
+
   it("the mode control alone can get you out", () => {
     usePresentationStore.getState().enterFullScreen();
     mount();
