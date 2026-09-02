@@ -10,6 +10,7 @@ import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
 import { VarianceTree } from "../planning/VarianceTree";
+import { MultiSeries } from "../planning/MultiSeries";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -596,6 +597,21 @@ const renderComponent = (
         />
       );
 
+    case "MULTI_SERIES":
+      // Several DECLARED series over the same periods, no cap. NOT PERIOD_SERIES, which is one
+      // producer's cost curve wearing a generic name — seven required keys, hardcoded capex and
+      // expense bars, an "over by" column against a cap. See MultiSeries.contract.ts.
+      return (
+        <MultiSeries
+          rows={comp.rows}
+          series={comp.series}
+          value_label={comp.value_label}
+          scope_label={comp.scope_label}
+          valid_as_of={comp.valid_as_of}
+          state_version={comp.state_version}
+        />
+      );
+
     case "VARIANCE_TREE":
       // THE FIRST ARCHETYPE WITH DEPTH. Nothing in the projection arm nests, and nesting is not
       // a field that can be added to a series, a grid or a ranking — the producer's own words:
@@ -745,6 +761,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "FORECAST_MEASURE" ||
   archetype === "CONTRIBUTION_RANKING" ||
   archetype === "VARIANCE_TREE" ||
+  archetype === "MULTI_SERIES" ||
   archetype === "INTERVAL_TIMELINE" ||
   archetype === "DECISION_RECORD" ||
   // A sparse APPROVAL_TASK was UNREGISTERED here, so it inherited col-span-1 and

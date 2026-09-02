@@ -21,6 +21,7 @@ import {
   Target,
   ListOrdered,
   Workflow,
+  LineChart,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -87,6 +88,9 @@ export function glyphFor(t: AnswerArchetype): {
       return { Icon: Grid2x2, color: "text-neon-green/80" };
     case "SHORTFALL_GRID":
       return { Icon: Scale, color: "text-neon-pink/80" };
+    case "MULTI_SERIES":
+      // Several lines together — distinct from PERIOD_SERIES's single trend at a glance.
+      return { Icon: LineChart, color: "text-neon-cyan/80" };
     case "VARIANCE_TREE":
       // Depth is what distinguishes it from everything else in the list.
       return { Icon: Workflow, color: "text-neon-blue/80" };

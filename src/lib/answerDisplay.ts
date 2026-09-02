@@ -44,6 +44,7 @@ export type AnswerArchetype =
   | "THRESHOLD_GRID"
   | "MATRIX_GRID"
   | "SHORTFALL_GRID"
+  | "MULTI_SERIES"
   | "VARIANCE_TREE"
   | "CONTRIBUTION_RANKING"
   | "FORECAST_MEASURE"
@@ -74,6 +75,7 @@ export const DISPLAY_ARCHETYPES = [
   "THRESHOLD_GRID",
   "MATRIX_GRID",
   "SHORTFALL_GRID",
+  "MULTI_SERIES",
   "VARIANCE_TREE",
   "CONTRIBUTION_RANKING",
   "FORECAST_MEASURE",
@@ -180,6 +182,11 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Matrix";
     case "SHORTFALL_GRID":
       return "Shortfall";
+    case "MULTI_SERIES":
+      // NOT "Series" — PERIOD_SERIES already owns that word, and two bands with the same
+      // header is the borrowed-name defect at the navigation layer. "Trends" says what makes
+      // this one different: several lines together, no cap.
+      return "Trends";
     case "VARIANCE_TREE":
       return "Decomposition";
     case "CONTRIBUTION_RANKING":

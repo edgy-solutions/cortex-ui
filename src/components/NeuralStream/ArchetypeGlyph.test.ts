@@ -127,6 +127,7 @@ describe("each archetype keeps its own glyph", () => {
     FORECAST_MEASURE: "Target",
     CONTRIBUTION_RANKING: "ListOrdered",
     VARIANCE_TREE: "Workflow",
+    MULTI_SERIES: "LineChart",
     THRESHOLD_GRID: "Grid3x3",
     MATRIX_GRID: "Grid2x2",
     SHORTFALL_GRID: "Scale",

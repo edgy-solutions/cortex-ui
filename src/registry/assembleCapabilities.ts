@@ -43,6 +43,7 @@ import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
+import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -331,12 +332,17 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PROGRAM_FINANCE"],
     contract: FORECAST_MEASURE_CONTRACT,
   },
+  // MOVED OFF PERIOD_SERIES. It was bound there on a field-level reading that turned out to
+  // be wrong: PERIOD_SERIES requires seven keys and hardcodes capex/expense bars and an
+  // "over by" column against a cap. Engine F's rows carry one of the seven. The card did not
+  // draw — and both lanes reported that it did, because an `archetype=PERIOD_SERIES` label in
+  // the response stream was read as a render. A label is a claim; a render is an event.
   {
     subject_uri: "fin:BurnRateSeries",
-    object_uri: "mesh:PeriodSeries",
+    object_uri: "mesh:MultiSeries",
     persona_fit: ["PROGRAM_FINANCE_ANALYST"],
     domain_fit: ["PROGRAM_FINANCE"],
-    contract: PERIOD_SERIES_CONTRACT,
+    contract: MULTI_SERIES_CONTRACT,
   },
   {
     subject_uri: "fin:FundingStatusGrid",
@@ -355,12 +361,16 @@ const DERIVED_BINDINGS = [
   // absent `value_unit`? — is YES, and for a reason worth knowing rather than the reason
   // assumed: this component never reads the field at all. See PERIOD_SERIES_CONTRACT's
   // `value_unit`, which is advertised and unconsumed.
+  // Same move, and this one also retires accommodation A2: the `amount_unit` rename existed
+  // to stop an envelope-level lift promoting a currency onto a ratio chart. MULTI_SERIES puts
+  // the unit on the SERIES, so a dimensionless index simply declares none and the lift has
+  // nothing to lift.
   {
     subject_uri: "fin:PerformanceIndexSeries",
-    object_uri: "mesh:PeriodSeries",
+    object_uri: "mesh:MultiSeries",
     persona_fit: ["PROGRAM_FINANCE_ANALYST"],
     domain_fit: ["PROGRAM_FINANCE"],
-    contract: PERIOD_SERIES_CONTRACT,
+    contract: MULTI_SERIES_CONTRACT,
   },
   // THE FIRST BINDING WHOSE ANSWER IS ACTED ON RATHER THAN DRAWN.
   //
