@@ -32,6 +32,11 @@ import { fetchEntitlements } from "@/api/client";
 // absent from every built bundle for two days because nothing on the entry path referenced it.
 // Guarded by `seedPortfolioCanvas.reachability.test.ts`. Remove when the phrase routes.
 import "@/lib/seedPortfolioCanvas";
+// SIDE-EFFECT IMPORT, bare for the same reason as the line above: this module installs
+// `window.__cortex` and exports nothing App needs, so an unused named binding would be a
+// binding a bundler may drop and a module nobody imports is dropped outright. Covered by the
+// same reachability law.
+import "@/lib/debugGlobals";
 
 import { Toaster } from "sonner";
 
