@@ -83,9 +83,8 @@ export function ContributionRanking({
 
   return (
     <div className="glass-panel p-4">
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-neon-purple/80 flex-shrink-0" />
-        <h3 className="font-semibold text-slate-100">Ranking</h3>
+      <div className="flex items-baseline gap-3 flex-wrap">
+        <h3 className="text-xl font-semibold text-slate-100">Ranking</h3>
         <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
           {ranked.length} {ranked.length === 1 ? "contributor" : "contributors"}
           {value_label ? ` · ${value_label}` : ""}
@@ -101,27 +100,36 @@ export function ContributionRanking({
               <button
                 type="button"
                 onClick={() => setSelected(r)}
-                className="w-full text-left px-2 py-1.5 rounded hover:bg-white/[.04] transition-colors"
+                className="w-full text-left px-2 py-2 rounded hover:bg-white/[.04] transition-colors"
               >
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-[9px] text-slate-600 w-4 flex-shrink-0 tabular-nums">
+                <div className="flex items-baseline gap-3">
+                  <span className="font-mono text-[10px] text-slate-600 w-5 flex-shrink-0 tabular-nums">
                     {i + 1}
                   </span>
-                  <span className="font-mono text-[12px] text-slate-200 truncate min-w-0 flex-1">
+                  {/* THE NAME IS CONTENT, not a label on a number. It reads at the weight of a
+                      thing a reader is looking FOR — this list is scanned for a name, then the
+                      number beside it is read. */}
+                  <span className="text-[15px] font-semibold text-slate-100 truncate min-w-0 flex-1">
                     {r.entity_name}
                   </span>
-                  <span className={`font-mono text-[12px] tabular-nums ${tone.text}`}>
+                  {/* THE SIGN IS SHOWN EXPLICITLY, including the plus. In a list where some
+                      contributions push a total up and others pull it down, a bare number reads
+                      as a magnitude and the direction has to be inferred from a colour — which
+                      is the channel a projector loses first. `formatAmount` already carries a
+                      minus; only the plus has to be added. */}
+                  <span className={`font-mono text-[15px] font-semibold tabular-nums ${tone.text}`}>
+                    {r.contribution > 0 ? "+" : ""}
                     {formatAmount(r.contribution, value_unit)}
                   </span>
-                  <span className="font-mono text-[10px] text-slate-500 w-12 text-right tabular-nums">
+                  <span className="font-mono text-[11px] text-slate-500 w-16 text-right tabular-nums">
                     {/* NULL SHARE IS ABSENT, NOT ZERO. The total was nought; there is no share
                         of nothing, and 0% would read as "contributes nothing". */}
                     {share === null ? "—" : `${showMeasure(share * 100)}%`}
                   </span>
                 </div>
-                <span className="mt-1 block h-0.5 w-full rounded-sm bg-slate-100/10">
+                <span className="mt-1.5 block h-1.5 w-full rounded-full bg-slate-100/[.07]">
                   <span
-                    className={`block h-full rounded-sm ${tone.bar}`}
+                    className={`block h-full rounded-full ${tone.bar}`}
                     style={{
                       width:
                         share !== null && widest > 0
@@ -145,15 +153,20 @@ export function ContributionRanking({
         })}
       </ol>
 
-      <p className="mt-2 font-mono text-[9px] text-slate-500 flex items-center gap-3 flex-wrap">
+      {/* WHAT THE MARKS MEAN on the left, WHAT THE COLOURS MEAN on the right. Split because
+          they answer different questions and a single run of six items reads as one list of
+          six equal things. */}
+      <div className="mt-3 flex items-center justify-between gap-4 flex-wrap font-mono text-[9px] uppercase tracking-widest text-slate-500">
         <span>bar = share of total</span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/60" /> favourable
+        <span className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/60" /> favourable
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm bg-rose-500/60" /> adverse
+          </span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-rose-500/60" /> adverse
-        </span>
-      </p>
+      </div>
 
       {selected && (
         <CellInspector

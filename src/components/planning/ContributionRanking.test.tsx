@@ -134,3 +134,23 @@ describe("it refuses rather than drawing an empty ranking", () => {
     expect(document.querySelector("[data-cell-inspector]")).not.toBeNull();
   });
 });
+
+describe("direction is legible without colour", () => {
+  it("shows the SIGN explicitly, plus included", () => {
+    // In a list where some contributions push a total up and others pull it down, a bare number
+    // reads as a magnitude and the direction has to be inferred from a colour — the channel a
+    // projector loses first. `formatAmount` already carries a minus; only the plus is added.
+    render(
+      <ContributionRanking
+        rows={[
+          { entity_id: "a", entity_name: "A", contribution: 120000, share_of_total: 0.1, favourable: true },
+          { entity_id: "b", entity_name: "B", contribution: -800000, share_of_total: 0.6, favourable: false },
+        ]}
+        value_unit="USD"
+      />,
+    );
+    const rows = screen.getAllByRole("button");
+    expect(rows[0].textContent, "a favourable contribution shows no plus").toMatch(/\+\$120(\.0)?K/);
+    expect(rows[1].textContent).toMatch(/-\$800(\.0)?K/);
+  });
+});

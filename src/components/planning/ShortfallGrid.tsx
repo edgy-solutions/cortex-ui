@@ -74,14 +74,27 @@ function gridAxes(cells: ShortfallCell[]): { subjects: string[]; periods: string
 }
 
 /** Read from `state`, never from the numbers — see refusal 1 above. */
+/**
+ * THE THREE STATES DIFFER IN FORM, NOT ONLY IN HUE.
+ *
+ * They were three fills — rose, amber, slate — and a colour ramp is the first thing a projector
+ * washes out, which left three states reading as one wash of warm cells. The DASHED border on
+ * "pledged but not firm" survives that: a dashed outline says provisional in a way no tint does,
+ * and it is the distinction a room chasing funders actually needs.
+ *
+ * Amber is retired here on purpose. It was doing double duty — warning on this grid, and
+ * "unresolved" on the answer rail — and a colour that means two things means neither.
+ */
 function cellStyle(state: ShortfallState): string {
   switch (state) {
     case "short":
-      return "bg-rose-500/30 text-rose-100 ring-1 ring-rose-400/50";
+      return "bg-rose-500/[.12] text-rose-200 border border-rose-400/50";
     case "pledged-not-firm":
-      return "bg-amber-500/20 text-amber-100 ring-1 ring-amber-400/30";
+      // FUNDED, BUT NOT FIRM. Dashed rather than tinted: the money is pledged, so it is not a
+      // shortfall; it is not secured, so it is not settled either.
+      return "bg-transparent text-slate-200 border border-dashed border-teal-400/40";
     case "met":
-      return "bg-slate-500/10 text-slate-300";
+      return "bg-teal-500/[.10] text-slate-100 border border-teal-400/40";
     default:
       // An unrecognised state is not silently styled as met: a verdict this renderer does not
       // know is a verdict it must not colour, or a future vocabulary lands looking healthy.
@@ -200,17 +213,20 @@ export function ShortfallGrid({
                           unfirmCell ? `, ${amount(cell.secured)} firm` : ""
                         }${cell.shortfall > 0 ? ` — short ${amount(cell.shortfall)}` : ""}`}
                       >
-                        {amount(cell.committed)}
-                        <span className="block text-[9px] opacity-60">
-                          / {amount(cell.required)}
+                        {/* ALLOCATED AGAINST REQUIRED, on one line. Stacked, the second number
+                            read as a separate fact; inline, the pair reads as the ratio it is. */}
+                        <span className="whitespace-nowrap">
+                          <span className="font-semibold">{amount(cell.committed)}</span>
+                          <span className="text-[10px] opacity-60"> / {amount(cell.required)}</span>
                         </span>
-                        {/* Only when it differs — otherwise a third number every cell repeats
-                            teaches the reader to stop looking at it. */}
-                        {unfirmCell && (
-                          <span className="block text-[9px] text-amber-300/90">
-                            {amount(cell.secured)} firm
-                          </span>
-                        )}
+                        {/* THE FIRM SUBSET, on every cell rather than only where it differs.
+                            It was shown only when secured ≠ committed, which reads as "this one
+                            is special" — but "all of it is firm" is a fact a reader chasing
+                            funders needs on the cells that are FINE just as much as on the ones
+                            that are not, and its absence is what made them look identical. */}
+                        <span className="block text-[9px] uppercase tracking-widest text-slate-400 mt-0.5">
+                          firm {amount(cell.secured)}
+                        </span>
                       </button>
                     </td>
                   );
@@ -219,6 +235,29 @@ export function ShortfallGrid({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* WHAT THE CELL SAYS on the left, WHAT ITS FORM MEANS on the right.
+          The three states are named with the payload's own vocabulary rather than a reading of
+          it: "pledged but not firm" is a state this grid is TOLD, not one it works out from
+          comparing committed against secured — that comparison is invisible to a reader and
+          the distinction is the whole reason the third state exists. */}
+      <div className="mt-3 flex items-center justify-between gap-4 flex-wrap font-mono text-[9px] uppercase tracking-widest text-slate-500">
+        <span>allocated / required · firm below</span>
+        <span className="flex items-center gap-4 flex-wrap">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm border border-teal-400/50 bg-teal-500/[.10]" />
+            funded · firm
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm border border-dashed border-teal-400/50" />
+            funded · not firm
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm border border-rose-400/60 bg-rose-500/[.12]" />
+            short
+          </span>
+        </span>
       </div>
 
       {/* WHY a cell is what it is. All three quantities, always — `secured` shows here even when

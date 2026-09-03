@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ThresholdGrid } from "./ThresholdGrid";
 import { MatrixGrid } from "./MatrixGrid";
+import { ShortfallGrid } from "./ShortfallGrid";
 
 afterEach(cleanup);
 
@@ -98,5 +99,78 @@ describe("both grids still explain themselves, and behave the same way", () => {
       expect(src).toContain("onClick={() => setSelected(cell)}");
       expect(src).toContain('type="button"');
     }
+  });
+});
+
+/**
+ * THE THREE FUNDING STATES DIFFER IN FORM, NOT ONLY IN HUE.
+ *
+ * They were three fills — rose, amber, slate — and a colour ramp is the first thing a projector
+ * washes out, which left three distinct states reading as one wash of warm cells. The dashed
+ * border on "pledged but not firm" survives that: a dashed outline says provisional in a way no
+ * tint does, and it is the distinction a room chasing funders actually needs.
+ *
+ * The state is READ, never worked out. "Pledged but not firm" is invisible to any comparison of
+ * required against committed — it lives in `secured`, and the producer states the verdict.
+ */
+describe("funding states are told apart by form", () => {
+  const cell = (state: string, over: Record<string, unknown> = {}) => [
+    {
+      subject_id: "O1",
+      subject_label: "Org A",
+      period: "P1",
+      required: 100,
+      committed: 100,
+      secured: 100,
+      shortfall: 0,
+      state,
+      ...over,
+    },
+  ];
+
+  it("each state gets a DIFFERENT form, not just a different colour", () => {
+    const forms = new Map<string, string>();
+    for (const state of ["met", "pledged-not-firm", "short"]) {
+      cleanup();
+      const { container } = render(<ShortfallGrid rows={cell(state)} />);
+      forms.set(state, container.querySelector("button")!.className);
+    }
+    // Provisional is the one that must survive a washed-out projector, so it is the one that
+    // carries a border STYLE rather than a fill.
+    expect(forms.get("pledged-not-firm")).toMatch(/border-dashed/);
+    expect(forms.get("met")).not.toMatch(/border-dashed/);
+    expect(forms.get("short")).not.toMatch(/border-dashed/);
+    // And all three remain distinct from one another.
+    expect(new Set(forms.values()).size).toBe(3);
+  });
+
+  it("amber is gone — it meant two things across two surfaces", () => {
+    // It was a warning here and "unresolved" on the answer rail. A colour that means two things
+    // means neither.
+    for (const state of ["met", "pledged-not-firm", "short"]) {
+      cleanup();
+      const { container } = render(<ShortfallGrid rows={cell(state)} />);
+      expect(container.querySelector("button")!.className).not.toMatch(/amber/);
+    }
+  });
+
+  it("an UNKNOWN state is still not styled as met", () => {
+    // A verdict this renderer does not know is a verdict it must not colour, or a future
+    // vocabulary lands looking healthy.
+    const { container } = render(<ShortfallGrid rows={cell("renegotiating")} />);
+    const cls = container.querySelector("button")!.className;
+    expect(cls).not.toMatch(/teal/);
+    expect(cls).not.toMatch(/rose/);
+  });
+
+  it("shows the FIRM subset on every cell, including the ones that are fine", () => {
+    // It used to appear only where secured differed from committed, which reads as "this one is
+    // special" — and its absence everywhere else is what made the healthy cells and the
+    // provisional ones look identical at a glance.
+    // Queried on the CELL's text rather than by matcher: the label and the amount are
+    // separate text nodes inside one span, and getByText walks elements, not their
+    // concatenation.
+    const { container } = render(<ShortfallGrid rows={cell("met")} />);
+    expect(container.querySelector("button")!.textContent).toMatch(/firm/i);
   });
 });
