@@ -22,6 +22,7 @@ import {
   ListOrdered,
   Workflow,
   LineChart,
+  MessageCircleQuestion,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -88,6 +89,10 @@ export function glyphFor(t: AnswerArchetype): {
       return { Icon: Grid2x2, color: "text-neon-green/80" };
     case "SHORTFALL_GRID":
       return { Icon: Scale, color: "text-neon-pink/80" };
+    case "ELICITATION":
+      // A question mark is the honest glyph here and the only place it is not a failure: this
+      // row IS the system asking, rather than the list failing to name what an answer is.
+      return { Icon: MessageCircleQuestion, color: "text-neon-cyan/80" };
     case "MULTI_SERIES":
       // Several lines together — distinct from PERIOD_SERIES's single trend at a glance.
       return { Icon: LineChart, color: "text-neon-cyan/80" };

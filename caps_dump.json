@@ -1,0 +1,1521 @@
+{
+ "frontend_id": "cortex-ui-desktop",
+ "frontend_version": "headless-dump",
+ "capabilities": [
+  {
+   "subject_uri": "mesh:DatasetAnalysisReport",
+   "object_uri": "mesh:ChartWidget",
+   "archetype": "CHART_WIDGET",
+   "component": "ChartWidget",
+   "layout": "full-width",
+   "expected_fields": [
+    "chart_data",
+    "chart_type",
+    "subject_concept",
+    "sql_query",
+    "value_unit"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "CHART_WIDGET",
+    "component": "ChartWidget",
+    "layout": "full-width",
+    "fields": {
+     "chart_data": {
+      "encoding": "json-string",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "chart_type": {
+      "type": "enum",
+      "values": [
+       "BAR",
+       "LINE",
+       "PIE",
+       "SCATTER"
+      ],
+      "required": true
+     },
+     "subject_concept": {
+      "type": "string",
+      "required": false
+     },
+     "sql_query": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "minNumericColumns": 1,
+     "minCategoricalColumnsForCategoricalAxis": 1,
+     "categoricalAxisTypes": [
+      "BAR",
+      "LINE",
+      "PIE"
+     ],
+     "minNumericColumnsForScatter": 2
+    },
+    "refusalReasons": [
+     "no rows",
+     "rows aren't objects",
+     "no numeric column",
+     "no categorical column",
+     "scatter requires 2 numeric columns (x and y)",
+     "JSON parse failure",
+     "not an array"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:OwnershipFact",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD",
+    "OPS_OPERATOR"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:ImpactSet",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:SchemaDescription",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_ENGINEER"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:AssetProfile",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:CatalogListing",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:KnowledgeRetrievalResponse",
+   "object_uri": "mesh:KnowledgeDocument",
+   "archetype": "KNOWLEDGE_DOCUMENT",
+   "component": "MarkdownRenderer",
+   "layout": "full-width",
+   "expected_fields": [
+    "markdown_content",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "MECHANIC"
+   ],
+   "domain_fit": [
+    "MAINTENANCE",
+    "MANUFACTURING"
+   ],
+   "contract": {
+    "archetype": "KNOWLEDGE_DOCUMENT",
+    "component": "MarkdownRenderer",
+    "layout": "full-width",
+    "fields": {
+     "markdown_content": {
+      "encoding": "string",
+      "required": true
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:LineageTopology",
+   "object_uri": "mesh:ProcessTopology",
+   "archetype": "PROCESS_TOPOLOGY",
+   "component": "ProcessTopologyCard",
+   "layout": "full-width",
+   "expected_fields": [
+    "nodes",
+    "edges",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD",
+    "DATA_ENGINEER"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "PROCESS_TOPOLOGY",
+    "component": "ProcessTopologyCard",
+    "layout": "full-width",
+    "fields": {
+     "nodes": {
+      "encoding": "array",
+      "required": false,
+      "elementRequiredKeys": [
+       "id"
+      ]
+     },
+     "edges": {
+      "encoding": "array",
+      "required": false,
+      "elementRequiredKeys": [
+       "source",
+       "target"
+      ]
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minNodes": 0,
+     "minEdges": 0
+    },
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:FreshnessReport",
+   "object_uri": "mesh:AssetStateMetric",
+   "archetype": "ASSET_STATE_METRIC",
+   "component": "SupplyTable",
+   "layout": "full-width",
+   "expected_fields": [
+    "metrics",
+    "subject_concept"
+   ],
+   "persona_fit": [
+    "OPS_OPERATOR",
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "ASSET_STATE_METRIC",
+    "component": "SupplyTable",
+    "layout": "full-width",
+    "fields": {
+     "metrics": {
+      "encoding": "array",
+      "required": true,
+      "parsesTo": "array-of-objects"
+     },
+     "subject_concept": {
+      "encoding": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "schemaFromRowIndex": 0,
+     "requiresHomogeneousRows": true
+    },
+    "refusalReasons": [
+     "no rows"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:TagFilterResult",
+   "object_uri": "mesh:HazardDeclaration",
+   "archetype": "HAZARD_DECLARATION",
+   "component": "WarningCard",
+   "layout": "grid-col-1",
+   "expected_fields": [
+    "subject_concept",
+    "hazards",
+    "severity"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "HAZARD_DECLARATION",
+    "component": "WarningCard",
+    "layout": "grid-col-1",
+    "fields": {
+     "subject_concept": {
+      "encoding": "string",
+      "required": true,
+      "mapsToProp": "error"
+     },
+     "hazards": {
+      "encoding": "array",
+      "required": false,
+      "elementRequiredKeys": [
+       "id"
+      ]
+     },
+     "severity": {
+      "encoding": "enum",
+      "required": false,
+      "values": [
+       "CRITICAL",
+       "WARNING",
+       "INFO"
+      ]
+     }
+    },
+    "rowRequirements": {
+     "minHazards": 0
+    },
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:PartObsolescenceReviewBatch",
+   "object_uri": "mesh:GroupedReview",
+   "archetype": "GROUPED_REVIEW",
+   "component": "GroupedReviewTable",
+   "layout": "full-width",
+   "expected_fields": [
+    "batch"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "SUSTAINMENT"
+   ],
+   "contract": {
+    "archetype": "GROUPED_REVIEW",
+    "component": "GroupedReviewTable",
+    "layout": "full-width",
+    "fields": {
+     "batch": {
+      "encoding": "object",
+      "required": true,
+      "requiredKeys": [
+       "batch_id",
+       "notice_id",
+       "notice_type",
+       "notice_fingerprint",
+       "approver",
+       "items"
+      ]
+     }
+    },
+    "rowRequirements": {
+     "minItems": 1
+    },
+    "refusalReasons": [
+     "no items"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:HumanApprovalTask",
+   "object_uri": "mesh:ApprovalTask",
+   "archetype": "APPROVAL_TASK",
+   "component": "ApprovalTaskCard",
+   "layout": "grid-col-1",
+   "expected_fields": [
+    "task"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "SUSTAINMENT"
+   ],
+   "contract": {
+    "archetype": "APPROVAL_TASK",
+    "component": "ApprovalTaskCard",
+    "layout": "grid-col-1",
+    "fields": {
+     "task": {
+      "encoding": "object",
+      "required": true,
+      "requiredKeys": [
+       "task_id",
+       "kind",
+       "task_state",
+       "audience",
+       "requested_by",
+       "subject_ref",
+       "title",
+       "summary"
+      ]
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:WorkflowObservation",
+   "object_uri": "mesh:WorkflowObservation",
+   "archetype": "WORKFLOW_OBSERVATION",
+   "component": "WorkflowObservationView",
+   "layout": "full-width",
+   "expected_fields": [
+    "projection"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "SUSTAINMENT"
+   ],
+   "contract": {
+    "archetype": "WORKFLOW_OBSERVATION",
+    "component": "WorkflowObservationView",
+    "layout": "full-width",
+    "fields": {
+     "projection": {
+      "encoding": "object",
+      "required": true
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:InstancesByProperty",
+   "object_uri": "mesh:InstancesByProperty",
+   "archetype": "INSTANCES_BY_PROPERTY",
+   "component": "InstancesByPropertyView",
+   "layout": "full-width",
+   "expected_fields": [
+    "__payload"
+   ],
+   "persona_fit": [
+    "DATA_STEWARD"
+   ],
+   "domain_fit": [
+    "DATA_ENGINEERING"
+   ],
+   "contract": {
+    "archetype": "INSTANCES_BY_PROPERTY",
+    "component": "InstancesByPropertyView",
+    "layout": "full-width",
+    "fields": {
+     "__payload": {
+      "encoding": "object",
+      "required": true,
+      "isWholeComponentPayload": true
+     }
+    },
+    "rowRequirements": {},
+    "refusalReasons": []
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:PeriodCostSeries",
+   "object_uri": "mesh:PeriodSeries",
+   "archetype": "PERIOD_SERIES",
+   "component": "PeriodSeries",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "scope_label",
+    "value_unit"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "PERIOD_SERIES",
+    "component": "PeriodSeries",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "requiresPeriodLabel": true,
+     "trustsRowOrder": true,
+     "capIsNullable": true,
+     "overCapIsUpstream": true
+    },
+    "refusalReasons": [
+     "no periods",
+     "row is missing its period label",
+     "no numeric amount on any row"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:LoadThresholdGrid",
+   "object_uri": "mesh:ThresholdGrid",
+   "archetype": "THRESHOLD_GRID",
+   "component": "ThresholdGrid",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_label",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "THRESHOLD_GRID",
+    "component": "ThresholdGrid",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minCells": 1,
+     "requiresSubjectAndPeriod": true,
+     "thresholdIsPerCell": true,
+     "overThresholdIsUpstream": true,
+     "absentCellsAreNotZero": true
+    },
+    "refusalReasons": [
+     "no cells",
+     "cell is missing its subject or period",
+     "no cell carries a numeric value"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:MaturityMatrix",
+   "object_uri": "mesh:MatrixGrid",
+   "archetype": "MATRIX_GRID",
+   "component": "MatrixGrid",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "level_label",
+    "scope_label",
+    "as_of"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "MATRIX_GRID",
+    "component": "MatrixGrid",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "level_label": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     },
+     "as_of": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minCells": 1,
+     "requiresRowAndColumn": true,
+     "targetIsPerCell": true,
+     "absentCellsAreNotZero": true,
+     "gapIsUpstream": true
+    },
+    "refusalReasons": [
+     "no cells",
+     "cell is missing its row or column",
+     "no cell carries a numeric level"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:EffectSet",
+   "object_uri": "mesh:DeltaSet",
+   "archetype": "DELTA_SET",
+   "component": "DeltaSet",
+   "layout": "full-width",
+   "expected_fields": [
+    "effects",
+    "scope_label",
+    "baseline_label",
+    "headline"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "DELTA_SET",
+    "component": "DeltaSet",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "effects": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     },
+     "baseline_label": {
+      "type": "string",
+      "required": false
+     },
+     "headline": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 0,
+     "requiresMetricAndDirection": true,
+     "magnitudeIsUpstream": true,
+     "directionIsUpstream": true
+    },
+    "refusalReasons": [
+     "effects is not a list",
+     "effect is missing its metric",
+     "effect has an unknown direction"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:IntervalSchedule",
+   "object_uri": "mesh:IntervalTimeline",
+   "archetype": "INTERVAL_TIMELINE",
+   "component": "IntervalTimeline",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "group_kind",
+    "milestones",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "INTERVAL_TIMELINE",
+    "component": "IntervalTimeline",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "group_kind": {
+      "type": "string",
+      "required": false
+     },
+     "milestones": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "requiresPlannedInterval": true,
+     "rowKey": [
+      "group_id",
+      "project_id"
+     ],
+     "riskFlagIsUpstream": true
+    },
+    "refusalReasons": [
+     "no scheduled work in scope",
+     "row is missing its planned interval",
+     "row has an unknown group kind"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:DecisionArtifact",
+   "object_uri": "mesh:DecisionRecord",
+   "archetype": "DECISION_RECORD",
+   "component": "DecisionRecord",
+   "layout": "full-width",
+   "expected_fields": [
+    "decision",
+    "ops",
+    "question_trail",
+    "alternatives",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "DECISION_RECORD",
+    "component": "DecisionRecord",
+    "layout": "full-width",
+    "recomputes": false,
+    "fields": {
+     "decision": {
+      "encoding": "object",
+      "required": true,
+      "requiredKeys": [
+       "task_id",
+       "kind",
+       "task_state",
+       "audience",
+       "requested_by",
+       "subject_ref",
+       "acted_by",
+       "acted_at",
+       "decision",
+       "comment"
+      ]
+     },
+     "ops": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "question_trail": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": false
+     },
+     "alternatives": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minOps": 1,
+     "requiresRationale": true,
+     "actedAtIsImmutable": true
+    },
+    "refusalReasons": [
+     "decision has no rationale",
+     "decision disposed no ops",
+     "decision is missing its actor"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:FundingGapSet",
+   "object_uri": "mesh:ShortfallGrid",
+   "archetype": "SHORTFALL_GRID",
+   "component": "ShortfallGrid",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_label",
+    "value_unit",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "SHORTFALL_GRID",
+    "component": "ShortfallGrid",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "absentIsNotZero": true,
+     "shortfallIsUpstream": true
+    },
+    "refusalReasons": [
+     "no funding rows recorded",
+     "cell is missing its subject",
+     "cell has no required amount"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:ContributionSequence",
+   "object_uri": "mesh:IntervalTimeline",
+   "archetype": "INTERVAL_TIMELINE",
+   "component": "IntervalTimeline",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "group_kind",
+    "milestones",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "INTERVAL_TIMELINE",
+    "component": "IntervalTimeline",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "group_kind": {
+      "type": "string",
+      "required": false
+     },
+     "milestones": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "requiresPlannedInterval": true,
+     "rowKey": [
+      "group_id",
+      "project_id"
+     ],
+     "riskFlagIsUpstream": true
+    },
+    "refusalReasons": [
+     "no scheduled work in scope",
+     "row is missing its planned interval",
+     "row has an unknown group kind"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:VarianceDecomposition",
+   "object_uri": "mesh:VarianceTree",
+   "archetype": "VARIANCE_TREE",
+   "component": "VarianceTree",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_label",
+    "value_unit",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "VARIANCE_TREE",
+    "component": "VarianceTree",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "singleRoot": true,
+     "shareIsOfRoot": true,
+     "residualIsRendered": true,
+     "maxRenderDepth": 4
+    },
+    "refusalReasons": [
+     "no decomposition recorded",
+     "root carries no variance",
+     "root is missing its name"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:VarianceDriverRanking",
+   "object_uri": "mesh:ContributionRanking",
+   "archetype": "CONTRIBUTION_RANKING",
+   "component": "ContributionRanking",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_label",
+    "value_unit",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "CONTRIBUTION_RANKING",
+    "component": "ContributionRanking",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "orderIsUpstream": true,
+     "shareIsUpstreamAndNullable": true
+    },
+    "refusalReasons": [
+     "no contributors recorded",
+     "contributor is missing its name",
+     "contributor carries no contribution"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:EstimateAtCompletion",
+   "object_uri": "mesh:ForecastMeasure",
+   "archetype": "FORECAST_MEASURE",
+   "component": "ForecastMeasure",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_unit",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "FORECAST_MEASURE",
+    "component": "ForecastMeasure",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "exactlyOneRow": true,
+     "methodIsMandatory": true,
+     "derivationsAreUpstream": true
+    },
+    "refusalReasons": [
+     "no forecast row recorded",
+     "forecast carries no method — the number alone is ambiguous",
+     "forecast carries no value"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:BurnRateSeries",
+   "object_uri": "mesh:MultiSeries",
+   "archetype": "MULTI_SERIES",
+   "component": "MultiSeries",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "series",
+    "reference",
+    "verdict",
+    "value_label",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "MULTI_SERIES",
+    "component": "MultiSeries",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "series": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "reference": {
+      "encoding": "object",
+      "parsesTo": "object",
+      "required": false
+     },
+     "verdict": {
+      "type": "string",
+      "required": false
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "seriesAreDeclared": true,
+     "oneUnitPerCard": true,
+     "noCapSemantics": true
+    },
+    "refusalReasons": [
+     "no periods recorded",
+     "the payload does not declare which of its keys are series",
+     "a declared series appears in no row",
+     "series declare different units — they cannot share an axis"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:FundingStatusGrid",
+   "object_uri": "mesh:ShortfallGrid",
+   "archetype": "SHORTFALL_GRID",
+   "component": "ShortfallGrid",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "value_label",
+    "value_unit",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "SHORTFALL_GRID",
+    "component": "ShortfallGrid",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "value_unit": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "absentIsNotZero": true,
+     "shortfallIsUpstream": true
+    },
+    "refusalReasons": [
+     "no funding rows recorded",
+     "cell is missing its subject",
+     "cell has no required amount"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "fin:PerformanceIndexSeries",
+   "object_uri": "mesh:MultiSeries",
+   "archetype": "MULTI_SERIES",
+   "component": "MultiSeries",
+   "layout": "full-width",
+   "expected_fields": [
+    "rows",
+    "series",
+    "reference",
+    "verdict",
+    "value_label",
+    "scope_label"
+   ],
+   "persona_fit": [
+    "PROGRAM_FINANCE_ANALYST"
+   ],
+   "domain_fit": [
+    "PROGRAM_FINANCE"
+   ],
+   "contract": {
+    "archetype": "MULTI_SERIES",
+    "component": "MultiSeries",
+    "layout": "full-width",
+    "recomputes": true,
+    "fields": {
+     "rows": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "series": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": true
+     },
+     "reference": {
+      "encoding": "object",
+      "parsesTo": "object",
+      "required": false
+     },
+     "verdict": {
+      "type": "string",
+      "required": false
+     },
+     "value_label": {
+      "type": "string",
+      "required": false
+     },
+     "scope_label": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "rowRequirements": {
+     "minRows": 1,
+     "seriesAreDeclared": true,
+     "oneUnitPerCard": true,
+     "noCapSemantics": true
+    },
+    "refusalReasons": [
+     "no periods recorded",
+     "the payload does not declare which of its keys are series",
+     "a declared series appears in no row",
+     "series declare different units — they cannot share an axis"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:CanvasSeedResult",
+   "object_uri": "mesh:CanvasSeed",
+   "archetype": "CANVAS_SEED",
+   "component": "",
+   "consumer": "canvasSeedFromArtifact",
+   "layout": "none",
+   "expected_fields": [
+    "artifact_ids",
+    "name",
+    "canvas_type"
+   ],
+   "persona_fit": [
+    "PORTFOLIO_LEAD"
+   ],
+   "domain_fit": [
+    "PORTFOLIO_PLANNING"
+   ],
+   "contract": {
+    "archetype": "CANVAS_SEED",
+    "consumer": "canvasSeedFromArtifact",
+    "layout": "none",
+    "recomputes": false,
+    "fields": {
+     "artifact_ids": {
+      "encoding": "array",
+      "parsesTo": "array-of-strings",
+      "required": true
+     },
+     "name": {
+      "type": "string",
+      "required": false
+     },
+     "canvas_type": {
+      "type": "string",
+      "required": false
+     }
+    },
+    "refusalReasons": [
+     "no surviving artifact ids — a seed that placed nothing is not a seed"
+    ]
+   },
+   "contract_source": "derived"
+  },
+  {
+   "subject_uri": "mesh:SlotElicitation",
+   "object_uri": "mesh:AskCard",
+   "archetype": "ELICITATION",
+   "component": "AskCardConnected",
+   "layout": "full-width",
+   "expected_fields": [
+    "slot",
+    "options",
+    "option_source",
+    "free_text_reason",
+    "spoken",
+    "found",
+    "sub_query",
+    "accepted_slots",
+    "message",
+    "truncated_from"
+   ],
+   "persona_fit": [],
+   "domain_fit": [],
+   "contract": {
+    "archetype": "ELICITATION",
+    "component": "AskCardConnected",
+    "layout": "full-width",
+    "recomputes": false,
+    "fields": {
+     "slot": {
+      "type": "string",
+      "required": true
+     },
+     "options": {
+      "encoding": "array",
+      "parsesTo": "array-of-objects",
+      "required": false
+     },
+     "option_source": {
+      "type": "string",
+      "required": false
+     },
+     "free_text_reason": {
+      "type": "string",
+      "required": false
+     },
+     "spoken": {
+      "type": "string",
+      "required": false
+     },
+     "found": {
+      "type": "string",
+      "required": false
+     },
+     "sub_query": {
+      "type": "string",
+      "required": false
+     },
+     "accepted_slots": {
+      "encoding": "object",
+      "parsesTo": "object",
+      "required": false
+     },
+     "message": {
+      "type": "string",
+      "required": false
+     },
+     "truncated_from": {
+      "type": "number",
+      "required": false
+     }
+    },
+    "refusalReasons": [
+     "the ask names no slot",
+     "this is not an ask"
+    ]
+   },
+   "contract_source": "derived"
+  }
+ ]
+}

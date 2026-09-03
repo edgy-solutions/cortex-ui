@@ -44,6 +44,7 @@ export type AnswerArchetype =
   | "THRESHOLD_GRID"
   | "MATRIX_GRID"
   | "SHORTFALL_GRID"
+  | "ELICITATION"
   | "MULTI_SERIES"
   | "VARIANCE_TREE"
   | "CONTRIBUTION_RANKING"
@@ -75,6 +76,7 @@ export const DISPLAY_ARCHETYPES = [
   "THRESHOLD_GRID",
   "MATRIX_GRID",
   "SHORTFALL_GRID",
+  "ELICITATION",
   "MULTI_SERIES",
   "VARIANCE_TREE",
   "CONTRIBUTION_RANKING",
@@ -182,6 +184,10 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Matrix";
     case "SHORTFALL_GRID":
       return "Shortfall";
+    case "ELICITATION":
+      // NOT an answer word. This row is the system asking, and calling it anything that reads
+      // as a result is the mislabel that put it in KNOWLEDGE_DOCUMENT in the first place.
+      return "Question";
     case "MULTI_SERIES":
       // NOT "Series" — PERIOD_SERIES already owns that word, and two bands with the same
       // header is the borrowed-name defect at the navigation layer. "Trends" says what makes

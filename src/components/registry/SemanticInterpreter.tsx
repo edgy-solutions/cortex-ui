@@ -11,6 +11,7 @@ import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
 import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
+import { AskCardConnected } from "../elicitation/AskCardConnected";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -596,6 +597,12 @@ const renderComponent = (
           state_version={comp.state_version}
         />
       );
+
+    case "ELICITATION":
+      // A QUESTION, NOT AN ANSWER. It fell through to KNOWLEDGE_DOCUMENT before this case
+      // existed, which put a request for input in the answer rail wearing a document's frame.
+      // The component draws no card chrome for the same reason.
+      return <AskCardConnected component={comp} />;
 
     case "MULTI_SERIES":
       // Several DECLARED series over the same periods, no cap. NOT PERIOD_SERIES, which is one

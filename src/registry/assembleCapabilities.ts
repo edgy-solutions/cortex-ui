@@ -44,6 +44,7 @@ import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasur
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
+import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -390,6 +391,30 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PORTFOLIO_LEAD"],
     domain_fit: ["PORTFOLIO_PLANNING"],
     contract: CANVAS_SEED_CONTRACT,
+  },
+  // THE ONLY ROW WHOSE SUBJECT IS NOT AN ANSWER. Every other subject here is something a verb
+  // PRODUCED; this one is what the router emits when a verb could not be called at all, so the
+  // question it renders exists precisely because no output type does.
+  //
+  // WHY IT MUST BE REGISTERED ANYWAY. The presentation agent chooses from the registered menu,
+  // so an archetype absent from it can never be selected no matter what the producer stamps.
+  // Without this row the card is unreachable code and the ask keeps landing on the universal
+  // KNOWLEDGE_DOCUMENT fallback — a question wearing a document's frame, which is the defect.
+  //
+  // `mesh:SlotElicitation` IS THIS SIDE'S HALF OF A JOINT CONTRACT AND IS NOT YET CONFIRMED.
+  // `slot_disposition.py` emits `status: "slot_elicitation"` and NO output type, so today
+  // nothing carries this subject and the row matches nothing. That is stated rather than hidden:
+  // an advertised-unconsumed row is the same defect as an advertised-unconsumed field, and the
+  // producer has to either stamp the archetype or emit this subject for the seam to close.
+  {
+    subject_uri: "mesh:SlotElicitation",
+    object_uri: "mesh:AskCard",
+    // NO persona or domain affinity, and that is not an omission. An ask is not better suited
+    // to a finance analyst than to anyone else — it is what happens when the system cannot
+    // proceed, and ranking it by audience would make some readers likelier to be asked.
+    persona_fit: [],
+    domain_fit: [],
+    contract: ELICITATION_CONTRACT,
   },
 ] as const;
 
