@@ -106,6 +106,17 @@ export interface VarianceNode {
   entity_id: string;
   entity_name: string;
   variance_kind?: string;
+  /**
+   * Whether this node's variance is a GOOD one. Optional, and never inferred from the sign.
+   *
+   * A positive cost variance is favourable and a positive schedule variance is not, so a card
+   * colouring from `variance > 0` would be right on one `variance_kind` and wrong on the next
+   * — the identical trap the ranking refuses for its own `favourable`. Absent means the bar is
+   * drawn neutral: a share is still a share when nobody has said whether it is welcome.
+   *
+   * The producer does not send this today. The rendering waits for it rather than guessing.
+   */
+  favourable?: boolean;
   variance: number;
   /** Fraction OF THE ROOT. Null when the root variance was zero — absent, never 0%. */
   share_of_root?: number | null;

@@ -28,6 +28,19 @@ import {
  * and the entity names are the payload's.
  */
 
+/**
+ * The bar's colour, from the producer's verdict alone.
+ *
+ * Neutral when unstated — which is every node today. A share is still a share when nobody has
+ * said whether it is welcome, and a card that guessed would be right on one variance kind and
+ * wrong on the next.
+ */
+function barTone(node: VarianceNode): string {
+  if (node.favourable === true) return "bg-emerald-500/70";
+  if (node.favourable === false) return "bg-rose-500/70";
+  return "bg-slate-400/50";
+}
+
 /** How the producer's stop reason reads to someone who did not write the engine. */
 const STOP_LANGUAGE: Record<string, string> = {
   leaf: "nothing beneath this in the model",
@@ -98,22 +111,35 @@ function Node({
         <button
           type="button"
           onClick={() => onInspect(node)}
-          className="flex-1 min-w-0 text-left flex items-baseline gap-2 hover:bg-white/[.04] rounded px-1"
+          className="flex-1 min-w-0 text-left hover:bg-white/[.04] rounded px-1 py-0.5"
         >
-          <span className="font-mono text-[9px] uppercase tracking-widest text-slate-600 flex-shrink-0">
-            {node.level}
+          <span className="flex items-baseline gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-widest text-slate-600 flex-shrink-0">
+              {node.level}
+            </span>
+            <span className="text-[13px] text-slate-100 truncate min-w-0 flex-1">
+              {node.entity_name}
+            </span>
+            {/* FIXED COLUMNS, so the numbers line up regardless of DEPTH. In a tree the label
+                is indented and a value laid out after it drifts right with every level — which
+                puts the figures a reader is comparing on a diagonal. */}
+            <span className="font-mono text-[13px] tabular-nums text-slate-200 w-24 text-right flex-shrink-0">
+              {formatAmount(node.variance, valueUnit)}
+            </span>
+            {/* OF THE ROOT, and the label says so. Against its parent a small variance inside a
+                small account can be half of it; against the root it is noise, and an unqualified
+                "share" invites the reading that makes a trivial node look like the problem. */}
+            <span className="font-mono text-[10px] text-slate-500 w-14 text-right tabular-nums flex-shrink-0">
+              {share === null ? "—" : `${showMeasure(share * 100)}%`}
+            </span>
           </span>
-          <span className="font-mono text-[12px] text-slate-200 truncate min-w-0 flex-1">
-            {node.entity_name}
-          </span>
-          <span className="font-mono text-[12px] tabular-nums text-slate-300">
-            {formatAmount(node.variance, valueUnit)}
-          </span>
-          {/* OF THE ROOT, and the label says so. Against its parent a small variance inside a
-              small account can be half of it; against the root it is noise, and an unqualified
-              "share" invites the reading that makes a trivial node look like the problem. */}
-          <span className="font-mono text-[10px] text-slate-500 w-20 text-right tabular-nums">
-            {share === null ? "—" : `${showMeasure(share * 100)}% of total`}
+          {/* THE SHARE, DRAWN. A column of percentages is read one number at a time; a bar is
+              read as a shape, which is what "which of these is the problem" actually asks. */}
+          <span className="mt-1 block h-1 w-full rounded-full bg-slate-100/[.07]">
+            <span
+              className={`block h-full rounded-full ${barTone(node)}`}
+              style={{ width: share === null ? "0%" : `${Math.min(100, Math.abs(share) * 100)}%` }}
+            />
           </span>
         </button>
       </div>
@@ -228,8 +254,8 @@ export function VarianceTree({
         <Node node={root} depth={0} valueUnit={value_unit} onInspect={setSelected} />
       </ul>
 
-      <p className="mt-2 font-mono text-[9px] text-slate-500">
-        shares are of the TOTAL, not of the parent
+      <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-slate-500">
+        bar = share of total · shares are of the TOTAL, not of the parent
       </p>
 
       {selected && (

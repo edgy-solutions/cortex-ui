@@ -16,6 +16,8 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { VarianceTree } from "./VarianceTree";
 import { MAX_RENDER_DEPTH, depthBelow, countBelow } from "./VarianceTree.contract";
 
@@ -210,12 +212,26 @@ describe("arithmetic honesty", () => {
 });
 
 describe("the share is of the ROOT and the card says so", () => {
-  it("labels every share as a share of the total", () => {
-    // Against its parent a small variance inside a small account can be half of it. An
-    // unqualified "share" invites the reading that makes a trivial node look like the problem.
+  it("tells the reader the shares are of the TOTAL, and the inspector repeats it per node", () => {
+    // The CLAIM is unchanged: against its parent a small variance inside a small account can be
+    // half of it, so an unqualified "share" invites the reading that makes a trivial node look
+    // like the problem.
+    //
+    // WHAT CHANGED, AND WHY THIS IS A NARROWING RATHER THAN A WEAKENING. It used to require
+    // "% of total" on EVERY ROW. The rows now carry a bare percentage in a fixed column, with
+    // the qualifier stated once beneath the tree — because repeating four words on every row of
+    // a nested list is the kind of noise a reader stops seeing, and a label nobody reads is not
+    // a label. The qualifier is still stated, and the INSPECTOR still names it per node, which
+    // is where a reader goes when they want to be sure about one number.
+    //
+    // If that trade is wrong the fix is to put the words back on the rows — not to delete this
+    // test, which is what a genuine weakening would have looked like.
     render(<VarianceTree rows={deepTree()} />);
-    expect(screen.getAllByText(/% of total/).length).toBeGreaterThan(0);
     expect(screen.getByText(/shares are of the TOTAL, not of the parent/)).toBeTruthy();
+
+    // And per node, on demand.
+    fireEvent.click(screen.getAllByRole("button")[1]);
+    expect(screen.getAllByText(/% of total/).length).toBeGreaterThan(0);
   });
 
   it("a null share renders absent, never 0%", () => {
@@ -240,5 +256,76 @@ describe("depth and count are read from the payload, not assumed", () => {
   it("refuses a root with no variance", () => {
     render(<VarianceTree rows={[{ level: "program", entity_id: "P", entity_name: "P" }]} />);
     expect(screen.getByText(/root carries no variance/)).toBeTruthy();
+  });
+});
+
+/**
+ * THE SHARE IS DRAWN, AND ITS COLOUR IS THE PRODUCER'S OR NOBODY'S.
+ *
+ * A column of percentages is read one number at a time; a bar is read as a shape, which is what
+ * "which of these is the problem" actually asks. But the bar's COLOUR is a verdict, and this
+ * node carries no `favourable` today — a positive cost variance is favourable and a positive
+ * schedule variance is not, so colouring from `variance > 0` would be right on one
+ * `variance_kind` and wrong on the next. Neutral until the producer says.
+ */
+describe("the share bar states no verdict it was not given", () => {
+  const node = (over: Record<string, unknown> = {}) => [
+    { ...leaf("WP", -400), share_of_root: 0.4, ...over },
+  ];
+
+  it("is NEUTRAL when the producer has not said whether the variance is welcome", () => {
+    // Every node today. A share is still a share when nobody has said whether it is good.
+    const { container } = render(<VarianceTree rows={node()} />);
+    const bar = container.querySelector("[data-variance-node] span[style]") as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.className).not.toMatch(/rose|emerald/);
+  });
+
+  it("takes the producer's verdict when there IS one", () => {
+    const { container } = render(<VarianceTree rows={node({ favourable: false })} />);
+    const bar = container.querySelector("[data-variance-node] span[style]") as HTMLElement;
+    expect(bar.className).toMatch(/rose/);
+    cleanup();
+    const ok = render(<VarianceTree rows={node({ favourable: true })} />);
+    const good = ok.container.querySelector("[data-variance-node] span[style]") as HTMLElement;
+    expect(good.className).toMatch(/emerald/);
+  });
+
+  it("derives no verdict from the sign anywhere in the component", () => {
+    const raw = readFileSync(path.join(__dirname, "VarianceTree.tsx"), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(src).toContain("node.favourable"); // positive control: the verdict is read
+    expect(src).not.toMatch(/variance\s*[<>]\s*0/);
+  });
+
+  it("a null share draws no bar rather than a full one", () => {
+    // Width from an absent share must not fall back to 100% — that would draw the loudest
+    // possible mark for the case where nothing is known.
+    const { container } = render(<VarianceTree rows={node({ share_of_root: null })} />);
+    const bar = container.querySelector("[data-variance-node] span[style]") as HTMLElement;
+    expect(bar.style.width).toBe("0%");
+  });
+});
+
+describe("the value column is aligned across depths", () => {
+  it("the amount sits in a FIXED column, so numbers do not drift right with indentation", () => {
+    // The defect this fixes is specific to trees: the label is indented, and a value laid out
+    // after it moves right with every level — which puts the figures a reader is comparing on a
+    // diagonal. jsdom computes no layout, so the fixed width is asserted on the class the
+    // browser would lay out from; a rendered-geometry assertion here would read zeros.
+    const { container } = render(<VarianceTree rows={deepTree()} />);
+    const rows = [...container.querySelectorAll("[data-variance-node]")];
+    expect(rows.length).toBeGreaterThan(1); // positive control: more than one depth is drawn
+    for (const r of rows) {
+      // Matched on a NUMBER, not on a currency symbol: this fixture declares no unit, so
+      // `formatAmount` correctly renders "-1.0K" with no `$` — and an assertion anchored on the
+      // symbol found nothing and reported the column missing rather than the anchor being wrong.
+      const amount = [...r.querySelectorAll("span")].find((el) =>
+        /^[-+]?\$?[\d.]+[KMB]?$/.test((el.textContent ?? "").trim()),
+      );
+      expect(amount, "a row draws no amount").toBeTruthy();
+      expect(amount!.className, "the amount column is not fixed-width").toMatch(/\bw-\d+\b/);
+      expect(amount!.className).toMatch(/flex-shrink-0/);
+    }
   });
 });
