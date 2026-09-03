@@ -35,6 +35,16 @@ export const ACCENT = "#2dd4bf";
  */
 export const ACCENT_DEEP = "#0d9488";
 
+/**
+ * A SECOND series, when several share one chart.
+ *
+ * Distinct from `ACCENT_DEEP`, which is the accent one step back for a STACK — two depths of
+ * one quantity. This is a different quantity beside the first, so it steps sideways in
+ * saturation rather than down in lightness: on a dark ground a darker teal reads as "the same
+ * thing, dimmer", which is the wrong relationship between two independent series.
+ */
+export const SERIES_SECONDARY = "#7f9f9a";
+
 /** Crossed a declared line. Breach, over-cap, over-threshold — one colour, every surface. */
 export const OVER = "#fb7185";
 

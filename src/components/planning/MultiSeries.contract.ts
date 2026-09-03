@@ -75,6 +75,29 @@ export const MULTI_SERIES_CONTRACT = {
      * see the header; inferring this is how the neighbouring archetype became specific.
      */
     series: { encoding: "array", parsesTo: "array-of-objects", required: true },
+    /**
+     * A DECLARED reference line — `{ value, label }`. Optional, drawn when present.
+     *
+     * THE CARD DOES NOT KNOW WHICH VALUES ARE MEANINGFUL. A performance index has a target of
+     * 1.0 and a burn rate has none, and an archetype that drew a 1.0 line because a series
+     * looked like a ratio would be inventing the same kind of fact as plotting
+     * `trailing_periods` — a mark that means something for the first consumer and nothing for
+     * the next. The producer knows; the producer declares.
+     *
+     * This is also why it is not a "cap": a cap is a limit that can be BREACHED, and breach is
+     * PERIOD_SERIES's vocabulary. A reference is a line to read against, and the card states no
+     * verdict about which side of it a series sits.
+     */
+    reference: { encoding: "object", parsesTo: "object", required: false },
+    /**
+     * A verdict the PRODUCER states about this chart, rendered verbatim beside the title.
+     *
+     * NEVER INFERRED. "CPI below 1.0" is a judgement, and a card computing it from
+     * `value < reference.value` would be deciding what the reference MEANS — favourable below
+     * for a cost ratio, unfavourable below for an index, and the card cannot tell which. Same
+     * rule the ranking follows for `favourable`.
+     */
+    verdict: { type: "string", required: false },
     /** What the values MEAN collectively. Supplied; the renderer invents no framing. */
     value_label: { type: "string", required: false },
     scope_label: { type: "string", required: false },
@@ -96,6 +119,20 @@ export interface SeriesDecl {
 export interface MultiSeriesRow {
   period: string;
   [key: string]: unknown;
+}
+
+/** A declared line to read the series against. The card draws it and judges nothing. */
+export interface SeriesReference {
+  value: number;
+  label?: string;
+}
+
+/** Reads a reference only when it carries a usable number. A label-only reference draws no line. */
+export function readReference(v: unknown): SeriesReference | null {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.value !== "number" || !Number.isFinite(r.value)) return null;
+  return { value: r.value, label: typeof r.label === "string" ? r.label : undefined };
 }
 
 export interface MultiSeriesData {

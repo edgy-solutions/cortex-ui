@@ -1,16 +1,29 @@
 import {
   CartesianGrid,
+  LabelList,
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { formatAmount } from "@/lib/formatAmount";
-import { ACCENT, ACCENT_DEEP, LIMIT, MUTED, GRID_LINE, OVER } from "@/lib/chartPalette";
-import { validateMultiSeries, type SeriesDecl } from "./MultiSeries.contract";
+import {
+  ACCENT,
+  SERIES_SECONDARY,
+  LIMIT,
+  MUTED,
+  GRID_LINE,
+  OVER,
+} from "@/lib/chartPalette";
+import {
+  readReference,
+  validateMultiSeries,
+  type SeriesDecl,
+} from "./MultiSeries.contract";
 
 /**
  * MULTI_SERIES — several DECLARED series over the same periods.
@@ -35,7 +48,7 @@ import { validateMultiSeries, type SeriesDecl } from "./MultiSeries.contract";
  * be this component learning its first consumer's vocabulary, which is the defect it exists to
  * avoid. Position is arbitrary and honest; the legend carries the meaning.
  */
-const LINE_COLOURS = [ACCENT, ACCENT_DEEP, LIMIT, OVER, MUTED];
+const LINE_COLOURS = [ACCENT, SERIES_SECONDARY, LIMIT, OVER, MUTED];
 
 function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
   return (
@@ -53,6 +66,8 @@ function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) 
 export function MultiSeries({
   rows,
   series,
+  reference,
+  verdict,
   value_label,
   scope_label,
   valid_as_of,
@@ -60,6 +75,8 @@ export function MultiSeries({
 }: {
   rows: unknown;
   series: unknown;
+  reference?: unknown;
+  verdict?: string;
   value_label?: string;
   scope_label?: string;
   valid_as_of?: string;
@@ -75,6 +92,7 @@ export function MultiSeries({
   // is what a ratio is; `formatAmount` already declines to invent a symbol it was not given, so
   // the same formatter serves both and neither surface guesses.
   const fmt = (v: number) => formatAmount(v, unit ?? undefined);
+  const ref = readReference(reference);
 
   return (
     <div className="glass-panel p-4">
@@ -89,6 +107,18 @@ export function MultiSeries({
               or a ratio; the payload knows which, so the card says which. */}
           {unit === null ? " · dimensionless" : ` · ${unit}`}
         </span>
+        {/* THE PRODUCER'S VERDICT, verbatim, or nothing at all. Never computed from where a
+            series sits against the reference: below a target is bad for an index and good for
+            a cost ratio, and this card cannot tell which it is looking at. */}
+        {verdict && (
+          <span
+            className="font-mono text-[10px] uppercase tracking-widest"
+            style={{ color: OVER }}
+            data-verdict
+          >
+            {verdict}
+          </span>
+        )}
       </div>
 
       <div className="mt-3" style={{ width: "100%", height: 260 }}>
@@ -96,7 +126,19 @@ export function MultiSeries({
           <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID_LINE} />
             <XAxis dataKey="period" tick={{ fill: MUTED, fontSize: 11 }} />
-            <YAxis tickFormatter={fmt} tick={{ fill: MUTED, fontSize: 11 }} width={64} />
+            {/* ZOOMED TO THE DATA, not anchored at zero. Two indices between 0.78 and 1.00 drawn
+                against a 0 baseline occupy the top fifth of the chart and their movement — which
+                is the whole question — becomes invisible. The reference is included in the
+                domain so a declared line is never off-screen. */}
+            <YAxis
+              tickFormatter={fmt}
+              tick={{ fill: MUTED, fontSize: 11 }}
+              width={64}
+              domain={[
+                (min: number) => (ref ? Math.min(min, ref.value) : min),
+                (max: number) => (ref ? Math.max(max, ref.value) : max),
+              ]}
+            />
             <Tooltip
               contentStyle={{
                 background: "#0b1220",
@@ -106,7 +148,28 @@ export function MultiSeries({
               }}
               formatter={(v: unknown) => (typeof v === "number" ? fmt(v) : String(v ?? "—"))}
             />
-            <Legend wrapperStyle={{ fontFamily: "monospace", fontSize: 10, color: MUTED }} />
+            <Legend
+              align="left"
+              verticalAlign="bottom"
+              wrapperStyle={{ fontFamily: "monospace", fontSize: 10, color: MUTED }}
+            />
+            {/* A DECLARED line, drawn dashed so it never reads as a measured series. Its label
+                is the producer's word for it, or the bare value when they sent none — this card
+                does not name it "target", because it does not know that it is one. */}
+            {ref && (
+              <ReferenceLine
+                y={ref.value}
+                stroke={OVER}
+                strokeDasharray="6 4"
+                label={{
+                  value: ref.label ? `${ref.label} ${fmt(ref.value)}` : fmt(ref.value),
+                  position: "right",
+                  fill: OVER,
+                  fontFamily: "monospace",
+                  fontSize: 10,
+                }}
+              />
+            )}
             {decls.map((d: SeriesDecl, i: number) => (
               <Line
                 key={d.key}
@@ -119,7 +182,36 @@ export function MultiSeries({
                 // A GAP IS A GAP. Recharts would otherwise bridge a missing period with a
                 // straight line, drawing a measurement nobody took.
                 connectNulls={false}
-              />
+              >
+                {/* THE LAST VALUE, AT THE LAST POINT. A reader tracing two lines to the right
+                    edge should not have to cross-reference a legend to learn where each ended.
+                    Only the final point is labelled; labelling every point is a table. */}
+                <LabelList
+                  dataKey={d.key}
+                  content={(props: unknown) => {
+                    const q = props as {
+                      index?: number;
+                      x?: number;
+                      y?: number;
+                      value?: number;
+                    };
+                    if (q.index !== data.length - 1) return null;
+                    if (typeof q.value !== "number") return null;
+                    return (
+                      <text
+                        x={(q.x ?? 0) - 6}
+                        y={(q.y ?? 0) - 8}
+                        textAnchor="end"
+                        fill={LINE_COLOURS[i % LINE_COLOURS.length]}
+                        fontFamily="monospace"
+                        fontSize={10}
+                      >
+                        {`${d.label} ${fmt(q.value)}`}
+                      </text>
+                    );
+                  }}
+                />
+              </Line>
             ))}
           </LineChart>
         </ResponsiveContainer>

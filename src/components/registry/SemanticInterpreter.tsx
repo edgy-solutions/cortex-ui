@@ -605,6 +605,8 @@ const renderComponent = (
         <MultiSeries
           rows={comp.rows}
           series={comp.series}
+          reference={comp.reference}
+          verdict={comp.verdict}
           value_label={comp.value_label}
           scope_label={comp.scope_label}
           valid_as_of={comp.valid_as_of}

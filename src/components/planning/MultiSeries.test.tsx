@@ -29,7 +29,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { MultiSeries } from "./MultiSeries";
-import { validateMultiSeries } from "./MultiSeries.contract";
+import { readReference, validateMultiSeries } from "./MultiSeries.contract";
 import { assembleDerivedCapabilities } from "@/registry/assembleCapabilities";
 
 afterEach(cleanup);
@@ -207,5 +207,73 @@ describe("the registry axis is derived too — every binding, not one per archet
       (c) => c.archetype === "PERIOD_SERIES" && c.subject_uri.startsWith("fin:"),
     );
     expect(stranded.map((c) => c.subject_uri)).toEqual([]);
+  });
+});
+
+/**
+ * A DECLARED REFERENCE IS DRAWN; AN UNDECLARED ONE IS NOT INVENTED.
+ *
+ * The mockup shows a dashed TARGET 1.00 line and a "CPI BELOW 1.0" callout. Neither is in the
+ * payload, and neither can come from the card: a performance index has a target of 1.0 and a
+ * burn rate has none, so an archetype drawing a 1.0 line because a series looked like a ratio
+ * would be inventing the same kind of fact as plotting `trailing_periods` — a mark that means
+ * something for the first consumer and nothing for the next.
+ *
+ * So the producer declares the line, and the producer states the verdict. The card draws and
+ * judges nothing.
+ */
+describe("the reference line is declared, never assumed", () => {
+  it("reads a reference only when it carries a usable number", () => {
+    expect(readReference({ value: 1, label: "target" })).toEqual({ value: 1, label: "target" });
+    // A label with no value draws no line — there is nowhere to draw it.
+    expect(readReference({ label: "target" })).toBeNull();
+    expect(readReference({ value: "1" })).toBeNull();
+    expect(readReference(undefined)).toBeNull();
+    expect(readReference(null)).toBeNull();
+  });
+
+  it("draws NO reference when the payload declares none", () => {
+    // The state both live consumers are in today. The card must look complete without it.
+    const p = payload(["a", "b"]);
+    const { container } = render(<MultiSeries rows={p.rows} series={p.series} />);
+    expect(container.querySelector("[data-verdict]")).toBeNull();
+  });
+
+  it("the component does not name the line 'target' — that word is the producer's", () => {
+    // A card labelling an undeclared line "target" would be asserting what the reference MEANS.
+    // The producer's own `label` is used, and a bare value when they sent none.
+    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(src).toContain("ref.label"); // positive control: the producer's word is read
+    // The WORD, not a quoted form of it: the first version of this anchored on quotes and a
+    // mutation using a template literal walked straight past it. This component has no
+    // legitimate use for the word at all.
+    expect(src.toLowerCase()).not.toContain("target");
+  });
+});
+
+describe("the verdict is stated by the producer, never inferred", () => {
+  it("renders a verdict verbatim when one is sent", () => {
+    const p = payload(["a", "b"]);
+    render(<MultiSeries rows={p.rows} series={p.series} verdict="CPI below 1.0" />);
+    expect(screen.getByText("CPI below 1.0")).toBeTruthy();
+  });
+
+  it("says NOTHING when a series sits below a declared reference and no verdict was sent", () => {
+    // The whole rider. Below a line is bad for an index and good for a cost ratio, and this
+    // card cannot tell which it is looking at — so a card computing the callout from
+    // `value < reference.value` would be deciding what the reference means.
+    const p = payload(["a", "b"]);
+    const { container } = render(
+      <MultiSeries rows={p.rows} series={p.series} reference={{ value: 9999, label: "line" }} />,
+    );
+    expect(container.querySelector("[data-verdict]")).toBeNull();
+  });
+
+  it("the component derives no verdict from the reference at all", () => {
+    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // No comparison of a datum against the reference anywhere in the code.
+    expect(src).not.toMatch(/<\s*ref\.value|ref\.value\s*[<>]/);
   });
 });
