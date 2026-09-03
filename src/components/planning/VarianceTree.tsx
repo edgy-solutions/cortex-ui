@@ -41,6 +41,23 @@ function barTone(node: VarianceNode): string {
   return "bg-slate-400/50";
 }
 
+/**
+ * The verdict as a WORD, so it survives a projector and a colour-blind reader.
+ *
+ * A TAG RATHER THAN AN ARROW, deliberately. An up-arrow means "favourable" only if up is good,
+ * and for a cost variance the favourable number is often the negative one — so an arrow beside
+ * a minus sign asks the reader to know which variance kind they are looking at, which is the
+ * exact assumption this component refuses everywhere else. Two letters cannot be misread that
+ * way.
+ *
+ * Absent when the producer states no verdict, which is every node today.
+ */
+function verdictTag(node: VarianceNode): { text: string; className: string } | null {
+  if (node.favourable === true) return { text: "fav", className: "text-emerald-300" };
+  if (node.favourable === false) return { text: "adv", className: "text-rose-300" };
+  return null;
+}
+
 /** How the producer's stop reason reads to someone who did not write the engine. */
 const STOP_LANGUAGE: Record<string, string> = {
   leaf: "nothing beneath this in the model",
@@ -84,6 +101,7 @@ function Node({
   // saying anything would be noise. Every other value IS a statement and is rendered — an
   // unknown one verbatim, never mapped onto a neighbour.
   const stopLine = stop && stop !== "decomposed" ? (STOP_LANGUAGE[stop] ?? stop) : "";
+  const verdict = verdictTag(node);
 
   return (
     <li>
@@ -93,6 +111,18 @@ function Node({
         data-variance-node
         data-depth={depth}
       >
+        {/* ONE RAIL PER LEVEL. Depth was carried by indentation alone, which is a distance the
+            eye has to measure against a card edge that scrolls away. A rail per level is
+            countable, and it is hue-independent — the same reason the funding grid tells
+            provisional cells apart by a border rather than a tint. */}
+        {Array.from({ length: depth }, (_, k) => (
+          <span
+            key={k}
+            data-depth-rail
+            aria-hidden
+            className="self-stretch w-px bg-slate-100/10 flex-shrink-0"
+          />
+        ))}
         {kids.length > 0 ? (
           <button
             type="button"
@@ -123,37 +153,55 @@ function Node({
             {/* FIXED COLUMNS, so the numbers line up regardless of DEPTH. In a tree the label
                 is indented and a value laid out after it drifts right with every level — which
                 puts the figures a reader is comparing on a diagonal. */}
+            {/* THE SIGN IS SHOWN, plus included. In a decomposition where some contributors
+                push a total up and others pull it down, a bare number reads as a magnitude and
+                the direction has to be inferred from a colour. */}
             <span className="font-mono text-[13px] tabular-nums text-slate-200 w-24 text-right flex-shrink-0">
+              {node.variance > 0 ? "+" : ""}
               {formatAmount(node.variance, valueUnit)}
+            </span>
+            {/* The producer's verdict, as a word. Nothing when unstated. */}
+            <span className="w-8 flex-shrink-0 font-mono text-[9px] uppercase tracking-widest">
+              {verdict && <span className={verdict.className} data-verdict-tag>{verdict.text}</span>}
             </span>
             {/* OF THE ROOT, and the label says so. Against its parent a small variance inside a
                 small account can be half of it; against the root it is noise, and an unqualified
                 "share" invites the reading that makes a trivial node look like the problem. */}
+            {/* THE SHARE, DRAWN, AS ITS OWN COLUMN between the number and the percentage.
+                A full-width bar under each row turned a compact tree into a stack of two-line
+                entries and put the mark a long way from the figure it encodes. Beside the
+                percent it is read as the same fact twice — once as a shape, once as a number —
+                which is what makes a bar worth drawing at all.
+                WIDTH IS |SHARE|. The percentage keeps its sign; a bar cannot have one. */}
+            <span
+              data-share-bar
+              className="w-20 h-1 rounded-full bg-slate-100/[.07] flex-shrink-0 self-center"
+            >
+              <span
+                className={`block h-full rounded-full ${barTone(node)}`}
+                style={{ width: share === null ? "0%" : `${Math.min(100, Math.abs(share) * 100)}%` }}
+              />
+            </span>
             <span className="font-mono text-[10px] text-slate-500 w-14 text-right tabular-nums flex-shrink-0">
               {share === null ? "—" : `${showMeasure(share * 100)}%`}
             </span>
           </span>
-          {/* THE SHARE, DRAWN. A column of percentages is read one number at a time; a bar is
-              read as a shape, which is what "which of these is the problem" actually asks. */}
-          <span className="mt-1 block h-1 w-full rounded-full bg-slate-100/[.07]">
-            <span
-              className={`block h-full rounded-full ${barTone(node)}`}
-              style={{ width: share === null ? "0%" : `${Math.min(100, Math.abs(share) * 100)}%` }}
-            />
-          </span>
         </button>
       </div>
 
-      {/* THE PRODUCER'S OWN STOPPING STATEMENT. Never inferred from an empty contributor list:
-          leaf, immaterial, and its-own-depth-limit are three different facts that produce the
-          identical absence. */}
+      {/* THE PRODUCER'S OWN STOPPING STATEMENT, as a trailing tag rather than a line of its
+          own. Never inferred from an empty contributor list: leaf, immaterial, and
+          its-own-depth-limit are three different facts that produce the identical absence.
+          The full sentence stays on hover and in the inspector; the tag is what a reader
+          scanning a branch for "why does this stop here" can see without reading. */}
       {stopLine && (
         <p
-          className="font-mono text-[9px] text-slate-500 pb-1"
+          className="font-mono text-[9px] text-slate-600 pb-1 uppercase tracking-widest"
           style={{ paddingLeft: depth * 14 + 24 }}
           data-stop-reason={stop}
+          title={stopLine}
         >
-          {stopLine}
+          {stop}
         </p>
       )}
 
@@ -255,7 +303,7 @@ export function VarianceTree({
       </ul>
 
       <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-slate-500">
-        bar = share of total · shares are of the TOTAL, not of the parent
+        shares are of the TOTAL, not of the parent
       </p>
 
       {selected && (

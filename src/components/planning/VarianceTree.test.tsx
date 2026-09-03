@@ -81,8 +81,14 @@ const deepTree = () => [
 
 describe("the producer's stopping reason is rendered, never inferred", () => {
   it("says WHY a childless node has no children — leaf", () => {
-    render(<VarianceTree rows={[{ ...leaf("WP", -100), share_of_root: 1 }]} />);
-    expect(screen.getByText(/nothing beneath this in the model/)).toBeTruthy();
+    // The reason is now a TAG carrying the producer's own token, with the sentence on hover.
+    // A reader scanning a branch for "why does this stop here" sees the tag; a reader who wants
+    // the sentence gets it without it occupying a line on every leaf.
+    const { container } = render(<VarianceTree rows={[{ ...leaf("WP", -100), share_of_root: 1 }]} />);
+    const tag = container.querySelector('[data-stop-reason="leaf"]')!;
+    expect(tag).toBeTruthy();
+    expect(tag.textContent).toContain("leaf");
+    expect(tag.getAttribute("title")).toMatch(/nothing beneath this in the model/);
   });
 
   it("distinguishes IMMATERIAL from leaf", () => {
@@ -93,13 +99,18 @@ describe("the producer's stopping reason is rendered, never inferred", () => {
         rows={[{ ...leaf("CA", -20), stop_reason: "explained", share_of_root: 0.02 }]}
       />,
     );
-    expect(screen.getByText(/immaterial against the total/)).toBeTruthy();
-    expect(screen.queryByText(/nothing beneath this/)).toBeNull();
+    const tag = document.querySelector('[data-stop-reason="explained"]')!;
+    expect(tag).toBeTruthy();
+    expect(tag.getAttribute("title")).toMatch(/immaterial against the total/);
+    // And it is NOT the leaf sentence — same absence of children, entirely different fact.
+    expect(document.querySelector('[data-stop-reason="leaf"]')).toBeNull();
   });
 
   it("says when the ANALYSIS hit its own depth limit", () => {
     render(<VarianceTree rows={[{ ...leaf("CA", -400), stop_reason: "depth", share_of_root: 0.4 }]} />);
-    expect(screen.getByText(/the analysis stopped here at its own depth limit/)).toBeTruthy();
+    const tag = document.querySelector('[data-stop-reason="depth"]')!;
+    expect(tag).toBeTruthy();
+    expect(tag.getAttribute("title")).toMatch(/the analysis stopped here at its own depth limit/);
   });
 
   it("says NOTHING for a node that was decomposed — silence is the right output", () => {
@@ -291,11 +302,21 @@ describe("the share bar states no verdict it was not given", () => {
     expect(good.className).toMatch(/emerald/);
   });
 
-  it("derives no verdict from the sign anywhere in the component", () => {
+  it("derives no verdict from the sign — the VERDICT function reads only the declaration", () => {
+    // NARROWED, and the narrowing matters. The first version banned `variance > 0` anywhere in
+    // the file, which also bans showing the sign at all — and rendering "+1.2K" for a positive
+    // number is displaying the sign, not judging it. The ban belongs on the function that
+    // decides the VERDICT, not on the whole component.
     const raw = readFileSync(path.join(__dirname, "VarianceTree.tsx"), "utf8");
     const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(src).toContain("node.favourable"); // positive control: the verdict is read
-    expect(src).not.toMatch(/variance\s*[<>]\s*0/);
+
+    for (const fn of ["function barTone", "function verdictTag"]) {
+      const start = src.indexOf(fn);
+      expect(start, fn + " is missing").toBeGreaterThan(-1);
+      const body = src.slice(start, src.indexOf("\n}", start));
+      expect(body, fn + " reads the verdict").toContain("node.favourable");
+      expect(body, fn + " infers from the sign").not.toMatch(/variance/);
+    }
   });
 
   it("a null share draws no bar rather than a full one", () => {
@@ -327,5 +348,79 @@ describe("the value column is aligned across depths", () => {
       expect(amount!.className, "the amount column is not fixed-width").toMatch(/\bw-\d+\b/);
       expect(amount!.className).toMatch(/flex-shrink-0/);
     }
+  });
+});
+
+describe("the bar is a column, not a second line", () => {
+  it("sits BETWEEN the amount and the percent, at a fixed width", () => {
+    // A full-width bar under each row turns a compact tree into a stack of two-line entries and
+    // puts the mark a long way from the figure it encodes. Beside the percent it reads as the
+    // same fact twice — once as a shape, once as a number.
+    //
+    // COMPARED BY DOCUMENT POSITION, not by index in a flattened span list. The first version
+    // indexed into `querySelectorAll("span")`, which includes wrappers and spacers, so the
+    // numbers it compared were positions in a list nobody laid out — and it reported the bar as
+    // mis-ordered when the query was what was wrong.
+    const { container } = render(<VarianceTree rows={deepTree()} />);
+    const row = container.querySelector("[data-variance-node]")!;
+    const bar = row.querySelector("[data-share-bar]")!;
+    const spans = [...row.querySelectorAll("span")];
+    const amount = spans.find((el) =>
+      /^[-+]?\$?[\d.]+[KMB]?$/.test((el.textContent ?? "").trim()),
+    );
+    const pct = spans.find((el) => /^-?[\d.]+%$/.test((el.textContent ?? "").trim()));
+
+    expect(bar, "no share bar").toBeTruthy();
+    expect(amount, "no amount column").toBeTruthy();
+    expect(pct, "no percent column").toBeTruthy();
+
+    // DOCUMENT_POSITION_FOLLOWING === 4: the bar comes after the amount, the percent after the bar.
+    expect(amount!.compareDocumentPosition(bar) & 4, "the bar is not after the amount").toBe(4);
+    expect(bar.compareDocumentPosition(pct!) & 4, "the percent is not after the bar").toBe(4);
+  });
+
+  it("the bar column is fixed-width, so it aligns across depths like the others", () => {
+    const { container } = render(<VarianceTree rows={deepTree()} />);
+    const tracks = [...container.querySelectorAll("[data-share-bar]")];
+    expect(tracks.length).toBeGreaterThan(1); // positive control: several depths draw one
+    for (const track of tracks) {
+      expect(track.className).toMatch(/\bw-\d+\b/);
+      expect(track.className).not.toMatch(/w-full/);
+    }
+  });
+});
+
+describe("depth and verdict survive a projector", () => {
+  it("draws ONE RAIL PER LEVEL, so depth is countable rather than measured", () => {
+    // Indentation alone is a distance the eye measures against a card edge that scrolls away.
+    const { container } = render(<VarianceTree rows={deepTree()} />);
+    for (const row of container.querySelectorAll("[data-variance-node]")) {
+      const depth = Number(row.getAttribute("data-depth"));
+      expect(row.querySelectorAll("[data-depth-rail]").length, `depth ${depth}`).toBe(depth);
+    }
+  });
+
+  it("the verdict is a WORD, not only a colour", () => {
+    // Rose and teal are the second channel, never the only one — the projector rule from the
+    // funding grid and the ranking, applied to a tree.
+    const { container } = render(
+      <VarianceTree rows={[{ ...leaf("WP", -100), share_of_root: 1, favourable: false }]} />,
+    );
+    const tag = container.querySelector("[data-verdict-tag]")!;
+    expect(tag).toBeTruthy();
+    expect(tag.textContent).toMatch(/adv/i);
+  });
+
+  it("shows NO verdict word when the producer states none", () => {
+    // Every node today. An unstated verdict must not acquire one from a default.
+    const { container } = render(<VarianceTree rows={[{ ...leaf("WP", -100), share_of_root: 1 }]} />);
+    expect(container.querySelector("[data-verdict-tag]")).toBeNull();
+  });
+
+  it("shows the SIGN on the amount, plus included", () => {
+    const { container } = render(
+      <VarianceTree rows={[{ ...leaf("WP", 400), share_of_root: 0.4 }]} />,
+    );
+    expect(container.querySelector("[data-variance-node]")!.textContent).toMatch(/\+/);
   });
 });
