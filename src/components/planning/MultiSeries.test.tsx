@@ -277,3 +277,45 @@ describe("the verdict is stated by the producer, never inferred", () => {
     expect(src).not.toMatch(/<\s*ref\.value|ref\.value\s*[<>]/);
   });
 });
+
+/**
+ * A DASHED STROKE IS DECLARED, NOT POSITIONAL.
+ *
+ * The burn-rate mockup draws `planned` dashed and `spent` solid; the indices mockup draws both
+ * solid. So dashing is not a general rule of the design — it means "intended rather than
+ * measured", which is domain knowledge this archetype does not have.
+ *
+ * Varying it by POSITION would put a dash on whichever series happened to be declared second:
+ * right for a plan beside an actual, wrong for one index beside another. Meaningful for the
+ * first consumer and arbitrary for the next — the defect this archetype was minted to avoid,
+ * in a stroke pattern instead of a field name.
+ */
+describe("stroke style is the producer's declaration", () => {
+  it("draws dashed only where the payload asks", () => {
+    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(src).toContain("d.dashed ? "); // positive control: it is read from the declaration
+    // And never from where the series sits in the list.
+    expect(src).not.toMatch(/strokeDasharray=\{i\s*[=><%]/);
+    expect(src).not.toMatch(/i\s*===?\s*\d+\s*\?\s*["'`][\d ]+["'`]/);
+  });
+
+  it("the declaration survives validation with its style intact", () => {
+    const r = validateMultiSeries(payload(["a", "b"]).rows, [
+      { key: "a", label: "A" },
+      { key: "b", label: "B", dashed: true },
+    ]);
+    expect(r.kind).toBe("ok");
+    if (r.kind === "ok") {
+      expect(r.data.series[0].dashed).toBeFalsy();
+      expect(r.data.series[1].dashed).toBe(true);
+    }
+  });
+
+  it("a series with no style declared is not refused", () => {
+    // Both live consumers send none today. An optional hint that made a payload invalid would
+    // be a required field wearing an optional name.
+    const p = payload(["a", "b"]);
+    expect(validateMultiSeries(p.rows, p.series).kind).toBe("ok");
+  });
+});

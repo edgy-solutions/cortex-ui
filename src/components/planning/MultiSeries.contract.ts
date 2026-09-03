@@ -114,6 +114,20 @@ export interface SeriesDecl {
   key: string;
   label: string;
   unit?: string | null;
+  /**
+   * Draw this series dashed. Optional; solid when absent.
+   *
+   * DECLARED, BECAUSE THE CARD CANNOT KNOW WHICH SERIES IS A PLAN. A dashed stroke reads as
+   * "intended rather than measured", which is exactly right for a spend plan beside actual
+   * spend and exactly wrong for one performance index beside another. Varying it by POSITION
+   * would put a dash on whichever series happened to be declared second — meaningful for the
+   * first consumer and arbitrary for the next, which is the defect this archetype was minted
+   * to avoid.
+   *
+   * A STYLE HINT, NOT A SEMANTIC. It says how to draw, never what the series means; nothing
+   * else in this component reads it.
+   */
+  dashed?: boolean;
 }
 
 export interface MultiSeriesRow {

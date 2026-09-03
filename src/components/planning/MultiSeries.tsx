@@ -178,6 +178,11 @@ export function MultiSeries({
                 name={d.label}
                 stroke={LINE_COLOURS[i % LINE_COLOURS.length]}
                 strokeWidth={2}
+                // FORM AS WELL AS HUE, when the producer asks for it. A dashed stroke survives
+                // a washed-out projector in a way a second teal does not — the same reason the
+                // funding grid tells provisional cells apart by their border rather than their
+                // fill.
+                strokeDasharray={d.dashed ? "6 4" : undefined}
                 dot={false}
                 // A GAP IS A GAP. Recharts would otherwise bridge a missing period with a
                 // straight line, drawing a measurement nobody took.
