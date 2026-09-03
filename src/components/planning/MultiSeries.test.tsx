@@ -29,10 +29,21 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { MultiSeries } from "./MultiSeries";
-import { readReference, validateMultiSeries } from "./MultiSeries.contract";
+import {
+  formatSeriesValue,
+  readReference,
+  validateMultiSeries,
+} from "./MultiSeries.contract";
 import { assembleDerivedCapabilities } from "@/registry/assembleCapabilities";
 
 afterEach(cleanup);
+
+/** Comments stripped ONCE, here. Repeating this regex at six call sites was six chances for
+ *  an escaping layer to eat a backslash — which it did, twice, turning the pattern into one
+ *  that matched nothing and failed on correct code. */
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
 
 /** Build a payload of ANY shape, so no test knows a consumer's field names. */
 const payload = (keys: string[], periods = 3, unit?: string | null) => ({
@@ -77,7 +88,7 @@ describe("nothing about which series exist is written in the component", () => {
     // explanation and failed on correct code. Prose defeating a source regex is a defect this
     // repo has hit before; scanning code rather than the whole file is the fix.
     const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(raw);
     expect(src).toContain("dataKey={d.key}"); // positive control: driven by the declaration
     expect(src).not.toContain("dataKey=\"capex\""); // and the comment really was stripped
     const literals = src.match(/dataKey="[^"]+"/g) ?? [];
@@ -96,7 +107,7 @@ describe("nothing about which series exist is written in the component", () => {
     // missing period with a straight line, drawing a measurement nobody took, and it looks
     // exactly like data.
     const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(raw);
     expect(src).toContain("<Line"); // positive control on the stripped source
     expect(src, "gaps are being bridged").toContain("connectNulls={false}");
     expect(src).not.toContain("connectNulls={true}");
@@ -243,7 +254,7 @@ describe("the reference line is declared, never assumed", () => {
     // A card labelling an undeclared line "target" would be asserting what the reference MEANS.
     // The producer's own `label` is used, and a bare value when they sent none.
     const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(raw);
     expect(src).toContain("ref.label"); // positive control: the producer's word is read
     // The WORD, not a quoted form of it: the first version of this anchored on quotes and a
     // mutation using a template literal walked straight past it. This component has no
@@ -272,7 +283,7 @@ describe("the verdict is stated by the producer, never inferred", () => {
 
   it("the component derives no verdict from the reference at all", () => {
     const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(raw);
     // No comparison of a datum against the reference anywhere in the code.
     expect(src).not.toMatch(/<\s*ref\.value|ref\.value\s*[<>]/);
   });
@@ -293,7 +304,7 @@ describe("the verdict is stated by the producer, never inferred", () => {
 describe("stroke style is the producer's declaration", () => {
   it("draws dashed only where the payload asks", () => {
     const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(raw);
     expect(src).toContain("d.dashed ? "); // positive control: it is read from the declaration
     // And never from where the series sits in the list.
     expect(src).not.toMatch(/strokeDasharray=\{i\s*[=><%]/);
@@ -317,5 +328,89 @@ describe("stroke style is the producer's declaration", () => {
     // be a required field wearing an optional name.
     const p = payload(["a", "b"]);
     expect(validateMultiSeries(p.rows, p.series).kind).toBe("ok");
+  });
+});
+
+/**
+ * A RATIO IS NOT A SMALL AMOUNT OF MONEY.
+ *
+ * `formatAmount` compacts thousands and above and returns `String(n)` below 1000 — correct for
+ * money, because rounding $847.32 destroys precision a reader can use. Fed a performance index
+ * it printed 0.7829181494661922, and the y-axis ticks were those floats truncated to whatever
+ * fitted the label width.
+ *
+ * That is the 1.7999999999999998 defect again, in the one surface that had no ratio case when
+ * it was fixed — the fix was applied to the grids and this chart did not exist yet.
+ */
+describe("dimensionless values are formatted as ratios, not as amounts", () => {
+  // TESTED ON THE FUNCTION, NOT THE CARD, and the first version of this was tested on the card
+  // and could not fail. Recharts measures its container, jsdom reports zero, and no axis or
+  // label is ever emitted — so `container.textContent` held the header and nothing else, and
+  // three separate mutations to the formatter came back green against it. The formatter is
+  // exported for exactly this reason.
+
+  it("an index reads at ratio precision, not as a raw float", () => {
+    expect(formatSeriesValue(0.7829181494661922, null)).toBe("0.78");
+    expect(formatSeriesValue(0.9565217391304348, null)).toBe("0.96");
+    expect(formatSeriesValue(1, null)).toBe("1");
+  });
+
+  it("an AMOUNT keeps its money formatting — the fix must not cost the other case", () => {
+    // Why the UNIT decides and not the magnitude: rounding $847.32 to two decimals is fine, but
+    // rounding it to a compacted ratio is not, and `formatAmount` already gets money right.
+    expect(formatSeriesValue(1100000, "USD")).toContain("$1.1M");
+    expect(formatSeriesValue(847.32, "USD")).toMatch(/847/);
+  });
+
+  it("no dimensionless value ever renders more than two decimals", () => {
+    // The defect stated as a property rather than as three examples: whatever the input, the
+    // output a reader sees cannot be a sixteen-digit float.
+    for (const v of [0.1, 1 / 3, 2 / 7, 0.7829181494661922, 123.456789]) {
+      expect(formatSeriesValue(v, null)).not.toMatch(/d.d{3,}/);
+    }
+  });
+
+  it("the component composes the exported formatter rather than its own", () => {
+    // Otherwise the tests above guard a function the card does not use.
+    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const src = stripComments(raw);
+    expect(src).toContain("formatSeriesValue(v, unit)");
+    expect(src).not.toContain("formatAmount(");
+  });
+
+  it("the y-axis tick count is bounded, so a tight domain does not fill with fractions", () => {
+    // Source-level: the tick count is a Recharts prop and Recharts renders nothing here.
+    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const src = stripComments(raw);
+    expect(src).toMatch(/tickCount=\{\d+\}/);
+  });
+});
+
+describe("a reference the card cannot read says so", () => {
+  it("SPEAKS UP when a declared reference is unreadable", () => {
+    // Absent and malformed both drew no line, so a screenshot could not tell a producer that
+    // never sent the field from one that sent `value` as a string. That ambiguity is the
+    // diagnosis this card exists to support.
+    const p = payload(["a"]);
+    const { container } = render(
+      <MultiSeries rows={p.rows} series={p.series} reference={{ value: "1.0", label: "target" }} />,
+    );
+    expect(container.querySelector("[data-reference-unreadable]")).not.toBeNull();
+  });
+
+  it("stays SILENT when there is simply no reference", () => {
+    // Most payloads legitimately have none. A note on every card would be noise, and noise is
+    // what stops the note above being read when it matters.
+    const p = payload(["a"]);
+    const { container } = render(<MultiSeries rows={p.rows} series={p.series} />);
+    expect(container.querySelector("[data-reference-unreadable]")).toBeNull();
+  });
+
+  it("stays silent when the reference IS readable", () => {
+    const p = payload(["a"]);
+    const { container } = render(
+      <MultiSeries rows={p.rows} series={p.series} reference={{ value: 1, label: "target" }} />,
+    );
+    expect(container.querySelector("[data-reference-unreadable]")).toBeNull();
   });
 });

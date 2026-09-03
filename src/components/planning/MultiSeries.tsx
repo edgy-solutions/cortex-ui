@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatAmount } from "@/lib/formatAmount";
 import {
   ACCENT,
   SERIES_SECONDARY,
@@ -20,6 +19,7 @@ import {
   OVER,
 } from "@/lib/chartPalette";
 import {
+  formatSeriesValue,
   readReference,
   validateMultiSeries,
   type SeriesDecl,
@@ -88,11 +88,25 @@ export function MultiSeries({
   }
   const { rows: data, series: decls, unit } = result.data;
 
-  // A DIMENSIONLESS SERIES IS NOT AN UNKNOWN CURRENCY. With no unit the axis reads `1.2`, which
-  // is what a ratio is; `formatAmount` already declines to invent a symbol it was not given, so
-  // the same formatter serves both and neither surface guesses.
-  const fmt = (v: number) => formatAmount(v, unit ?? undefined);
+  // A RATIO IS NOT A SMALL AMOUNT OF MONEY, and using one formatter for both was wrong.
+  //
+  // `formatAmount` compacts thousands and above and then returns `String(n)` below 1000 —
+  // correct for money, because rounding $847.32 would destroy precision a reader can use. Fed a
+  // performance index it printed 0.7829181494661922, and the y-axis ticks were the same floats
+  // truncated to whatever fitted the label width. The 1.7999999999999998 defect again, in the
+  // one surface that had no ratio case when it was fixed.
+  //
+  // So the unit decides the formatter: declared unit means an amount, no unit means a ratio at
+  // the precision a ratio is read to. Two decimals, because an index is quoted as 0.85 and a
+  // third digit is noise a reader has to skip.
+  const fmt = (v: number) => formatSeriesValue(v, unit);
   const ref = readReference(reference);
+  // PRESENT BUT UNREADABLE IS NOT THE SAME AS ABSENT, and on screen they looked identical:
+  // both drew no line. That made a missing producer field and a malformed one — a `value` sent
+  // as the string "1.0", say — indistinguishable from a screenshot, which is exactly the
+  // diagnosis this card was asked to support. Absence stays silent because most payloads
+  // legitimately have none; a declaration this card could not read says so.
+  const referenceUnreadable = reference != null && ref === null;
 
   return (
     <div className="glass-panel p-4">
@@ -110,6 +124,15 @@ export function MultiSeries({
         {/* THE PRODUCER'S VERDICT, verbatim, or nothing at all. Never computed from where a
             series sits against the reference: below a target is bad for an index and good for
             a cost ratio, and this card cannot tell which it is looking at. */}
+        {referenceUnreadable && (
+          <span
+            className="font-mono text-[10px] uppercase tracking-widest text-amber-400/80"
+            data-reference-unreadable
+            title="the payload declared a reference this card could not read"
+          >
+            reference not readable
+          </span>
+        )}
         {verdict && (
           <span
             className="font-mono text-[10px] uppercase tracking-widest"
@@ -133,7 +156,13 @@ export function MultiSeries({
             <YAxis
               tickFormatter={fmt}
               tick={{ fill: MUTED, fontSize: 11 }}
-              width={64}
+              width={72}
+              // BOUNDED, so a zoomed domain does not generate a tick per pixel of precision.
+              // The domain is deliberately tight — that is what makes an index's movement
+              // visible — and an unbounded tick count turns tightness into a column of
+              // near-identical fractions.
+              tickCount={5}
+              allowDecimals
               domain={[
                 (min: number) => (ref ? Math.min(min, ref.value) : min),
                 (max: number) => (ref ? Math.max(max, ref.value) : max),

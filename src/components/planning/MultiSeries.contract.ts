@@ -44,6 +44,9 @@
  * made that claim on the reader's behalf. Refusing names the problem; drawing it hides one.
  */
 
+import { formatAmount } from "@/lib/formatAmount";
+import { showMeasure } from "@/lib/showMeasure";
+
 export const MULTI_SERIES_ROW_REQUIREMENTS = {
   minRows: 1,
   /** The payload says which keys are series. The renderer never infers them. */
@@ -133,6 +136,25 @@ export interface SeriesDecl {
 export interface MultiSeriesRow {
   period: string;
   [key: string]: unknown;
+}
+
+/**
+ * How a value on this chart is written, given the unit its series declared.
+ *
+ * EXPORTED SO IT CAN BE TESTED AT ALL. It began as a closure inside the component, and the
+ * tests written for it asserted on the rendered card — which cannot work: Recharts measures its
+ * container, jsdom reports zero, and no axis or label is ever emitted. Three mutations to the
+ * formatter came back green against a test that was only ever reading the card's header.
+ *
+ * A pure function is the honest instrument for a pure decision. The component composes it.
+ *
+ * THE UNIT DECIDES, NOT THE MAGNITUDE. `formatAmount` returns `String(n)` below 1000, which is
+ * right for money — rounding $847.32 destroys precision a reader can use — and catastrophic for
+ * a ratio, which printed as 0.7829181494661922. Two decimals for a dimensionless value, because
+ * an index is quoted as 0.85 and a third digit is noise a reader has to skip.
+ */
+export function formatSeriesValue(v: number, unit: string | null): string {
+  return unit === null ? showMeasure(v, 2) : formatAmount(v, unit);
 }
 
 /** A declared line to read the series against. The card draws it and judges nothing. */
