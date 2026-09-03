@@ -73,7 +73,9 @@ describe("the method is not optional at the renderer either", () => {
 
   it("draws the method and the formula alongside the figure when both are present", () => {
     render(<ForecastMeasure rows={row()} value_unit="USD" />);
-    expect(screen.getByText("CPI")).toBeTruthy();
+    // The method now reads "CPI method", so this matches the name inside its line rather than
+    // as a whole element — the assertion is that the method is SHOWN, not how it is worded.
+    expect(screen.getByText(/CPI method/i)).toBeTruthy();
     expect(screen.getByText("EAC = BAC / CPI")).toBeTruthy();
     expect(screen.getByText(/\$14\.2M|\$14\.15M/)).toBeTruthy();
   });
@@ -94,16 +96,26 @@ describe("it reads the producer's numbers and re-derives none of them", () => {
     expect(screen.queryByText(/-\$2\.2M|-\$2\.15M/)).toBeNull();
   });
 
-  it("and the HEADLINE is not coloured over-budget from a derivation either", () => {
-    // The subtle half, and it was blind until this test: `vac` drives the headline COLOUR as
-    // well as the variance figure. A card that fell back to comparing `bac` against `eac`
-    // would show the number in the breach colour while claiming no variance — the verdict
-    // asserted in paint rather than in words, which is harder to notice and just as wrong.
+  it("and the VARIANCE TILE is not coloured adverse from a derivation either", () => {
+    // The subtle half, and it was blind until a test went in: `vac` drives the breach COLOUR as
+    // well as the figure. A card falling back to comparing `bac` against `eac` would paint the
+    // verdict while claiming no variance — asserted in paint rather than in words, which is
+    // harder to notice and just as wrong.
+    //
+    // MOVED WITH THE DESIGN. It used to assert on the headline, which was coloured by the
+    // verdict; the headline is now always neutral, because a forecast is not itself good or bad
+    // — the variance is. Left on the headline this test would still have passed and stopped
+    // meaning anything, which is how a guard quietly retires.
     //
     // The row below has bac 12M against a 14.2M forecast, so a derivation WOULD say over.
-    render(<ForecastMeasure rows={row({ vac: undefined })} value_unit="USD" />);
-    const headline = screen.getByText(/^\$14/);
-    expect(headline.getAttribute("style") ?? "").not.toMatch(/251, ?113, ?133|#fb7185/i);
+    const { container } = render(<ForecastMeasure rows={row({ vac: undefined })} value_unit="USD" />);
+    const tiles = [...container.querySelectorAll("div")].filter((el) =>
+      /variance/i.test(el.textContent ?? ""),
+    );
+    expect(tiles.length).toBeGreaterThan(0); // positive control: the tile is there
+    for (const t of tiles) {
+      expect(t.className).not.toMatch(/rose/);
+    }
   });
   it("an absent supporting quantity is an em dash, never a zero", () => {
     // A zero is a measurement. "We were not told" and "it is nought" are different claims.
