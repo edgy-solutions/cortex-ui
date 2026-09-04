@@ -40,6 +40,10 @@ function walk(component: Record<string, unknown>) {
 const base = {
   status: "slot_elicitation",
   disposition: "ask",
+  // THE TYPED SUBJECT, minted 2026-09-03. Without it an ask had no output class and the
+  // presentation agent could not select for it, so the card landed on KNOWLEDGE_DOCUMENT —
+  // which is the fallback this whole archetype exists to stop borrowing.
+  output_uri: "http://invincible-agent/mesh#SlotElicitation",
   reason: "slot-unfilled",
   spoken: "",
   found: "",
@@ -58,6 +62,9 @@ const H06_DEPLOYED = {
   options: [] as { value: string; label: string }[],
   option_source: "none",
   free_text_reason: "too_many",
+  // NOT `truncated_from`. `too_many` cuts nothing — the provider returns no members at all —
+  // so what was cut is 0 and what EXISTS is 9. Two numbers, and this is the one a reader wants.
+  total_count: 9,
   message:
     "I need a capability and there are too many to list (9 to choose from). Nothing was run.",
 };
@@ -93,6 +100,7 @@ const E05 = {
   options: [] as { value: string; label: string }[],
   option_source: "none",
   free_text_reason: "too_many",
+  total_count: 14,
   message: "I need a project and there are too many to list (14 to choose from). Nothing was run.",
 };
 
@@ -158,17 +166,25 @@ describe("E05 — a real name of the wrong kind", () => {
     expect(w.sent).toEqual(["what does it depend on (project_id: ERP Modernization)"]);
   });
 
-  it("the count the reader needs is NOT on the card — it survives only in the prose", () => {
-    // FILED, NOT FAKED. On the `too_many` branch the producer puts the candidate count in
-    // `detail`, which reaches the surface only inside `message`; `truncated_from` stays 0.
-    // So "14 to choose from" is real information this card cannot show without parsing prose,
-    // and parsing prose to recover a number is how a label becomes a data source. The
-    // assertion pins the gap so it stays visible until the producer carries the count.
+  it("the count reaches the reader as a FIELD, and not by parsing the prose", () => {
+    // THIS ASSERTION USED TO SAY THE OPPOSITE, and the inversion is the point. The walk filed
+    // that the count lived only inside `message`, so a surface wanting to say "14 projects"
+    // had to parse an English sentence. The producer carried it as `total_count` on
+    // 2026-09-03; the test flips rather than being deleted, so the closure is recorded where
+    // the gap was.
     const w = walk(E05);
+    // Still 0, and still correct: `too_many` cuts nothing, so nothing was truncated.
     expect(E05.truncated_from).toBe(0);
-    expect(E05.message).toMatch(/14 to choose from/);
-    expect(document.body.textContent).not.toMatch(/14/);
+    expect(document.querySelector("[data-total-count]")?.getAttribute("data-total-count")).toBe("14");
+    expect(screen.getByText(/14 exist/)).toBeTruthy();
     expect(w.sent).toEqual([]);
+  });
+
+  it("does NOT report what was cut, because nothing was", () => {
+    // The two numbers say different things and the card must not blend them. Showing
+    // "14 matched" on a path that truncated nothing would invent a menu that was never bound.
+    walk(E05);
+    expect(document.body.textContent).not.toMatch(/matched/);
   });
 });
 

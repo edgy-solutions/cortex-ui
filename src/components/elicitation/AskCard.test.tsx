@@ -204,6 +204,40 @@ describe("the card is a question and does not look like an answer", () => {
     expect(screen.getByText(/Nothing was run/)).toBeTruthy();
   });
 
+  it("refuses an ABSTAIN that arrives with only its STATUS, and no disposition", () => {
+    // THE SECOND LEVER, and it is not redundant. The producer split the status on 2026-09-03 so
+    // a consumer switching on EITHER field is correct — which is only true if this card checks
+    // both. A card that lost its `disposition` in transit would otherwise fall through and be
+    // drawn as a question, the same defect arriving through a different hole.
+    const onReroute = vi.fn();
+    const { disposition: _dropped, ...noDisposition } = card();
+    render(
+      <AskCard
+        component={{ ...noDisposition, status: "slot_abstain", options: [], option_source: "none" }}
+        onReroute={onReroute}
+      />,
+    );
+    expect(document.querySelector("[data-ask-card]")).toBeNull();
+    expect(document.querySelectorAll("button").length).toBe(0);
+    expect(document.querySelector("[data-ask-abstained]")).not.toBeNull();
+  });
+
+  it("refuses a STATUS it does not know, even when the disposition says ask", () => {
+    // Disagreement between the two fields is not something to resolve by picking the
+    // convenient one. An unrecognised status is a shape this component was not built for.
+    render(<AskCard component={card({ status: "something_new" })} />);
+    expect(document.querySelector("[data-ask-card]")).toBeNull();
+    expect(screen.getByText(/not an ask/)).toBeTruthy();
+  });
+
+  it("draws normally when BOTH fields agree it is an ask", () => {
+    // Red-proofs the two above: if the guard refused everything they would pass for the wrong
+    // reason and the card would never render at all.
+    render(<AskCard component={card()} />);
+    expect(document.querySelector("[data-ask-card]")).not.toBeNull();
+    expect(document.querySelectorAll("[data-ask-option]").length).toBe(2);
+  });
+
   it("refuses a disposition it does not know rather than guessing", () => {
     render(<AskCard component={card({ disposition: "route" })} />);
     expect(document.querySelector("[data-ask-card]")).toBeNull();

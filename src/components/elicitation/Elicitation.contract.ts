@@ -73,6 +73,18 @@ export type ElicitationFreeTextReason = (typeof ELICITATION_FREE_TEXT_REASONS)[n
 export const ASK = "ask";
 export const ABSTAIN = "abstain";
 
+/**
+ * The per-disposition statuses. TWO OF THEM, SINCE 2026-09-03 — one status for two
+ * dispositions was a producer-side defect this card's walk surfaced, and they closed it on
+ * their side so the wrong lever is unavailable rather than merely discouraged.
+ *
+ * This reads BOTH. `disposition` is the primary check because it is the field that has always
+ * discriminated; the status is checked too, so a card that lost its disposition still cannot
+ * be drawn as a question.
+ */
+export const STATUS_ASK = "slot_elicitation";
+export const STATUS_ABSTAIN = "slot_abstain";
+
 export const ELICITATION_REFUSAL_REASONS = [
   "the ask names no slot",
   "this is not an ask",
@@ -113,6 +125,13 @@ export const ELICITATION_CONTRACT = {
     message: { type: "string", required: false },
     /** How many candidates existed before the menu bound. 0 when untruncated. */
     truncated_from: { type: "number", required: false },
+    /**
+     * How many EXIST, when a provider counted them. NOT `truncated_from`, and the producer is
+     * explicit that conflating them is the defect: that one counts what was CUT, and `too_many`
+     * cuts nothing because the provider returns no members at all. Two different numbers, and
+     * on the free-text path the one a reader wants is this one.
+     */
+    total_count: { type: "number", required: false },
   },
   refusalReasons: ELICITATION_REFUSAL_REASONS,
 } as const;
@@ -135,6 +154,7 @@ export interface AskCardPayload {
   accepted_slots: Record<string, unknown>;
   message: string;
   truncated_from: number;
+  total_count: number;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -162,8 +182,12 @@ export function validateAsk(
   if (!isRecord(comp)) return { kind: "empty", reason: "this is not an ask" };
 
   const disposition = str(comp.disposition);
-  if (disposition && disposition !== ASK) {
-    if (disposition === ABSTAIN) {
+  const status = str(comp.status);
+  // BOTH LEVERS, and the status one is not redundant: a card that lost its `disposition`
+  // would otherwise fall through and be drawn as a question, which is the same defect
+  // arriving through a different hole.
+  if ((disposition && disposition !== ASK) || (status && status !== STATUS_ASK)) {
+    if (disposition === ABSTAIN || status === STATUS_ABSTAIN) {
       return {
         kind: "abstained",
         message: str(comp.message) || "Nothing was run.",
@@ -201,6 +225,7 @@ export function validateAsk(
       accepted_slots: isRecord(comp.accepted_slots) ? comp.accepted_slots : {},
       message: str(comp.message),
       truncated_from: typeof comp.truncated_from === "number" ? comp.truncated_from : 0,
+      total_count: typeof comp.total_count === "number" ? comp.total_count : 0,
     },
   };
 }

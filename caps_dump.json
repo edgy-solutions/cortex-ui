@@ -1457,7 +1457,8 @@
     "sub_query",
     "accepted_slots",
     "message",
-    "truncated_from"
+    "truncated_from",
+    "total_count"
    ],
    "persona_fit": [],
    "domain_fit": [],
@@ -1506,6 +1507,10 @@
       "required": false
      },
      "truncated_from": {
+      "type": "number",
+      "required": false
+     },
+     "total_count": {
       "type": "number",
       "required": false
      }

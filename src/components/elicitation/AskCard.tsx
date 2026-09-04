@@ -179,6 +179,16 @@ export function AskCard({
           data-free-text-reason={ask.free_text_reason ?? ""}
         >
           {noMenuLine}
+          {/* HOW MANY EXIST — a DIFFERENT number from `truncated_from`, which counts what was
+              cut and is 0 here because `too_many` returns no members at all. It arrived as a
+              field on 2026-09-03; before that it lived only inside the prose `message`, and
+              recovering it would have meant parsing an English sentence for a number. */}
+          {ask.total_count > 0 && (
+            <span className="text-slate-600" data-total-count={ask.total_count}>
+              {" "}
+              · {ask.total_count} exist
+            </span>
+          )}
         </p>
       )}
 
