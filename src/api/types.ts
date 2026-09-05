@@ -143,6 +143,22 @@ export interface RouteDecision {
    *  (or "what did the winner beat") is visible, not just the winner. */
   candidates?: SubjectCandidate[];
 
+  /**
+   * WHAT AN ELIGIBILITY GATE REMOVED, and which gate removed it.
+   *
+   * THE FAILURE THIS EXISTS TO MAKE VISIBLE. `candidates` is what SURVIVED. Every gate —
+   * domain, arity, argument-fit, permission, the productive-option gate — can delete the only
+   * verb that fits, and the record afterwards shows only the survivors. So an abstention on a
+   * pool of one reads as "the classifier was not sure" when the truth is "the gate deleted the
+   * answer before the classifier saw it". Those need different remedies and the record could
+   * not tell them apart.
+   *
+   * The three fields are the producer's, read verbatim and never interpreted: this surface has
+   * no vocabulary of gates and must not acquire one, or the next gate anyone adds renders as
+   * an unknown token instead of inheriting the trace.
+   */
+  excluded?: ExcludedCandidate[];
+
   /** Acting-persona provenance — the CALLER persona + domain this decision
    *  was computed under. Persona-driven routing means the same query can
    *  pick different verbs under different personas; this is the premise
@@ -157,6 +173,19 @@ export interface RouteDecision {
  * one whose `uri` equals RouteDecision.about.uri; the rest are the losers,
  * rendered first-class with their scores so the contest is visible.
  */
+/**
+ * ExcludedCandidate — one verb an eligibility gate removed, with the gate that removed it and
+ * the reason it gave. A silent removal is indistinguishable from "there was never an answer".
+ */
+export interface ExcludedCandidate {
+  /** The verb removed — an IRI or a label, whichever the producer captured. */
+  verb: string;
+  /** WHICH gate removed it: "arity", "domain", "argument-fit", "permission", … */
+  gate: string;
+  /** WHY, in the gate's own words. Rendered verbatim; this surface does not paraphrase. */
+  reason: string;
+}
+
 export interface SubjectCandidate {
   uri: string;
   label?: string;

@@ -6,7 +6,7 @@ import {
   useCurrentGraphTrace,
   useCurrentGraphAlternates,
 } from "@/store/useCanvasStore";
-import { presentFallbackReason, type RouteSeverity } from "@/lib/routing";
+import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
 import type { GraphTraceNode } from "@/api/types";
 
 /**
@@ -79,9 +79,17 @@ export function DecisionPathDiagram() {
     topLoserRecall > winnerRecall;
 
   const isFallback = !!routing.fallback;
+  // THE ABSTENTION, TOLD APART. "Nothing fit" and "something fit and a gate removed it" are
+  // different events with different remedies, and they used to render identically. When the
+  // record carries no exclusions this is exactly `presentFallbackReason` — an ordinary
+  // abstention never gets louder than it was.
   const fb = isFallback && routing.fallback_reason
-    ? presentFallbackReason(routing.fallback_reason)
+    ? presentAbstention(routing.fallback_reason, routing.excluded)
     : null;
+  // Drawn on EVERY decision, not only on an abstention: a gate that removed the better verb
+  // while a worse one survived is the same defect with an answer on top of it, and that case
+  // shows no fallback at all.
+  const removed = readExclusions(routing.excluded);
 
   return (
     <div className="glass-panel-sm p-3">
@@ -159,6 +167,12 @@ export function DecisionPathDiagram() {
                   }))}
                 />
               )}
+
+              {/* REMOVED, NOT PASSED OVER — and the distinction is the whole point. "Verbs not
+                  taken" above were eligible and lost. These never reached the classifier at
+                  all: a gate deleted them, and the record afterwards showed only the survivors,
+                  so an abstention on a pool of one wore a classifier-uncertainty costume. */}
+              {removed.length > 0 && <Removed items={removed} />}
 
               {/* TERMINAL — the output class, OR the loud fallback node */}
               {isFallback && fb ? (
@@ -264,6 +278,39 @@ function Connector({ label, verb }: { label: string; verb?: boolean }) {
 
 /** The branches-not-taken: dashed offshoots off the spine, dim, with
  *  scores where captured. Subject-leg losers or verb-leg alternates. */
+/**
+ * The candidates a gate deleted. A separate component from `Offshoots` because the shape
+ * differs in kind rather than in degree: an offshoot carries a SCORE, which is a comparison
+ * these never got to be part of. What they carry instead is a gate and a sentence.
+ */
+function Removed({ items }: { items: { verb: string; gate: string; reason: string }[] }) {
+  return (
+    <div
+      className="ml-3 mb-1 border-l border-dashed border-amber-700/50 pl-3 py-1"
+      data-removed-candidates
+    >
+      <div className="text-[9px] font-mono uppercase tracking-wider text-amber-500/70 mb-1">
+        candidates removed (eligibility)
+      </div>
+      <div className="flex flex-col gap-1">
+        {items.map((it, i) => (
+          <div
+            key={`${it.verb}-${i}`}
+            className="text-[10px] font-mono leading-snug text-slate-400"
+            data-removed-gate={it.gate || undefined}
+          >
+            <span className="text-slate-300">{_short(it.verb)}</span>
+            {it.gate && <span className="text-amber-500/80"> — excluded by {it.gate}</span>}
+            {/* THE GATE'S OWN WORDS, verbatim. This surface has no vocabulary of gates and must
+                not acquire one, or the next gate anyone adds renders as an unknown token. */}
+            {it.reason && <span className="text-slate-500">: {it.reason}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Offshoots({
   caption,
   items,
@@ -326,7 +373,9 @@ function FallbackNode({
           {title}
         </span>
       </div>
-      <p className="mt-1 text-[10px] font-mono leading-snug text-slate-400">{detail}</p>
+      <p className="mt-1 text-[10px] font-mono leading-snug text-slate-400" data-fallback-detail>
+        {detail}
+      </p>
       <div className="mt-1 text-[9px] font-mono uppercase tracking-widest text-slate-600">
         {reason}
       </div>
