@@ -146,7 +146,11 @@ export function MultiSeries({
 
       <div className="mt-3" style={{ width: "100%", height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          {/* `top: 20` IS THE REFERENCE LABEL'S ROOM. The y-domain deliberately INCLUDES the
+              reference, so a declared line can sit flush against the top edge — and its label
+              sits above it. Eight pixels clipped that label; twenty clears it, and costs a
+              chart 260px tall nothing a reader would notice. */}
+          <LineChart data={data} margin={{ top: 20, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID_LINE} />
             <XAxis dataKey="period" tick={{ fill: MUTED, fontSize: 11 }} />
             {/* ZOOMED TO THE DATA, not anchored at zero. Two indices between 0.78 and 1.00 drawn
@@ -192,7 +196,21 @@ export function MultiSeries({
                 strokeDasharray="6 4"
                 label={{
                   value: ref.label ? `${ref.label} ${fmt(ref.value)}` : fmt(ref.value),
-                  position: "right",
+                  // INSIDE THE PLOT, ALWAYS, AND ALWAYS ON THE SAME SIDE OF THE LINE.
+                  //
+                  // It was `"right"`, which draws the label OUTSIDE the plot into a 12px
+                  // margin, so any label longer than a few pixels was cut — "target 1.00"
+                  // arrived as "t.". A reference near mid-plot still read, because the eye
+                  // fills in a label it can half-see; one at the top of the domain has nothing
+                  // to fill in with, which is why this surfaced on the indices card.
+                  //
+                  // THE FIRST FIX PICKED THE SIDE BY COMPARING THE REFERENCE TO THE DATA'S
+                  // RANGE, and a seal in this file's tests refused it: no comparison of a datum
+                  // against the reference, anywhere. That seal is right and the exemption would
+                  // have been the erosion — "it only chooses a text anchor" is how a card starts
+                  // deciding what its numbers mean. One side for every case instead, and the
+                  // top margin below is what makes that safe.
+                  position: "insideTopRight",
                   fill: OVER,
                   fontFamily: "monospace",
                   fontSize: 10,

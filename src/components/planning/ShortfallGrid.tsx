@@ -185,8 +185,22 @@ export function ShortfallGrid({
           <tbody>
             {subjects.map((s) => (
               <tr key={s}>
-                <td className="px-3 py-2 font-mono text-sm text-slate-100 whitespace-nowrap">
-                  {names.get(s)}
+                {/* THE LABEL COLUMN SIZES TO ITS CONTENT, CAPPED — it used to claim half the
+                    card and push the later periods off the right edge behind a scrollbar.
+                    Two separate causes, and fixing either alone leaves the other:
+
+                      * `whitespace-nowrap` made a long label ("Research, Development, Test and
+                        Evaluation") demand its full single-line width, so the periods got
+                        whatever was left and the table overflowed;
+                      * in a `w-full` auto-layout table this column also ABSORBS SPARE WIDTH,
+                        which is the dead band between the labels and the first period at full
+                        card width — nothing was overflowing there, the column was just greedy.
+
+                    `w-[1%]` shrinks the column to its content, and the cap lives on an inner
+                    block because `max-width` on a `td` is ignored under auto table layout —
+                    it has to be on something that is not a table cell to be honoured at all. */}
+                <td className="px-3 py-2 font-mono text-sm text-slate-100 align-middle w-[1%]">
+                  <span className="block max-w-[13rem]">{names.get(s)}</span>
                 </td>
                 {periods.map((p) => {
                   const cell = at(s, p);

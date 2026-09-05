@@ -44,7 +44,13 @@ export function FitBox({
   return (
     <div
       ref={outerRef}
-      className={`w-full h-full overflow-hidden flex items-center justify-center ${className ?? ""}`}
+      /* TOP-ALIGNED, NOT CENTERED. Centering made the vertical position of a card's content a
+         function of how tall that content happened to be: a short answer (a single metric, a
+         short ranking) floated mid-card with empty bands above and below, while a tall one sat
+         flush at the top. Side by side those read as two different layouts rather than one.
+         Horizontal centering stays — the scale is chosen by width, so content usually fills it
+         anyway, and when it does not, centered is right for a single column. */
+      className={`w-full h-full overflow-hidden flex items-start justify-center ${className ?? ""}`}
     >
       <div
         ref={innerRef}
@@ -52,7 +58,10 @@ export function FitBox({
           width: naturalWidth,
           flex: "0 0 auto",
           transform: `scale(${scale})`,
-          transformOrigin: "center center",
+          // MUST MATCH `items-start` ABOVE. `center center` scales toward the middle, which
+          // reintroduces the gap the alignment just removed — the element's box shrinks from
+          // its centre and leaves half the removed height above it.
+          transformOrigin: "top center",
         }}
       >
         {children}

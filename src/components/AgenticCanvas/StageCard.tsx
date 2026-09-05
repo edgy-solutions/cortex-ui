@@ -269,8 +269,13 @@ export function StageCard({
               : "bg-neon-cyan"
           }`}
         />
+        {/* THE SUBJECT IS WHAT GIVES WAY. Six cards on one program share a subject and differ
+            only by verb, so when both halves truncate the reader loses the ONE word that tells
+            them apart — "NOTIONAL PROGRAM MER… · fin Eac Calcula…" names nothing. `min-w-0`
+            is what makes this span actually shrink: a flex child will not go below its content
+            width without it, which is why adding `truncate` alone never did anything here. */}
         <span
-          className={`text-[11px] font-mono uppercase tracking-widest truncate ${
+          className={`text-[11px] font-mono uppercase tracking-widest truncate min-w-0 ${
             task && taskPending ? "text-neon-pink/90" : "text-slate-400"
           }`}
         >
@@ -310,7 +315,11 @@ export function StageCard({
           </span>
         ) : (
           !custom && spo.verbLabel && (
-            <span className="ml-auto text-[10px] font-mono text-neon-purple/70 truncate max-w-[45%]">
+            /* SHRINKS LAST, not first. It was `truncate max-w-[45%]` with no shrink priority,
+               so the verb was clipped at the same time as the subject beside it — and the verb
+               is the half that disambiguates. The cap stays as a bound on a pathological verb,
+               but a real one ("fin Funding Status") now renders whole and the subject yields. */
+            <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-neon-purple/70 truncate max-w-[60%]">
               {spo.verbLabel}
             </span>
           )
