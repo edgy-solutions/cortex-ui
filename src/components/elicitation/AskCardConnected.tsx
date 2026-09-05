@@ -20,6 +20,8 @@ export function AskCardConnected({ component }: { component: unknown }) {
       <AskCard
         component={component}
         onReroute={(reroute, ask) => {
+          // `sendMessage` takes the pick as its SECOND argument, so the phrase and the choice
+          // stay separate all the way to the wire.
           const result = dispatchReroute(reroute, ask, sendMessage);
           setBlocked(result.blocked ?? null);
         }}

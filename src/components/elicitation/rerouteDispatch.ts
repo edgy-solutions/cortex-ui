@@ -1,30 +1,38 @@
+import { BOUND_SLOTS_FIELD, toBoundSlots } from "@/api/boundSlots";
 import { BIND, type AskCardPayload, type Reroute } from "./Elicitation.contract";
 
 /**
- * Where an answered ask goes — and the honest report that half of it has nowhere to go yet.
+ * Where an answered ask goes. BOTH PATHS REACH THE SERVER NOW.
  *
- * ── RESPEAK WORKS TODAY, WITH NO SERVER CHANGE ────────────────────────────────────────────
+ * ── RESPEAK: WORDS RE-ENTER AS WORDS ──────────────────────────────────────────────────────
  *
- * It composes a phrase and hands it to the ordinary send path, because that is what a
- * re-speak IS: words re-entering as words, filled and resolved exactly as any question is.
+ * The phrase the producer composes goes to the ordinary send path and is filled and resolved
+ * like any question. Nothing rides beside it, because there is no pick to carry.
  *
- * ── BIND HAS NO ROUTE, AND THAT IS A FINDING, NOT A BUG HERE ──────────────────────────────
+ * ── BIND: THE PICK RIDES BESIDE THE PHRASE, NEVER INSIDE IT ───────────────────────────────
  *
- * `resolve_ask` exists as a pure in-process function with NO caller but a battery script and
- * its tests — no endpoint reaches it — and cortex's own send path takes a bare string, so
- * there is no transport on either side carrying pre-bound slots.
+ * The message is the ORIGINAL `sub_query`, unmodified, and the choice travels in its own
+ * field. Encoding it into the phrase — `"<sub_query> (<slot>: C7)"` — would send it back
+ * through the filler and the resolver, and re-parsing is the one thing this path exists to
+ * forbid: a menu whose selections get re-interpreted is a menu whose selections are
+ * suggestions. That is why `resolve_ask` returns an empty query on BIND, and why this does
+ * not compose one.
  *
- * IT WOULD BE EASY TO FAKE, AND FAKING IT DESTROYS THE ONE GUARANTEE BIND EXISTS FOR. The
- * phrase `"<sub_query> (<slot>: P1)"` would very likely resolve — and it would go back through
- * the filler and the resolver, which is precisely what BIND was built to avoid: the second turn
- * must be RECONSTRUCTED, never re-parsed, so it cannot parse the phrase differently than the
- * first turn did. A fallback that usually works is worse than none, because it makes the
- * missing seam invisible until the day the re-parse disagrees.
+ * ── THE FIELD NAME IS THE WHOLE RISK ──────────────────────────────────────────────────────
  *
- * So a pick is accepted, validated, and then reported as undeliverable. The producer's own
- * docstring notes both live ask cases currently fall to free text (`too_many`), so this path
- * has no live case today — which is why naming it costs nothing and hiding it would cost the
- * next person the whole diagnosis.
+ * The gateway reads `request.bound_slots`. A body posting `slots` — the name this module's own
+ * `Reroute` type uses, mirroring the producer's Python — is NOT rejected: `bound_slots` parses
+ * as None, the supervisor sees no pick, and the turn proceeds AS IF THE READER HAD NOT
+ * ANSWERED. No 422, no log line, a wrong answer with nothing anywhere saying so. The rename
+ * happens HERE, once, from a constant, and a test asserts the posted key against the name the
+ * gateway model declares.
+ *
+ * ── WHAT IS STILL REFUSED, AND WHY THAT IS NOT A GAP ──────────────────────────────────────
+ *
+ * A slot the provider reported as `too_many` had NO MENU, so there is nothing a pick could
+ * have been chosen from and `validate_bound_slots` refuses it as `no_menu` by design. Such an
+ * ask carries no options, so this never sends one: the card renders a text field and the
+ * answer takes the RESPEAK path, which is where an unvalidatable value belongs.
  */
 
 export interface DispatchResult {
@@ -39,19 +47,28 @@ export interface DispatchResult {
   blocked?: string;
 }
 
+/** The send seam. A pick is a SECOND ARGUMENT, never a phrase this function assembles. */
+export type SendTurn = (query: string, boundSlots?: Record<string, string>) => void;
+
 export function dispatchReroute(
   reroute: Reroute,
   ask: AskCardPayload,
-  send: (query: string) => void,
+  send: SendTurn,
 ): DispatchResult {
   if (reroute.action === BIND) {
-    void ask;
-    return {
-      blocked:
-        "Your choice was accepted, but there is no route yet that carries a pre-bound slot — " +
-        "re-asking it in words would re-parse the question, which is the one thing this path exists to avoid.",
-    };
+    // A BIND with nothing to bind would post `{}` — which is not "no pick" but a CLAIM that a
+    // menu was answered, against a server that branches on the field being absent.
+    const bound = toBoundSlots(reroute.slots);
+    if (Object.keys(bound).length === 0) {
+      return { blocked: "That pick carried no slot to bind, so nothing was sent." };
+    }
+    // The original phrase, verbatim. See the header: composing one here would re-parse.
+    send(ask.sub_query, bound);
+    return {};
   }
   send(reroute.query);
   return {};
 }
+
+/** Re-exported so a test can assert the posted key without reaching past this module. */
+export { BOUND_SLOTS_FIELD };

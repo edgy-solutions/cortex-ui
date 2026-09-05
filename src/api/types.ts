@@ -752,6 +752,24 @@ export interface InterviewRequest {
    */
   active_persona?: string;
   active_domains?: string[];
+  /**
+   * ADR-0033: THE ANSWER TO AN ASK. `{slot_name: chosen_id}` for a pick made from a menu this
+   * system offered. Absent on every ordinary turn.
+   *
+   * THE NAME IS LOAD-BEARING AND IS NOT `slots`. `gateway.py` declares
+   * `bound_slots: dict[str, str] | None` and reads `request.bound_slots`; posting `slots`
+   * parses as None and the pick DEFAULTS SILENTLY — a wrong answer with no error anywhere.
+   * The name is built from `BOUND_SLOTS_FIELD` rather than typed at the call site, and sealed.
+   *
+   * SEPARATE FROM `message`, never encoded into it. Routing a pick through the phrase would
+   * re-parse it, and re-parsing is the one thing BIND exists to forbid.
+   *
+   * NOT TRUSTED BY THE SERVER, which is the design: the supervisor RECOMPUTES the menu for the
+   * verb and slot and refuses a pick that is not on it. Neither side holds the offered set —
+   * no client echo (self-certifying) and no server-held state (a lifetime the stateless
+   * re-route exists to avoid).
+   */
+  bound_slots?: Record<string, string>;
 }
 
 // ── ADR-0026 entitlement matrix ────────────────────────────

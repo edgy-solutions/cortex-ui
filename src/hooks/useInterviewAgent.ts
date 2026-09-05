@@ -1,3 +1,4 @@
+import { boundSlotsBody } from "@/api/boundSlots";
 import { useCallback, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { streamInterviewResponse } from "@/api/client";
@@ -122,6 +123,12 @@ function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
  * - Updates Zustand store with ontology terms and data bindings
  * - Transitions to "blueprint" phase on INTERVIEW_COMPLETE signal
  */
+/** One turn's outgoing content: the phrase, and a pick if the reader answered an ask. */
+interface SendPayload {
+  userInput: string;
+  boundSlots?: Record<string, string>;
+}
+
 export function useInterviewAgent() {
   const {
     liveBpmnGraph,
@@ -477,7 +484,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async (userInput: string) => {
+    mutationFn: async ({ userInput, boundSlots }: SendPayload) => {
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
@@ -583,6 +590,11 @@ export function useInterviewAgent() {
       const personaSelection = usePersonaStore.getState();
       const request: InterviewRequest = {
         message: userInput,
+        // Only when a pick was made. An empty object is NOT the same as absent: the server
+        // branches on the field being None, and `{}` is a claim that a menu was answered.
+        // The decision lives in a function so it can be sealed; a conditional spread here
+        // could not be.
+        ...boundSlotsBody(boundSlots),
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,
@@ -633,10 +645,11 @@ export function useInterviewAgent() {
     },
   });
 
+  /** What one turn carries. A pick rides BESIDE the phrase, never inside it. */
   const sendMessage = useCallback(
-    (userInput: string) => {
+    (userInput: string, boundSlots?: Record<string, string>) => {
       if (mutation.isPending || !userInput.trim()) return;
-      mutation.mutate(userInput.trim());
+      mutation.mutate({ userInput: userInput.trim(), boundSlots });
     },
     [mutation]
   );

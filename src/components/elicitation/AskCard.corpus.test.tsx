@@ -17,12 +17,14 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { AskCard } from "./AskCard";
 import { dispatchReroute } from "./rerouteDispatch";
 import { BIND, RESPEAK, validateAsk, type Reroute } from "./Elicitation.contract";
+import { BOUND_SLOTS_FIELD } from "@/api/boundSlots";
 
 afterEach(cleanup);
 
 /** Render the card wired the way `AskCardConnected` wires it, and watch both seams. */
 function walk(component: Record<string, unknown>) {
-  const sent: string[] = [];
+  /** Every turn this walk causes: the phrase, and the pick that rode BESIDE it. */
+  const turns: { query: string; boundSlots?: Record<string, string> }[] = [];
   const routed: Reroute[] = [];
   const state: { blocked?: string } = {};
   render(
@@ -30,11 +32,13 @@ function walk(component: Record<string, unknown>) {
       component={component}
       onReroute={(reroute, ask) => {
         routed.push(reroute);
-        state.blocked = dispatchReroute(reroute, ask, (q) => sent.push(q)).blocked;
+        state.blocked = dispatchReroute(reroute, ask, (query, boundSlots) => {
+          turns.push({ query, boundSlots });
+        }).blocked;
       }}
     />,
   );
-  return { sent, routed, state };
+  return { turns, routed, state, get sent() { return turns.map((t) => t.query); } };
 }
 
 const base = {
@@ -137,16 +141,35 @@ describe("H06 — the bound case, at both bounds", () => {
     expect(w.routed[0]).toMatchObject({ action: BIND, slots: { capability_id: "C7" } });
   });
 
-  it("and at the ruled bound the answer CANNOT BE DELIVERED — the live cost of the missing route", () => {
-    // Not a hypothetical gap. `resolve_ask` has no caller but a battery script, and cortex's
-    // send path takes a bare string, so nothing on either side carries a pre-bound slot. The
-    // board records the bound as ruled 8 -> 10, which makes H06 the FIRST live BIND case: the
-    // day the enumerate fan-out lands, this menu appears and every pick on it stops here.
+  it("and the answer IS DELIVERED — the pick beside the phrase, not inside it", () => {
+    // THIS ASSERTION USED TO SAY THE OPPOSITE. It pinned a wall: `resolve_ask` had no caller
+    // but a battery script and cortex's send took a bare string, so a validated pick died on
+    // this side. Both halves landed, so the test inverts rather than being deleted — the
+    // closure is recorded where the wall was.
     const w = walk(H06_RULED);
     fireEvent.click(screen.getByRole("button", { name: "Observability" }));
+
     expect(w.routed[0].action).toBe(BIND);
-    expect(w.sent).toEqual([]);
-    expect(w.state.blocked).toMatch(/no route yet/);
+    expect(w.state.blocked).toBeUndefined();
+    expect(w.turns).toHaveLength(1);
+    // THE MESSAGE IS THE ORIGINAL PHRASE, UNMODIFIED. Not "(capability_id: C9)" appended —
+    // that would send the pick back through the filler and the resolver, and re-parsing is the
+    // one thing this path exists to forbid.
+    expect(w.turns[0].query).toBe("what is the capability path");
+    expect(w.turns[0].query).not.toMatch(/C9/);
+    // And it rides under the key the gateway READS. Posting `slots` would parse as None and
+    // the turn would proceed as if nobody had answered — silently.
+    expect(w.turns[0].boundSlots).toEqual({ capability_id: "C9" });
+    expect(BOUND_SLOTS_FIELD).toBe("bound_slots");
+  });
+
+  it("a menu pick carries the slots the FIRST turn already filled, not just the answer", () => {
+    // `accepted_slots` is the whole re-route mechanism: `execute_subtask` only fills when the
+    // supplied slots are empty, so binding just the answered slot would suppress filling of
+    // every other slot the first turn got right.
+    const w = walk({ ...H06_RULED, accepted_slots: { horizon: "FY26" } });
+    fireEvent.click(screen.getByRole("button", { name: "Supply Planning" }));
+    expect(w.turns[0].boundSlots).toEqual({ horizon: "FY26", capability_id: "C4" });
   });
 });
 
@@ -199,10 +222,12 @@ describe("the two corpus cases do not blend", () => {
 
     expect(menu.routed.map((r) => r.action)).toEqual([BIND]);
     expect(words.routed.map((r) => r.action)).toEqual([RESPEAK]);
-    // One mechanism reaches the send path today and the other does not, which is the fact a
-    // blended pass rate would hide.
-    expect(menu.sent).toEqual([]);
-    expect(words.sent.length).toBe(1);
+    // BOTH reach the server now, and they reach it DIFFERENTLY. That difference is the fact a
+    // blended pass rate would hide: one turn carries a pick in its own field and one carries
+    // words in the message, and only the second is re-parsed on arrival.
+    expect(menu.turns[0].boundSlots).toEqual({ capability_id: "C1" });
+    expect(words.turns[0].boundSlots).toBeUndefined();
+    expect(words.turns[0].query).toMatch(/project_id: Atlas/);
   });
 });
 
