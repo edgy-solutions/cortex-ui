@@ -140,7 +140,14 @@ describe("the two answer paths are dispatched differently", () => {
     // and reach the engine as a 422 — the failure the tri-state exists to prevent.
     const r = resolveAsk(ask({ options: [], option_source: "none", free_text_reason: "too_many" }), "Meridian");
     expect(r.action).toBe(RESPEAK);
-    expect(r.query).toBe("what is driving the cost variance (program_id: Meridian)");
+    // THE PHRASE IS RE-ISSUED UNCOMPOSED, and this assertion used to pin the composed form.
+    // `"<sub_query> (<slot>: Meridian)"` was machine syntax on top of the question, and it
+    // reached the rail and was displayed as what the person had asked.
+    expect(r.query).toBe("what is driving the cost variance");
+    expect(r.query).not.toMatch(/Meridian|program_id/);
+    // The typed words are still delivered — beside the phrase, in their own field.
+    expect(r.spoken_answer).toBe("Meridian");
+    expect(r.slot).toBe("program_id");
     // And it carries no invented binding for the slot it was asked about.
     expect(r.slots).not.toHaveProperty("program_id");
   });

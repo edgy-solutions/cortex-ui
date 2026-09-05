@@ -1,13 +1,21 @@
 import { BOUND_SLOTS_FIELD, toBoundSlots } from "@/api/boundSlots";
+import { SPOKEN_ANSWER_FIELD, SPOKEN_SLOT_FIELD, type SpokenAnswer } from "@/api/spokenAnswer";
 import { BIND, type AskCardPayload, type Reroute } from "./Elicitation.contract";
 
 /**
  * Where an answered ask goes. BOTH PATHS REACH THE SERVER NOW.
  *
- * ── RESPEAK: WORDS RE-ENTER AS WORDS ──────────────────────────────────────────────────────
+ * ── RESPEAK: THE ANSWER RIDES BESIDE THE PHRASE TOO ───────────────────────────────────────
  *
- * The phrase the producer composes goes to the ordinary send path and is filled and resolved
- * like any question. Nothing rides beside it, because there is no pick to carry.
+ * The phrase is the ORIGINAL `sub_query`, byte-equal, and the typed answer travels in its own
+ * pair of fields. It used to be concatenated — `"<sub_query> (<slot>: meridian)"` — and that
+ * composed string reached the rail and was displayed as the user's question. Machine syntax on
+ * top of a paraphrase, presented as something a person said.
+ *
+ * ITS FIELDS ARE NOT `bound_slots`, AND THE SEPARATION IS THE SAFETY. A RESPEAK ask had no
+ * menu by construction, so `validate_bound_slots` refuses its slot as `no_menu` by design —
+ * see the last section. The answer is unvalidatable words and travels under a name that says
+ * so, where the server merges it into `spoken` and runs the ordinary resolution ladder.
  *
  * ── BIND: THE PICK RIDES BESIDE THE PHRASE, NEVER INSIDE IT ───────────────────────────────
  *
@@ -47,8 +55,17 @@ export interface DispatchResult {
   blocked?: string;
 }
 
-/** The send seam. A pick is a SECOND ARGUMENT, never a phrase this function assembles. */
-export type SendTurn = (query: string, boundSlots?: Record<string, string>) => void;
+/**
+ * The send seam. An answer is an ARGUMENT, never a phrase this function assembles — a pick in
+ * the second, typed words in the third. The two are separate parameters rather than one
+ * because they are separate wire fields for a reason: a pick is validated against a recomputed
+ * menu and unvalidatable words are refused by that same validator.
+ */
+export type SendTurn = (
+  query: string,
+  boundSlots?: Record<string, string>,
+  spoken?: SpokenAnswer,
+) => void;
 
 export function dispatchReroute(
   reroute: Reroute,
@@ -66,9 +83,15 @@ export function dispatchReroute(
     send(ask.sub_query, bound);
     return {};
   }
-  send(reroute.query);
+  // The phrase, verbatim, with the typed answer BESIDE it. A RESPEAK whose answer went missing
+  // would re-ask the identical question with nothing added, which reads to the reader as their
+  // answer having been ignored — so an empty one is reported rather than sent blind.
+  if (!reroute.spoken_answer.trim()) {
+    return { blocked: "That answer carried no words, so nothing was sent." };
+  }
+  send(reroute.query, undefined, { slot: reroute.slot, answer: reroute.spoken_answer });
   return {};
 }
 
-/** Re-exported so a test can assert the posted key without reaching past this module. */
-export { BOUND_SLOTS_FIELD };
+/** Re-exported so a test can assert the posted keys without reaching past this module. */
+export { BOUND_SLOTS_FIELD, SPOKEN_SLOT_FIELD, SPOKEN_ANSWER_FIELD };

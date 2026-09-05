@@ -1,4 +1,5 @@
 import { boundSlotsBody } from "@/api/boundSlots";
+import { spokenAnswerBody, type SpokenAnswer } from "@/api/spokenAnswer";
 import { useCallback, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { streamInterviewResponse } from "@/api/client";
@@ -123,10 +124,15 @@ function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
  * - Updates Zustand store with ontology terms and data bindings
  * - Transitions to "blueprint" phase on INTERVIEW_COMPLETE signal
  */
-/** One turn's outgoing content: the phrase, and a pick if the reader answered an ask. */
+/**
+ * One turn's outgoing content: the phrase, and whatever the reader's answer was — a PICK from
+ * a menu, or typed WORDS where there was no menu to pick from. Never both, and never inside
+ * the phrase.
+ */
 interface SendPayload {
   userInput: string;
   boundSlots?: Record<string, string>;
+  spoken?: SpokenAnswer;
 }
 
 export function useInterviewAgent() {
@@ -484,7 +490,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async ({ userInput, boundSlots }: SendPayload) => {
+    mutationFn: async ({ userInput, boundSlots, spoken }: SendPayload) => {
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
@@ -595,6 +601,10 @@ export function useInterviewAgent() {
         // The decision lives in a function so it can be sealed; a conditional spread here
         // could not be.
         ...boundSlotsBody(boundSlots),
+        // And the same, for an ask that had no menu. A separate function and separate fields
+        // because a typed answer is not a pick: `validate_bound_slots` refuses a no-menu slot
+        // by design, so routing words through that path would 422 or default silently.
+        ...spokenAnswerBody(spoken),
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,
@@ -645,11 +655,11 @@ export function useInterviewAgent() {
     },
   });
 
-  /** What one turn carries. A pick rides BESIDE the phrase, never inside it. */
+  /** What one turn carries. An answer rides BESIDE the phrase, never inside it. */
   const sendMessage = useCallback(
-    (userInput: string, boundSlots?: Record<string, string>) => {
+    (userInput: string, boundSlots?: Record<string, string>, spoken?: SpokenAnswer) => {
       if (mutation.isPending || !userInput.trim()) return;
-      mutation.mutate({ userInput: userInput.trim(), boundSlots });
+      mutation.mutate({ userInput: userInput.trim(), boundSlots, spoken });
     },
     [mutation]
   );

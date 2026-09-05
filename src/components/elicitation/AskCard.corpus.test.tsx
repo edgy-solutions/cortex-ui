@@ -18,13 +18,18 @@ import { AskCard } from "./AskCard";
 import { dispatchReroute } from "./rerouteDispatch";
 import { BIND, RESPEAK, validateAsk, type Reroute } from "./Elicitation.contract";
 import { BOUND_SLOTS_FIELD } from "@/api/boundSlots";
+import { SPOKEN_ANSWER_FIELD, SPOKEN_SLOT_FIELD, type SpokenAnswer } from "@/api/spokenAnswer";
 
 afterEach(cleanup);
 
 /** Render the card wired the way `AskCardConnected` wires it, and watch both seams. */
 function walk(component: Record<string, unknown>) {
-  /** Every turn this walk causes: the phrase, and the pick that rode BESIDE it. */
-  const turns: { query: string; boundSlots?: Record<string, string> }[] = [];
+  /** Every turn this walk causes: the phrase, and the ANSWER that rode BESIDE it. */
+  const turns: {
+    query: string;
+    boundSlots?: Record<string, string>;
+    spoken?: SpokenAnswer;
+  }[] = [];
   const routed: Reroute[] = [];
   const state: { blocked?: string } = {};
   render(
@@ -32,8 +37,8 @@ function walk(component: Record<string, unknown>) {
       component={component}
       onReroute={(reroute, ask) => {
         routed.push(reroute);
-        state.blocked = dispatchReroute(reroute, ask, (query, boundSlots) => {
-          turns.push({ query, boundSlots });
+        state.blocked = dispatchReroute(reroute, ask, (query, boundSlots, spoken) => {
+          turns.push({ query, boundSlots, spoken });
         }).blocked;
       }}
     />,
@@ -122,9 +127,23 @@ describe("H06 — the bound case, at both bounds", () => {
     fireEvent.click(screen.getByRole("button", { name: "answer" }));
 
     expect(w.routed[0].action).toBe(RESPEAK);
-    // The phrase the producer's `resolve_ask` composes, character for character — the two
-    // sides cannot disagree about what was asked.
-    expect(w.sent).toEqual(["what is the capability path (capability_id: Integration Platform)"]);
+    // THIS ASSERTION USED TO PIN THE COMPOSED PHRASE, character for character, against a
+    // `resolve_ask` that composed one. Both sides stopped: the phrase the producer re-issues
+    // is now `sub_query` byte-equal, and the answer travels as its own pair of fields. The
+    // test moves with the contract rather than being deleted, so what changed stays visible
+    // at the place that was pinning it.
+    expect(w.sent).toEqual(["what is the capability path"]);
+    expect(w.turns[0].query).not.toMatch(/Integration Platform|capability_id/);
+    // The answer, BESIDE the phrase — and NOT in `bound_slots`, which is the half that would
+    // fail silently. This ask had no menu, so `validate_bound_slots` refuses its slot as
+    // `no_menu` by design; unvalidatable words belong under a name that says they are words.
+    expect(w.turns[0].spoken).toEqual({
+      slot: "capability_id",
+      answer: "Integration Platform",
+    });
+    expect(w.turns[0].boundSlots).toBeUndefined();
+    expect(SPOKEN_SLOT_FIELD).toBe("spoken_slot");
+    expect(SPOKEN_ANSWER_FIELD).toBe("spoken_answer");
     expect(w.state.blocked).toBeUndefined();
   });
 
@@ -186,7 +205,14 @@ describe("E05 — a real name of the wrong kind", () => {
 
     expect(w.routed[0].action).toBe(RESPEAK);
     expect(w.routed[0].slots).not.toHaveProperty("project_id");
-    expect(w.sent).toEqual(["what does it depend on (project_id: ERP Modernization)"]);
+    // The phrase, UNCOMPOSED — see H06 above. The words the resolver needs in order to report
+    // `wrong_class` and REMOVE the value are still delivered; they arrive as an answer rather
+    // than as syntax glued onto the question.
+    expect(w.sent).toEqual(["what does it depend on"]);
+    expect(w.turns[0].spoken).toEqual({
+      slot: "project_id",
+      answer: "ERP Modernization",
+    });
   });
 
   it("the count reaches the reader as a FIELD, and not by parsing the prose", () => {
@@ -223,11 +249,15 @@ describe("the two corpus cases do not blend", () => {
     expect(menu.routed.map((r) => r.action)).toEqual([BIND]);
     expect(words.routed.map((r) => r.action)).toEqual([RESPEAK]);
     // BOTH reach the server now, and they reach it DIFFERENTLY. That difference is the fact a
-    // blended pass rate would hide: one turn carries a pick in its own field and one carries
-    // words in the message, and only the second is re-parsed on arrival.
+    // blended pass rate would hide: one carries a PICK, checked against a recomputed menu, and
+    // one carries WORDS, which that same validator refuses by design because this ask offered
+    // no menu to pick from. Neither is carried in the message — that part is now the same on
+    // both paths, and it is the only part that is.
     expect(menu.turns[0].boundSlots).toEqual({ capability_id: "C1" });
+    expect(menu.turns[0].spoken).toBeUndefined();
     expect(words.turns[0].boundSlots).toBeUndefined();
-    expect(words.turns[0].query).toMatch(/project_id: Atlas/);
+    expect(words.turns[0].spoken).toEqual({ slot: "project_id", answer: "Atlas" });
+    expect(words.turns[0].query).not.toMatch(/Atlas|project_id/);
   });
 });
 

@@ -30,6 +30,7 @@ const bind = (slots: Record<string, unknown>): Reroute => ({
   slots,
   query: "",
   slot: "capability_id",
+  spoken_answer: "",
 });
 
 describe("a BIND with nothing to bind is refused, not posted", () => {
@@ -73,20 +74,48 @@ describe("the phrase and the pick stay separate", () => {
     expect(bound).toEqual({ capability_id: "C1" });
   });
 
-  it("a RESPEAK sends the composed phrase and NO second argument", () => {
-    // Free text has no pick to carry, and posting one would be a claim about a menu that was
-    // never offered — `validate_bound_slots` refuses exactly that as `no_menu`.
+  it("a RESPEAK sends the phrase UNCOMPOSED, with the words in the THIRD argument", () => {
+    // THIS ASSERTION USED TO PIN THE OPPOSITE — the composed phrase, and a call of length one.
+    // Composing `"<sub_query> (<slot>: Integration Platform)"` put machine syntax on top of
+    // the question and that string reached the rail, where it was displayed as what the person
+    // asked. The phrase now goes byte-equal and the typed words ride beside it, which is the
+    // shape BIND has always had.
     const send = vi.fn();
     const reroute: Reroute = {
       action: RESPEAK,
       slots: { horizon: "FY26" },
-      query: "what is the capability path (capability_id: Integration Platform)",
+      query: "what is the capability path",
       slot: "capability_id",
+      spoken_answer: "Integration Platform",
     };
     dispatchReroute(reroute, ask({ options: [] }), send);
-    expect(send).toHaveBeenCalledWith(
-      "what is the capability path (capability_id: Integration Platform)",
-    );
-    expect(send.mock.calls[0]).toHaveLength(1);
+    expect(send).toHaveBeenCalledWith("what is the capability path", undefined, {
+      slot: "capability_id",
+      answer: "Integration Platform",
+    });
+    const [query, bound] = send.mock.calls[0];
+    expect(query).not.toMatch(/Integration Platform|capability_id/);
+    // NOT in `bound_slots`, and this is the half that would fail silently. A RESPEAK ask had
+    // no menu by construction, so `validate_bound_slots` refuses its slot as `no_menu`; the
+    // words belong under a name that says they are words.
+    expect(bound).toBeUndefined();
+  });
+
+  it("a RESPEAK carrying no words is refused rather than sent blind", () => {
+    // `resolveAsk` rejects an empty answer before this point, so the guard is only reachable
+    // by another caller — the same reason the empty-BIND branch above exists. Sending it would
+    // re-ask the identical question with nothing added, which reads as the answer being
+    // ignored rather than as an error.
+    const send = vi.fn();
+    const reroute: Reroute = {
+      action: RESPEAK,
+      slots: {},
+      query: "what is the capability path",
+      slot: "capability_id",
+      spoken_answer: "   ",
+    };
+    const result = dispatchReroute(reroute, ask({ options: [] }), send);
+    expect(send).not.toHaveBeenCalled();
+    expect(result.blocked).toMatch(/no words/);
   });
 });

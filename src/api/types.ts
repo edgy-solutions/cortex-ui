@@ -833,6 +833,25 @@ export interface InterviewRequest {
    * re-route exists to avoid).
    */
   bound_slots?: Record<string, string>;
+  /**
+   * ADR-0033 RESPEAK: THE ANSWER TO AN ASK THAT HAD NO MENU. Two scalars, because such an ask
+   * asks about exactly one slot and there is exactly one answer — a dict would reimport the
+   * `{}`-versus-absent ambiguity `bound_slots` is careful about, for no gain.
+   *
+   * SEPARATE FROM `bound_slots`, AND THE SEPARATION IS THE SAFETY. A RESPEAK ask had no menu
+   * by construction, so `validate_bound_slots` refuses its slot as `no_menu` by design;
+   * routing unvalidatable words through the validated path would 422 or default silently.
+   *
+   * AND NOT CONCATENATED INTO `message`. That is the whole point: the composed phrase
+   * `Provide the current funding status. (program_id: meridian)` was machine syntax on top of
+   * a paraphrase, rendered as the user's question. The phrase stays byte-equal to what the
+   * person typed and the answer travels here.
+   *
+   * Built from `SPOKEN_SLOT_FIELD` / `SPOKEN_ANSWER_FIELD` rather than typed at the call site,
+   * and sealed against the gateway's own declaration.
+   */
+  spoken_slot?: string;
+  spoken_answer?: string;
 }
 
 // ── ADR-0026 entitlement matrix ────────────────────────────

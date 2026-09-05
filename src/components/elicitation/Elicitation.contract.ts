@@ -261,15 +261,32 @@ export interface Reroute {
   action: typeof BIND | typeof RESPEAK;
   /** For BIND: the merged, ready-to-dispatch parameters. */
   slots: Record<string, unknown>;
-  /** For RESPEAK: the phrase to re-issue. */
+  /** For RESPEAK: the phrase to re-issue, BYTE-EQUAL to `sub_query`. Nothing is composed. */
   query: string;
   slot: string;
+  /**
+   * For RESPEAK: what the reader typed, as its own field.
+   *
+   * IT USED TO BE CONCATENATED INTO `query`, and that is the defect this field closes. The
+   * composed string `"<sub_query> (<slot>: <answer>)"` reached the rail and was displayed as
+   * the user's question — machine syntax on top of a paraphrase, presented as something a
+   * person said. BIND already refused exactly this shape; RESPEAK now matches it.
+   *
+   * Empty on BIND, where the pick travels in `slots` instead.
+   */
+  spoken_answer: string;
 }
 
 /**
  * Turn a reader's answer into the next route. A port of the producer's `resolve_ask`, and
- * deliberately identical — including the phrase RESPEAK composes, so the two sides cannot
+ * deliberately identical — including the phrase RESPEAK re-issues, so the two sides cannot
  * disagree about what was asked.
+ *
+ * NOTHING IS COMPOSED, on either path. RESPEAK re-issues `sub_query` byte-equal and carries
+ * the answer in `spoken_answer`; BIND re-issues it byte-equal and carries the pick in `slots`.
+ * The two paths differ in what rides beside the phrase, never in whether the phrase was
+ * assembled. What the RESOLVER receives is a separate question from what the RAIL displays,
+ * and the defect being closed here was an implementation string becoming what a person reads.
  *
  * A menu was offered → the answer must be ON it, and BINDS. No menu → the answer is words and
  * is RE-SPOKEN. There is no third branch, and "no menu" never means "anything is acceptable":
@@ -282,12 +299,20 @@ export function resolveAsk(ask: AskCardPayload, answer: string): Reroute {
 
   if (ask.options.length > 0) {
     const value = validatePick(a, ask.options);
-    return { action: BIND, slots: { ...ask.accepted_slots, [ask.slot]: value }, query: "", slot: ask.slot };
+    return {
+      action: BIND,
+      slots: { ...ask.accepted_slots, [ask.slot]: value },
+      query: "",
+      slot: ask.slot,
+      spoken_answer: "",
+    };
   }
   return {
     action: RESPEAK,
     slots: { ...ask.accepted_slots },
-    query: `${ask.sub_query} (${ask.slot}: ${a})`.trim(),
+    // The phrase, UNMODIFIED. See the header: the answer rides beside it, in its own field.
+    query: ask.sub_query,
     slot: ask.slot,
+    spoken_answer: a,
   };
 }
