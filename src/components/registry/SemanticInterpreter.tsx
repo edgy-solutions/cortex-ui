@@ -1,4 +1,5 @@
 import React from "react";
+import { fallbackSubjectLabel, looksLikeIri } from "@/lib/confidence";
 import { AlertCircle, FileText, Zap } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -200,7 +201,13 @@ const MarkdownRenderer = ({
         <div className="flex items-center gap-2 mb-1">
           <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
           <h3 className="text-xl font-bold text-white tracking-tight leading-none">
-            {subject || "Knowledge Document"}
+            {/* AN IRI IS NOT A TITLE. This card is the fallback every unregistered archetype
+                lands on, and what arrives as its subject is whatever the producer had — for a
+                slot elicitation that is the VERB, `mesh:finFundingStatus`, printed raw as the
+                heading. Rendering the local name is a projection of the value the producer
+                sent, not a name invented for it; a subject someone actually wrote is left
+                exactly as written. */}
+            {looksLikeIri(subject) ? fallbackSubjectLabel(subject) : subject || "Knowledge Document"}
           </h3>
         </div>
         <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">

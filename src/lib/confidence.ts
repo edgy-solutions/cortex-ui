@@ -108,12 +108,28 @@ export function presentConfidence(raw: number | null | undefined): ConfidencePre
  * NEVER synthesizes meaning that isn't in the IRI. "mesh:retrieveKnowledge"
  * → "Retrieve knowledge"; we don't invent a verb description.
  */
+/**
+ * An IRI's local name, with any curie prefix removed.
+ *
+ * IT WAS `^mesh:` AND ONLY `mesh:`, which was right when `mesh` was the only vocabulary. A
+ * `fin:` term now reaches these helpers and rendered as "Fin funding status" — the prefix read
+ * as the first word of the name. Any `ns:` prefix, then; a full IRI has already lost its scheme
+ * to the split above, so there is nothing else shaped like this for it to eat.
+ */
+export function localName(iri: string): string {
+  const local = iri.split(/[#/]/).pop() ?? iri;
+  return local.replace(/^[A-Za-z][\w-]*:/, "");
+}
+
+/** True when a value is an IRI rather than something a person wrote. */
+export function looksLikeIri(v: string | undefined): boolean {
+  if (!v) return false;
+  return /^[A-Za-z][\w-]*:\S*$/.test(v) || v.includes("#");
+}
+
 export function fallbackVerbLabel(iri: string | undefined): string {
   if (!iri) return "Unknown action";
-  const local = iri.split(/[#/]/).pop() ?? iri;
-  // Strip a "mesh:" prefix if the gateway forgot to. Then convert
-  // CamelCase → space-separated words.
-  const noPrefix = local.replace(/^mesh:/, "");
+  const noPrefix = localName(iri);
   const spaced = noPrefix.replace(/([a-z])([A-Z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
@@ -124,7 +140,6 @@ export function fallbackVerbLabel(iri: string | undefined): string {
  */
 export function fallbackSubjectLabel(uri: string | undefined): string {
   if (!uri) return "Unknown subject";
-  const local = uri.split(/[#/]/).pop() ?? uri;
-  const spaced = local.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const spaced = localName(uri).replace(/([a-z])([A-Z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
