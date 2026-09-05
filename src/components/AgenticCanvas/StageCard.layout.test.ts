@@ -16,7 +16,7 @@ import { describe, it, expect } from "vitest";
 
 const CARD = readFileSync(path.join(__dirname, "StageCard.tsx"), "utf8");
 
-const iBody = CARD.indexOf('<div className="flex-1 min-h-0 overflow-hidden relative">');
+const iBody = CARD.indexOf('className="flex-1 min-h-0 overflow-hidden relative"');
 const iStrip = CARD.indexOf("<InterpretationStrip artifact={artifact} />");
 const iHeader = CARD.indexOf("Header: subject identifier");
 

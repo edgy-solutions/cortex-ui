@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react";
+import { Maximize2, Minimize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -65,6 +65,7 @@ export function GlobalCanvasStage() {
   const setGroup = useStageStore((s) => s.setGroup);
   const clearGroup = useStageStore((s) => s.clearGroup);
   const openFullPane = useStageStore((s) => s.openFullPane);
+  const closeFullPane = useStageStore((s) => s.closeFullPane);
   const setFocusTab = useStageStore((s) => s.setFocusTab);
   const view = useStageStore((s) => s.view);
   const canvases = useStageStore((s) => s.canvases);
@@ -249,9 +250,12 @@ export function GlobalCanvasStage() {
         return;
       }
       if (fullPane) {
+        // ONE RUNG, NOT THREE. This called `clearFocus()` AND `clearGroup()`, so Esc from an
+        // expanded card left the card, left the focus, and left the group in a single press —
+        // landing at the overview with no way to get back to the card you were reading except
+        // to find it again. The zoom went in one step at a time and came out all at once.
+        closeFullPane();
         e.stopPropagation();
-        clearFocus();
-        clearGroup();
         return;
       }
       if (focusId) {
@@ -266,7 +270,7 @@ export function GlobalCanvasStage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusId, fullPane, groupKey, clearFocus, clearGroup]);
+  }, [focusId, fullPane, groupKey, clearFocus, clearGroup, closeFullPane]);
 
   // Switching the list mode re-lays-out the global map — zoom out first.
   const prevMode = useRef(sortMode);
@@ -712,9 +716,13 @@ export function GlobalCanvasStage() {
               Expand
             </button>
           </div>
+          {/* `right-32`, NOT `right-3`. The shell draws its own full-screen toggle at
+              `top-2 right-2` on this same canvas (Layout.tsx) and at the same z-20, so two
+              buttons occupied one corner and overlapped — both readable, neither reachable.
+              The shell's is permanent chrome, so the contextual control moves aside. */}
           <button
             onClick={clearFocus}
-            className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
+            className="absolute top-3 right-32 z-20 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
             title="Back to the full canvas (Esc)"
           >
             <LayoutGrid className="w-2.5 h-2.5" />
@@ -723,12 +731,14 @@ export function GlobalCanvasStage() {
         </>
       )}
 
-      {/* Group-focus overview button (no card focused). */}
+      {/* Group-focus overview button (no card focused). THIRD OCCUPANT OF THE SAME CORNER,
+          and the reason the fix is stated as a rule rather than applied to the one that was
+          reported: the shell owns top-right, so every contextual exit clears it. */}
       {isGlobal && groupKey && !focusId && !fullPane && (
         <button
           data-overlay
           onClick={clearGroup}
-          className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
+          className="absolute top-3 right-32 z-20 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
           title="Back to the full canvas (Esc)"
         >
           <LayoutGrid className="w-2.5 h-2.5" />
@@ -760,14 +770,28 @@ export function GlobalCanvasStage() {
       {fullPane && (
         <div className="absolute inset-0 z-30 bg-surface-dark animate-in fade-in duration-200">
           <CanvasPane />
-          <button
-            onClick={clearFocus}
-            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
-            title="Back to the full canvas (Esc)"
-          >
-            <LayoutGrid className="w-2.5 h-2.5" />
-            Overview · Esc
-          </button>
+          {/* TWO EXITS, BECAUSE THERE ARE TWO PLACES TO GO. There was one, and it went all the
+              way out: expanding a card was reversible only by leaving the canvas entirely and
+              hunting for the card again. `closeFullPane` existed in the store and nothing had
+              ever called it — the rung was built and never hung. */}
+          <div className="absolute top-3 right-3 z-40 flex items-center gap-1.5">
+            <button
+              onClick={closeFullPane}
+              className="flex items-center gap-1.5 rounded-lg border border-neon-cyan/40 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/10 transition-colors shadow-lg"
+              title="Back to this card on the canvas (Esc)"
+            >
+              <Minimize2 className="w-2.5 h-2.5" />
+              Back to card · Esc
+            </button>
+            <button
+              onClick={clearFocus}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/85 backdrop-blur-sm px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 transition-colors shadow-lg"
+              title="All the way out to the full canvas"
+            >
+              <LayoutGrid className="w-2.5 h-2.5" />
+              Overview
+            </button>
+          </div>
         </div>
       )}
 

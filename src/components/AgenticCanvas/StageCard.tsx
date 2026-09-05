@@ -90,6 +90,23 @@ export function StageCard({
 
   const showMap = focused && focusTab === "map";
 
+  /**
+   * THE BACK FACE MOUNTS ON FIRST FLIP AND STAYS MOUNTED.
+   *
+   * A flip needs both faces rendered at once — a face hidden with `display: none` measures
+   * zero, and `FitBox` sizes its content from `clientWidth`/`scrollHeight`, so the map would
+   * arrive at scale 0 the first time it showed. But `DecisionMap` takes NO PROPS: it reads the
+   * CURRENT artifact and fires a `fetchDecisionSubgraph` on mount. Mounting it eagerly on every
+   * card would be one network call per card on the stage, and every back would show the same
+   * map — correct only for the focused card, which is the one case that already worked.
+   *
+   * So: nothing is mounted until this card is first turned over, and after that it stays, so
+   * every later flip is a transform with no fetch behind it.
+   */
+  const everFlipped = useRef(false);
+  if (showMap) everFlipped.current = true;
+  const backMounted = everFlipped.current;
+
   // A card that carries its OWN dimensions is a PANEL; one that does not is a PREVIEW.
   //
   // FitBox shrinks a fixed 640-wide block to fit, by the smaller of the width and height
@@ -360,17 +377,20 @@ export function StageCard({
 
       {/* Body first, provenance after — see the footer below. */}
       {/* Body: the content lens (answer / task card), or the provenance lens when
-          toggled at focus — Decision Map for an answer, Workflow for a task. */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
-        {showMap ? (
-          <div className="absolute inset-0 p-2">
-            <FitBox naturalWidth={640}>
-              <div style={{ width: 640, height: task ? undefined : 380 }}>
-                {task ? <WorkflowLens taskRef={task} /> : <DecisionMap />}
-              </div>
-            </FitBox>
-          </div>
-        ) : hasRendered && sized ? (
+          toggled at focus — Decision Map for an answer, Workflow for a task.
+
+          THE CLIPPING LIVES HERE AND THE ROTATION LIVES INSIDE IT, and that split is load
+          bearing rather than tidiness: an element with `transform-style: preserve-3d` and any
+          `overflow` other than `visible` has its 3D context FLATTENED, so putting the rotation
+          on this div renders the turn as an instant swap with no depth — working badly, which
+          is worse than not working. */}
+      <div
+        className="flex-1 min-h-0 overflow-hidden relative"
+        style={{ perspective: 1200 }}
+      >
+        <div className="absolute inset-0 flip-face-holder" data-flipped={showMap ? "" : undefined}>
+        <div className="flip-face" data-face="front">
+        {hasRendered && sized ? (
           // PANEL. The card was given room; the content uses it. No scaling, so a chart fills
           // the width it was allotted instead of being letterboxed inside it. Overflow scrolls
           // rather than clipping, because a card sized slightly too small should still be
@@ -414,6 +434,33 @@ export function StageCard({
             </p>
           </div>
         )}
+        </div>
+
+        {/* THE BACK. Pre-rotated, so it faces away until the holder turns. It is not rendered
+            at all until this card has been flipped once — see `backMounted`. Until then the
+            turn still animates; there is simply nothing behind it yet, which is why the
+            skeleton below exists rather than a blank face. */}
+        <div className="flip-face" data-face="back">
+          {backMounted ? (
+            <div className="absolute inset-0 p-2">
+              <FitBox naturalWidth={640}>
+                <div style={{ width: 640, height: task ? undefined : 380 }}>
+                  {task ? <WorkflowLens taskRef={task} /> : <DecisionMap />}
+                </div>
+              </FitBox>
+            </div>
+          ) : (
+            /* A FIRST FLIP LANDS BEFORE THE FETCH RETURNS. The map's request starts when it
+               mounts, so the turn finishes first — and an empty back reads as broken rather
+               than as pending. */
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-slate-600">
+                reading the decision…
+              </span>
+            </div>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* FOOTER: how the question was read, and the question itself.

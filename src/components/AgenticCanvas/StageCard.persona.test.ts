@@ -26,7 +26,7 @@ const INTERP = readFileSync(
 describe("the persona is shown once, in the eyebrow", () => {
   it("the card renders it inside the header, before the body", () => {
     const iHeader = CARD.indexOf("Header: subject identifier");
-    const iBody = CARD.indexOf('<div className="flex-1 min-h-0 overflow-hidden relative">');
+    const iBody = CARD.indexOf('className="flex-1 min-h-0 overflow-hidden relative"');
     // The FULL condition, not just the identifier: `personaCfg && (` also matches a chip
     // that has been disabled with a leading `false &&`, which is exactly how this would be
     // switched off in practice.
