@@ -65,7 +65,15 @@ describe("the interpretation strip renders only what was captured", () => {
   it("renders NOTHING when no interpretation was captured", () => {
     // Not an empty box with a heading: the strip is a claim, and a placeholder occupies the
     // space where a real claim belongs while making the card look like it said something.
-    expect(SRC).toMatch(/if \(!action && slots\.length === 0\) return null;/);
+    expect(SRC).toMatch(/if \(!hasInterpretation\(artifact\)\) return null;/);
+  });
+
+  it("that decision is EXPORTED, because the footer sizes itself around it", () => {
+    // It was inlined, and the footer beside it reserved half a row for a strip that was not
+    // there — truncating the question into the empty space. A call site restating "an action
+    // or some slots" would be right today and wrong the day this condition moves; one shared
+    // predicate makes the disagreement unrepresentable rather than merely unlikely.
+    expect(SRC).toMatch(/export function hasInterpretation\(artifact: Artifact\): boolean/);
   });
 
   it("renders each slot as its OWN element — editability must not require a re-layout", () => {

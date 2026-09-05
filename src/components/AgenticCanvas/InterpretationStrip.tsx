@@ -72,6 +72,21 @@ function slotValue(v: unknown): string {
   return "…";
 }
 
+/**
+ * Whether this artifact has an interpretation to show — the strip's own render condition,
+ * EXPORTED so a caller sizing the row beside it cannot hold a second opinion.
+ *
+ * The footer lays out as two columns and caps the question at 55% so the two share the row.
+ * With no strip that cap truncated the question into empty space, and the obvious fix —
+ * restating "has an action or some slots" at the call site — would be right today and wrong
+ * the day this condition changes, with the disagreement showing up as a clipped question
+ * nobody would trace back to here.
+ */
+export function hasInterpretation(artifact: Artifact): boolean {
+  const params = artifact.resolved_intent?.parameters;
+  return Boolean(artifact.routing?.action?.label) || Object.keys(params ?? {}).length > 0;
+}
+
 export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
   const params = artifact.resolved_intent?.parameters;
   const slots = params ? Object.entries(params) : [];
@@ -80,8 +95,9 @@ export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
   const action = artifact.routing?.action?.label ?? null;
 
   // No captured interpretation → render nothing. An empty strip is honest; a placeholder one
-  // would occupy the space where a real claim belongs.
-  if (!action && slots.length === 0) return null;
+  // would occupy the space where a real claim belongs. The predicate is shared with the
+  // footer that sizes itself around this decision.
+  if (!hasInterpretation(artifact)) return null;
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap px-2 py-1 border-b border-white/5">

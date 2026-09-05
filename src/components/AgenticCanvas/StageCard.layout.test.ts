@@ -40,7 +40,27 @@ describe("the answer comes before its provenance", () => {
   it("and only on a canvas card with a real answer — unchanged from before the move", () => {
     // The gate travelled with it. A task card has no resolved intent to show, and a global
     // preview has no room for one.
-    expect(CARD).toContain("{!task && custom && <InterpretationStrip artifact={artifact} />}");
+    expect(CARD).toContain("const showsStrip = !task && custom && hasInterpretation(artifact)");
+    expect(CARD).toContain("{showsStrip && (");
+  });
+
+  it("the question is NOT capped at half a row it does not have to share", () => {
+    // THE DEFECT THIS PINS. The footer is two columns and the question was capped at 55% so it
+    // could not crowd out the strip beside it. On the GLOBAL stage `custom` is false — a
+    // computed arrangement passes no grip or remove handler — so the strip never drew, the
+    // left column reserved half the row for nothing, and the question truncated into empty
+    // space with room to spare.
+    const footer = CARD.slice(iStrip);
+    expect(footer).toContain('showsStrip ? "max-w-[55%]" : "min-w-0 flex-1 justify-end"');
+    // The cap must be CONDITIONAL, never a constant class on the element.
+    expect(footer).not.toMatch(/text-slate-500 truncate max-w-\[55%\]/);
+  });
+
+  it("and the empty column is not rendered at all when there is no strip", () => {
+    // A flex child with `flex-1` claims its share whether or not it has content, so gating the
+    // strip INSIDE a permanent wrapper would have left the gap exactly as it was.
+    const footer = CARD.slice(iStrip);
+    expect(footer).not.toMatch(/<div className="min-w-0 flex-1">\s*\{!task && custom/);
   });
 });
 

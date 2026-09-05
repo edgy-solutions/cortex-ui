@@ -10,7 +10,7 @@ import { taskKindLabel } from "@/lib/taskArtifact";
 import { WorkflowLens } from "./WorkflowLens";
 import { STAGE_CARD } from "@/lib/stageConstants";
 import { overviewTier, DENSE_PREVIEW_ROWS } from "@/lib/overviewTier";
-import { InterpretationStrip, FreshnessStamp } from "./InterpretationStrip";
+import { InterpretationStrip, FreshnessStamp, hasInterpretation } from "./InterpretationStrip";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 
 export { STAGE_CARD };
@@ -74,6 +74,9 @@ export function StageCard({
   // supplies the body — same citizenship, different costume.
   const task = artifact.task_ref;
   const taskPending = task?.task_state === "pending";
+  // Asked of the strip itself rather than restated here — see `hasInterpretation`. The footer
+  // sizes itself around this, so a second opinion would show up as a clipped question.
+  const showsStrip = !task && custom && hasInterpretation(artifact);
   // Read from the FIRST component's captured attribution, the same field the interpreter
   // reads. Not inferred from the answer, and absent when the payload declared none.
   const { personaConfig } = useMeshConfig();
@@ -413,11 +416,23 @@ export function StageCard({
           It renders nothing when the payload captured no interpretation; a fabricated one is
           worse than none, because it is what a reader would trust. */}
       <div className="flex items-end justify-between gap-3 px-3 py-1.5 border-t border-slate-800/60 flex-shrink-0">
-        <div className="min-w-0 flex-1">
-          {!task && custom && <InterpretationStrip artifact={artifact} />}
-        </div>
+        {/* The strip's column exists only when the strip does. An always-present flex child
+            reserved half the row for nothing on the GLOBAL stage — `custom` is false there,
+            since a computed arrangement has no grip or remove handler to pass — and the
+            question then truncated into that empty space. */}
+        {showsStrip && (
+          <div className="min-w-0 flex-1">
+            <InterpretationStrip artifact={artifact} />
+          </div>
+        )}
         <span
-          className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 truncate max-w-[55%] italic"
+          className={
+            "flex items-center gap-1.5 text-[10px] font-mono text-slate-500 truncate italic " +
+            // THE CAP IS FOR SHARING, NOT DECORATION. It exists so the question cannot crowd
+            // out the interpretation beside it; with nothing beside it, capping at 55% clips a
+            // phrase there is room to read in full.
+            (showsStrip ? "max-w-[55%]" : "min-w-0 flex-1 justify-end")
+          }
           title={artifact.question_text || undefined}
         >
           <GitBranch className="w-2.5 h-2.5 text-slate-600 flex-shrink-0 not-italic" />
