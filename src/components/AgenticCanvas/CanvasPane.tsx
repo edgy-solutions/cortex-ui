@@ -188,13 +188,22 @@ export const CanvasPane = () => {
   // useInterviewStore (ephemeral), Artifacts still live in
   // useCanvasStore (durable); we just stopped sourcing the canvas's
   // own header from the wrong store.
+  /* CHROME AROUND A QUESTION IS NOT PART OF THE QUESTION.
+     Copying a question to ask it again is an ordinary thing to do, and every label beside one
+     is a token that comes along: selecting this header yields
+     "Q <question> Artifact 155 of 184", which reaches entity extraction as
+     `["Notional Program Meridian Artifact 155"]` once "Q" and "of 184" fall out as
+     non-entities. Nothing in cortex CONCATENATES that — the composer is written only by its
+     own textarea — so the join happens in the clipboard, which is precisely why reading the
+     send path found nothing. `select-none` takes the labels out of the selection and leaves
+     the question copyable on its own. */
   const artifactHeader = (
     <div className="w-full flex items-baseline justify-between px-6 pt-4 pb-2 gap-4 shrink-0 border-b border-white/5">
       <p
         className="font-mono text-xs text-slate-300 truncate"
         title={artifact.question_text}
       >
-        <span className="text-slate-500 tracking-widest uppercase mr-2">
+        <span className="text-slate-500 tracking-widest uppercase mr-2 select-none">
           Q
         </span>
         {artifact.question_text || (
@@ -202,7 +211,7 @@ export const CanvasPane = () => {
         )}
       </p>
       {artifactCount > 1 && (
-        <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase whitespace-nowrap">
+        <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase whitespace-nowrap select-none">
           Artifact {currentIndex + 1} of {artifactCount}
         </span>
       )}

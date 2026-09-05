@@ -472,7 +472,8 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         </p>
         {captured && a.question_text && (
           <p className="text-[10px] font-mono text-slate-500 leading-snug line-clamp-1 mt-0.5">
-            <span className="text-slate-600">Q · </span>
+            {/* See CanvasPane's header: a label beside a question is copied with it. */}
+            <span className="text-slate-600 select-none">Q · </span>
             {highlight(a.question_text, ctx.searchHit)}
           </p>
         )}
@@ -715,15 +716,20 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
           {highlight(summary, ctx.searchHit)}
         </p>
         <p className="text-[10px] font-mono text-slate-500 leading-snug line-clamp-1 mt-0.5">
+          {/* THE WORST OF THESE ROWS: the question shares one line with a label, a separator,
+              a timestamp and a duration, so a selection over it copies
+              "Q · <question> · 14:32 · 2.1s". Everything that is not the question is marked
+              unselectable, which leaves the question copyable ALONE from a row that shows four
+              things. */}
           {captured && a.question_text && (
             <>
-              <span className="text-slate-600">Q · </span>
+              <span className="text-slate-600 select-none">Q · </span>
               {highlight(a.question_text, ctx.searchHit)}
-              <span className="text-slate-700"> · </span>
+              <span className="text-slate-700 select-none"> · </span>
             </>
           )}
-          <span className="text-slate-600">{formatTime(a.created_at)}</span>
-          {took && <span className="text-slate-600"> · {took}</span>}
+          <span className="text-slate-600 select-none">{formatTime(a.created_at)}</span>
+          {took && <span className="text-slate-600 select-none"> · {took}</span>}
         </p>
       </div>
       {pinned && (
