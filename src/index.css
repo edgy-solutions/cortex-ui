@@ -196,47 +196,78 @@ body,
   @apply text-cyan-300 border-cyan-400/60;
 }
 
-/* ── THE CARD TURNS OVER — the decision map is the BACK, not a replacement ──────────────────
+
+/* ── THE CARD TURNS OVER — the whole card, and only while it is turning ─────────────────────
  *
- * The map used to swap in where the answer was, which read as the card being replaced by a
- * different card. Turning it over says the thing that is true: one artifact, two faces — the
- * answer, and how the system got there.
+ * The decision map used to swap in where the answer was, which reads as the card being
+ * replaced. Then it flipped with the skin standing still, which reads as a hole in a card with
+ * something spinning behind it. Both faces now carry the card's own border, background and
+ * focus ring, so what rotates is a card.
  *
- * `.flip-face-holder` is what rotates, and it must NOT clip. An element with
- * `transform-style: preserve-3d` and any `overflow` other than `visible` has its 3D context
- * FLATTENED by the browser, so the turn degrades to an instant swap with no depth. The clipping
- * therefore lives on the parent in StageCard, and this element only rotates.
+ * THE 3D IS TEMPORARY, AND THAT IS THE POINT. A face inside a live `preserve-3d` context is
+ * composited as a texture; the map's content is additionally scaled by `FitBox`, so the browser
+ * rasterised it once at the layer's resolution and resampled the bitmap rather than
+ * re-rendering the text. It arrived soft and stayed soft, because nothing invalidated the
+ * layer. Scoping every 3D property to `[data-flipping]` means the settled card has no
+ * transformed ancestor and renders as ordinary text.
  *
- * Both faces stay in the layout — hidden by `backface-visibility`, never by `display: none` —
- * because `FitBox` measures its content with a ResizeObserver, and a face with no layout box
- * measures zero and renders its content at scale 0 the first time it is shown.
+ * Faces are hidden by VISIBILITY when settled, never `display: none` — `FitBox` measures with a
+ * ResizeObserver, and a face with no layout box measures zero and renders its content at scale
+ * 0 the first time it is shown.
  */
-.flip-face-holder {
-  transform-style: preserve-3d;
-  transition: transform 480ms cubic-bezier(0.2, 0.7, 0.2, 1);
+.flip-stage {
+  perspective: 1200px;
 }
 
-.flip-face-holder[data-flipped] {
+.flip-holder {
+  position: absolute;
+  inset: 0;
+}
+
+/* Only while turning: the 3D context, and the rotation it makes meaningful. `transform-style`
+ * must not sit on a clipping element — any `overflow` other than `visible` flattens it — which
+ * is why this element only rotates and the faces do the clipping. */
+.flip-holder[data-flipping] {
+  transform-style: preserve-3d;
+  transition: transform var(--flip-ms, 480ms) cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.flip-holder[data-flipping][data-flipped] {
   transform: rotateY(180deg);
 }
 
 .flip-face {
   position: absolute;
   inset: 0;
+}
+
+/* SETTLED: one face is shown, flat and untransformed. Both keep their layout box. */
+.flip-holder:not([data-flipping]) .flip-face {
+  visibility: hidden;
+}
+
+.flip-holder:not([data-flipping]) .flip-face[data-active] {
+  visibility: visible;
+}
+
+/* TURNING: both faces are present and the one facing away is hidden by its backface. */
+.flip-holder[data-flipping] .flip-face {
+  visibility: visible;
   backface-visibility: hidden;
-  /* Safari honours only the prefixed form, and without it BOTH faces paint — the back reads
-     as a mirrored ghost over the answer rather than as a hidden face. */
+  /* Safari honours only the prefixed form, and without it BOTH faces paint — the back reads as
+     a mirrored ghost over the answer rather than as a hidden face. */
   -webkit-backface-visibility: hidden;
 }
 
-.flip-face[data-face="back"] {
+.flip-holder[data-flipping] .flip-face[data-face="back"] {
   transform: rotateY(180deg);
 }
 
 /* A TURN IS MOTION, AND SOME READERS HAVE ASKED FOR LESS OF IT. The faces still swap — the
- * information is not the animation — but nothing rotates and nothing takes half a second. */
+ * information is not the animation — but nothing rotates. The settle is on a timer rather than
+ * on `transitionend` precisely so it still runs here, where no transition event ever fires. */
 @media (prefers-reduced-motion: reduce) {
-  .flip-face-holder {
+  .flip-holder[data-flipping] {
     transition: none;
   }
 }

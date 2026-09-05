@@ -31,10 +31,13 @@ describe("the answer comes before its provenance", () => {
     expect(iStrip).toBeGreaterThan(iBody);
   });
 
-  it("it is still rendered exactly once — moved, not duplicated or dropped", () => {
-    // A move done by copy-paste leaves two, and a card that shows its interpretation twice is
-    // worse than one that shows it in the wrong place.
-    expect(CARD.split("<InterpretationStrip artifact={artifact} />").length - 1).toBe(1);
+  it("it is rendered once PER FACE — the card has two, and they are the same card", () => {
+    // This asserted ONE, and was right until the card gained a back. Both faces carry the whole
+    // card, chrome included, because a skin that stays put while the contents rotate is not a
+    // card turning over. Two is now correct; three would be the copy-paste move it guarded.
+    expect(CARD.split("<InterpretationStrip artifact={artifact} />").length - 1).toBe(2);
+    // And the footer they sit in is ONE footer rendered twice, not two that can drift apart.
+    expect(CARD.match(/const showsStrip = /g)).toHaveLength(1);
   });
 
   it("and only on a canvas card with a real answer — unchanged from before the move", () => {

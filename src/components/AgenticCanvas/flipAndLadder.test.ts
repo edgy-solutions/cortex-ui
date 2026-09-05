@@ -24,18 +24,60 @@ const LAYOUT = read("../Layout.tsx");
 const stripComments = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const STAGE_CODE = stripComments(STAGE);
+const CARD_CODE = stripComments(CARD);
 
 describe("the flip has depth, which depends on where the clipping lives", () => {
   it("the rotating element does NOT clip, or the browser flattens the turn", () => {
     // The one that half-works if missed: `transform-style: preserve-3d` with any `overflow`
     // other than `visible` has its 3D context flattened, so the card swaps faces instantly
     // with no rotation. It looks like a bug in the animation rather than in the overflow.
-    const holder = CSS.slice(CSS.indexOf(".flip-face-holder {"));
-    expect(holder).toContain("transform-style: preserve-3d");
-    expect(holder.slice(0, holder.indexOf("}"))).not.toMatch(/overflow/);
-    // And the clipping is on the parent instead, which is where it has to be.
-    expect(CARD).toContain('className="flex-1 min-h-0 overflow-hidden relative"');
-    expect(CARD).toMatch(/style=\{\{ perspective: \d+ \}\}/);
+    const holder = CSS.slice(CSS.indexOf(".flip-holder[data-flipping] {"));
+    const block = holder.slice(0, holder.indexOf("}"));
+    expect(block).toContain("transform-style: preserve-3d");
+    expect(block).not.toMatch(/overflow/);
+    // The clipping is on the FACES, which is where it has to be — and the skin with it.
+    expect(CARD).toMatch(/const faceSkin = `flex h-full w-full flex-col overflow-hidden rounded-xl border/);
+    expect(CSS).toMatch(/\.flip-stage \{\s*perspective:/);
+  });
+
+  it("the WHOLE card turns — the skin is on the faces, not on the root", () => {
+    // It flipped with the border, background and corner standing still, which reads as a hole
+    // in a card with something spinning behind it rather than as a card turning over.
+    expect(CARD).toContain('className="absolute cursor-pointer flip-stage"');
+    // The root must no longer carry the card's appearance at all.
+    expect(CARD).not.toMatch(/className=\{`absolute flex flex-col overflow-hidden rounded-xl border/);
+    // ONE skin, rendered twice — two copies of a focus-state ternary is two places for the
+    // selected border to stop agreeing with itself.
+    expect(CARD.match(/className=\{faceSkin\}/g)).toHaveLength(2);
+  });
+
+  it("the 3D exists ONLY while turning — this is the blurry back", () => {
+    // A face inside a live `preserve-3d` context is composited as a texture, and the map is
+    // additionally scaled by `FitBox`, so the browser rasterised it once at the layer's
+    // resolution and resampled that bitmap rather than re-rendering the text. It arrived soft
+    // and STAYED soft, because nothing ever invalidated the layer.
+    expect(CSS).toMatch(/\.flip-holder\[data-flipping\][^{]*\{[^}]*transform-style: preserve-3d/);
+    const settled = CSS.slice(CSS.indexOf(".flip-holder {"));
+    expect(settled.slice(0, settled.indexOf("}"))).not.toMatch(/transform-style|transition/);
+    // Settled, a face is hidden by VISIBILITY — it keeps its layout box, which FitBox measures.
+    expect(CSS).toMatch(/\.flip-holder:not\(\[data-flipping\]\) \.flip-face \{\s*visibility: hidden/);
+    expect(CSS).not.toMatch(/\.flip-holder:not\(\[data-flipping\]\)[^{]*\{[^}]*display:\s*none/);
+  });
+
+  it("the settle runs on a TIMER, so reduced motion is not left composited", () => {
+    // Under `prefers-reduced-motion` there is no transition and no `transitionend`, and a
+    // settle that never ran would leave the card a texture — soft forever, on exactly the
+    // setting chosen by someone who wanted less of this rather than worse of it.
+    expect(CARD).toContain("setTimeout(() => setFlipping(false), FLIP_MS + 40)");
+    // Comment-stripped: the comment beside the timer NAMES the API it rejects, and a prose
+    // mention is not a call. The same shape bit this file once already.
+    expect(CARD_CODE).not.toMatch(/onTransitionEnd/);
+  });
+
+  it("the angle lags the state by a frame, or there is nothing to transition", () => {
+    // The 3D context has to be in the DOM BEFORE the transform changes, or the browser has no
+    // transition to run and the card snaps to the other face.
+    expect(CARD).toContain("requestAnimationFrame(() => setRenderFlipped(showMap))");
   });
 
   it("faces are hidden by BACKFACE, never by display", () => {
@@ -51,9 +93,14 @@ describe("the flip has depth, which depends on where the clipping lives", () => 
     expect(CSS).not.toMatch(/\.flip-face\[data-face="back"\] \{[^}]*display:\s*none/);
   });
 
-  it("the back is pre-rotated, so it faces away until the holder turns", () => {
-    expect(CSS).toMatch(/\.flip-face\[data-face="back"\] \{\s*transform: rotateY\(180deg\)/);
-    expect(CSS).toMatch(/\.flip-face-holder\[data-flipped\] \{\s*transform: rotateY\(180deg\)/);
+  it("the back is pre-rotated ONLY while turning, or the settled back is mirrored", () => {
+    // Scoped to `[data-flipping]`. A back face still carrying `rotateY(180deg)` after the
+    // holder has stopped rotating would render its content mirrored — readable as a mistake
+    // only if you look at the text, which is why it needs an assertion rather than a glance.
+    expect(CSS).toMatch(
+      /\.flip-holder\[data-flipping\] \.flip-face\[data-face="back"\] \{\s*transform: rotateY\(180deg\)/,
+    );
+    expect(CSS).toMatch(/\.flip-holder\[data-flipping\]\[data-flipped\] \{\s*transform: rotateY\(180deg\)/);
   });
 
   it("reduced motion drops the animation and keeps the information", () => {
