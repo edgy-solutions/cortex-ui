@@ -18,10 +18,19 @@ import type { Artifact } from "@/api/types";
  * change; each slot is its own element with its own key so the editable version swaps the
  * element and keeps the composition.
  *
- * **Nothing is invented.** Slots come from `resolved_intent.parameters` and nowhere else. A
- * card whose payload carries no parameters renders no slots rather than a plausible guess —
- * an interpretation strip is a claim about how the question was READ, and a fabricated one is
- * worse than none because it is exactly what a reader would trust.
+ * **Nothing is invented.** Slots come from `resolved_intent` and nowhere else. A card whose
+ * payload carries none renders no slots rather than a plausible guess — an interpretation
+ * strip is a claim about how the question was READ, and a fabricated one is worse than none
+ * because it is exactly what a reader would trust.
+ *
+ * **AND FOR A LONG TIME IT INVENTED NOTHING BY RENDERING NOTHING.** This read
+ * `resolved_intent.parameters`, a key no writer in the engine produces — not the initial write
+ * from `intent_extraction` (`mode`, `entity_refs`, `slots`) and not the `subtask_slots_decision`
+ * overwrite (`accepted_slots`, `refused_slots`, `slot_resolution`). So the strip was blank on
+ * every card, and a note in `InterpretationStrip.disclosure.test.tsx` explained the blankness
+ * with a cause that had since been fixed. That is its own failure shape, worth naming: THE
+ * SYMPTOM OUTLIVED THE DIAGNOSIS, so the filed note kept passing its own smell test because
+ * the effect never changed.
  */
 
 /**
@@ -83,13 +92,92 @@ function slotValue(v: unknown): string {
  * nobody would trace back to here.
  */
 export function hasInterpretation(artifact: Artifact): boolean {
-  const params = artifact.resolved_intent?.parameters;
-  return Boolean(artifact.routing?.action?.label) || Object.keys(params ?? {}).length > 0;
+  return Boolean(artifact.routing?.action?.label) || interpretationRows(artifact).length > 0;
+}
+
+/**
+ * THE ROWS, AND WHAT EACH ONE IS MARKED AS.
+ *
+ * Rows are the UNION of the three keys, not any one of them, and each key is load-bearing for
+ * a different reason:
+ *
+ * `slot_resolution` is the source of DISCLOSURE — the reader's words and what they were
+ * narrowed to. It covers everything the resolver touched.
+ *
+ * `accepted_slots` decides the TREATMENT. A slot that resolved and was then REFUSED is the
+ * single most useful row on the strip: it is the explanation for why the answer did not
+ * reflect what the person said. Dropping it would be the omission-leaves-no-trace shape — but
+ * rendering it identically to one that was used is WORSE than dropping it, because it claims
+ * the system used something it discarded. A presence that misrepresents beats an absence for
+ * damage. So refusal is a treatment, never a filter.
+ *
+ * `refused_slots` names them, as records. It carries slots that never reached the resolver at
+ * all, so a refusal cannot be inferred from the other two.
+ *
+ * AND THE UNION IS WIDER THAN THE RESOLVER'S OWN MAP, deliberately. A slot supplied as a menu
+ * PICK goes through `validate_bound_slots`, not the resolution ladder, so it can reach the
+ * verb with no `slot_resolution` record at all. Sourcing rows from that map alone would drop
+ * it — a slot that was used, shown nowhere, which is the same silent omission one field over.
+ */
+export interface InterpretationRow {
+  slot: string;
+  /** The resolution record, when the resolver touched this slot. */
+  resolution?: unknown;
+  /** What reached the verb, when it did. */
+  accepted?: unknown;
+  /** Why it did not, when it did not. */
+  refusedReason?: string;
+  /** The reader's own words, from whichever key carried them. */
+  spoken?: string;
+  used: boolean;
+}
+
+export function interpretationRows(artifact: Artifact): InterpretationRow[] {
+  const ri = artifact.resolved_intent;
+  const resolution = isRecord(ri?.slot_resolution) ? ri.slot_resolution : {};
+  const accepted = isRecord(ri?.accepted_slots) ? ri.accepted_slots : {};
+  const refused = Array.isArray(ri?.refused_slots) ? ri.refused_slots : [];
+
+  const refusedBy = new Map<string, { reason?: string; spoken?: string }>();
+  for (const r of refused) {
+    // A refusal with no name cannot be attributed to a row, and attaching it to an arbitrary
+    // one would mark a slot as unused on no evidence. Counted by its absence, not guessed at.
+    if (isRecord(r) && typeof r.name === "string" && r.name) {
+      refusedBy.set(r.name, {
+        reason: typeof r.reason === "string" ? r.reason : undefined,
+        spoken: typeof r.spoken === "string" ? r.spoken : undefined,
+      });
+    }
+  }
+
+  // Insertion order, resolution first: the slots with something to disclose lead, and every
+  // other key adds only what it alone knows about.
+  const names: string[] = [];
+  for (const k of [...Object.keys(resolution), ...Object.keys(accepted), ...refusedBy.keys()]) {
+    if (!names.includes(k)) names.push(k);
+  }
+
+  return names.map((slot) => {
+    const rec = resolution[slot];
+    const ref = refusedBy.get(slot);
+    const spokenFromRec =
+      isRecord(rec) && typeof rec.spoken === "string" && rec.spoken.trim() ? rec.spoken.trim() : "";
+    return {
+      slot,
+      resolution: rec,
+      accepted: Object.prototype.hasOwnProperty.call(accepted, slot) ? accepted[slot] : undefined,
+      refusedReason: ref?.reason,
+      spoken: spokenFromRec || ref?.spoken || undefined,
+      // USED means it reached the verb. A refusal is decisive even if the slot also appears in
+      // `accepted_slots`: the two disagreeing is a producer bug, and the safe reading of a
+      // disagreement is the one that does not claim a discarded value was acted on.
+      used: !refusedBy.has(slot) && Object.prototype.hasOwnProperty.call(accepted, slot),
+    };
+  });
 }
 
 export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
-  const params = artifact.resolved_intent?.parameters;
-  const slots = params ? Object.entries(params) : [];
+  const slots = interpretationRows(artifact);
   // The action label is the captured routing decision's, read verbatim — the same
   // never-synthesize rule the answer headline follows.
   const action = artifact.routing?.action?.label ?? null;
@@ -109,17 +197,55 @@ export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
           {action}
         </span>
       )}
-      {slots.map(([k, v]) => (
+      {slots.map((row) => (
         // One element per slot, keyed by slot name: the editable version replaces THIS node
         // and leaves the row's composition untouched.
         <span
-          key={k}
-          data-slot={k}
-          className="text-[9px] font-mono text-slate-400 border border-slate-700/50 rounded px-1 py-px truncate max-w-[130px]"
-          title={`${k} = ${slotValue(v)}`}
+          key={row.slot}
+          data-slot={row.slot}
+          data-slot-refused={row.used ? undefined : ""}
+          className={
+            row.used
+              ? "text-[9px] font-mono text-slate-400 border border-slate-700/50 rounded px-1 py-px truncate max-w-[130px]"
+              : // NOT A DIMMER VERSION OF THE SAME THING. A refused slot that differs only in
+                // opacity reads as a quieter fact of the same kind, and the reader's eye
+                // resolves it as "used, less important". The dashed border makes it a
+                // different KIND of element at a glance, and it is hue-independent — the word
+                // below is what actually carries the meaning.
+                "text-[9px] font-mono text-amber-300/70 border border-dashed border-amber-500/40 rounded px-1 py-px truncate max-w-[180px]"
+          }
+          title={
+            row.used
+              ? `${row.slot} = ${slotValue(row.resolution ?? row.accepted)}`
+              : `${row.slot}: not used${row.refusedReason ? ` — ${row.refusedReason}` : ""}${
+                  row.spoken ? ` (you said "${row.spoken}")` : ""
+                }`
+          }
         >
-          <span className="text-slate-600">{k} </span>
-          {slotValue(v)}
+          <span className={row.used ? "text-slate-600" : "text-amber-500/60"}>{row.slot} </span>
+          {row.used ? (
+            slotValue(row.resolution ?? row.accepted)
+          ) : (
+            <>
+              {/* THE WORDS, KEPT. Whatever else a refusal is, the reader said something, and
+                  the row exists to explain why the answer does not reflect it. */}
+              {row.spoken ? `"${row.spoken}" ` : ""}
+              {/* NO ARROW, and this is the deliberate part. `spoken → resolved` asserts that
+                  the words BECAME the value the system used. For a refused slot they did not,
+                  however well they resolved — so the glyph that means "became" is absent and a
+                  WORD says what happened instead. Colour is the second channel, never the
+                  only one. */}
+              <span className="uppercase tracking-wider">not used</span>
+              {row.refusedReason ? (
+                // The producer's own reason token, verbatim. It arrives as a record field now
+                // rather than inside a sentence, so nothing here parses prose to find it.
+                <span className="text-amber-500/70" data-refused-reason={row.refusedReason}>
+                  {" · "}
+                  {row.refusedReason}
+                </span>
+              ) : null}
+            </>
+          )}
         </span>
       ))}
     </div>

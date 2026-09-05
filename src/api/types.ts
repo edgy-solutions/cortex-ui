@@ -501,10 +501,44 @@ export interface Artifact {
    * reproduce the historical answer. Phase 1: derived from routing
    * when it arrives; null until then.
    */
+  /**
+   * WHAT THE SYSTEM UNDERSTOOD — the supervisor's `subtask_slots_decision` capture, written at
+   * the disposition point where the accepted parameters, the refused ones, the per-slot
+   * resolution outcomes and the route/ask/abstain decision all exist at once.
+   *
+   * `parameters` USED TO BE DECLARED HERE AND WAS NEVER WRITTEN BY ANYONE. The strip sourced
+   * its slots from it and therefore rendered none — before the RESPEAK fold and after it. The
+   * field is gone rather than kept beside the real ones: an orphan that looks authoritative is
+   * exactly what a reader trusts, and its presence is what made a key nobody writes look like
+   * a key somebody writes.
+   *
+   * The three below are the producer's own metadata keys, sealed against its declaration.
+   */
   resolved_intent: {
     subject_uri?: string;
     verb_iri?: string;
-    parameters?: Record<string, unknown>;
+    disposition?: string;
+    /**
+     * Per-slot resolution, for EVERY slot the resolver touched:
+     * `{slot: {outcome, spoken, instance_id, instance_label, candidates}}`.
+     *
+     * This is what makes a narrowing disclosable — the reader's own words beside what they
+     * were narrowed to. A slot present here was resolved; whether it was USED is a separate
+     * question that `accepted_slots` and `refused_slots` answer.
+     */
+    slot_resolution?: Record<string, unknown>;
+    /** `{slot: value}` — what actually reached the verb. */
+    accepted_slots?: Record<string, unknown>;
+    /**
+     * What the system declined to use, as RECORDS rather than sentences.
+     *
+     * It serialized as prose once (`"program_id='meridian' refused (undeclared)"`), so a
+     * surface wanting the slot name had to parse an English sentence — presence-is-not-content
+     * in a field, the same defect named when `too_many`'s count reached the card only inside
+     * `message`. The producer's `Refusal.__str__` is unchanged and still right for a log line;
+     * a payload is read by a renderer and gets its own shape.
+     */
+    refused_slots?: { name?: string; reason?: string; spoken?: string }[];
   };
 
   /**
