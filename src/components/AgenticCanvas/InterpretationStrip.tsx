@@ -54,6 +54,27 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/**
+ * WAS IT CHOSEN, OR WAS IT NARROWED? `outcome: "bound"` means the reader picked it off a menu
+ * this system drew; every other outcome means the resolver worked on words they typed.
+ *
+ * THE TWO ARE NOT FOLDED TOGETHER, and the reason is sharper than tidiness: a strip that
+ * erased the distinction could not tell a reader whether the resolver was involved at all.
+ * A pick still earns its arrow — the label genuinely did become the value — so the mark that
+ * separates them has to be quieter than the arrow's presence.
+ *
+ * THE MARK IS THE QUOTATION. Quoted is the reader's own words; bare is a label this system put
+ * in front of them and they clicked. Nothing is added to the row to carry it, and it is the
+ * same convention the refused branch already uses for spoken text.
+ *
+ * THEY CLICKED, THEY DID NOT SPEAK, and that stays legible past this surface: a clicked label
+ * arriving somewhere the resolver expects words is the words-in-an-id-slot hole from the other
+ * direction, which is a third reason not to collapse `bound` into `exact`.
+ */
+function isBound(v: unknown): boolean {
+  return isRecord(v) && v.outcome === "bound";
+}
+
 /** Formats a slot value without asserting a type the payload never declared. */
 function slotValue(v: unknown): string {
   if (v === null) return "null";
@@ -62,7 +83,9 @@ function slotValue(v: unknown): string {
   if (typeof v === "boolean") return String(v);
   if (Array.isArray(v)) return v.map(slotValue).join(", ");
   if (isRecord(v)) {
-    const spoken = typeof v.spoken === "string" ? v.spoken.trim() : "";
+    const raw = typeof v.spoken === "string" ? v.spoken.trim() : "";
+    // A picked label is shown bare; typed words are shown quoted. See `isBound`.
+    const spoken = raw && !isBound(v) ? `"${raw}"` : raw;
     // The resolved side, in order of how much it tells a reader. `value` is not a documented
     // referent field; it is accepted because a resolved PERIOD has no declared shape yet and
     // this is the name it would plausibly arrive under — but it is read, never required.
@@ -204,6 +227,14 @@ export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
           key={row.slot}
           data-slot={row.slot}
           data-slot-refused={row.used ? undefined : ""}
+          // The producer's own outcome token, verbatim and uninterpreted. `bound` is a PICK and
+          // everything else is a resolution; this surface has no vocabulary of outcomes and must
+          // not acquire one, or the next outcome anyone adds renders as a guess.
+          data-slot-outcome={
+            isRecord(row.resolution) && typeof row.resolution.outcome === "string"
+              ? row.resolution.outcome
+              : undefined
+          }
           className={
             row.used
               ? "text-[9px] font-mono text-slate-400 border border-slate-700/50 rounded px-1 py-px truncate max-w-[130px]"
@@ -216,7 +247,13 @@ export function InterpretationStrip({ artifact }: { artifact: Artifact }) {
           }
           title={
             row.used
-              ? `${row.slot} = ${slotValue(row.resolution ?? row.accepted)}`
+              ? `${row.slot} = ${slotValue(row.resolution ?? row.accepted)}${
+                  isBound(row.resolution)
+                    ? " — chosen from the menu"
+                    : isRecord(row.resolution)
+                      ? " — resolved from what you said"
+                      : ""
+                }`
               : `${row.slot}: not used${row.refusedReason ? ` — ${row.refusedReason}` : ""}${
                   row.spoken ? ` (you said "${row.spoken}")` : ""
                 }`

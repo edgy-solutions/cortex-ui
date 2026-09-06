@@ -65,6 +65,91 @@ const withRefusals = (
   }) as unknown as Artifact;
 
 describe("a resolved referent shows spoken AND resolved", () => {
+  it("draws a REAL captured payload from a walk, field for field", () => {
+    // NOT AN INVENTED FIXTURE. This is `artifact-2-1788654936317` at 00:40:02Z — the
+    // Regulatory Reporting pick — copied from the artifact the producer wrote after the roll.
+    // The before/after across that roll is the evidence the WRITE works: the 23:47 artifact
+    // had `slot_resolution: {}` and the 00:40 one carries the row, so a blank strip after this
+    // point is a READ defect and not a missing capture.
+    render(
+      <InterpretationStrip
+        artifact={
+          {
+            id: "artifact-2-1788654936317",
+            resolved_intent: {
+              verb_iri: "mesh:planCapabilityPath",
+              disposition: "route",
+              accepted_slots: { capability_id: "C9" },
+              refused_slots: [],
+              slot_resolution: {
+                capability_id: {
+                  outcome: "bound",
+                  spoken: "Regulatory Reporting",
+                  instance_id: "C9",
+                },
+              },
+            },
+            routing: { action: { label: "plan Capability Path" } },
+          } as unknown as Artifact
+        }
+      />,
+    );
+    const row = document.querySelector("[data-slot='capability_id']");
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-slot-refused")).toBeNull();
+    // No `instance_label` on this record, so the id is the resolved side — read, never required.
+    expect(row!.textContent).toMatch(/Regulatory Reporting → C9/);
+  });
+
+  it("an ASK turn renders no slots, and that is CORRECT rather than the defect", () => {
+    // `artifact-1` (00:35) and `artifact-3` (00:59) both carry empty `slot_resolution` AND
+    // empty `accepted_slots`. Those are the turns where the menu is OFFERED and nothing is
+    // bound yet; the BIND is a separate artifact. Pinned so an empty strip on an ask is not
+    // re-diagnosed as the blank-strip bug it looks exactly like.
+    const { container } = render(
+      <InterpretationStrip
+        artifact={
+          {
+            id: "artifact-1",
+            resolved_intent: { slot_resolution: {}, accepted_slots: {}, refused_slots: [] },
+          } as unknown as Artifact
+        }
+      />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("a PICK is marked apart from a RESOLUTION, without losing its arrow", () => {
+    // The architect's ruling: `bound` is not `exact` and must not fold into "narrowed", or the
+    // strip cannot tell a reader whether the resolver was involved at all. A pick still earns
+    // the arrow — the label genuinely became the value — so the separation is the QUOTATION.
+    render(
+      <InterpretationStrip
+        artifact={withRefusals(
+          {
+            capability_id: { outcome: "bound", spoken: "Regulatory Reporting", instance_id: "C9" },
+            site: { outcome: "exact", spoken: "Brandon", instance_id: "S2", instance_label: "Site B" },
+          },
+          [],
+          { capability_id: "C9", site: "S2" },
+        )}
+      />,
+    );
+    const pick = document.querySelector("[data-slot='capability_id']");
+    const resolved = document.querySelector("[data-slot='site']");
+    // Both keep the arrow.
+    expect(pick!.textContent).toMatch(/→/);
+    expect(resolved!.textContent).toMatch(/→/);
+    // They clicked a label — bare, because they did not say it.
+    expect(pick!.textContent).toMatch(/Regulatory Reporting → C9/);
+    expect(pick!.textContent).not.toMatch(/"Regulatory Reporting"/);
+    // They typed words — quoted, because those are theirs.
+    expect(resolved!.textContent).toMatch(/"Brandon" → Site B/);
+    // And the producer's own token rides on the row, uninterpreted.
+    expect(pick!.getAttribute("data-slot-outcome")).toBe("bound");
+    expect(resolved!.getAttribute("data-slot-outcome")).toBe("exact");
+  });
+
   it("renders both, resolved side authoritative", () => {
     render(
       <InterpretationStrip
@@ -73,7 +158,9 @@ describe("a resolved referent shows spoken AND resolved", () => {
         })}
       />,
     );
-    expect(screen.getByText(/Brandon → Site B — Brandon/)).toBeTruthy();
+    // QUOTED, because "Brandon" is what the reader TYPED. The quotation is what separates a
+    // resolution from a menu pick, whose label is shown bare — see the `bound` case above.
+    expect(screen.getByText(/"Brandon" → Site B — Brandon/)).toBeTruthy();
   });
 
   it("falls back to the id when no label was captured", () => {
@@ -82,7 +169,7 @@ describe("a resolved referent shows spoken AND resolved", () => {
         artifact={withParams({ site: { spoken: "Brandon", instance_id: "S2" } })}
       />,
     );
-    expect(screen.getByText(/Brandon → S2/)).toBeTruthy();
+    expect(screen.getByText(/"Brandon" → S2/)).toBeTruthy();
   });
 
   it("an UNRESOLVED referent is never shown as resolved", () => {
@@ -94,7 +181,7 @@ describe("a resolved referent shows spoken AND resolved", () => {
         artifact={withParams({ site: { outcome: "not_specific", spoken: "the north site", instance_id: null } })}
       />,
     );
-    expect(screen.getByText(/the north site \(unresolved\)/)).toBeTruthy();
+    expect(screen.getByText(/"the north site" \(unresolved\)/)).toBeTruthy();
     expect(screen.queryByText(/→/)).toBeNull();
   });
 
@@ -192,7 +279,7 @@ describe("a resolved referent shows spoken AND resolved", () => {
     );
     const row = document.querySelector("[data-slot='site']");
     expect(row!.getAttribute("data-slot-refused")).toBeNull();
-    expect(row!.textContent).toMatch(/Brandon → Site B/);
+    expect(row!.textContent).toMatch(/"Brandon" → Site B/);
   });
 
   it("a slot in BOTH accepted and refused is drawn as REFUSED", () => {
