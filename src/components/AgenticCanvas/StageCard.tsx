@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { FitBox } from "./FitBox";
 import { AnsweredChip } from "./AnsweredChip";
+import { useFlipState } from "./useFlipState";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
@@ -27,9 +28,6 @@ export { STAGE_CARD };
  * Positioning + camera live in GlobalCanvasStage; this component is presentation
  * only. Single click focuses (handled by parent), double-click → full-pane.
  */
-/** Kept in step with `--flip-ms` in index.css — the settle must outlast the transition. */
-const FLIP_MS = 480;
-
 export function StageCard({
   artifact,
   focused,
@@ -127,21 +125,7 @@ export function StageCard({
    * `renderFlipped` lags `showMap` by one frame ON PURPOSE. The 3D context has to be in the DOM
    * BEFORE the angle changes, or the browser has no transition to run and the card snaps.
    */
-  const [renderFlipped, setRenderFlipped] = useState(showMap);
-  const [flipping, setFlipping] = useState(false);
-  useLayoutEffect(() => {
-    if (renderFlipped === showMap) return;
-    setFlipping(true);
-    const raf = requestAnimationFrame(() => setRenderFlipped(showMap));
-    // A TIMER, NOT `onTransitionEnd`. Under `prefers-reduced-motion` there is no transition and
-    // no event, and a settle that never runs would leave the card composited — soft forever, on
-    // exactly the setting chosen by someone who wanted less of this, not worse of it.
-    const settle = setTimeout(() => setFlipping(false), FLIP_MS + 40);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(settle);
-    };
-  }, [showMap, renderFlipped]);
+  const { renderFlipped, flipping } = useFlipState(showMap);
 
   /** The card's own appearance, rendered on BOTH faces so the skin turns with the contents. */
   const faceSkin = `flex h-full w-full flex-col overflow-hidden rounded-xl border bg-slate-900/95 shadow-xl ${

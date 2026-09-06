@@ -64,20 +64,36 @@ describe("the flip has depth, which depends on where the clipping lives", () => 
     expect(CSS).not.toMatch(/\.flip-holder:not\(\[data-flipping\]\)[^{]*\{[^}]*display:\s*none/);
   });
 
-  it("the settle runs on a TIMER, so reduced motion is not left composited", () => {
-    // Under `prefers-reduced-motion` there is no transition and no `transitionend`, and a
-    // settle that never ran would leave the card a texture — soft forever, on exactly the
-    // setting chosen by someone who wanted less of this rather than worse of it.
-    expect(CARD).toContain("setTimeout(() => setFlipping(false), FLIP_MS + 40)");
-    // Comment-stripped: the comment beside the timer NAMES the API it rejects, and a prose
-    // mention is not a call. The same shape bit this file once already.
-    expect(CARD_CODE).not.toMatch(/onTransitionEnd/);
+  it("the turn's state machine is somewhere a CLOCK can reach it", () => {
+    // ⛔ WHAT USED TO BE HERE WAS WORTHLESS, AND IT IS WHY THE BLURRY BACK SHIPPED TWICE.
+    //
+    // Two assertions stood here: that the card's source CONTAINED a `setTimeout(... FLIP_MS)`
+    // and a `requestAnimationFrame(... setRenderFlipped)`. Both were true of code that never
+    // settled. The starter and the settle were ONE effect keyed on `[showMap, renderFlipped]`,
+    // so the frame that set the angle changed a dependency, React ran the cleanup, and the
+    // cleanup cleared the settle timer BEFORE IT FIRED. `flipping` stayed true forever and the
+    // card stayed composited — the exact symptom the fix was for, with a green suite over it.
+    //
+    // A LIFECYCLE DEFECT IS INVISIBLE TO A SOURCE ASSERTION BY CONSTRUCTION: the code says what
+    // it intends, and the runtime does something else. The only fix is to run it, so the state
+    // machine moved to `useFlipState` and `useFlipState.test.ts` drives it with fake timers —
+    // including a mutation that restores this exact defect and goes red.
+    //
+    // What is left here is the one thing that IS structural: the card must not carry its own
+    // copy of the machine, or the tested one stops being the one that runs.
+    const HOOK = readFileSync(path.join(__dirname, "useFlipState.ts"), "utf8");
+    expect(HOOK).toContain("setTimeout(() => setFlipping(false), FLIP_MS + 40)");
+    expect(HOOK).toContain("requestAnimationFrame(() => setRenderFlipped(flipped))");
+    expect(CARD).toContain("useFlipState(showMap)");
+    expect(CARD_CODE).not.toMatch(/setFlipping|setRenderFlipped|onTransitionEnd/);
   });
 
-  it("the angle lags the state by a frame, or there is nothing to transition", () => {
-    // The 3D context has to be in the DOM BEFORE the transform changes, or the browser has no
-    // transition to run and the card snaps to the other face.
-    expect(CARD).toContain("requestAnimationFrame(() => setRenderFlipped(showMap))");
+  it("the settle does NOT depend on the angle — the defect, as a structural guard", () => {
+    // Belt to the behavioural test's braces. Merging the two effects, or adding the angle back
+    // to the settle's dependencies, re-creates the bug exactly.
+    const HOOK = readFileSync(path.join(__dirname, "useFlipState.ts"), "utf8");
+    expect(HOOK).toMatch(/\}, \[flipping\]\);/);
+    expect(HOOK).not.toMatch(/\}, \[flipping, [^\]]+\]\);/);
   });
 
   it("faces are hidden by BACKFACE, never by display", () => {
