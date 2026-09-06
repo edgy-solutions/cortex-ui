@@ -2,11 +2,13 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Route, ChevronDown, Crown, AlertTriangle } from "lucide-react";
 import {
+  useCurrentArtifact,
   useCurrentRouting,
   useCurrentGraphTrace,
   useCurrentGraphAlternates,
 } from "@/store/useCanvasStore";
 import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
+import { readPresentation } from "@/lib/presentationProvenance";
 import type { GraphTraceNode } from "@/api/types";
 
 /**
@@ -34,6 +36,7 @@ import type { GraphTraceNode } from "@/api/types";
  */
 export function DecisionPathDiagram() {
   const routing = useCurrentRouting();
+  const artifact = useCurrentArtifact();
   const nodes = useCurrentGraphTrace();
   const alternates = useCurrentGraphAlternates();
   const [open, setOpen] = useState(true);
@@ -90,6 +93,10 @@ export function DecisionPathDiagram() {
   // while a worse one survived is the same defect with an answer on top of it, and that case
   // shows no fallback at all.
   const removed = readExclusions(routing.excluded);
+  // HOW THE CARD WAS CHOSEN, which is a different question from how the VERB was. The path
+  // above ends at an output class; this says which renderer was picked for it and whether the
+  // caller had actually declared one.
+  const presentation = readPresentation(artifact?.rendered_output?.presentation);
 
   return (
     <div className="glass-panel-sm p-3">
@@ -192,6 +199,8 @@ export function DecisionPathDiagram() {
                 />
               )}
             </div>
+
+            {presentation && <Chosen p={presentation} />}
 
             <p className="mt-3 pt-3 border-t border-slate-800/40 text-[10px] text-slate-600 italic leading-snug">
               The path the router actually took (solid), and the branches it
@@ -307,6 +316,58 @@ function Removed({ items }: { items: { verb: string; gate: string; reason: strin
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * WHICH CARD WAS CHOSEN FOR THIS ANSWER, AND WHETHER ANYONE DECLARED IT.
+ *
+ * The decision path above ends at an output class. This is the step after: of the capabilities
+ * registered for that class, which one drew — and, crucially, whether the class matched any of
+ * them at all. A widening produces a card that looks entirely reasonable, so the basis is the
+ * only thing that says a card was chosen because the DATA happened to fit rather than because
+ * the caller named it.
+ */
+function Chosen({ p }: { p: import("@/lib/presentationProvenance").PresentationProvenance }) {
+  return (
+    <div
+      className={`ml-3 mb-1 border-l border-dashed pl-3 py-1 ${
+        p.declared ? "border-slate-700/60" : "border-amber-700/50"
+      }`}
+      data-presentation-basis={p.basis}
+      data-presentation-declared={p.declared ? "" : undefined}
+    >
+      <div
+        className={`text-[9px] font-mono uppercase tracking-wider mb-1 ${
+          p.declared ? "text-slate-600" : "text-amber-500/70"
+        }`}
+      >
+        {p.declared ? "card chosen (declared)" : "card chosen (NOT declared for this type)"}
+      </div>
+      {/* THE PRODUCER'S OWN STRING, verbatim. A lookup table of bases would render the next one
+          anyone writes as an unknown token — the silent-fall-through defect wearing a switch. */}
+      <div className="text-[10px] font-mono leading-snug text-slate-400">
+        {p.basis}
+        {p.source && <span className="text-slate-600"> · {p.source}</span>}
+        {p.satisfied !== null && p.considered !== null && (
+          <span className="text-slate-600">
+            {" "}
+            · {p.satisfied} of {p.considered} could draw it
+          </span>
+        )}
+      </div>
+      {/* WHICH CARDS COULD NOT, and what each one missed. Same shape as the eligibility trace,
+          one layer over: a refusal nobody records is a choice that looks unanimous. */}
+      {p.refusals.map((r, i) => (
+        <div
+          key={`${r.archetype}-${i}`}
+          className="text-[10px] font-mono leading-snug text-slate-500"
+          data-presentation-refusal={r.archetype}
+        >
+          <span className="text-slate-400">{r.archetype}</span> — {r.reason}
+        </div>
+      ))}
     </div>
   );
 }

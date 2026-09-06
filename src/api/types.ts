@@ -607,6 +607,21 @@ export interface Artifact {
     components: unknown[];
     archetype?: string;
     component_uri?: string;
+    /**
+     * HOW THE ARCHETYPE ABOVE WAS CHOSEN — the selector's own provenance.
+     *
+     * It sits BESIDE `archetype` because it is an account of that one field: which capability
+     * won, out of how many, on what basis, and which cards were refused. `selection_basis` is
+     * the discriminator between "the caller declared this archetype for this output type" and
+     * "output_uri matched nothing, the search widened, and some card's contract happened to fit
+     * the data" — the second being how a period series became a bar chart, correct-looking and
+     * wrong.
+     *
+     * NOT ON THE WIRE YET. The presentation agent computes every field of this per answer and
+     * hands it to a log call; it reaches a pod's stdout rather than the artifact. The reader
+     * treats absence as silence, so this costs nothing until it is carried.
+     */
+    presentation?: unknown;
   } | null;
 
   /**

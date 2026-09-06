@@ -113,3 +113,66 @@ describe("the abstention message distinguishes the two cases", () => {
     expect(document.querySelector("[data-removed-candidates]")).toBeNull();
   });
 });
+
+describe("which CARD was chosen, and whether anyone declared it", () => {
+  const withPresentation = (presentation: unknown) => {
+    useCanvasStore.setState({
+      artifacts: [
+        {
+          id: "a1",
+          routing: routing(),
+          rendered_output: { components: [], presentation },
+        } as unknown as Artifact,
+      ],
+      currentArtifactId: "a1",
+    });
+  };
+
+  it("says so plainly when the caller DECLARED this archetype for this type", () => {
+    withPresentation({
+      presentation_source: "registered",
+      selection_basis: "output_uri+payload",
+      candidates_considered: 3,
+      candidates_satisfied: 1,
+    });
+    render(<DecisionPathDiagram />);
+    const el = document.querySelector("[data-presentation-basis]")!;
+    expect(el).toBeTruthy();
+    expect(el.hasAttribute("data-presentation-declared")).toBe(true);
+    expect(el.textContent).toContain("1 of 3 could draw it");
+  });
+
+  it("FLAGS a widening — the card that looks right and was never declared", () => {
+    // The `mesh:PeriodCostSeries` incident: matched no capability, search widened, a
+    // `[{period, total}]` series satisfied CHART_WIDGET, `presentation_source: "registered"`,
+    // and a plausible bar chart drew. The basis was the only field that said so.
+    withPresentation({
+      presentation_source: "registered",
+      selection_basis: "payload-only (output_uri matched no capability)",
+    });
+    render(<DecisionPathDiagram />);
+    const el = document.querySelector("[data-presentation-basis]")!;
+    expect(el.hasAttribute("data-presentation-declared")).toBe(false);
+    expect(el.textContent).toContain("NOT declared for this type");
+    // And the producer's own string is shown rather than a paraphrase of it.
+    expect(el.textContent).toContain("payload-only (output_uri matched no capability)");
+  });
+
+  it("names the cards that could not draw it, and what each one missed", () => {
+    withPresentation({
+      selection_basis: "output_uri+payload",
+      refusals: [{ archetype: "PERIOD_SERIES", reason: "rows lack `period`" }],
+    });
+    render(<DecisionPathDiagram />);
+    const r = document.querySelector("[data-presentation-refusal='PERIOD_SERIES']")!;
+    expect(r.textContent).toContain("rows lack `period`");
+  });
+
+  it("draws NOTHING when the selector's account never arrived", () => {
+    // The case that runs today: the provenance is computed per answer and handed to a log
+    // call, so it reaches a pod's stdout rather than the artifact.
+    withPresentation(undefined);
+    render(<DecisionPathDiagram />);
+    expect(document.querySelector("[data-presentation-basis]")).toBeNull();
+  });
+});
