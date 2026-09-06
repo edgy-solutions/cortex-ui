@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { BOUND_SLOTS_FIELD, boundSlotsBody, toBoundSlots } from "./boundSlots";
+import { ANSWERING_ARTIFACT_FIELD, answeringArtifactBody } from "./answeringArtifact";
 
 /** The producer's gateway, when this machine has it checked out beside cortex. */
 const GATEWAY = path.join(__dirname, "../../../invincible-agent/src/iagent/gateway.py");
@@ -109,5 +110,40 @@ describe("toBoundSlots meets the type the gateway declares", () => {
     // answered, against a server that branches on the field being absent.
     expect(toBoundSlots({})).toEqual({});
     expect(Object.keys(toBoundSlots({ a: null }))).toEqual([]);
+  });
+});
+
+describe("the lineage claim", () => {
+  it("uses the name the gateway declares", () => {
+    expect(ANSWERING_ARTIFACT_FIELD).toBe("answering_artifact_id");
+    expect(answeringArtifactBody("art-1")).toEqual({ answering_artifact_id: "art-1" });
+  });
+
+  it("is ABSENT when this turn answers no ask", () => {
+    // An empty string is not a missing id — it is a claim to have answered an artifact with no
+    // name, which the server refuses and which no caller means.
+    expect(answeringArtifactBody(undefined)).toEqual({});
+    expect(answeringArtifactBody(null)).toEqual({});
+    expect(answeringArtifactBody("   ")).toEqual({});
+  });
+
+  it.skipIf(!HAVE_GATEWAY)("matches the DECLARATION in gateway.py, read live", () => {
+    const src = readFileSync(GATEWAY, "utf8");
+    // Written as a literal rather than assembled from the constant: building this pattern by
+    // concatenation is how the escapes get eaten, and a regex that silently matches nothing is
+    // the shape this repo has been bitten by three times.
+    const decl = src.match(/^\s*([a-z_]+):\s*str\s*\|\s*None\s*=\s*None\s*$/gm) ?? [];
+    expect(decl.some((d) => d.trim().startsWith(ANSWERING_ARTIFACT_FIELD + ":"))).toBe(true);
+    expect(src).toContain("request." + ANSWERING_ARTIFACT_FIELD);
+  });
+
+  it.skipIf(!HAVE_GATEWAY)("is GUARDED there — the server decides, the client only claims", () => {
+    // The write is a MERGE on the parent id, and MERGE CREATES what it cannot find. An
+    // unguarded claim would not record a wrong parent; it would conjure an artifact into the
+    // provenance graph by naming it, and the rail would fold two cards onto a lineage nobody
+    // produced. The guard is the reason cortex may post this at all.
+    const src = readFileSync(GATEWAY, "utf8");
+    expect(src).toMatch(/_answers_something/);
+    expect(src).toMatch(/derived_from_artifact_id/);
   });
 });

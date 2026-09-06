@@ -11,7 +11,14 @@ import { dispatchReroute } from "./rerouteDispatch";
  * outside world is here, and the decision of WHERE an answer goes is in `dispatchReroute`,
  * which is a pure function for the same reason.
  */
-export function AskCardConnected({ component }: { component: unknown }) {
+export function AskCardConnected({
+  component,
+  answeringArtifactId,
+}: {
+  component: unknown;
+  /** The artifact this ask is ON — the lineage the answer claims. Never the current one. */
+  answeringArtifactId?: string;
+}) {
   const { sendMessage, isProcessing } = useAgent();
   const [blocked, setBlocked] = useState<string | null>(null);
 
@@ -23,7 +30,11 @@ export function AskCardConnected({ component }: { component: unknown }) {
         onReroute={(reroute, ask) => {
           // `sendMessage` takes the pick as its SECOND argument, so the phrase and the choice
           // stay separate all the way to the wire.
-          const result = dispatchReroute(reroute, ask, sendMessage);
+          const result = dispatchReroute(reroute, ask, (query, boundSlots, spoken, answeredWith) =>
+            // The lineage claim rides with the answer, so the server can fold this ask into
+            // the answer it produced. It is refused unless the turn really carries an answer.
+            sendMessage(query, boundSlots, spoken, answeredWith, answeringArtifactId),
+          );
           setBlocked(result.blocked ?? null);
         }}
       />

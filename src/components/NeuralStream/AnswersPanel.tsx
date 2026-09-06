@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { Search, GripVertical, Clock, Hash, Shapes, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { foldedAskIds } from "@/lib/askFold";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
 import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
@@ -87,10 +88,15 @@ export function AnswersPanel() {
   // that arrived in the same minute (watermark 0). Pure created_at would violate
   // see-your-write in exactly the moment it matters; pure watermark would sink
   // every task to the bottom.
+  // ONE QUESTION, ONE ITEM. An ask whose answer has arrived is dropped and the answer stands
+  // in its place — see `foldedAskIds`. Folded on the SERVER’s `derived_from_artifact_id`,
+  // never on the client’s claim: the claim is refused on any turn that did not carry an
+  // answer, and folding on it would hide an ask whose answer never happened.
+  const folded = useMemo(() => foldedAskIds(artifacts), [artifacts]);
   const sorted = useMemo(() => {
     const BUCKET_MS = 60_000; // 1 minute
     return [...artifacts]
-      .filter((a) => a.status !== "pending")
+      .filter((a) => a.status !== "pending" && !folded.has(a.id))
       .sort((a, b) => {
         const ba = Math.floor(a.created_at / BUCKET_MS);
         const bb = Math.floor(b.created_at / BUCKET_MS);
@@ -98,7 +104,7 @@ export function AnswersPanel() {
         if (b.watermark !== a.watermark) return b.watermark - a.watermark; // see-your-write within
         return b.created_at - a.created_at;
       });
-  }, [artifacts]);
+  }, [artifacts, folded]);
 
   const q = search.trim().toLowerCase();
   // Full-content search index (summary + question + the whole rendered payload

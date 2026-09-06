@@ -425,7 +425,7 @@ export function StageCard({
             // readable — the alternative is content silently cut off with nothing saying so.
             <div className="absolute inset-0 overflow-auto custom-scrollbar p-3">
               <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
-                <SemanticInterpreter payload={{ components }} hidePersona />
+                <SemanticInterpreter payload={{ components }} hidePersona artifactId={artifact.id} />
               </div>
             </div>
           ) : hasRendered ? (

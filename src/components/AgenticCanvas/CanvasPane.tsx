@@ -313,7 +313,7 @@ export const CanvasPane = () => {
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
           {/* SemanticInterpreter handles the grid, col-spans, and
               RadarReveal for the LLM-generated answer body. */}
-          <SemanticInterpreter payload={{ components: filteredComponents }} />
+          <SemanticInterpreter payload={{ components: filteredComponents }} artifactId={artifact.id} />
           <InlineFigures artifact={artifact} />
         </div>
       )}

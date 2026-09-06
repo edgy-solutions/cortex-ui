@@ -882,6 +882,18 @@ export interface InterviewRequest {
    */
   bound_slots?: Record<string, string>;
   /**
+   * ADR-0033 LINEAGE: THE ARTIFACT THIS TURN IS ANSWERING — the ask whose card the reader
+   * clicked. Absent on every ordinary turn.
+   *
+   * A CLAIM, NOT A DECISION. The server honours it only when the turn actually carries an
+   * answer (a pick or words) and refuses it otherwise, returning it on the artifact under a
+   * DIFFERENT name, `derived_from_artifact_id`. Two names because the check would look like a
+   * rename under one — and the check is load-bearing: the write is a MERGE on the parent id,
+   * and MERGE CREATES what it cannot find, so an unguarded claim would conjure an artifact into
+   * the provenance graph by naming it.
+   */
+  answering_artifact_id?: string;
+  /**
    * ADR-0033 RESPEAK: THE ANSWER TO AN ASK THAT HAD NO MENU. Two scalars, because such an ask
    * asks about exactly one slot and there is exactly one answer — a dict would reimport the
    * `{}`-versus-absent ambiguity `bound_slots` is careful about, for no gain.

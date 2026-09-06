@@ -367,6 +367,20 @@ export type { SemanticUIContainer } from "@/api/types";
 
 interface SemanticInterpreterProps {
   payload: { components: any[] }; // DashboardUI shape
+  /**
+   * WHICH ARTIFACT THESE COMPONENTS BELONG TO — threaded explicitly, and it must never be read
+   * from "the current artifact" instead.
+   *
+   * An ask card answers by claiming lineage to the artifact it is ON, and on a canvas several
+   * artifacts render at once while exactly one is current. A component that asked the store
+   * which artifact is selected would attach a pick to whichever card the reader happened to
+   * have focused — and the server MERGEs on that id, so a wrong parent is not a wrong edge but
+   * a CONJURED node. The one component that needs this is the one place it is passed.
+   *
+   * Absent on surfaces that render components outside an artifact; the ask card then claims no
+   * lineage, which is the honest outcome rather than a guessed one.
+   */
+  artifactId?: string;
   // The citizen shell passes this at overview zoom: the "dense" preview cap.
   // Dense archetypes (tables) render first N rows + a "⌄ K more" affordance so
   // the frame scales by width, not height. Unset (focus/full view) = render all.
@@ -390,6 +404,9 @@ const renderComponent = (
   comp: any,
   onPublish: (sql: string, title: string) => void,
   previewRows?: number,
+  // Threaded rather than read from the store — see `artifactId` on the props. Only the ask
+  // card uses it, and only to claim lineage to the artifact it is ON.
+  artifactId?: string,
 ) => {
   switch (comp.archetype) {
     case "PROCESS_TOPOLOGY":
@@ -609,7 +626,7 @@ const renderComponent = (
       // A QUESTION, NOT AN ANSWER. It fell through to KNOWLEDGE_DOCUMENT before this case
       // existed, which put a request for input in the answer rail wearing a document's frame.
       // The component draws no card chrome for the same reason.
-      return <AskCardConnected component={comp} />;
+      return <AskCardConnected component={comp} answeringArtifactId={artifactId} />;
 
     case "MULTI_SERIES":
       // Several DECLARED series over the same periods, no cap. NOT PERIOD_SERIES, which is one
@@ -788,7 +805,7 @@ const isFullWidth = (archetype: string) =>
   // than inherit a corner postage-stamp by omission.
   archetype === "TRIAGE_TASK";
 
-export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona }) => {
+export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();
 
   const handlePublish = async (sql: string, title: string) => {
@@ -853,7 +870,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 {pCfg.label}
               </div>
             )}
-            {renderComponent(comp, handlePublish, previewRows)}
+            {renderComponent(comp, handlePublish, previewRows, artifactId)}
           </div>
         );
       })}

@@ -9,6 +9,9 @@ import {
 } from "@/store/useCanvasStore";
 import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
 import { readPresentation } from "@/lib/presentationProvenance";
+import { isAsk } from "@/lib/askFold";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import type { Artifact } from "@/api/types";
 import type { GraphTraceNode } from "@/api/types";
 
 /**
@@ -97,6 +100,10 @@ export function DecisionPathDiagram() {
   // above ends at an output class; this says which renderer was picked for it and whether the
   // caller had actually declared one.
   const presentation = readPresentation(artifact?.rendered_output?.presentation);
+  // WHAT THIS ANSWER WAS ASKED, when it is one. The ask's own row is folded out of the rail
+  // once answered — the reader already answered it — so this is where "what did it ask me"
+  // stays answerable. Read from the FOLDED parent, not from any state a card kept alive.
+  const askedBy = useAskedBy(artifact);
 
   return (
     <div className="glass-panel-sm p-3">
@@ -199,6 +206,26 @@ export function DecisionPathDiagram() {
                 />
               )}
             </div>
+
+            {askedBy && (
+              <div
+                className="ml-3 mb-1 border-l border-dashed border-neon-cyan/30 pl-3 py-1"
+                data-asked-by
+              >
+                <div className="text-[9px] font-mono uppercase tracking-wider text-slate-600 mb-1">
+                  asked first
+                </div>
+                <div className="text-[10px] font-mono leading-snug text-slate-400">
+                  {askedBy.question}
+                  {askedBy.answer && (
+                    <>
+                      <span className="text-slate-600"> → </span>
+                      <span className="text-slate-200">{askedBy.answer}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {presentation && <Chosen p={presentation} />}
 
@@ -329,6 +356,29 @@ function Removed({ items }: { items: { verb: string; gate: string; reason: strin
  * only thing that says a card was chosen because the DATA happened to fit rather than because
  * the caller named it.
  */
+/**
+ * The ask this answer came from, read off the artifact it was DERIVED FROM.
+ *
+ * The lineage is the server's (`derived_from_artifact_id`, honoured only for a turn that
+ * really carried an answer), so this cannot show a question that was never answered. The ask's
+ * own card is gone from the rail by then, which is the point: one item, and the question it
+ * replaced still reachable.
+ */
+function useAskedBy(artifact: Artifact | null): { question: string; answer: string } | null {
+  const parentId = artifact?.derived_from_artifact_id ?? null;
+  const parent = useCanvasStore((s) =>
+    parentId ? (s.artifacts.find((a) => a.id === parentId) ?? null) : null,
+  );
+  if (!parent || !isAsk(parent)) return null;
+  const question = (parent.question_text || "").trim();
+  // What the reader answered with, in the terms they saw. Absent when this client did not send
+  // the turn — a reload, or another surface — and absence is silence rather than a guess.
+  const w = artifact?.answered_with;
+  const answer = w && w.label ? (w.value && w.value !== w.label ? `${w.label} → ${w.value}` : w.label) : "";
+  if (!question && !answer) return null;
+  return { question, answer };
+}
+
 function Chosen({ p }: { p: import("@/lib/presentationProvenance").PresentationProvenance }) {
   return (
     <div

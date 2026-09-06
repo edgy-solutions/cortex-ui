@@ -1,4 +1,5 @@
 import { boundSlotsBody } from "@/api/boundSlots";
+import { answeringArtifactBody } from "@/api/answeringArtifact";
 import { spokenAnswerBody, type SpokenAnswer } from "@/api/spokenAnswer";
 import type { AnsweredWith } from "@/api/types";
 import { useCallback, useRef, useState } from "react";
@@ -140,6 +141,8 @@ interface SendPayload {
    * string and the wire carries ids and words — nothing a person merely looked at.
    */
   answeredWith?: AnsweredWith;
+  /** The ask artifact this turn answers, when it answers one. */
+  answeringArtifactId?: string;
 }
 
 export function useInterviewAgent() {
@@ -497,7 +500,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith }: SendPayload) => {
+    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId }: SendPayload) => {
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
@@ -615,6 +618,8 @@ export function useInterviewAgent() {
         // because a typed answer is not a pick: `validate_bound_slots` refuses a no-menu slot
         // by design, so routing words through that path would 422 or default silently.
         ...spokenAnswerBody(spoken),
+        // WHICH ask this answers. A claim the server checks, not an instruction it follows.
+        ...answeringArtifactBody(answeringArtifactId),
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,
@@ -672,9 +677,16 @@ export function useInterviewAgent() {
       boundSlots?: Record<string, string>,
       spoken?: SpokenAnswer,
       answeredWith?: AnsweredWith,
+      answeringArtifactId?: string,
     ) => {
       if (mutation.isPending || !userInput.trim()) return;
-      mutation.mutate({ userInput: userInput.trim(), boundSlots, spoken, answeredWith });
+      mutation.mutate({
+        userInput: userInput.trim(),
+        boundSlots,
+        spoken,
+        answeredWith,
+        answeringArtifactId,
+      });
     },
     [mutation]
   );
