@@ -5,6 +5,7 @@ import { SemanticInterpreter } from '../registry/SemanticInterpreter';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers, Route } from 'lucide-react';
 import { InlineFigures } from './InlineFigures';
+import { AnsweredChip } from './AnsweredChip';
 import { DecisionMap } from './DecisionMap';
 import { WorkflowLens } from './WorkflowLens';
 import { taskKindLabel } from '@/lib/taskArtifact';
@@ -228,7 +229,12 @@ export const CanvasPane = () => {
     return (
       <div className="h-full w-full flex flex-col bg-slate-950/50 border-l border-white/10">
         {artifactHeader}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          {/* THE OTHER IN-FLIGHT SURFACE. The chip was mounted on `StageCard` alone, so a
+              reader watching the full pane — which is where you land after picking from an ask
+              — saw the bare question and no trace of what they had chosen. Two surfaces show a
+              question before its answer exists and both have to say what was answered. */}
+          <AnsweredChip artifact={artifact} />
           <p className={`font-mono text-xs tracking-widest uppercase ${empty.tone}`}>
             {empty.label}
           </p>

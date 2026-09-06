@@ -505,6 +505,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
           // we just don't want a future schema drift to wipe them.
           question_text: existing.question_text || artifact.question_text,
           message_id: existing.message_id || artifact.message_id,
+          // A CLIENT-ONLY FIELD, and the one most exposed to the drift this block already
+          // guards against. `answered_with` is what THIS client sent; the projection has no
+          // column for it, so today the key is simply absent from the incoming row and the
+          // spread leaves it alone. The day someone adds one — or a mapper starts emitting
+          // `answered_with: undefined` — the chip would vanish mid-flight, on the surface a
+          // person is watching precisely because their answer has not come back yet.
+          answered_with: existing.answered_with ?? artifact.answered_with ?? null,
           updated_at: Date.now(),
         };
         nextArtifacts = state.artifacts.map((a, i) =>

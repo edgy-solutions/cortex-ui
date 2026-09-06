@@ -117,3 +117,31 @@ describe("the client's account never becomes the server's", () => {
     expect(HOOK).toContain("answered_with: answeredWith ?? null");
   });
 });
+
+describe("BOTH in-flight surfaces say what was answered", () => {
+  // It was mounted on `StageCard` alone. The full pane — which is where a reader lands after
+  // picking from an ask — has its own "Working on it…" state with the question header and
+  // showed no trace of the pick. One surface tested, two surfaces shipping.
+  const stripComments2 = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const PANE = stripComments2(readFileSync(path.join(__dirname, "CanvasPane.tsx"), "utf8"));
+
+  it("the full pane's pending state mounts the chip", () => {
+    expect(PANE).toContain("<AnsweredChip artifact={artifact} />");
+    // In the EMPTY branch specifically — the one that draws while no components exist.
+    const empty = PANE.slice(PANE.indexOf("if (components.length === 0) {"));
+    expect(empty.slice(0, empty.indexOf("return (\n    <div className=\"h-full w-full bg-slate-900"))).toContain(
+      "<AnsweredChip artifact={artifact} />",
+    );
+  });
+
+  it("the store PRESERVES the field across an Electric merge", () => {
+    // `answered_with` is client-only and the projection has no column for it, so today the key
+    // is simply absent from the incoming row and the spread leaves it alone. The day someone
+    // adds one — or a mapper emits `answered_with: undefined` — the chip would vanish
+    // mid-flight, on the surface a person is watching BECAUSE their answer has not come back.
+    // The block already makes this promise for `question_text`; this joins it.
+    const STORE = stripComments2(readFileSync(path.join(__dirname, "../../store/useCanvasStore.ts"), "utf8"));
+    expect(STORE).toContain("answered_with: existing.answered_with ?? artifact.answered_with ?? null");
+  });
+});
