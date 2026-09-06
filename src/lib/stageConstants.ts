@@ -158,6 +158,16 @@ export function portfolioPlanningTemplate(
 export const PORTFOLIO_PLANNING_SLOTS = 5;
 
 /**
+ * The first ratified template's id — ADR-0050 §1, `policy/canvases/portfolio.yaml`.
+ *
+ * A CONSTANT BECAUSE THE LANDING ORDER IS THE HAZARD. §7 names it: a second `template_id` must
+ * be admitted on both sides, and THE FRONTEND ROW MUST LAND BEFORE THE BACKEND ADVERTISES IT —
+ * the same ordering trap already written into the archetype registries by name. A literal at
+ * the lookup site is how a row gets added on one side and spelled differently on the other.
+ */
+export const PORTFOLIO_TEMPLATE_ID = "portfolio";
+
+/**
  * Keyed by the canvas's `use`, as a plain string so this module stays dependency-free and
  * `useStageStore` can import it without a cycle.
  *
@@ -171,22 +181,46 @@ const TEMPLATES: Record<
   string,
   (vp: CardSize, rowContentH?: number, anchorContentH?: number) => CardSlot[]
 > = {
+  // ADR-0050 §1: `policy/canvases/<template_id>.yaml`, so the first ratified board is
+  // `portfolio`. This is the key the SERVER will name when it seeds.
+  [PORTFOLIO_TEMPLATE_ID]: portfolioPlanningTemplate,
+  // THE LEGACY KEY, AND IT IS NOT A DUPLICATE ROW. Every canvas authored before templates had
+  // ids carries `use: "portfolio_planning"` and no `template_id`, and those boards must keep
+  // laying out exactly as they did — a template that silently stopped applying would reflow
+  // somebody's board on the next render and look like the fold breaking.
   portfolio_planning: portfolioPlanningTemplate,
 };
 
 /**
- * The slot a type's template assigns to the nth card, or null when the type has no template
- * or has run past its end. Null means "fall back to the generic placement" — a template
- * declares where its FIRST cards go, and a canvas that outgrows it keeps working.
+ * The slot a template assigns to the nth card, or null when there is no template for this
+ * board or it has run past its end. Null means "fall back to the generic placement" — a
+ * template declares where its FIRST cards go, and a canvas that outgrows it keeps working.
+ *
+ * ── KEYED BY `template_id`, NOT BY `use` (ADR-0050 §7) ─────────────────────────────────────
+ *
+ * Those were one concept while there was one template, and they are not one concept. `use` is
+ * the canvas's LENS — what chrome it wears, which is a property of how a person reads the
+ * board. `template_id` names the ratified YAML that seeded it. Keeping the geometry keyed by
+ * the lens would mean a second ratified board could not have its own arrangement without
+ * inventing a lens for it, and two boards sharing a lens could not differ in layout at all.
+ *
+ * §7's ruling is what stays: a panel's `layout` declares its SLOT ROLE and ordinal — anchor,
+ * and the pairs beneath it — never pixels. The geometry that realizes a role lives here,
+ * because the coordinates are derived from the viewport aspect and from MEASURED content
+ * heights, and there is no set of numbers a YAML could carry that would survive a different
+ * pane.
+ *
+ * The `use` fallback is for boards that predate template ids — see the legacy row in
+ * `TEMPLATES`.
  */
 export function templateSlot(
-  use: string | undefined,
+  templateId: string | undefined,
   n: number,
   vp: CardSize,
   rowContentH?: number,
   anchorContentH?: number,
 ): CardSlot | null {
-  const build = use ? TEMPLATES[use] : undefined;
+  const build = templateId ? TEMPLATES[templateId] : undefined;
   if (!build) return null;
   const t = build(vp, rowContentH, anchorContentH);
   return n >= 0 && n < t.length ? t[n] : null;

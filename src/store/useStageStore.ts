@@ -58,6 +58,27 @@ export interface CustomCanvas {
   id: string;
   name: string;
   use?: CanvasUse;
+  /**
+   * WHICH RATIFIED TEMPLATE SEEDED THIS BOARD — ADR-0050 §1/§6, the id of
+   * `policy/canvases/<template_id>.yaml`.
+   *
+   * SEPARATE FROM `use`, AND §7 IS EXPLICIT ABOUT WHY. `use` is the LENS — what chrome the
+   * board wears, a property of how a person reads it. `template_id` names the policy artifact
+   * that arranged it. They were one concept while there was one template and they are not one
+   * concept: keyed by the lens, a second ratified board could not have its own arrangement
+   * without inventing a lens for it, and two boards sharing a lens could not differ in layout.
+   *
+   * ABSENT ON EVERY BOARD AUTHORED BEFORE TEMPLATES HAD IDS, and on every board a person built
+   * by hand — §8: a board a user builds in the UI stays a user board. Absent means "look up by
+   * `use`", which is what those boards have always done.
+   */
+  template_id?: string;
+  /**
+   * The ratified content this board was seeded from — `<template_id>@<first 12 hex of sha256>`
+   * per §1. Carried, never interpreted: cortex does not merge overlays or verify digests, and
+   * a client that recomputed one would be a second opinion about a policy artifact.
+   */
+  template_ref?: string;
   items: CanvasItem[];
   /**
    * TRUE once a HUMAN has placed, moved or resized a card here.
@@ -225,7 +246,15 @@ export const useStageStore = create<StageState>()(
             const anchorContentH = naturalContentHeight(comps(c.items[0]?.id ?? "")) ?? undefined;
             let changed = false;
             const items = c.items.map((it, i) => {
-              const slot = templateSlot(c.use, i, vp, rowContentH, anchorContentH);
+              // BY `template_id` WHEN THERE IS ONE, else by `use` — see the field's own note.
+              // A board seeded before ids existed keeps the layout it has always had.
+              const slot = templateSlot(
+                c.template_id ?? c.use,
+                i,
+                vp,
+                rowContentH,
+                anchorContentH,
+              );
               if (!slot) return it;
               if (it.x === slot.x && it.y === slot.y && it.w === slot.w && it.h === slot.h) {
                 return it;
@@ -290,7 +319,8 @@ export const useStageStore = create<StageState>()(
               tallestContentHeight(held.slice(1).map(comps));
             const slot =
               templateSlot(
-                c.use,
+                // See the drop above and `template_id`: by id when the board has one.
+                c.template_id ?? c.use,
                 c.items.length,
                 get().viewport,
                 natural ?? undefined,

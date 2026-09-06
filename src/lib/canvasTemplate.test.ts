@@ -19,6 +19,7 @@ import {
   PORTFOLIO_PLANNING_SLOTS,
   portfolioPlanningTemplate,
   templateSlot,
+  PORTFOLIO_TEMPLATE_ID,
   PANEL_MIN,
   type CardSlot,
 } from "./stageConstants";
@@ -588,5 +589,56 @@ describe("seeding sizes the anchor and the rows from their own content", () => {
 
     expect(items[1].h).toBeGreaterThan(portfolioPlanningTemplate(VP)[1].h);
     expect(items[0].h).toBe(portfolioPlanningTemplate(VP)[0].h);
+  });
+});
+
+/**
+ * ADR-0050 §7 — THE BUILDER IS KEYED BY `template_id`, AND THE LANDING ORDER IS THE HAZARD.
+ *
+ * §7 names it directly: a second `template_id` must be admitted on both sides, and the
+ * FRONTEND ROW MUST LAND BEFORE THE BACKEND ADVERTISES IT — the same ordering trap already
+ * written into the archetype registries by name. These pin the frontend half so a second row
+ * is an addition rather than a redesign, and so the boards that predate ids keep their layout.
+ */
+describe("templates are keyed by template_id, not by lens", () => {
+  it("the first ratified board resolves by its id", () => {
+    // `policy/canvases/portfolio.yaml` per §1, so the id is `portfolio`. The constant exists
+    // because a literal at the lookup site is how a row gets spelled differently on each side.
+    expect(PORTFOLIO_TEMPLATE_ID).toBe("portfolio");
+    expect(templateSlot(PORTFOLIO_TEMPLATE_ID, 0, VP)).not.toBeNull();
+  });
+
+  it("a board seeded before ids existed still lays out — by its `use`", () => {
+    // Every canvas authored before templates had ids carries `use: "portfolio_planning"` and
+    // no `template_id`. A template that silently stopped applying would reflow somebody's
+    // board on the next render and read as the fold breaking.
+    expect(templateSlot("portfolio_planning", 0, VP)).not.toBeNull();
+  });
+
+  it("the two keys resolve to the SAME arrangement — one template, two names", () => {
+    // Not two rows that can drift: the same builder under both keys. If these ever disagree,
+    // an old board and a newly seeded one would lay out differently for no stated reason.
+    expect(templateSlot(PORTFOLIO_TEMPLATE_ID, 0, VP)).toEqual(
+      templateSlot("portfolio_planning", 0, VP),
+    );
+    expect(templateSlot(PORTFOLIO_TEMPLATE_ID, 3, VP)).toEqual(
+      templateSlot("portfolio_planning", 3, VP),
+    );
+  });
+
+  it("an UNKNOWN template_id falls back to generic placement rather than guessing", () => {
+    // The landing-order hazard, from this side. If the backend advertises a second template
+    // before this registry has its row, the board must place generically — not throw, and not
+    // borrow another template's arrangement, which would look like a layout nobody authored.
+    expect(templateSlot("cost-composition", 0, VP)).toBeNull();
+    expect(templateSlot(undefined, 0, VP)).toBeNull();
+  });
+
+  it("the store looks up by template_id FIRST, falling back to use", () => {
+    const STORE = readFileSync(path.join(__dirname, "../store/useStageStore.ts"), "utf8");
+    // Both placement sites — the re-fit and the drop — or one board type re-fits by id and
+    // places new cards by lens.
+    expect(STORE.match(/c\.template_id \?\? c\.use/g)?.length).toBe(2);
+    expect(STORE).toContain("template_id?: string;");
   });
 });
