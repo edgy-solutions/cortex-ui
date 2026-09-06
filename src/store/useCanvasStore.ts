@@ -263,6 +263,12 @@ interface CanvasState {
      * without changing this API — capture-or-lose-forever.
      */
     derived_from_artifact_id?: string | null;
+    /**
+     * What this client sent beside the question — a pick or typed words answering an ask.
+     * CAPTURED AT CREATION for the same reason lineage is: the in-flight card has no other
+     * source for it, and the moment passes.
+     */
+    answered_with?: Artifact["answered_with"];
   }) => void;
 
   /**

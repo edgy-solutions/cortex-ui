@@ -57,7 +57,15 @@ describe("a BIND with nothing to bind is refused, not posted", () => {
     const send = vi.fn();
     const result = dispatchReroute(bind({ capability_id: "C1" }), ask(), send);
     expect(result.blocked).toBeUndefined();
-    expect(send).toHaveBeenCalledWith("what is the capability path", { capability_id: "C1" });
+    // The fourth argument is PRESENTATION ONLY — the label the reader clicked, for the
+    // in-flight card. It travels beside the send rather than through it, and the seal that it
+    // never reaches the request body is in `boundSlots.test.ts`.
+    expect(send).toHaveBeenCalledWith(
+      "what is the capability path",
+      { capability_id: "C1" },
+      undefined,
+      { slot: "capability_id", label: "Data Governance", value: "C1" },
+    );
   });
 });
 
@@ -89,10 +97,14 @@ describe("the phrase and the pick stay separate", () => {
       spoken_answer: "Integration Platform",
     };
     dispatchReroute(reroute, ask({ options: [] }), send);
-    expect(send).toHaveBeenCalledWith("what is the capability path", undefined, {
-      slot: "capability_id",
-      answer: "Integration Platform",
-    });
+    expect(send).toHaveBeenCalledWith(
+      "what is the capability path",
+      undefined,
+      { slot: "capability_id", answer: "Integration Platform" },
+      // NO VALUE. The resolver has not run on typed words, so there is no id they stand for,
+      // and a chip claiming one would assert a narrowing that has not happened.
+      { slot: "capability_id", label: "Integration Platform", value: "" },
+    );
     const [query, bound] = send.mock.calls[0];
     expect(query).not.toMatch(/Integration Platform|capability_id/);
     // NOT in `bound_slots`, and this is the half that would fail silently. A RESPEAK ask had

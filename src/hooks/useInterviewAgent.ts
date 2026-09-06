@@ -1,5 +1,6 @@
 import { boundSlotsBody } from "@/api/boundSlots";
 import { spokenAnswerBody, type SpokenAnswer } from "@/api/spokenAnswer";
+import type { AnsweredWith } from "@/api/types";
 import { useCallback, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { streamInterviewResponse } from "@/api/client";
@@ -133,6 +134,12 @@ interface SendPayload {
   userInput: string;
   boundSlots?: Record<string, string>;
   spoken?: SpokenAnswer;
+  /**
+   * PRESENTATION ONLY. Written onto the pending artifact so the in-flight card can say what was
+   * answered; deliberately NOT spread into the request body, because `label` is a display
+   * string and the wire carries ids and words — nothing a person merely looked at.
+   */
+  answeredWith?: AnsweredWith;
 }
 
 export function useInterviewAgent() {
@@ -490,7 +497,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async ({ userInput, boundSlots, spoken }: SendPayload) => {
+    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith }: SendPayload) => {
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
@@ -551,6 +558,9 @@ export function useInterviewAgent() {
         question_text: userInput,
         produced_for: getProducedFor(),
         derived_from_artifact_id: null,
+        // WHAT THE CLIENT SENT, for the in-flight card. Presentation only — it is not part of
+        // the request body, which carries ids and words and nothing a person merely looked at.
+        answered_with: answeredWith ?? null,
       });
 
       // Phase 0 instant-pre-render: seed all 5 pipeline stages as
@@ -657,9 +667,14 @@ export function useInterviewAgent() {
 
   /** What one turn carries. An answer rides BESIDE the phrase, never inside it. */
   const sendMessage = useCallback(
-    (userInput: string, boundSlots?: Record<string, string>, spoken?: SpokenAnswer) => {
+    (
+      userInput: string,
+      boundSlots?: Record<string, string>,
+      spoken?: SpokenAnswer,
+      answeredWith?: AnsweredWith,
+    ) => {
       if (mutation.isPending || !userInput.trim()) return;
-      mutation.mutate({ userInput: userInput.trim(), boundSlots, spoken });
+      mutation.mutate({ userInput: userInput.trim(), boundSlots, spoken, answeredWith });
     },
     [mutation]
   );

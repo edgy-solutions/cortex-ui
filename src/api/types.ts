@@ -177,6 +177,19 @@ export interface RouteDecision {
  * ExcludedCandidate — one verb an eligibility gate removed, with the gate that removed it and
  * the reason it gave. A silent removal is indistinguishable from "there was never an answer".
  */
+/**
+ * What a reader answered an ask with, in the terms they saw it in.
+ *
+ * `label` is what was on the button or in the box; `value` is the id it stood for, and is
+ * empty for typed words because no resolver has run on them yet. The pair is exactly what the
+ * ask card locks to, and the in-flight card shows the same thing at the other end.
+ */
+export interface AnsweredWith {
+  slot: string;
+  label: string;
+  value: string;
+}
+
 export interface ExcludedCandidate {
   /** The verb removed — an IRI or a label, whichever the producer captured. */
   verb: string;
@@ -501,6 +514,26 @@ export interface Artifact {
    * reproduce the historical answer. Phase 1: derived from routing
    * when it arrives; null until then.
    */
+  /**
+   * WHAT THIS CLIENT SENT WITH THE QUESTION — set locally at turn start, never by a producer.
+   *
+   * THE GAP IT FILLS. The ruling is "slot in the strip, not in the question", and the phrase
+   * goes byte-equal because of it. But the strip renders from `resolved_intent`, which does not
+   * exist until the answer lands — so between the click and the answer the card showed a bare
+   * question with no trace of the pick, and a person who had just chosen something saw no
+   * evidence that they had.
+   *
+   * IT IS NOT `resolved_intent` AND MUST NOT BE MERGED INTO IT. That field is the server's
+   * account of what it understood; this is the client's account of what it asked for. They can
+   * DISAGREE — a bound slot the server refuses is exactly the case worth seeing — and a surface
+   * that blended them would draw a refusal as an acceptance. When the real artifact lands the
+   * strip renders from the server's fields and this one has done its job.
+   *
+   * PRESENTATION ONLY. It never reaches the wire: `label` is a display string and the request
+   * body carries ids and words, nothing a person merely looked at.
+   */
+  answered_with?: AnsweredWith | null;
+
   /**
    * WHAT THE SYSTEM UNDERSTOOD — the supervisor's `subtask_slots_decision` capture, written at
    * the disposition point where the accepted parameters, the refused ones, the per-slot

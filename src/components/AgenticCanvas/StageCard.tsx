@@ -3,6 +3,7 @@ import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { FitBox } from "./FitBox";
+import { AnsweredChip } from "./AnsweredChip";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
@@ -467,7 +468,11 @@ export function StageCard({
               </FitBox>
             </div>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center px-4">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
+              {/* WHAT WAS ANSWERED, while the answer is in flight. See `AnsweredChip`: the strip
+                  cannot say this yet because the server's account does not exist until the
+                  answer lands, and this card is what a person looks at in the meantime. */}
+              <AnsweredChip artifact={artifact} />
               <p
                 className={`text-[13px] font-mono leading-snug text-center ${
                   isUnresolved(artifact) ? "text-amber-400/80 italic" : "text-slate-300"

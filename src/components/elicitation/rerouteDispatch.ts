@@ -1,3 +1,4 @@
+import type { AnsweredWith } from "@/api/types";
 import { BOUND_SLOTS_FIELD, toBoundSlots } from "@/api/boundSlots";
 import { SPOKEN_ANSWER_FIELD, SPOKEN_SLOT_FIELD, type SpokenAnswer } from "@/api/spokenAnswer";
 import { BIND, type AskCardPayload, type Reroute } from "./Elicitation.contract";
@@ -65,6 +66,13 @@ export type SendTurn = (
   query: string,
   boundSlots?: Record<string, string>,
   spoken?: SpokenAnswer,
+  /**
+   * PRESENTATION ONLY, AND NEVER POSTED. The in-flight card needs the LABEL the reader clicked
+   * — "Inventory Visibility" — and the wire carries the id it stands for. This is the only
+   * place both are in hand, so it is built here and travels beside the send rather than
+   * through it. A seal asserts no label reaches the request body.
+   */
+  answeredWith?: AnsweredWith,
 ) => void;
 
 export function dispatchReroute(
@@ -80,7 +88,15 @@ export function dispatchReroute(
       return { blocked: "That pick carried no slot to bind, so nothing was sent." };
     }
     // The original phrase, verbatim. See the header: composing one here would re-parse.
-    send(ask.sub_query, bound);
+    const value = String(bound[ask.slot] ?? "");
+    const chosen = ask.options.find((o) => o.value === value);
+    send(ask.sub_query, bound, undefined, {
+      slot: ask.slot,
+      // The label the reader actually saw. Falling back to the id is honest when the pick did
+      // not come from this menu — it says the id, rather than inventing a name for it.
+      label: chosen ? chosen.label : value,
+      value,
+    });
     return {};
   }
   // The phrase, verbatim, with the typed answer BESIDE it. A RESPEAK whose answer went missing
@@ -89,7 +105,14 @@ export function dispatchReroute(
   if (!reroute.spoken_answer.trim()) {
     return { blocked: "That answer carried no words, so nothing was sent." };
   }
-  send(reroute.query, undefined, { slot: reroute.slot, answer: reroute.spoken_answer });
+  send(
+    reroute.query,
+    undefined,
+    { slot: reroute.slot, answer: reroute.spoken_answer },
+    // NO VALUE. The resolver has not run on typed words, so there is no id they stand for, and
+    // a chip claiming one would assert a narrowing that has not happened.
+    { slot: reroute.slot, label: reroute.spoken_answer.trim(), value: "" },
+  );
   return {};
 }
 

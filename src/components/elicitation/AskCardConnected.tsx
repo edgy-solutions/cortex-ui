@@ -12,13 +12,14 @@ import { dispatchReroute } from "./rerouteDispatch";
  * which is a pure function for the same reason.
  */
 export function AskCardConnected({ component }: { component: unknown }) {
-  const { sendMessage } = useAgent();
+  const { sendMessage, isProcessing } = useAgent();
   const [blocked, setBlocked] = useState<string | null>(null);
 
   return (
     <>
       <AskCard
         component={component}
+        pending={isProcessing}
         onReroute={(reroute, ask) => {
           // `sendMessage` takes the pick as its SECOND argument, so the phrase and the choice
           // stay separate all the way to the wire.
