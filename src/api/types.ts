@@ -617,11 +617,14 @@ export interface Artifact {
      * the data" — the second being how a period series became a bar chart, correct-looking and
      * wrong.
      *
-     * NOT ON THE WIRE YET. The presentation agent computes every field of this per answer and
-     * hands it to a log call; it reaches a pod's stdout rather than the artifact. The reader
-     * treats absence as silence, so this costs nothing until it is carried.
+     * THE NAME IS THE PRODUCER'S, read from `169faef` rather than guessed. This field was
+     * first written here as `presentation` — a name nothing emits — and the render would have
+     * stayed silent forever while looking correct. `capabilities._with_selection_provenance`
+     * sets `presentation_provenance`, and absence there is deliberate: a path that returned
+     * before a selection ran gets NO key rather than a null one, so "no selection happened"
+     * stays distinguishable from "a selection happened and reported nothing".
      */
-    presentation?: unknown;
+    presentation_provenance?: unknown;
   } | null;
 
   /**

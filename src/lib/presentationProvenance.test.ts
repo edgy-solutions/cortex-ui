@@ -12,6 +12,8 @@
  * one asserted hardest.
  */
 import { describe, it, expect } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { readPresentation, DECLARED_BASIS } from "./presentationProvenance";
 
 const prov = (over: Record<string, unknown> = {}) => ({
@@ -99,5 +101,50 @@ describe("the counts and refusals are read, not inferred", () => {
       prov({ refusals: [{ archetype: "PERIOD_SERIES" }, { reason: "no rows" }, "nope"] }),
     )!;
     expect(p.refusals).toEqual([]);
+  });
+});
+
+/**
+ * THE KEY NAME, READ FROM THE PRODUCER RATHER THAN GUESSED.
+ *
+ * This was first written against `rendered_output.presentation` — a name nothing emits. The
+ * reader was correct, the render was correct, every test passed, and the block would never
+ * have drawn: absence is silence by design, so a wrong key is indistinguishable from a
+ * producer that has not shipped yet. Engine F's `_with_selection_provenance` sets
+ * `presentation_provenance`, and that is now the name on both sides.
+ */
+describe("the key the producer actually writes", () => {
+  const GATEWAY_REPO = path.join(
+    __dirname,
+    "../../../invincible-agent/agent_fleet/presentation_agent/capabilities.py",
+  );
+
+  it.skipIf(!existsSync(GATEWAY_REPO))("matches the producer's, read live", () => {
+    const src = readFileSync(GATEWAY_REPO, "utf8");
+    expect(src).toContain('payload["presentation_provenance"]');
+    // And cortex reads that exact key off the envelope.
+    const hud = readFileSync(
+      path.join(__dirname, "../components/HUD/DecisionPathDiagram.tsx"),
+      "utf8",
+    );
+    expect(hud).toContain("rendered_output?.presentation_provenance");
+  });
+
+  const REGISTRY = path.join(
+    __dirname,
+    "../../../invincible-agent/agent_fleet/presentation_agent/capability_registry.py",
+  );
+
+  it.skipIf(!existsSync(REGISTRY))("reads only fields the SELECTOR actually builds", () => {
+    // POINTED AT THE RIGHT MODULE. This first asserted against `capabilities.py`, which merely
+    // CARRIES the dict — `_with_selection_provenance` copies whatever it is handed. The fields
+    // are assembled in `select_archetype`, so that is where their existence is checkable.
+    // Asserting against the carrier passed for `selection_basis` (named in its docstring) and
+    // failed for `presentation_source`, which is the tell that the file was wrong rather than
+    // the field.
+    const src = readFileSync(REGISTRY, "utf8");
+    for (const field of ["selection_basis", "presentation_source", "candidates_satisfied", "refusals"]) {
+      expect(src, `${field} is not built by the selector`).toContain(`"${field}"`);
+    }
   });
 });

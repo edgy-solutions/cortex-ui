@@ -121,7 +121,7 @@ describe("which CARD was chosen, and whether anyone declared it", () => {
         {
           id: "a1",
           routing: routing(),
-          rendered_output: { components: [], presentation },
+          rendered_output: { components: [], presentation_provenance: presentation },
         } as unknown as Artifact,
       ],
       currentArtifactId: "a1",

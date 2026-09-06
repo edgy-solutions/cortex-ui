@@ -99,7 +99,7 @@ export function DecisionPathDiagram() {
   // HOW THE CARD WAS CHOSEN, which is a different question from how the VERB was. The path
   // above ends at an output class; this says which renderer was picked for it and whether the
   // caller had actually declared one.
-  const presentation = readPresentation(artifact?.rendered_output?.presentation);
+  const presentation = readPresentation(artifact?.rendered_output?.presentation_provenance);
   // WHAT THIS ANSWER WAS ASKED, when it is one. The ask's own row is folded out of the rail
   // once answered — the reader already answered it — so this is where "what did it ask me"
   // stays answerable. Read from the FOLDED parent, not from any state a card kept alive.
