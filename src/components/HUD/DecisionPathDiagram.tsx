@@ -43,6 +43,16 @@ export function DecisionPathDiagram() {
   const nodes = useCurrentGraphTrace();
   const alternates = useCurrentGraphAlternates();
   const [open, setOpen] = useState(true);
+  // WHAT THIS ANSWER WAS ASKED, when it is one. The ask's own row is folded out of the rail
+  // once answered — the reader already answered it — so this is where "what did it ask me"
+  // stays answerable. Read from the FOLDED parent, not from any state a card kept alive.
+  //
+  // CALLED ABOVE THE EARLY RETURN, and that placement is the whole bug it is a fix for. It sat
+  // below `if (!routing) return null`, so a render before any routing arrived ran five hooks
+  // and the render after it ran six — React #310, "rendered more hooks than during the previous
+  // render", thrown on the first route decision of every session. A hook cannot live after a
+  // conditional return, however naturally the reading order wants it beside the thing it feeds.
+  const askedBy = useAskedBy(artifact);
 
   // Nothing routed yet → don't show an empty box.
   if (!routing) return null;
@@ -100,11 +110,6 @@ export function DecisionPathDiagram() {
   // above ends at an output class; this says which renderer was picked for it and whether the
   // caller had actually declared one.
   const presentation = readPresentation(artifact?.rendered_output?.presentation_provenance);
-  // WHAT THIS ANSWER WAS ASKED, when it is one. The ask's own row is folded out of the rail
-  // once answered — the reader already answered it — so this is where "what did it ask me"
-  // stays answerable. Read from the FOLDED parent, not from any state a card kept alive.
-  const askedBy = useAskedBy(artifact);
-
   return (
     <div className="glass-panel-sm p-3">
       <button
