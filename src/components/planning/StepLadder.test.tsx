@@ -248,3 +248,64 @@ describe("the cases the first pass could not see", () => {
     expect(document.body.textContent).toContain("20,982,365.26");
   });
 });
+
+/**
+ * THREE SHAPES OF NON-OBVIOUS BASIS, from engine-cost — a real custom composition, not a
+ * fixture. A seal shaped on Overhead alone misses the other two, and they fail differently.
+ *
+ *   Fringe            basis is a BARE COMPONENT — direct labour alone, while the previous
+ *                     running total is the whole base cost including material.
+ *   Overhead          basis is a COMPONENT PLUS AN EARLIER STEP — labour + fringe.
+ *   Material handling basis is 1,085,760.00 against a running total of 18,792,982.77. A factor
+ *                     of SEVENTEEN apart, and late enough in the walk that a reader who assumes
+ *                     "basis is roughly the running total" cannot rationalise it away.
+ *
+ * The third is the one that would expose a renderer quietly substituting the running total for
+ * a missing basis, because every other row is close enough to hide it.
+ */
+const CUSTOM_STEPS = [
+  { name: "Base cost", rate: null, basis: null, amount: "7865884.00", running_total: "7865884.00" },
+  { name: "Fringe", rate: "0.330", basis: "6338124.00", amount: "2091580.92", running_total: "9957464.92" },
+  { name: "Overhead", rate: "0.820", basis: "8429704.92", amount: "6912358.03", running_total: "16869822.95" },
+  { name: "G&A", rate: "0.114", basis: "16869822.95", amount: "1923159.82", running_total: "18792982.77" },
+  { name: "Material handling", rate: "0.015", basis: "1085760.00", amount: "16286.40", running_total: "18809269.17" },
+  { name: "Profit", rate: "0.10", basis: "18809269.17", amount: "1880926.92", running_total: "20690196.09" },
+];
+
+describe("a basis is whatever the producer struck the rate on", () => {
+  const custom = () => payload({ steps: CUSTOM_STEPS, price: "20690196.09", unit_price: "" });
+
+  it("draws a basis SEVENTEEN TIMES smaller than the running total beside it", () => {
+    render(<StepLadder component={custom()} />);
+    const mh = document.querySelector('[data-ladder-step="Material handling"]')!;
+    expect(mh.querySelector("[data-ladder-basis]")!.textContent).toBe("1,085,760.00");
+    // And the running total on the SAME row is the walk's, not the basis restated.
+    expect(mh.textContent).toContain("18,809,269.17");
+  });
+
+  it("never substitutes the running total for a basis", () => {
+    // The failure this shape exists to catch: a renderer filling a basis it did not receive
+    // from the number nearest to hand. On every other row the two are close enough that the
+    // substitution would look plausible.
+    render(<StepLadder component={custom()} />);
+    const mh = document.querySelector('[data-ladder-step="Material handling"]')!;
+    expect(mh.querySelector("[data-ladder-basis]")!.textContent).not.toBe("18,792,982.77");
+  });
+
+  it("a bare-component basis is drawn as sent — Fringe, not the base cost above it", () => {
+    // Fringe is struck on direct labour alone; the previous running total is the whole base
+    // cost, which includes material and other direct. Two rows above Overhead, and a different
+    // kind of non-obvious.
+    render(<StepLadder component={custom()} />);
+    const fringe = document.querySelector('[data-ladder-step="Fringe"]')!;
+    expect(fringe.querySelector("[data-ladder-basis]")!.textContent).toBe("6,338,124.00");
+    expect(fringe.querySelector("[data-ladder-basis]")!.textContent).not.toBe("7,865,884.00");
+  });
+
+  it("reconciles against ITS OWN price, which is a different total", () => {
+    // A custom burden structure produces a different price from the standard one — proof the
+    // reconciliation check reads the payload rather than a remembered figure.
+    render(<StepLadder component={custom()} />);
+    expect(document.querySelector("[data-ladder-price]")?.textContent).toBe("20,690,196.09");
+  });
+});
