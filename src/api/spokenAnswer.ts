@@ -30,8 +30,17 @@ export interface SpokenAnswer {
 /**
  * The answer's slice of the request body — `{}` when nothing was spoken.
  *
- * A FUNCTION RATHER THAN A SPREAD AT THE CALL SITE, for the reason `boundSlotsBody` is one:
- * the distinctions it encodes are not testable in a conditional inside an object literal.
+ * A FUNCTION RATHER THAN A SPREAD AT THE CALL SITE — and the reason first recorded here was
+ * FALSE. It said the absent-versus-empty distinction "is not testable in a conditional inside
+ * an object literal". `useInterviewAgent.test.ts` had captured the outgoing request since
+ * before this file existed and asserts on it directly; the seal was one import away. What got
+ * written instead was a source-text guard, chosen because the stronger form had been recorded
+ * as nonexistent.
+ *
+ * The extraction is still right — one place for a decision three fields share — but a recorded
+ * conclusion about a test deserves the same suspicion as the test. This one stopped anyone
+ * looking for a year's worth of the wrong reason in a day. The body is asserted on the body
+ * now, in `describe("what an answered ask actually posts")`.
  *
  * BOTH FIELDS OR NEITHER. An answer with no slot has nowhere to land, and a slot with no
  * answer is a claim that someone replied with nothing — so a half-populated pair is never

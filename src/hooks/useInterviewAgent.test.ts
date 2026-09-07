@@ -678,3 +678,100 @@ describe("useInterviewAgent — event admission", () => {
     expect([...admitted].sort()).toEqual([...declared].sort());
   });
 });
+
+/**
+ * THE OUTGOING BODY, ASSERTED ON THE BODY — which was available all along.
+ *
+ * `boundSlots.ts`, `spokenAnswer.ts` and `answeringArtifact.ts` each record that the
+ * absent-versus-empty distinction "is not testable in a conditional inside an object literal",
+ * and each cites that as the reason the decision was extracted into a function. THE EXTRACTION
+ * IS RIGHT AND THE REASON WAS FALSE: this file has captured `transport.request` since before any
+ * of them were written, and asserts on it three tests above. What I actually wrote instead were
+ * source-text `toContain` guards — the weaker form, chosen because I had recorded that the
+ * stronger one did not exist.
+ *
+ * A RECORDED CONCLUSION ABOUT A TEST DESERVES THE SAME SUSPICION AS THE TEST. Mine sat in three
+ * files for a day reading as considered judgement, and its effect was to stop anyone looking for
+ * the seal that was one import away. The comments now carry the correction rather than being
+ * quietly replaced.
+ *
+ * What these guard is silent: post the wrong name and the model parses its own field as None,
+ * the supervisor sees no pick, and the turn proceeds AS IF THE READER HAD NOT ANSWERED. No 422,
+ * no log line.
+ */
+describe("what an answered ask actually posts", () => {
+  const send = async (
+    r: ReturnType<typeof mount>,
+    ...args: Parameters<ReturnType<typeof mount>["result"]["current"]["sendMessage"]>
+  ) => {
+    await act(async () => {
+      r.result.current.sendMessage(...args);
+      await flush();
+    });
+  };
+
+  it("a PICK rides under `bound_slots`, and never under `slots`", async () => {
+    const r = mount();
+    await send(r, QUERY, { capability_id: "C4" });
+    expect(transport.request!.bound_slots).toEqual({ capability_id: "C4" });
+    // `slots` is the name the producer's own Reroute uses, and the one this codebase carries
+    // right up to the rename — so its absence is the assertion, not a formality.
+    expect(transport.request).not.toHaveProperty("slots");
+  });
+
+  it("TYPED WORDS ride under their own two fields, not under bound_slots", async () => {
+    // A no-menu ask has nothing to validate a pick against, so `validate_bound_slots` refuses
+    // its slot as `no_menu` by design. Routing words through that path would 422 or default.
+    const r = mount();
+    await send(r, QUERY, undefined, { slot: "capability_id", answer: "Integration Platform" });
+    expect(transport.request!.spoken_slot).toBe("capability_id");
+    expect(transport.request!.spoken_answer).toBe("Integration Platform");
+    expect(transport.request).not.toHaveProperty("bound_slots");
+  });
+
+  it("the LINEAGE claim posts under `answering_artifact_id`", async () => {
+    const r = mount();
+    await send(r, QUERY, { capability_id: "C4" }, undefined, undefined, "ask-1");
+    expect(transport.request!.answering_artifact_id).toBe("ask-1");
+  });
+
+  it("ABSENT, NOT EMPTY — an ordinary turn carries none of the four keys", async () => {
+    // THE DISTINCTION THE FUNCTIONS EXIST FOR, asserted at last on the body. `{bound_slots: {}}`
+    // is a CLAIM that a menu was answered, against a server that branches on the field being
+    // None and validates whatever it finds against a recomputed menu.
+    const r = mount();
+    await startTurn(r);
+    for (const key of ["bound_slots", "spoken_slot", "spoken_answer", "answering_artifact_id"]) {
+      expect(transport.request, key).not.toHaveProperty(key);
+    }
+    // The control: the turn really did post.
+    expect(transport.request!.message).toBe(QUERY);
+  });
+
+  it("an EMPTY pick is omitted rather than posted as `{}`", async () => {
+    const r = mount();
+    await send(r, QUERY, {});
+    expect(transport.request).not.toHaveProperty("bound_slots");
+  });
+
+  it("a HALF-POPULATED spoken answer posts neither half", async () => {
+    // An answer with no slot has nowhere to land; a slot with no answer claims someone replied
+    // with nothing. Both or neither, decided in one place.
+    const r = mount();
+    await send(r, QUERY, undefined, { slot: "capability_id", answer: "   " });
+    expect(transport.request).not.toHaveProperty("spoken_answer");
+    expect(transport.request).not.toHaveProperty("spoken_slot");
+  });
+
+  it("the DISPLAY LABEL never reaches the wire", async () => {
+    // `answeredWith` is what a person looked at. The body carries ids and words; a display
+    // string riding along would be a field the server never asked for and cannot validate.
+    const r = mount();
+    await send(
+      r, QUERY, { capability_id: "C4" }, undefined,
+      { slot: "capability_id", label: "Inventory Visibility", value: "C4" }, "ask-1",
+    );
+    expect(JSON.stringify(transport.request)).not.toContain("Inventory Visibility");
+    expect(transport.request!.bound_slots).toEqual({ capability_id: "C4" });
+  });
+});

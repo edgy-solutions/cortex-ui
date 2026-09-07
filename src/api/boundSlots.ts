@@ -32,8 +32,18 @@ export function toBoundSlots(slots: Record<string, unknown>): Record<string, str
 /**
  * The pick's slice of the request body — `{}` when there is no pick.
  *
- * A FUNCTION RATHER THAN A SPREAD AT THE CALL SITE, because the distinction it encodes is one
- * a conditional in a literal cannot be tested for. `{bound_slots: {}}` is NOT "no pick": the
+ * A FUNCTION RATHER THAN A SPREAD AT THE CALL SITE — and the reason first recorded here was
+ * FALSE. It said the absent-versus-empty distinction "is not testable in a conditional inside
+ * an object literal". `useInterviewAgent.test.ts` had captured the outgoing request since
+ * before this file existed and asserts on it directly; the seal was one import away. What got
+ * written instead was a source-text guard, chosen because the stronger form had been recorded
+ * as nonexistent.
+ *
+ * The extraction is still right — one place for a decision three fields share — but a recorded
+ * conclusion about a test deserves the same suspicion as the test. This one stopped anyone
+ * looking for a year's worth of the wrong reason in a day. The body is asserted on the body
+ * now, in `describe("what an answered ask actually posts")`.
+ * `{bound_slots: {}}` is NOT "no pick": the
  * server branches on the field being absent, so an empty object is a CLAIM that a menu was
  * answered, and it would be validated against a recomputed menu and refused. Absent is the
  * only honest way to say nothing was picked.
