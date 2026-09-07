@@ -219,6 +219,11 @@ export function startArtifactsSubscription(token: string | null): () => void {
   // route it targets is cortex-bff's `/electric/shape` PROXY — never Electric directly —
   // so the WHERE clause is server-injected from the verified JWT `sub` rather than
   // client-controlled. See gateway.py `electric_shape_proxy`.
+  // DECLARED ABOVE THE COMMENT BLOCK, not between it and the call. The transport guard walks
+  // up from `new ShapeStream(` through the CONTIGUOUS comment block and stops at the first
+  // line of code, so a statement wedged in here severs the `transport-exception:` marker from
+  // the call it declares — which is exactly how this file broke the build once.
+  const controller = new AbortController();
   // THE STREAM MUST BE ABORTABLE, AND `unsubscribe()` DOES NOT ABORT IT.
   //
   // `ShapeStream.subscribe()` returns a closure that does exactly one thing —
@@ -235,7 +240,12 @@ export function startArtifactsSubscription(token: string | null): () => void {
   // retry loop cannot fix a credential. One orphan per refresh, each one permanent.
   //
   // `signal` is the only thing that stops it, so the caller's cleanup aborts.
-  const controller = new AbortController();
+  //
+  // transport-exception: ShapeStream is a different transport (long-poll replication), so it
+  // cannot ride the axios wrapper. It carries the caller's OIDC bearer, and the route it
+  // targets is cortex-bff's `/electric/shape` PROXY — never Electric directly — so the WHERE
+  // clause is server-injected from the verified JWT `sub` rather than client-controlled.
+  // See gateway.py `electric_shape_proxy`.
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: {

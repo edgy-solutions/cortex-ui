@@ -68,13 +68,16 @@ export function startHumanTasksSubscription(token: string | null): () => void {
     console.info("[electric-tasks] VITE_API_URL empty; subscription skipped");
     return () => {};
   }
-  // transport-exception: ShapeStream replication transport, same reasoning as
-  // electric.ts — bearer attached, routed through cortex-bff's `/electric/shape`
-  // proxy so `recipient_id` is filtered by the server-verified caller identity.
   // ABORTABLE, for the reason spelled out in electric.ts: `unsubscribe()` detaches the
   // callback and leaves the long-poll running, so every token refresh would otherwise orphan a
   // stream that keeps polling with a bearer due to expire. `signal` is the only stop.
+  //
+  // Declared ABOVE the comment block below, never between it and the call — the guard's
+  // walk-up stops at the first line of code.
   const controller = new AbortController();
+  // transport-exception: ShapeStream replication transport, same reasoning as
+  // electric.ts — bearer attached, routed through cortex-bff's `/electric/shape`
+  // proxy so `recipient_id` is filtered by the server-verified caller identity.
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: { Authorization: `Bearer ${token}` },

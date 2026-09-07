@@ -218,13 +218,23 @@ if (violations.length) {
     console.error(`  ${v.file}:${v.line}  [${v.idiom}]`);
     console.error(`      ${v.text}`);
   }
+  // `MARKER_LOOKBACK` was never a binding in this file — the constant is `MAX_COMMENT_BLOCK`.
+  // The reference sat on the ONLY path that runs when the guard finds something, so the guard
+  // threw `ReferenceError` instead of reporting, and the build failed with a stack trace about
+  // the checker rather than a list of undeclared call sites. It went unnoticed because the
+  // happy path never touches this line: a guard that has never failed has never run its own
+  // failure. Reported by a real violation, in CI, on a red build.
   console.error(
     `\nEvery outbound call must go through src/api/client.ts (which attaches the caller's\n` +
-    `bearer + trace headers) or carry an explicit declaration on the call line or within\n` +
-    `${MARKER_LOOKBACK} lines above it:\n\n` +
+    `bearer + trace headers) or carry an explicit declaration on the call line, or in the\n` +
+    `CONTIGUOUS comment block directly above it (up to ${MAX_COMMENT_BLOCK} lines):\n\n` +
     `    // ${MARKER} raw fetch — carries the caller's OIDC bearer explicitly.\n\n` +
     `If the call genuinely needs no identity, say so in the declaration. The point is that\n` +
-    `it is a decision someone wrote down, not an omission nobody noticed.`
+    `it is a decision someone wrote down, not an omission nobody noticed.\n\n` +
+    `CONTIGUOUS is the word that catches people: the walk-up stops at the first line that is\n` +
+    `not a comment. A declared call that grows a statement between its comment and itself —\n` +
+    `a \`const\` hoisted for the call's own arguments, say — becomes undeclared without the\n` +
+    `declaration having changed. Put the statement ABOVE the comment block.`
   );
   process.exit(1);
 }
