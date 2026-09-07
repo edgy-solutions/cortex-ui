@@ -430,7 +430,12 @@ const DERIVED_BINDINGS = [
   // rather than hidden — an advertised-unconsumed row is the same defect as an
   // advertised-unconsumed field.
   {
-    subject_uri: "mesh:NamedHole",
+    // ONE IRI FOR BOTH ENDS WAS REFUSED, and the seal was right to refuse it:
+    // `test_every_binding_renders_a_response_AS_AN_ARCHETYPE` requires a Response subject and
+    // an Archetype object. The first reasoning here — no verb produces a hole, so there is no
+    // subject — confused NO VERB RAN with NOTHING WAS PRODUCED. A withheld panel is decided by
+    // the seeder, per caller, at dispatch; the record of a refusal is a result.
+    subject_uri: "mesh:WithheldPanel",
     object_uri: "mesh:NamedHole",
     // No affinity, and deliberately: a hole is not better suited to one persona than another.
     // It is what happens when a caller's grants do not cover a panel, and ranking it by
