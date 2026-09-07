@@ -14,6 +14,7 @@ import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
 import { NamedHole } from "./NamedHole";
+import { StepLadder } from "../planning/StepLadder";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -622,6 +623,12 @@ const renderComponent = (
           state_version={comp.state_version}
         />
       );
+
+    case "STEP_LADDER":
+      // A price built up by striking factors IN ORDER. Not a ranking — see the contract: each
+      // step's basis descends from the ones before it, so sorting would break the walk and
+      // assert a magnitude order nobody stated.
+      return <StepLadder component={comp} scope_label={comp.scope_label} />;
 
     case "NAMED_HOLE":
       // ADR-0050 §5. NOT an answer and NOT an empty card: a panel the template declared and

@@ -44,6 +44,7 @@ export type AnswerArchetype =
   | "THRESHOLD_GRID"
   | "MATRIX_GRID"
   | "SHORTFALL_GRID"
+  | "STEP_LADDER"
   | "NAMED_HOLE"
   | "ELICITATION"
   | "MULTI_SERIES"
@@ -77,6 +78,7 @@ export const DISPLAY_ARCHETYPES = [
   "THRESHOLD_GRID",
   "MATRIX_GRID",
   "SHORTFALL_GRID",
+  "STEP_LADDER",
   "NAMED_HOLE",
   "ELICITATION",
   "MULTI_SERIES",
@@ -186,6 +188,10 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Matrix";
     case "SHORTFALL_GRID":
       return "Shortfall";
+    case "STEP_LADDER":
+      // NOT "Steps", which reads as a procedure, and not "Costs", which is one producer's
+      // domain. A build-up is what the shape IS for any producer that strikes factors in order.
+      return "Build-up";
     case "NAMED_HOLE":
       // NOT "Empty" and not "Denied". The first is what a blank card already says here, and the
       // second reads as a failure when the board did exactly what it should.

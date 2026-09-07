@@ -24,6 +24,7 @@ import {
   LineChart,
   MessageCircleQuestion,
   Lock,
+  Layers,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -90,6 +91,9 @@ export function glyphFor(t: AnswerArchetype): {
       return { Icon: Grid2x2, color: "text-neon-green/80" };
     case "SHORTFALL_GRID":
       return { Icon: Scale, color: "text-neon-pink/80" };
+    case "STEP_LADDER":
+      // Layers, because the answer is a build-up: each figure struck on the ones beneath it.
+      return { Icon: Layers, color: "text-cyan-400/80" };
     case "NAMED_HOLE":
       // A lock, because the reason is entitlement rather than failure. An error glyph would say
       // the board broke; the board is intact and the reader is not.

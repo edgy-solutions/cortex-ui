@@ -46,6 +46,7 @@ import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.cont
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
 import { NAMED_HOLE_CONTRACT } from "../components/registry/NamedHole.contract";
+import { STEP_LADDER_CONTRACT } from "../components/planning/StepLadder.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -437,6 +438,21 @@ const DERIVED_BINDINGS = [
     persona_fit: [],
     domain_fit: [],
     contract: NAMED_HOLE_CONTRACT,
+  },
+  // Engine-cost's price composition. The producer holds `cost:PriceComposition` DELIBERATELY
+  // UNBOUND until this row exists, with the refusal written down beside its rows — unbound
+  // beats mis-bound, because a mis-binding renders something plausible and wrong. This is the
+  // frontend half; the producer adds theirs when this lands.
+  //
+  // CONTRIBUTION_RANKING was refused for it, and the reason is structural rather than
+  // aesthetic: that contract has no slot for `basis` or `running_total`, and those are the two
+  // fields that make a build-up checkable and readable as one movement.
+  {
+    subject_uri: "cost:PriceComposition",
+    object_uri: "mesh:StepLadder",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: STEP_LADDER_CONTRACT,
   },
 ] as const;
 
