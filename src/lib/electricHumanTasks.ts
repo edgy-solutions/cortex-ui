@@ -19,6 +19,7 @@ import {
   type HumanTask,
 } from "@/store/useHumanTaskStore";
 import { parseTaskPayload } from "@/lib/taskPayload";
+import { isAuthFailure } from "@/lib/electric";
 
 /**
  * Convert an Electric row (snake_case, bigint-as-string) into a HumanTask.
@@ -70,10 +71,15 @@ export function startHumanTasksSubscription(token: string | null): () => void {
   // transport-exception: ShapeStream replication transport, same reasoning as
   // electric.ts — bearer attached, routed through cortex-bff's `/electric/shape`
   // proxy so `recipient_id` is filtered by the server-verified caller identity.
+  // ABORTABLE, for the reason spelled out in electric.ts: `unsubscribe()` detaches the
+  // callback and leaves the long-poll running, so every token refresh would otherwise orphan a
+  // stream that keeps polling with a bearer due to expire. `signal` is the only stop.
+  const controller = new AbortController();
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: { Authorization: `Bearer ${token}` },
     params: { table: "human_task_projection" },
+    signal: controller.signal,
   });
   const unsubscribe = stream.subscribe(
     (messages: Message[]) => {
@@ -98,10 +104,20 @@ export function startHumanTasksSubscription(token: string | null): () => void {
     (err: Error) => {
       // Per [[feedback-trailing-steps-nonfatal]]: an Electric outage must not
       // break the session — the inbox stops updating live but the rest works.
+      // A refused credential is not an outage and does not heal by waiting — see electric.ts.
+      if (isAuthFailure(err)) {
+        console.error(
+          "[electric-tasks] subscription REJECTED — the bearer is no longer accepted; this " +
+            "stream will not recover on its own.",
+          err,
+        );
+        return;
+      }
       console.error("[electric-tasks] subscription error", err);
     }
   );
   return () => {
     unsubscribe();
+    controller.abort();
   };
 }

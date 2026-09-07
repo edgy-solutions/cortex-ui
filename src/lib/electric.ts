@@ -219,6 +219,23 @@ export function startArtifactsSubscription(token: string | null): () => void {
   // route it targets is cortex-bff's `/electric/shape` PROXY — never Electric directly —
   // so the WHERE clause is server-injected from the verified JWT `sub` rather than
   // client-controlled. See gateway.py `electric_shape_proxy`.
+  // THE STREAM MUST BE ABORTABLE, AND `unsubscribe()` DOES NOT ABORT IT.
+  //
+  // `ShapeStream.subscribe()` returns a closure that does exactly one thing —
+  // `subscribers.delete(subscriptionId)` — verified in
+  // node_modules/@electric-sql/client/dist/index.mjs. It detaches the CALLBACK. The internal
+  // long-poll loop keeps running. `unsubscribeAll()` is no better: it clears subscribers and
+  // detaches the visibility/wake listeners, and the fetch loop continues.
+  //
+  // WHICH TURNED THE TOKEN REFRESH INTO A LEAK. The bearer below is baked in at construction,
+  // so a stream carries one token for life. The effect in App.tsx re-fires on refresh and
+  // starts a NEW stream, but the old one was never stopped — it goes on polling
+  // `/electric/shape` with a token that expires an hour later, then 401s
+  // `{"detail":"Token has expired"}` forever, as an unhandled promise rejection, because a
+  // retry loop cannot fix a credential. One orphan per refresh, each one permanent.
+  //
+  // `signal` is the only thing that stops it, so the caller's cleanup aborts.
+  const controller = new AbortController();
   const stream = new ShapeStream({
     url: `${base}/electric/shape`,
     headers: {
@@ -227,6 +244,7 @@ export function startArtifactsSubscription(token: string | null): () => void {
     params: {
       table: "answer_artifact_projection",
     },
+    signal: controller.signal,
   });
   const unsubscribe = stream.subscribe(
     (messages: Message[]) => {
@@ -278,10 +296,35 @@ export function startArtifactsSubscription(token: string | null): () => void {
       // must not break the user's session — the canvas degrades
       // honestly (artifacts stop updating in real-time) but the
       // SSE path's HUD/pipeline-stage stream stays alive.
+      //
+      // A 401 IS NOT AN OUTAGE AND THE RETRY LOOP CANNOT FIX IT. The comment above is true of
+      // a network fault and false of an expired credential: retrying with the same baked-in
+      // bearer 401s identically, forever. It is named separately so a dead subscription reads
+      // as a dead subscription rather than as a flaky connection — the two want different
+      // remedies, and only one of them resolves by waiting.
+      if (isAuthFailure(err)) {
+        console.error(
+          "[electric] subscription REJECTED — the bearer is no longer accepted, so this stream " +
+            "will not recover on its own. A silent renew should abort it and start a new one.",
+          err,
+        );
+        return;
+      }
       console.error("[electric] subscription error", err);
     }
   );
   return () => {
     unsubscribe();
+    // See the note at construction: this, not `unsubscribe()`, is what stops the polling.
+    controller.abort();
   };
+}
+
+/**
+ * Whether a stream error is the server refusing the credential rather than the network
+ * failing. Read off the status the client reports; nothing here parses a message string.
+ */
+export function isAuthFailure(err: unknown): boolean {
+  const status = (err as { status?: unknown })?.status;
+  return status === 401 || status === 403;
 }
