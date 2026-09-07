@@ -39,3 +39,9 @@ backend/.env
 
 # Coverage output (vitest --coverage)
 coverage/
+
+# Generated: a headless capability-registry dump (`frontend_version: "headless-dump"`), used
+# for bindings verification. It was TRACKED BY ACCIDENT — swept into 2a3c006 by a `git add -A`
+# — and a generated probe output in version control is a file every lane will keep dirtying and
+# nobody owns. Kept on disk, out of the index.
+caps_dump.json
