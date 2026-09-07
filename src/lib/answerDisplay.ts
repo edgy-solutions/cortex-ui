@@ -44,6 +44,7 @@ export type AnswerArchetype =
   | "THRESHOLD_GRID"
   | "MATRIX_GRID"
   | "SHORTFALL_GRID"
+  | "NAMED_HOLE"
   | "ELICITATION"
   | "MULTI_SERIES"
   | "VARIANCE_TREE"
@@ -76,6 +77,7 @@ export const DISPLAY_ARCHETYPES = [
   "THRESHOLD_GRID",
   "MATRIX_GRID",
   "SHORTFALL_GRID",
+  "NAMED_HOLE",
   "ELICITATION",
   "MULTI_SERIES",
   "VARIANCE_TREE",
@@ -184,6 +186,10 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Matrix";
     case "SHORTFALL_GRID":
       return "Shortfall";
+    case "NAMED_HOLE":
+      // NOT "Empty" and not "Denied". The first is what a blank card already says here, and the
+      // second reads as a failure when the board did exactly what it should.
+      return "Withheld";
     case "ELICITATION":
       // NOT an answer word. This row is the system asking, and calling it anything that reads
       // as a result is the mislabel that put it in KNOWLEDGE_DOCUMENT in the first place.

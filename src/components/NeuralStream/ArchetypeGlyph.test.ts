@@ -129,6 +129,7 @@ describe("each archetype keeps its own glyph", () => {
     VARIANCE_TREE: "Workflow",
     MULTI_SERIES: "LineChart",
     ELICITATION: "MessageCircleQuestion",
+    NAMED_HOLE: "Lock",
     THRESHOLD_GRID: "Grid3x3",
     MATRIX_GRID: "Grid2x2",
     SHORTFALL_GRID: "Scale",

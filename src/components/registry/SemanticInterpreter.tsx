@@ -13,6 +13,7 @@ import { ContributionRanking } from "../planning/ContributionRanking";
 import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
+import { NamedHole } from "./NamedHole";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
 import { FederatedImage } from "../mesh/FederatedImage";
@@ -621,6 +622,12 @@ const renderComponent = (
           state_version={comp.state_version}
         />
       );
+
+    case "NAMED_HOLE":
+      // ADR-0050 §5. NOT an answer and NOT an empty card: a panel the template declared and
+      // this caller may not invoke. Blank already means "nothing was captured" on these
+      // surfaces, so the hole has to be a present card saying the opposite thing.
+      return <NamedHole component={comp} />;
 
     case "ELICITATION":
       // A QUESTION, NOT AN ANSWER. It fell through to KNOWLEDGE_DOCUMENT before this case

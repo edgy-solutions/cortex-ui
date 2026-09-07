@@ -45,6 +45,7 @@ import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/Contributi
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
+import { NAMED_HOLE_CONTRACT } from "../components/registry/NamedHole.contract";
 import {
   APPROVAL_TASK_CONTRACT,
   WORKFLOW_OBSERVATION_CONTRACT,
@@ -415,6 +416,27 @@ const DERIVED_BINDINGS = [
     persona_fit: [],
     domain_fit: [],
     contract: ELICITATION_CONTRACT,
+  },
+  // THE SECOND ROW WHOSE SUBJECT IS NOT AN ANSWER. ADR-0050 §5's named hole: a panel the
+  // template declared and the initiator may not invoke. Like the ask, it exists because
+  // something could NOT be produced, so no verb emits it as an output type.
+  //
+  // REGISTERED FOR THE REASON THE ASK WAS: the presentation agent chooses from the registered
+  // menu, so an archetype absent from it can never be selected no matter what a producer
+  // stamps — and the hole would land on the KNOWLEDGE_DOCUMENT fallback, which is a card that
+  // looks like an answer. `mesh:NamedHole` is this side's half and is NOT yet confirmed: slice
+  // 1 is unbuilt, so nothing emits this subject today and the row matches nothing. Stated
+  // rather than hidden — an advertised-unconsumed row is the same defect as an
+  // advertised-unconsumed field.
+  {
+    subject_uri: "mesh:NamedHole",
+    object_uri: "mesh:NamedHole",
+    // No affinity, and deliberately: a hole is not better suited to one persona than another.
+    // It is what happens when a caller's grants do not cover a panel, and ranking it by
+    // audience would make some readers likelier to be told.
+    persona_fit: [],
+    domain_fit: [],
+    contract: NAMED_HOLE_CONTRACT,
   },
 ] as const;
 
