@@ -441,6 +441,7 @@ export function StageCard({
                       centers the compact card and scales the visual one. */}
                   <SemanticInterpreter
                     payload={{ components }}
+                    artifactId={artifact.id}
                     hidePersona
                     previewRows={
                       overviewTier((components?.[0] as { archetype?: string } | undefined)?.archetype) === "dense"

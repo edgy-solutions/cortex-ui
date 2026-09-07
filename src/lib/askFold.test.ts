@@ -147,7 +147,107 @@ describe("the fold and the claim are actually wired", () => {
     expect(INTERP).toContain("<AskCardConnected component={comp} answeringArtifactId={artifactId} />");
     expect(INTERP).not.toMatch(/useCurrentArtifact/);
     // And both surfaces that render an artifact's components pass its id down.
-    expect(read("../components/AgenticCanvas/StageCard.tsx")).toContain("artifactId={artifact.id}");
-    expect(read("../components/AgenticCanvas/CanvasPane.tsx")).toContain("artifactId={artifact.id}");
+    // ⛔ THIS ASSERTED THAT EACH FILE *CONTAINED* THE PROP, AND THAT IS HOW THE CLAIM SHIPPED
+    // MISSING. `CanvasPane.tsx` contained it — at line 316, the persona-filtered branch — while
+    // line 155, the MAIN answer body a reader actually picks from, had none. The assertion was
+    // true about the file and false about the render path, and the gateway found it: a pick
+    // arriving with `bound_slots=1` and no `answering_artifact_id`.
+    //
+    // Two more sites were unthreaded for the same reason: `StageCard`'s preview branch and
+    // `PinnedAnswerCard`. Three of five, all live render paths, none visible to a `toContain`.
+    //
+    // So the assertion is now over EVERY ELEMENT, by AST — a line-based check cannot see a prop
+    // on the next line, which is exactly where `StageCard`'s sits.
+    const missing = interpretersWithoutArtifactId();
+    expect(missing, missing.join("\n")).toEqual([]);
+  });
+
+  it("the scan sees a real population, and would notice a stripped prop", () => {
+    // Positive control, twice over: it found interpreters at all, and removing a prop is
+    // detected. Without the second half a scanner with a broken matcher reports zero forever —
+    // which is the same false-green shape as the assertion it replaces.
+    const { total } = interpreterCensus();
+    expect(total).toBeGreaterThanOrEqual(5);
+    expect(interpretersWithoutArtifactId("<SemanticInterpreter payload={{ components }} />")).toEqual(
+      ["<probe>"],
+    );
   });
 });
+
+/**
+ * EVERY `<SemanticInterpreter>` MUST BE TOLD WHICH ARTIFACT IT IS RENDERING.
+ *
+ * An ask card claims lineage to the artifact it is ON, and it gets that id as a prop. An
+ * interpreter mounted without one hands `undefined` to `AskCardConnected`, and
+ * `answeringArtifactBody()` returns `{}` on a falsy id — so the request is well-formed, the pick
+ * arrives, and the claim is silently absent. That is precisely what the gateway observed:
+ * `bound_slots=1 spoken_answer=False` with no ask named.
+ *
+ * BY AST, because the prop can sit on a line of its own and a line-based check cannot see it.
+ */
+function interpreterElements(): { file: string; line: number; hasId: boolean }[] {
+  const ts = require("typescript") as typeof import("typescript");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const root = path.join(__dirname, "..");
+  const out: { file: string; line: number; hasId: boolean }[] = [];
+  const walkDir = (dir: string) => {
+    for (const entry of fs.readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      if (fs.statSync(full).isDirectory()) {
+        if (entry === "node_modules" || entry === "__spike__") continue;
+        walkDir(full);
+      } else if (entry.endsWith(".tsx") && !entry.includes(".test.")) {
+        collect(full, fs.readFileSync(full, "utf8"));
+      }
+    }
+  };
+  const collect = (file: string, src: string) => {
+    const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const visit = (node: import("typescript").Node): void => {
+      const opening =
+        ts.isJsxSelfClosingElement(node) ? node
+        : ts.isJsxOpeningElement(node) ? node
+        : null;
+      if (opening && opening.tagName.getText(sf) === "SemanticInterpreter") {
+        const hasId = opening.attributes.properties.some(
+          (a) => ts.isJsxAttribute(a) && a.name.getText(sf) === "artifactId",
+        );
+        out.push({
+          file: path.relative(root, file).split(path.sep).join("/"),
+          line: sf.getLineAndCharacterOfPosition(opening.getStart(sf)).line + 1,
+          hasId,
+        });
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sf, visit);
+  };
+  walkDir(root);
+  return out;
+}
+
+function interpreterCensus() {
+  const all = interpreterElements();
+  return { total: all.length, missing: all.filter((e) => !e.hasId).length };
+}
+
+/** Sites with no `artifactId`. Pass `probeSrc` to check a snippet instead of the tree. */
+function interpretersWithoutArtifactId(probeSrc?: string): string[] {
+  if (probeSrc !== undefined) {
+    const ts = require("typescript") as typeof import("typescript");
+    const sf = ts.createSourceFile("probe.tsx", `const x = ${probeSrc};`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let bad = false;
+    const visit = (node: import("typescript").Node): void => {
+      const el = ts.isJsxSelfClosingElement(node) ? node : ts.isJsxOpeningElement(node) ? node : null;
+      if (el && el.tagName.getText(sf) === "SemanticInterpreter") {
+        if (!el.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText(sf) === "artifactId")) bad = true;
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sf, visit);
+    return bad ? ["<probe>"] : [];
+  }
+  return interpreterElements()
+    .filter((e) => !e.hasId)
+    .map((e) => `${e.file}:${e.line} — <SemanticInterpreter> with no artifactId`);
+}

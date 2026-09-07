@@ -152,7 +152,7 @@ export const CanvasPane = () => {
             {onWorkflow ? (
               <WorkflowLens taskRef={taskRef} />
             ) : components.length > 0 ? (
-              <SemanticInterpreter payload={{ components }} />
+              <SemanticInterpreter payload={{ components }} artifactId={artifact.id} />
             ) : (
               <div className="h-full flex items-center justify-center">
                 <p className="font-mono text-xs tracking-widest uppercase text-slate-500">

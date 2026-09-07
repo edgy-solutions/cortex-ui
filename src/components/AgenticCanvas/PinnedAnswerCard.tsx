@@ -139,7 +139,7 @@ export function PinnedAnswerCard({
               expanded ? "" : "max-h-[280px]"
             } [&_.glass-panel]:!my-1 [&_.glass-panel]:!p-3 [&_.grid]:!gap-2`}
           >
-            <SemanticInterpreter payload={{ components }} />
+            <SemanticInterpreter payload={{ components }} artifactId={artifact.id} />
             {!expanded && (
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-slate-900/95 to-transparent" />
             )}
