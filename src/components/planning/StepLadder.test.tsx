@@ -309,3 +309,62 @@ describe("a basis is whatever the producer struck the rate on", () => {
     expect(document.querySelector("[data-ladder-price]")?.textContent).toBe("20,690,196.09");
   });
 });
+
+/**
+ * THE FRAMING FIELD NEITHER SIDE COULD SEE.
+ *
+ * The projector passthrough carried `scope_label` and `cost_price_composition` did not emit it —
+ * it was the last verb still unbound when the other seven were taught to speak their
+ * archetypes, so it never got the framing fields. The card would have drawn a build-up framed
+ * by nothing.
+ *
+ * NEITHER SIDE'S TESTS COULD CATCH IT, because each was right about its own half: the producer
+ * emitted a valid payload, the card rendered a valid card, and the field that joins them was
+ * absent from both. Mine were worse than blind — `scope_label` is consumed in two places here
+ * and appeared in ZERO tests, so the fallback was the only path ever exercised.
+ */
+describe("the scope the producer names", () => {
+  it("titles the card with the producer's own phrase", () => {
+    // `"Lot 3 at 2021-02-01 rates"` — engine-cost's, now that it emits one.
+    render(
+      <StepLadder component={payload()} scope_label="Lot 3 at 2021-02-01 rates" />,
+    );
+    expect(document.querySelector("h3")?.textContent).toBe("Lot 3 at 2021-02-01 rates");
+  });
+
+  it("falls back to the archetype's own name when a producer sends none", () => {
+    // STEP_LADDER is structurally named and will have producers other than this one. A card
+    // that required a scope would refuse a legitimate payload for lacking framing.
+    render(<StepLadder component={payload()} />);
+    expect(document.querySelector("h3")?.textContent).toBe("Price build-up");
+  });
+
+  it("still names the vintage in the eyebrow, even when the title repeats it", () => {
+    // DELIBERATE DUPLICATION. This producer's scope_label happens to contain the vintage, so
+    // "2021-02-01" appears twice — but `rate_vintage` is a DECLARED FIELD and the title is
+    // whatever prose the producer chose. Suppressing the structured fact because one
+    // producer's sentence happens to mention it would couple this card to that producer's
+    // phrasing, which is the domain-coupling the archetype is structurally named to avoid.
+    render(
+      <StepLadder component={payload()} scope_label="Lot 3 at 2021-02-01 rates" />,
+    );
+    const eyebrow = document.querySelectorAll("p")[0];
+    expect(eyebrow.textContent).toContain("rates 2021-02-01");
+    expect(document.querySelector("h3")?.textContent).toContain("2021-02-01");
+  });
+
+  it("carries the scope into a REFUSAL too — the half that is easiest to forget", () => {
+    // A refusal with no scope says "nothing to draw" about no particular thing, on a board
+    // where several cards can refuse at once.
+    render(
+      <StepLadder
+        component={payload({ sums: false })}
+        scope_label="Lot 3 at 2021-02-01 rates"
+      />,
+    );
+    expect(document.body.textContent).toContain("Lot 3 at 2021-02-01 rates");
+    expect(document.querySelector("[data-ladder-refusal]")?.textContent).toBe(
+      "the walk does not reconcile",
+    );
+  });
+});
