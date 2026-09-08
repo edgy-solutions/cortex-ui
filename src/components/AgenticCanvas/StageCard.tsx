@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { AskedSection } from "@/components/elicitation/AskedSection";
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
@@ -425,6 +426,7 @@ export function StageCard({
             // readable — the alternative is content silently cut off with nothing saying so.
             <div className="absolute inset-0 overflow-auto custom-scrollbar p-3">
               <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
+                <AskedSection artifact={artifact} />
                 <SemanticInterpreter payload={{ components }} hidePersona artifactId={artifact.id} />
               </div>
             </div>
