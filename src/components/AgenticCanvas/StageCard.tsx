@@ -437,6 +437,13 @@ export function StageCard({
             <div className="absolute inset-0 p-2">
               <FitBox naturalWidth={640}>
                 <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
+                  {/* THE COLLAPSED OFFER BELONGS ON THIS BRANCH TOO, and leaving it off the
+                      PANEL branch alone made it invisible on the canvas entirely. `sized` is
+                      true only for a card someone RESIZED away from the default, so every card
+                      on the global board — including the focused one a reader is looking at —
+                      renders here. Mounting on the branch whose name sounded like "the real
+                      one" put it on the branch almost nothing uses. */}
+                  <AskedSection artifact={artifact} />
                   {/* At overview zoom the shell caps a "dense" citizen to a preview
                       so FitBox scales it by WIDTH (readable) instead of by HEIGHT
                       (the long-list shrink). compact/visual render whole — FitBox

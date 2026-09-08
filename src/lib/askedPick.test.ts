@@ -141,3 +141,65 @@ describe("both surfaces read the same rule", () => {
     }
   });
 });
+
+/**
+ * EVERY BRANCH THAT DRAWS AN ANSWER MUST DRAW THE OFFER WITH IT.
+ *
+ * Mounted on `StageCard`'s PANEL branch and `CanvasPane`, the collapsed offer was invisible on
+ * the canvas — because `sized` is true only for a card someone RESIZED away from the default,
+ * so every card on the global board, INCLUDING THE FOCUSED ONE, renders through PREVIEW. The
+ * branch whose name sounded like "the real one" is the branch almost nothing uses.
+ *
+ * That is the third time this shape has shipped: a prop threaded at two of five interpreter
+ * sites, a chip mounted on one of two in-flight surfaces, and now a section on one of two
+ * answer branches. So the rule is asserted over the POPULATION rather than the instances —
+ * anywhere an answer's components are rendered, the offer is rendered beside them.
+ */
+describe("the offer is mounted wherever an answer is drawn", () => {
+  it("every SemanticInterpreter that draws an artifact has an AskedSection beside it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const ts = (await import("typescript")).default;
+
+    const files = [
+      "../components/AgenticCanvas/StageCard.tsx",
+      "../components/AgenticCanvas/CanvasPane.tsx",
+    ];
+    const missing: string[] = [];
+    let interpreters = 0;
+
+    for (const rel of files) {
+      const file = path.join(__dirname, rel);
+      const src = readFileSync(file, "utf8");
+      const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      const visit = (node: import("typescript").Node): void => {
+        // Every JSX PARENT that contains an interpreter must also contain the section.
+        if (ts.isJsxElement(node)) {
+          const kids = node.children;
+          const hasInterp = kids.some(
+            (k) =>
+              (ts.isJsxSelfClosingElement(k) && k.tagName.getText(sf) === "SemanticInterpreter") ||
+              (ts.isJsxElement(k) && k.openingElement.tagName.getText(sf) === "SemanticInterpreter"),
+          );
+          if (hasInterp) {
+            interpreters += 1;
+            const hasAsked = kids.some(
+              (k) => ts.isJsxSelfClosingElement(k) && k.tagName.getText(sf) === "AskedSection",
+            );
+            if (!hasAsked) {
+              const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+              missing.push(`${rel.split("/").pop()}:${line + 1} — interpreter with no AskedSection`);
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      ts.forEachChild(sf, visit);
+    }
+
+    // Positive control: the scan found interpreters at all. A walker that matched nothing would
+    // report zero missing and read as a clean bill of health forever.
+    expect(interpreters, "the scan found no interpreters — the walker is broken").toBeGreaterThanOrEqual(3);
+    expect(missing, missing.join("\n")).toEqual([]);
+  });
+});
