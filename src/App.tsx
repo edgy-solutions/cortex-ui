@@ -14,6 +14,13 @@ import {
   CORTEX_UI_CAPABILITIES,
 } from "@/registry/frontendCapabilities";
 import { assembleCapabilities } from "@/registry/assembleCapabilities";
+import {
+  createRegistrationLifecycle,
+  observeArtifactsForMenuLoss,
+  type RegistrationLifecycle,
+} from "@/registry/registrationLifecycle";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import type { Artifact } from "@/api/types";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
@@ -98,21 +105,39 @@ function useHumanTaskSync() {
 }
 
 // ADR-0017 frontend self-registration of presentation capabilities.
-// Fires once per authenticated session, best-effort. cortex-bff logs
-// the advertisement structurally so Engine F's eventual
-// /search_predicates lookup has a real source of truth to pull from.
+//
+// RE-ASSERTABLE, NOT ONCE-PER-SESSION. This hook latched on a boolean for a year, which is the
+// right COST against a stable substrate and the wrong ASSUMPTION against one that can be wiped
+// underneath it. A nuclear prime drops the collection holding every `rendersAs` row; the helm
+// hook restarts the registering ENGINE deployments so theirs come back; nothing re-posts
+// cortex's, because only a browser can, and this hook had already fired. Every answer then
+// rendered `KNOWLEDGE_DOCUMENT · No content available` until someone reloaded the tab — which
+// is what the "reroll the engines, sometimes reroll everything" ritual was accidentally doing.
+//
+// The trigger is the server's own report, which it stamps on every answer, so a stable session
+// still costs exactly one request. See `registrationLifecycle.ts` for why the widened
+// `selection_basis` is NOT the trigger, and `menuPresence.ts` for the label that is.
 function useFrontendCapabilityRegistration() {
   const auth = useAuth();
-  const registeredRef = useRef(false);
+  const lifecycleRef = useRef<RegistrationLifecycle | null>(null);
+  if (!lifecycleRef.current) {
+    lifecycleRef.current = createRegistrationLifecycle({
+      frontendId: CORTEX_UI_FRONTEND_ID,
+      now: () => Date.now(),
+    });
+  }
+  const lifecycle = lifecycleRef.current;
 
-  useEffect(() => {
-    if (!auth.isAuthenticated || registeredRef.current) return;
-    registeredRef.current = true;
-    // Assembled once and kept, so the log can name what was SENT. Recomputing it inside the
+  // ONE POST, callable twice. Extracted from the effect so the re-assertion sends exactly what
+  // the opening registration sent — a second copy of this call would drift from the first, and
+  // the drift would show up only after a wipe, which is the least observable moment there is.
+  const post = useRef((reason: "open" | "re-assert") => {
+    lifecycle.attemptStarted();
+    // Assembled once per attempt, so the log can name what was SENT. Recomputing it inside the
     // handler would report what the assembler produces now rather than what this request
     // carried — the same value today, and a lie the first time the two can differ.
     const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
-    registerFrontendCapabilities({
+    return registerFrontendCapabilities({
       frontend_id: CORTEX_UI_FRONTEND_ID,
       // Read at runtime from Vite's build-time injected version string;
       // falls back to a placeholder if the env wasn't set.
@@ -134,10 +159,11 @@ function useFrontendCapabilityRegistration() {
         // So: the names of what was sent (the console's instrument) beside both counts, and the
         // graph query confirms what landed (the other instrument). The gap between them is now
         // visible rather than inferred.
+        lifecycle.attemptSettled(true);
         const names = sent.map((c) => c.archetype + " | " + c.subject_uri).sort();
         // eslint-disable-next-line no-console
         console.info(
-          "[ADR-0017] frontend capabilities — sent:",
+          "[ADR-0017] frontend capabilities (" + reason + ") — sent:",
           sent.length,
           "accepted:",
           resp.accepted,
@@ -158,6 +184,7 @@ function useFrontendCapabilityRegistration() {
         }
       },
       (err) => {
+        lifecycle.attemptSettled(false);
         // Best-effort: a failed registration just means Engine F's
         // in-memory default table continues to speak for cortex-ui,
         // which is the pre-Stage-2 baseline anyway.
@@ -165,7 +192,45 @@ function useFrontendCapabilityRegistration() {
         console.warn("[ADR-0017] frontend capability registration failed:", err);
       },
     );
-  }, [auth.isAuthenticated]);
+  }).current;
+
+  // THE OPENING REGISTRATION — unchanged in cost and in timing.
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    if (!lifecycle.shouldOpen()) return;
+    void post("open");
+  }, [auth.isAuthenticated, lifecycle, post]);
+
+  // THE RE-ASSERTION, DRIVEN BY EVIDENCE.
+  //
+  // Every answer carries the selector's own account of which menu it used. An answer stamped
+  // for a caller the server has no menu for is proof our rows are gone, and it is the ONLY
+  // proof available from inside a session — no route change, reconnect or refetch reveals it.
+  //
+  // ONLY NEWLY ARRIVED ARTIFACTS ARE READ. A wiped answer stays in the list after the repair,
+  // and re-reading it would re-trigger once per cooldown forever, against a menu that is
+  // already back. The seen-set makes each artifact evidence exactly once.
+  const seenRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    const inspect = (artifacts: Artifact[]) => {
+      if (!observeArtifactsForMenuLoss(artifacts, seenRef.current, lifecycle)) return;
+      // SAID OUT LOUD. The months this went undiagnosed were months in which the system was
+      // behaving exactly as designed and reporting nothing, so the recovery announces itself —
+      // and names the cause, because "re-registering" alone would read as routine noise.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ADR-0017] the server holds NO capability menu for this surface — re-asserting." +
+          " This is the post-wipe state: a prime dropped the `rendersAs` rows and only a" +
+          " browser can put cortex's back. Re-posting rather than waiting for a reload.",
+      );
+      void post("re-assert");
+    };
+    inspect(useCanvasStore.getState().artifacts);
+    return useCanvasStore.subscribe((s, prev) => {
+      if (s.artifacts !== prev.artifacts) inspect(s.artifacts);
+    });
+  }, [auth.isAuthenticated, lifecycle, post]);
 }
 
 /**
