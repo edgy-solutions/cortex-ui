@@ -12,6 +12,7 @@
  * "Analytics & Reporting".
  */
 import { describe, it, expect } from "vitest";
+import { parseSourceOrThrow } from "@/lib/parseSource";
 import { readAskOf, readPick } from "./askedPick";
 import type { Artifact } from "@/api/types";
 
@@ -171,7 +172,7 @@ describe("the offer is mounted wherever an answer is drawn", () => {
     for (const rel of files) {
       const file = path.join(__dirname, rel);
       const src = readFileSync(file, "utf8");
-      const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      const sf = parseSourceOrThrow(file, src);
       const visit = (node: import("typescript").Node): void => {
         // Every JSX PARENT that contains an interpreter must also contain the section.
         if (ts.isJsxElement(node)) {

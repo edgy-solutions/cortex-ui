@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parseSourceOrThrow } from "@/lib/parseSource";
 import { askParentOf, foldedAskAnswers, foldedAskIds, isAsk, lineageParentIds } from "./askFold";
 import type { Artifact } from "@/api/types";
 
@@ -202,7 +203,7 @@ function interpreterElements(): { file: string; line: number; hasId: boolean }[]
     }
   };
   const collect = (file: string, src: string) => {
-    const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const sf = parseSourceOrThrow(file, src);
     const visit = (node: import("typescript").Node): void => {
       const opening =
         ts.isJsxSelfClosingElement(node) ? node
@@ -235,7 +236,7 @@ function interpreterCensus() {
 function interpretersWithoutArtifactId(probeSrc?: string): string[] {
   if (probeSrc !== undefined) {
     const ts = require("typescript") as typeof import("typescript");
-    const sf = ts.createSourceFile("probe.tsx", `const x = ${probeSrc};`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const sf = parseSourceOrThrow("probe.tsx", `const x = ${probeSrc};`);
     let bad = false;
     const visit = (node: import("typescript").Node): void => {
       const el = ts.isJsxSelfClosingElement(node) ? node : ts.isJsxOpeningElement(node) ? node : null;

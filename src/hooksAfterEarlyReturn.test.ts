@@ -40,6 +40,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import ts from "typescript";
+import { parseSourceOrThrow } from "@/lib/parseSource";
 
 const SRC = path.join(__dirname);
 
@@ -68,7 +69,7 @@ const isHookName = (name: string) => /^use[A-Z]/.test(name);
  */
 function violations(file: string): string[] {
   const src = readFileSync(file, "utf8");
-  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sf = parseSourceOrThrow(file, src);
   const found: string[] = [];
 
   const checkBody = (body: ts.Node, fnName: string) => {
@@ -169,6 +170,36 @@ describe("hook order cannot differ between renders", () => {
       const hits = violations(tmp);
       expect(hits).toHaveLength(1);
       expect(hits[0]).toContain("useAskedBy");
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+
+  it("REFUSES source that did not parse, instead of reporting no violations", () => {
+    // The hole under every absence assertion in this file. `ts.createSourceFile` is
+    // error-tolerant by design: it does not throw on a syntax error, it returns a degraded tree
+    // and files the problem on `parseDiagnostics`, which nothing was reading. A probe fixture
+    // with a typo therefore parsed to garbage, the walk found nothing because it could no
+    // longer see the constructs it looks for, and the test went green FOR THE OPPOSITE REASON
+    // to the one in its comment.
+    //
+    // The LangGraph lane hit this from the other side the same day — an `ast.parse` check that
+    // accepted a file which could not be imported, because `return` outside a function is a
+    // compile-time error and not a parse-time one. Same rule in two languages: a parser is not
+    // a validator, and a checker weaker than its subject reports green on a broken subject.
+    const broken = `
+      export function Card() {
+        const routing = useCurrentRouting();
+        if (!routing) return null
+        const asked = useAskedBy(
+      }
+    `;
+    const tmp = path.join(os.tmpdir(), "__hookscan_unparseable__.tsx");
+    const fs = require("node:fs") as typeof import("node:fs");
+    fs.writeFileSync(tmp, broken);
+    try {
+      // Before the guard this returned [] and read as a clean bill of health.
+      expect(() => violations(tmp)).toThrow(/did not parse/);
     } finally {
       fs.unlinkSync(tmp);
     }
