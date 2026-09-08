@@ -38,6 +38,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import ts from "typescript";
 
 const SRC = path.join(__dirname);
@@ -157,7 +158,11 @@ describe("hook order cannot differ between renders", () => {
         return <div>{asked}</div>;
       }
     `;
-    const tmp = path.join(__dirname, "__hookscan_probe__.tsx");
+    // WRITTEN TO THE OS TEMP DIR, NOT INTO `src`. Three AST scans in this suite walk
+    // `src` and vitest runs files in PARALLEL, so a probe living there is a fixture that can
+    // appear inside another test's population mid-walk. A test that alters the tree it and
+    // its neighbours are asserting over is a flake with a plausible failure message.
+    const tmp = path.join(os.tmpdir(), "__hookscan_probe__.tsx");
     const fs = require("node:fs") as typeof import("node:fs");
     fs.writeFileSync(tmp, broken);
     try {
@@ -184,7 +189,11 @@ describe("hook order cannot differ between renders", () => {
         return <div />;
       }
     `;
-    const tmp = path.join(__dirname, "__hookscan_probe2__.tsx");
+    // WRITTEN TO THE OS TEMP DIR, NOT INTO `src`. Three AST scans in this suite walk
+    // `src` and vitest runs files in PARALLEL, so a probe living there is a fixture that can
+    // appear inside another test's population mid-walk. A test that alters the tree it and
+    // its neighbours are asserting over is a flake with a plausible failure message.
+    const tmp = path.join(os.tmpdir(), "__hookscan_probe2__.tsx");
     const fs = require("node:fs") as typeof import("node:fs");
     fs.writeFileSync(tmp, fine);
     try {
