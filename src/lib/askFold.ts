@@ -63,3 +63,31 @@ export function foldedAskIds(artifacts: readonly Artifact[]): Set<string> {
   }
   return folded;
 }
+
+/**
+ * For each folded ask, the answer that superseded it — `askId → answerId`.
+ *
+ * ── WHY A MAP AND NOT JUST THE SET ────────────────────────────────────────────────────────
+ *
+ * The rail only needs to know WHICH rows to drop, because its order is computed and the answer
+ * already has a row of its own. A CANVAS is different: a card there sits at coordinates a
+ * person chose, and dropping it would leave a HOLE in a board someone arranged. What that slot
+ * should show is the answer — the same position, the same size, the question become its result.
+ * That needs the pairing, not the set.
+ */
+export function foldedAskAnswers(artifacts: readonly Artifact[]): Map<string, string> {
+  const asks = new Set<string>();
+  for (const a of artifacts) if (isAsk(a)) asks.add(a.id);
+  const out = new Map<string, string>();
+  if (asks.size === 0) return out;
+
+  for (const a of artifacts) {
+    const parent = a.derived_from_artifact_id;
+    if (!parent || !asks.has(parent) || isAsk(a)) continue;
+    if (a.status === "pending") continue;
+    // FIRST ANSWER WINS. A second child of one ask would be a re-ask, and letting it overwrite
+    // would make the slot flip between two answers depending on array order.
+    if (!out.has(parent)) out.set(parent, a.id);
+  }
+  return out;
+}

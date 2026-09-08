@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { foldedAskAnswers } from "@/lib/askFold";
 import { Maximize2, Minimize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
@@ -132,18 +133,38 @@ export function GlobalCanvasStage() {
     [artifacts, sortMode, edges],
   );
 
+  // AN ANSWERED ASK IS SUPERSEDED ON BOTH SURFACES — and it is not the same operation on each.
+  const folded = useMemo(() => foldedAskAnswers(artifacts), [artifacts]);
+
   // The cards to render + their positions, sourced by view.
   const entries = useMemo(() => {
     if (isGlobal) {
-      return artifacts
-        // GLOBAL is a computed view with no per-item arrangement, so every card is uniform.
-        .map((a) => ({ a, pos: globalLayout.positions[a.id], itemId: null as string | null, size: cardSize() }))
-        .filter((e) => e.pos);
+      return (
+        artifacts
+          // GLOBAL is computed, so a superseded ask is simply DROPPED: the answer already has a
+          // card of its own and the layout closes up. Nothing was arranged, so nothing is lost.
+          .filter((a) => !folded.has(a.id))
+          // GLOBAL is a computed view with no per-item arrangement, so every card is uniform.
+          .map((a) => ({ a, pos: globalLayout.positions[a.id], itemId: null as string | null, size: cardSize() }))
+          .filter((e) => e.pos)
+      );
     }
     return activeCanvas!.items
-      .map((it) => ({ a: artifactById[it.id], pos: { x: it.x, y: it.y }, itemId: it.id, size: cardSize(it) }))
+      .map((it) => {
+        // A CANVAS SLOT IS REPLACED, NOT REMOVED. This card sits where a person put it, at a
+        // size they may have chosen; dropping it would leave a hole in a board they arranged.
+        // The slot draws the ANSWER instead — same position, same footprint, the question
+        // become its result. That is "one item, one card" on a surface that HAS arrangement.
+        //
+        // SUBSTITUTED AT RENDER, NEVER WRITTEN BACK. Rewriting the stored item id would edit a
+        // board on its owner's behalf, and an arranged board is theirs. The slot keeps naming
+        // the ask; what it DRAWS is whatever superseded it.
+        const answerId = folded.get(it.id);
+        const a = answerId ? artifactById[answerId] : artifactById[it.id];
+        return { a, pos: { x: it.x, y: it.y }, itemId: it.id, size: cardSize(it) };
+      })
       .filter((e) => e.a);
-  }, [isGlobal, artifacts, globalLayout, activeCanvas, artifactById]);
+  }, [isGlobal, artifacts, globalLayout, activeCanvas, artifactById, folded]);
 
   const world = useMemo(() => {
     if (isGlobal) return globalLayout.world;

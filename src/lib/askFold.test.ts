@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { foldedAskIds, isAsk } from "./askFold";
+import { foldedAskAnswers, foldedAskIds, isAsk } from "./askFold";
 import type { Artifact } from "@/api/types";
 
 const art = (over: Partial<Artifact> & { id: string }): Artifact =>
@@ -250,4 +250,93 @@ function interpretersWithoutArtifactId(probeSrc?: string): string[] {
   return interpreterElements()
     .filter((e) => !e.hasId)
     .map((e) => `${e.file}:${e.line} — <SemanticInterpreter> with no artifactId`);
+}
+
+/**
+ * THE CANVAS, WHICH THE RAIL'S FOLD DID NOT COVER.
+ *
+ * `foldedAskIds` was wired into `AnswersPanel` alone. The canvas builds its own list — computed
+ * from `artifacts` in GLOBAL, from placed `items` on a custom board — and folded neither, so
+ * both cards stayed and the ask kept drawing where the answer belonged.
+ *
+ * THE TWO SURFACES NEED DIFFERENT OPERATIONS, which is why one set does not serve both:
+ *
+ *   GLOBAL is computed. A superseded ask is DROPPED and the layout closes up. Nothing was
+ *   arranged, so nothing is lost.
+ *
+ *   A CUSTOM BOARD has arrangement. A card sits where a person put it, at a size they may have
+ *   chosen, so dropping it leaves a HOLE in a board they made. The slot draws the ANSWER
+ *   instead — same position, same footprint, the question become its result.
+ */
+describe("an answered ask is superseded on the canvas too", () => {
+  it("pairs each folded ask with the answer that replaced it", () => {
+    const m = foldedAskAnswers([ask("q1"), art({ id: "a1", derived_from_artifact_id: "q1" })]);
+    expect(m.get("q1")).toBe("a1");
+    expect(m.size).toBe(1);
+  });
+
+  it("pairs NOTHING in every case the rail refuses to fold", () => {
+    // The pairing must not be more permissive than the set — a canvas slot swapped on lineage
+    // the rail would not fold is a card silently replaced by the wrong answer.
+    expect(foldedAskAnswers([ask("q1")]).size).toBe(0);
+    expect(
+      foldedAskAnswers([ask("q1"), art({ id: "a1", derived_from_artifact_id: "q1", status: "pending" })]).size,
+    ).toBe(0);
+    expect(foldedAskAnswers([art({ id: "a1" }), art({ id: "a2", derived_from_artifact_id: "a1" })]).size).toBe(0);
+    expect(foldedAskAnswers([ask("q1"), ask("q2", { derived_from_artifact_id: "q1" })]).size).toBe(0);
+    expect(foldedAskAnswers([ask("q1"), art({ id: "a1", derived_from_artifact_id: "ghost" })]).size).toBe(0);
+  });
+
+  it("the FIRST answer wins when an ask somehow has two", () => {
+    // Otherwise the slot flips between two answers depending on array order, which reads as a
+    // card changing its mind.
+    const m = foldedAskAnswers([
+      ask("q1"),
+      art({ id: "a1", derived_from_artifact_id: "q1" }),
+      art({ id: "a2", derived_from_artifact_id: "q1" }),
+    ]);
+    expect(m.get("q1")).toBe("a1");
+  });
+
+  it("agrees with the rail exactly — one rule, two consumers", () => {
+    // If these ever disagree, a row vanishes from the list while its card stays on the board,
+    // or the reverse. Same population, asserted against each other rather than restated.
+    const population = [
+      ask("q1"),
+      art({ id: "a1", derived_from_artifact_id: "q1" }),
+      ask("q2"),
+      art({ id: "a2", derived_from_artifact_id: "q2", status: "pending" }),
+      art({ id: "a3" }),
+    ];
+    expect([...foldedAskAnswers(population).keys()].sort()).toEqual([...foldedAskIds(population)].sort());
+  });
+
+  it("the canvas applies it — GLOBAL drops, a placed slot SWAPS", () => {
+    // The wiring, because a pairing nothing calls is the two cards we started with.
+    const STAGE = stripCommentsOf("../components/AgenticCanvas/GlobalCanvasStage.tsx");
+    expect(STAGE).toContain("foldedAskAnswers(artifacts)");
+    // GLOBAL: removed from the computed list.
+    expect(STAGE).toMatch(/\.filter\(\(a\) => !folded\.has\(a\.id\)\)/);
+    // CUSTOM: the slot keeps its position and draws the answer.
+    expect(STAGE).toMatch(/const answerId = folded\.get\(it\.id\);/);
+    expect(STAGE).toMatch(/answerId \? artifactById\[answerId\] : artifactById\[it\.id\]/);
+    // AND THE SLOT'S GEOMETRY IS THE SLOT'S — `it.x`, `it.y`, `cardSize(it)`. This is the whole
+    // point of replacing rather than removing: the answer appears WHERE THE QUESTION WAS, at the
+    // size the person gave it. A mutation zeroing the position survived until this line, because
+    // every other assertion was about WHICH artifact draws and none about where.
+    expect(STAGE).toMatch(/pos: \{ x: it\.x, y: it\.y \}, itemId: it\.id, size: cardSize\(it\)/);
+  });
+
+  it("and does NOT rewrite the stored board", () => {
+    // Substituted at render. Persisting the swap would edit a board on its owner's behalf, and
+    // an arranged board is theirs — the same rule that makes `arranged` load-bearing.
+    const STAGE = stripCommentsOf("../components/AgenticCanvas/GlobalCanvasStage.tsx");
+    expect(STAGE).not.toMatch(/moveItem\([^)]*answerId|setCanvases[^)]*folded/);
+  });
+});
+
+function stripCommentsOf(rel: string): string {
+  return readFileSync(path.join(__dirname, rel), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
 }
