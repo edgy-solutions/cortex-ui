@@ -4,6 +4,7 @@ import type { Artifact } from "@/api/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAgent } from "@/hooks/useAgent";
 import { slotWord } from "@/lib/slotWord";
+import { askParentOf } from "@/lib/askFold";
 import { readAskOf, readPick } from "@/lib/askedPick";
 import { resolveAsk } from "./Elicitation.contract";
 import { dispatchReroute } from "./rerouteDispatch";
@@ -36,10 +37,11 @@ import { dispatchReroute } from "./rerouteDispatch";
  * where the lineage is real.
  */
 export function AskedSection({ artifact }: { artifact: Artifact }) {
-  const parentId = artifact.derived_from_artifact_id ?? null;
-  const parent = useCanvasStore((s) =>
-    parentId ? (s.artifacts.find((a) => a.id === parentId) ?? null) : null,
-  );
+  // THE ASK AMONG THE PARENTS, not "the parent". The lineage edge is becoming multi-valued
+  // (ADR-0050 §6.2), and with several parents only one can be the question that was answered —
+  // so asking for it by name survives the change and reading [0] would not.
+  const artifacts = useCanvasStore((s) => s.artifacts);
+  const parent = askParentOf(artifact, artifacts);
   const { sendMessage } = useAgent();
   const [open, setOpen] = useState(false);
   const [blocked, setBlocked] = useState<string | null>(null);

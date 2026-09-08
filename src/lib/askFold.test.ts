@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { foldedAskAnswers, foldedAskIds, isAsk } from "./askFold";
+import { askParentOf, foldedAskAnswers, foldedAskIds, isAsk, lineageParentIds } from "./askFold";
 import type { Artifact } from "@/api/types";
 
 const art = (over: Partial<Artifact> & { id: string }): Artifact =>
@@ -398,5 +398,101 @@ describe("the stage follows the fold instead of being stranded by it", () => {
     // question appeared on the canvas while the camera stayed on what they had been reading.
     expect(STAGE()).toMatch(/internalSelect\.current = id !== currentArtifactId;/);
     expect(STAGE()).not.toMatch(/internalSelect\.current = true;/);
+  });
+});
+
+/**
+ * THE EDGE IS BECOMING MULTI-VALUED, AND A STRING READER WOULD REVERT THE FOLD SILENTLY.
+ *
+ * ADR-0050 §6.2 requires `derived_from` per PANEL — N edges, not one — and the engine lane has
+ * taken that change. Today the field is `Optional[str]` and every reader here treated it as one
+ * string. The day it lands as an array, `asks.has(["q1"])` is false and `find(a => a.id ===
+ * ["q1"])` misses: the fold stops folding, the collapsed offer disappears, the "asked first"
+ * line stops drawing. NOTHING THROWS. A feature reverts and the suite stays green, because every
+ * fixture in this file passes a scalar.
+ *
+ * So both shapes are read now, through one function, and asserted for both. This costs nothing
+ * while the producer is scalar and means the two lanes do not have to land in the same hour.
+ */
+describe("lineage is read for the shape it has AND the shape it is getting", () => {
+  const withParents = (id: string, parents: unknown): Artifact =>
+    ({ ...art({ id }), derived_from_artifact_id: parents }) as unknown as Artifact;
+
+  it("reads a scalar — today's shape", () => {
+    expect(lineageParentIds(withParents("a1", "q1"))).toEqual(["q1"]);
+  });
+
+  it("reads an ARRAY — the shape that has not landed", () => {
+    expect(lineageParentIds(withParents("a1", ["q1", "p2", "p3"]))).toEqual(["q1", "p2", "p3"]);
+  });
+
+  it("keeps the producer's ORDER, because §6.2's edges are per panel", () => {
+    // The projection is forbidden from reordering, so the first is the first they wrote — not
+    // an arbitrary pick that happens to be stable.
+    expect(lineageParentIds(withParents("a1", ["p3", "p1", "p2"]))).toEqual(["p3", "p1", "p2"]);
+  });
+
+  it("treats absent, empty and junk as no lineage rather than as a parent", () => {
+    expect(lineageParentIds(withParents("a1", null))).toEqual([]);
+    expect(lineageParentIds(withParents("a1", undefined))).toEqual([]);
+    expect(lineageParentIds(withParents("a1", "   "))).toEqual([]);
+    expect(lineageParentIds(withParents("a1", []))).toEqual([]);
+    expect(lineageParentIds(withParents("a1", [null, 7, ""]))).toEqual([]);
+    expect(lineageParentIds(null)).toEqual([]);
+  });
+
+  it("FOLDS on an array parent — the regression this prevents", () => {
+    // The whole point. With a string reader this returns an empty set and two cards come back.
+    const folded = foldedAskIds([
+      ask("q1"),
+      { ...art({ id: "a1" }), derived_from_artifact_id: ["q1"] } as unknown as Artifact,
+    ]);
+    expect([...folded]).toEqual(["q1"]);
+  });
+
+  it("finds the ask among SEVERAL parents, where 'the parent' stops meaning anything", () => {
+    // A canvas artifact carries one edge per panel. Only one of them can be the question that
+    // was answered, so reading [0] is a coin flip on edge order rather than a rule.
+    const answerArt = {
+      ...art({ id: "a1" }),
+      derived_from_artifact_id: ["panel-1", "q1", "panel-2"],
+    } as unknown as Artifact;
+    const all = [art({ id: "panel-1" }), ask("q1"), art({ id: "panel-2" }), answerArt];
+    expect(askParentOf(answerArt, all)?.id).toBe("q1");
+    expect([...foldedAskIds(all)]).toEqual(["q1"]);
+  });
+
+  it("pairs the answer to the ask among several parents too", () => {
+    const answerArt = {
+      ...art({ id: "a1" }),
+      derived_from_artifact_id: ["panel-1", "q1"],
+    } as unknown as Artifact;
+    expect(foldedAskAnswers([ask("q1"), art({ id: "panel-1" }), answerArt]).get("q1")).toBe("a1");
+  });
+
+  it("still folds NOTHING when none of the several parents is an ask", () => {
+    // The permissiveness must not grow with the arity: many parents is not a reason to fold one.
+    const answerArt = {
+      ...art({ id: "a1" }),
+      derived_from_artifact_id: ["p1", "p2"],
+    } as unknown as Artifact;
+    expect(foldedAskIds([art({ id: "p1" }), art({ id: "p2" }), answerArt]).size).toBe(0);
+    expect(askParentOf(answerArt, [art({ id: "p1" }), art({ id: "p2" })])).toBeNull();
+  });
+
+  it("no consumer reads the field directly any more", async () => {
+    // The regression would arrive through whichever reader was left behind, so the rule is that
+    // there are none. `askedPick` and the two surfaces go through `askParentOf`.
+    const { readFileSync } = await import("node:fs");
+    const p = await import("node:path");
+    const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const rel of [
+      "../components/elicitation/AskedSection.tsx",
+      "../components/HUD/DecisionPathDiagram.tsx",
+    ]) {
+      const src = strip(readFileSync(p.join(__dirname, rel), "utf8"));
+      expect(src, rel).toContain("askParentOf(artifact");
+      expect(src, rel).not.toContain("derived_from_artifact_id");
+    }
   });
 });

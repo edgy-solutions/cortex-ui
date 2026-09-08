@@ -9,6 +9,7 @@ import {
 } from "@/store/useCanvasStore";
 import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
 import { readPresentation } from "@/lib/presentationProvenance";
+import { askParentOf } from "@/lib/askFold";
 import { readAskOf, readPick } from "@/lib/askedPick";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import type { Artifact } from "@/api/types";
@@ -370,10 +371,10 @@ function Removed({ items }: { items: { verb: string; gate: string; reason: strin
  * replaced still reachable.
  */
 function useAskedBy(artifact: Artifact | null): { question: string; answer: string } | null {
-  const parentId = artifact?.derived_from_artifact_id ?? null;
-  const parent = useCanvasStore((s) =>
-    parentId ? (s.artifacts.find((a) => a.id === parentId) ?? null) : null,
-  );
+  // THE ASK AMONG THE PARENTS — see `askParentOf`. Reading a single id would go quietly wrong
+  // the day the edge becomes multi-valued: no throw, just a provenance line that stops drawing.
+  const artifacts = useCanvasStore((s) => s.artifacts);
+  const parent = askParentOf(artifact, artifacts);
   const ask = readAskOf(parent);
   if (!parent || !ask) return null;
   const question = (parent.question_text || "").trim();

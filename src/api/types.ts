@@ -736,7 +736,13 @@ export interface Artifact {
    * edge can be captured the moment follow-up detection lands without
    * changing the creation API.
    */
-  derived_from_artifact_id?: string | null;
+  /**
+   * BECOMING MULTI-VALUED (ADR-0050 §6.2): a canvas artifact carries one edge per PANEL, not
+   * one edge. The engine lane has taken that change. The type admits both shapes NOW so the
+   * producer can land without this side reverting the fold in the same hour — read it through
+   * `lineageParentIds`, never directly.
+   */
+  derived_from_artifact_id?: string | string[] | null;
 
   /**
    * Substrate-write-state. Orthogonal to `status` — `status` is the
