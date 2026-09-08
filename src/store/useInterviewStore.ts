@@ -56,6 +56,20 @@ export interface ThinkingStep {
    * "incomplete" is the cure (positive third state for "we don't know").
    */
   status: "pending" | "loading" | "done" | "error" | "incomplete";
+  /**
+   * PRE-RENDERED STRUCTURE, NOT A REPORTED STAGE. True on rows `primePipelineStages` invents
+   * before the turn has said anything, and cleared the moment a real signal arrives for that
+   * kind.
+   *
+   * The seed is a GUESS AT WHICH PATH THE TURN WILL TAKE, and it guesses the classic five. The
+   * status field alone cannot expose that guess: the seed sets its first row to `loading` so the
+   * panel shows motion immediately, which is the one place this vocabulary is written without a
+   * signal behind it. A turn that then runs some other path leaves that row `loading` forever,
+   * and nothing downstream could tell it from a stage that really did start.
+   *
+   * Marking it is what lets a renderer drop the un-taken path instead of drawing it as stuck.
+   */
+  seeded?: boolean;
   /** Set when the step entered `loading` (used for elapsed-time display). */
   startedAt?: number;
   /** Reported by event; if absent, ThinkingCard derives from startedAt. */
@@ -277,6 +291,10 @@ export const useInterviewStore = create<InterviewState>((set) => ({
             ...prev,
             ...partial,
             id: prev.id, // keep the React key stable
+            // A REAL SIGNAL ARRIVED, so this row is no longer the seed guessing. Cleared
+            // explicitly: the spread above carries `seeded` forward from prev, and a row that
+            // stayed marked after reporting would be dropped by a renderer as an un-taken path.
+            seeded: undefined,
             startedAt:
               partial.startedAt ??
               prev.startedAt ??
@@ -317,6 +335,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
           kind: stg.kind,
           label: stg.label,
           status: i === 0 ? "loading" : "pending",
+          seeded: true,
           startedAt: i === 0 ? Date.now() : undefined,
         }));
         return { ...m, thinkingSteps: seeded };
