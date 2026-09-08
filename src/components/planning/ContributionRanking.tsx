@@ -81,6 +81,27 @@ export function ContributionRanking({
     0,
   );
 
+  /**
+   * HOW MANY ROWS THE PRODUCER ACTUALLY JUDGED — and the reason this is counted at all.
+   *
+   * `favourable` absent renders as a grey bar, which was the right call and, on its own, an
+   * invisible one: a payload where NO row carries a verdict draws a full ranking of grey bars
+   * under a legend advertising two colours that never appear. It looks like a complete card.
+   *
+   * THAT IS THE SHAPE MOST LIKELY TO BE SCORED AS A PASS. A card that fails to draw gets
+   * investigated; a card that draws without a distinction it was supposed to make does not —
+   * and the live case is exactly this: one cost verb emits `direction: up|down|flat` where this
+   * reads `favourable`, so every row arrives unjudged and the ranking is silently flattened.
+   *
+   * NOTHING HERE INFERS A VERDICT. Reading `direction` and deciding that "up" means adverse is
+   * the producer's semantic call — a cost category rising may or may not be bad — and taking it
+   * would be the guess-dressed-as-a-judgement this component refuses everywhere else. What
+   * cortex owes is to say that the judgement is MISSING rather than to draw as if it were
+   * neutral.
+   */
+  const judged = ranked.filter((r) => typeof r.favourable === "boolean").length;
+  const noneJudged = judged === 0;
+
   return (
     <div className="glass-panel p-4">
       <div className="flex items-baseline gap-3 flex-wrap">
@@ -88,6 +109,15 @@ export function ContributionRanking({
         <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
           {ranked.length} {ranked.length === 1 ? "contributor" : "contributors"}
           {value_label ? ` · ${value_label}` : ""}
+          {/* SAID, NOT SHOWN BY OMISSION. Absence of a verdict is a fact about the payload and
+              the reader is entitled to it — otherwise a flattened ranking is indistinguishable
+              from one where everything genuinely sat level. */}
+          {noneJudged && (
+            <span className="text-amber-400/80" data-no-verdict>
+              {" "}
+              · no direction stated
+            </span>
+          )}
         </span>
       </div>
 
@@ -158,14 +188,32 @@ export function ContributionRanking({
           six equal things. */}
       <div className="mt-3 flex items-center justify-between gap-4 flex-wrap font-mono text-[9px] uppercase tracking-widest text-slate-500">
         <span>bar = share of total</span>
-        <span className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/60" /> favourable
+        {/* THE LEGEND DESCRIBES WHAT IS ON SCREEN, not what this card can draw. Advertising
+            favourable and adverse over a ranking of grey bars tells a reader the colours mean
+            something here and invites them to read the absence of green as "nothing was
+            favourable" rather than as "nothing was judged". */}
+        {noneJudged ? (
+          <span className="flex items-center gap-1.5" data-legend-unjudged>
+            <span className="inline-block w-3 h-2 rounded-sm bg-slate-500/60" /> direction not
+            stated by the producer
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm bg-rose-500/60" /> adverse
+        ) : (
+          <span className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/60" /> favourable
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2 rounded-sm bg-rose-500/60" /> adverse
+            </span>
+            {/* A MIXED SET IS ALSO A CLAIM. Some rows judged and some not is a different payload
+                from all judged, and grey among colours must not read as a third verdict. */}
+            {judged < ranked.length && (
+              <span className="flex items-center gap-1.5" data-legend-partial>
+                <span className="inline-block w-3 h-2 rounded-sm bg-slate-500/60" /> not stated
+              </span>
+            )}
           </span>
-        </span>
+        )}
       </div>
 
       {selected && (
