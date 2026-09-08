@@ -340,3 +340,63 @@ function stripCommentsOf(rel: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
 }
+
+/**
+ * THE CAMERA, WHICH IS WHERE THE FOLD IS FELT.
+ *
+ * Three defects reported from one walk, all on the stage rather than in the fold rule:
+ *
+ *  1. A GAP where the ask used to be. The layout was computed from ALL artifacts and the fold
+ *     filtered `entries` afterwards, so a slot was allocated to a card that was never drawn.
+ *     The board looked like something had been DELETED rather than answered.
+ *  2. THE WHOLE CANVAS ZOOMED OUT when the answer arrived. `posOf(focusId)` returning null fell
+ *     through to the world fit — the most disruptive fallback available, reached whenever the
+ *     focused card is briefly or permanently absent from the layout. The fold makes that
+ *     reachable a new way: read an ask, its answer arrives, the ask leaves the board.
+ *  3. A NEW QUESTION DID NOT TAKE FOCUS. `internalSelect` was set on every card click including
+ *     one that did not change the current artifact, and the effect that clears it only runs when
+ *     the id CHANGES — so a stale `true` survived and swallowed the next real focus.
+ */
+describe("the stage follows the fold instead of being stranded by it", () => {
+  const STAGE = () => stripCommentsOf("../components/AgenticCanvas/GlobalCanvasStage.tsx");
+
+  it("lays out only the cards it draws, so no gap is left behind", () => {
+    // The layout and the render must read the SAME list. Computing from `artifacts` and
+    // rendering from a filtered copy is what left the hole.
+    const s = STAGE();
+    expect(s).toMatch(/const visibleArtifacts = useMemo\(\s*\(\) => artifacts\.filter\(\(a\) => !folded\.has\(a\.id\)\)/);
+    expect(s).toMatch(/computeStageLayout\(visibleArtifacts, sortMode, edges\)/);
+    // Edges too — an edge to a card that is not drawn is a line into empty space.
+    expect(s).toMatch(/computeStageEdges\(visibleArtifacts\)/);
+    expect(s).not.toMatch(/computeStageLayout\(artifacts,/);
+  });
+
+  it("a focused card with no position HOLDS the camera — it does not fit the world", () => {
+    // The zoom-out. This is the assertion that would have caught it: the fallback existed and
+    // was reached, and nothing said it must not be the world.
+    expect(STAGE()).toMatch(/if \(focusId && !fp\) return camRef\.current;/);
+  });
+
+  it("focus follows a folded card to its successor", () => {
+    // What makes the swap a MOVE rather than a disappearance: you were reading the question,
+    // and you end up on the answer that replaced it.
+    const s = STAGE();
+    expect(s).toMatch(/const successor = folded\.get\(focusId\);/);
+    expect(s).toMatch(/focus\(successor\)/);
+  });
+
+  it("and follows ONLY the fold — not every card that leaves the board", () => {
+    // "The thing you were reading was replaced by THIS" is a claim the lineage makes. Nothing
+    // else on this surface can make it, so nothing else may move a reader's camera.
+    const s = STAGE();
+    const effect = s.slice(s.indexOf("const successor = folded.get(focusId);"));
+    expect(effect.slice(0, effect.indexOf("}, ["))).not.toMatch(/clearFocus|setView/);
+  });
+
+  it("a click on the ALREADY-CURRENT card leaves no stale in-place flag", () => {
+    // The stale `true` swallowed the focus of the NEXT new artifact — the reader's own
+    // question appeared on the canvas while the camera stayed on what they had been reading.
+    expect(STAGE()).toMatch(/internalSelect\.current = id !== currentArtifactId;/);
+    expect(STAGE()).not.toMatch(/internalSelect\.current = true;/);
+  });
+});

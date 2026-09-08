@@ -124,26 +124,43 @@ export function GlobalCanvasStage() {
       cancelled = true;
     };
   }, [isGlobal, sortMode, artifacts]);
-  const edges = useMemo(
-    () => [...computeStageEdges(artifacts), ...lineageEdges],
-    [artifacts, lineageEdges],
-  );
-  const globalLayout = useMemo(
-    () => computeStageLayout(artifacts, sortMode, edges),
-    [artifacts, sortMode, edges],
-  );
-
   // AN ANSWERED ASK IS SUPERSEDED ON BOTH SURFACES — and it is not the same operation on each.
   const folded = useMemo(() => foldedAskAnswers(artifacts), [artifacts]);
+
+  /**
+   * THE CARDS GLOBAL ACTUALLY DRAWS — and the layout must be computed from THIS, not from all
+   * artifacts.
+   *
+   * Filtering the folded ask out of `entries` while laying out the full list allocated a slot
+   * to a card that was never drawn, so a superseded ask left a HOLE where it used to be. The
+   * board looked like something had been deleted rather than answered, which is the opposite of
+   * what the fold is for.
+   *
+   * Edges are computed from the same list for the same reason: an edge to a card that is not
+   * drawn is a line into empty space.
+   */
+  const visibleArtifacts = useMemo(
+    () => artifacts.filter((a) => !folded.has(a.id)),
+    [artifacts, folded],
+  );
+
+  const edges = useMemo(
+    () => [...computeStageEdges(visibleArtifacts), ...lineageEdges],
+    [visibleArtifacts, lineageEdges],
+  );
+  const globalLayout = useMemo(
+    () => computeStageLayout(visibleArtifacts, sortMode, edges),
+    [visibleArtifacts, sortMode, edges],
+  );
 
   // The cards to render + their positions, sourced by view.
   const entries = useMemo(() => {
     if (isGlobal) {
       return (
-        artifacts
-          // GLOBAL is computed, so a superseded ask is simply DROPPED: the answer already has a
-          // card of its own and the layout closes up. Nothing was arranged, so nothing is lost.
-          .filter((a) => !folded.has(a.id))
+        // GLOBAL is computed, so a superseded ask is simply DROPPED — and `visibleArtifacts` is
+        // what the LAYOUT was built from, so the board closes up instead of leaving a hole
+        // where the ask used to be. Nothing was arranged, so nothing is lost.
+        visibleArtifacts
           // GLOBAL is a computed view with no per-item arrangement, so every card is uniform.
           .map((a) => ({ a, pos: globalLayout.positions[a.id], itemId: null as string | null, size: cardSize() }))
           .filter((e) => e.pos)
@@ -164,7 +181,7 @@ export function GlobalCanvasStage() {
         return { a, pos: { x: it.x, y: it.y }, itemId: it.id, size: cardSize(it) };
       })
       .filter((e) => e.a);
-  }, [isGlobal, artifacts, globalLayout, activeCanvas, artifactById, folded]);
+  }, [isGlobal, visibleArtifacts, globalLayout, activeCanvas, artifactById, folded]);
 
   const world = useMemo(() => {
     if (isGlobal) return globalLayout.world;
@@ -196,9 +213,29 @@ export function GlobalCanvasStage() {
 
   // Camera has three fits: a focused CARD, a focused GROUP (day/topic/type
   // box), else the whole world (overview).
-  const cam = useMemo(() => {
+  /** The camera: world-space translation plus scale. */
+  type Cam = { tx: number; ty: number; s: number };
+  // DECLARED BEFORE THE MEMO because the memo now READS it — a focused card with no position
+  // holds the previous camera rather than fitting the world. Seeded with a neutral identity so
+  // the very first render has something to hold.
+  const camRef = useRef<Cam>({ tx: 0, ty: 0, s: 1 });
+
+  const cam = useMemo<Cam>(() => {
     const { w: vw, h: vh } = vp;
     const fp = focusId ? posOf(focusId) : null;
+    /**
+     * A FOCUSED CARD WITH NO POSITION MUST NOT MEAN "SHOW EVERYTHING".
+     *
+     * This fell through to the world fit, so any moment where the focused card was briefly
+     * absent from the layout threw the camera all the way out — while the reader was looking
+     * at that card. It is the most disruptive fallback available and it was the default.
+     *
+     * The fold makes it reachable a new way: you are reading an ask, its answer arrives, the
+     * ask leaves the computed list, and the card under the camera stops existing. Holding the
+     * previous camera keeps the view still through the swap; the effect below then moves focus
+     * to the answer deliberately, which is a MOVE the reader can follow rather than a jump.
+     */
+    if (focusId && !fp) return camRef.current;
     if (fp) {
       const fs2 = sizeOf(focusId!);
       const s = clamp(
@@ -239,7 +276,6 @@ export function GlobalCanvasStage() {
   useEffect(() => {
     dismissEvidence();
   }, [focusId, dismissEvidence]);
-  const camRef = useRef(cam);
   camRef.current = cam;
 
   // Selecting an answer in the LIST jumps to GLOBAL and zooms to it — but an
@@ -303,14 +339,48 @@ export function GlobalCanvasStage() {
     }
   }, [sortMode, clearFocus, clearGroup]);
 
+  /**
+   * WHEN THE CARD YOU ARE READING IS SUPERSEDED, FOLLOW IT TO ITS ANSWER.
+   *
+   * You pick from an ask, keep watching it, and its answer arrives. The ask leaves the board —
+   * that is the fold working — and without this the camera is left focused on a card that no
+   * longer exists. Holding the previous camera (see `cam`) stops the jump; this is what makes
+   * the swap a MOVE: focus lands on the answer that replaced it, in the place the question was.
+   *
+   * Deliberately only for the FOLD. A card that vanishes for any other reason leaves focus
+   * alone, because "the thing you were reading was replaced by this" is a claim the lineage
+   * makes and nothing else here can.
+   */
+  useEffect(() => {
+    if (!focusId) return;
+    const successor = folded.get(focusId);
+    if (successor) {
+      setCurrentArtifact(successor);
+      focus(successor);
+    }
+  }, [focusId, folded, focus, setCurrentArtifact]);
+
+  // ONLY FLAG A SELECTION THAT ACTUALLY CHANGES THE CURRENT ARTIFACT — a stale `true` here
+  // swallowed the NEXT one.
+  //
+  // The flag tells the effect above "this card was clicked in place, do not jump to global",
+  // and the effect clears it. But the effect only runs when `currentArtifactId` CHANGES, so
+  // clicking the card that is already current set the flag and nothing ever cleared it. The
+  // next new artifact — a question the reader then asked — hit the effect with the flag still
+  // set, returned early, and never focused. The ask card appeared on the canvas while focus
+  // stayed on whatever they had been reading, so they had to hunt for their own question.
+  const flagInternal = (id: string) => {
+    internalSelect.current = id !== currentArtifactId;
+  };
+
   const onCardClick = (id: string) => {
     setSel([]); // clicking a card clears the lasso selection and focuses it
-    internalSelect.current = true; // zoom in place; don't jump to global
+    flagInternal(id); // zoom in place; don't jump to global
     setCurrentArtifact(id);
     focus(id);
   };
   const onCardDouble = (id: string) => {
-    internalSelect.current = true;
+    flagInternal(id);
     setCurrentArtifact(id);
     focus(id);
     openFullPane();
