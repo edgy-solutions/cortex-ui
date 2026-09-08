@@ -459,6 +459,84 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PROGRAM_FINANCE"],
     contract: STEP_LADDER_CONTRACT,
   },
+
+  // ── ENGINE-COST'S SEVEN, 2026-09-08 ─────────────────────────────────────────────────────
+  //
+  // Every archetype below was ALREADY declared and already draws the `fin` cards. What was
+  // missing is only the SUBJECT binding, and its absence is why "where did the money go" routed
+  // perfectly — conf 1.00, endpoint reached, slot accepted, `rendersAs` present in the graph —
+  // and then rendered KNOWLEDGE_DOCUMENT. `select_archetype` found no capability whose subject
+  // matched, widened to payload-only, and nothing on this menu was declared for it.
+  //
+  // THAT REFUSAL IS ADR-0017 WORKING. The backend will not hand a surface an archetype the
+  // surface never said it could draw. It simply reads exactly like a defect, which is the
+  // argument for wrong answers having distinguishable shapes.
+  //
+  // FULL IRIs, per the registrar's canonical form. `_canonical()` folds a CURIE to the same
+  // token, so `cost:CategoryBreakdown` would also resolve — but canonical is the full IRI and
+  // a CURIE is tolerated at runtime while flagged in CI, which is the worst of both. NOTE the
+  // ~30 rows ABOVE are CURIEs and predate that ruling; they resolve identically and are left
+  // alone rather than swept in a commit about something else.
+  //
+  // AFFINITY IS THE PRODUCER'S, NOT MINE. `COST_ANALYST` / `PRODUCTION_COST` is the cell
+  // engine-cost's lane states these questions route under; neither string appears anywhere else
+  // in this repo, so it is cited rather than inferred. Affinity RANKS and never filters
+  // (`capability_registry._affinity`), so a wrong value here cannot make a card unrenderable —
+  // it can only order two drawable candidates wrongly.
+  {
+    subject_uri: "http://invincible-agent/cost#CategoryBreakdown",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  {
+    subject_uri: "http://invincible-agent/cost#LaborComposition",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  {
+    subject_uri: "http://invincible-agent/cost#LotCostBreakdown",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  // SupplierConcentration's rows carry an extra `above_threshold` the other three do not. That
+  // is a ROW field and this contract's `fields` are the ENVELOPE — see the note on
+  // `expected_fields` below — so it needs no separate row shape here. The component reads
+  // `favourable` for tone and nothing here consumes `above_threshold`; if the concentration
+  // card should mark a breached threshold, that is a component change, not a binding one.
+  {
+    subject_uri: "http://invincible-agent/cost#SupplierConcentration",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  {
+    subject_uri: "http://invincible-agent/cost#UnitPriceTrend",
+    object_uri: "mesh:MultiSeries",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: MULTI_SERIES_CONTRACT,
+  },
+  {
+    subject_uri: "http://invincible-agent/cost#RateAssumptions",
+    object_uri: "mesh:MultiSeries",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: MULTI_SERIES_CONTRACT,
+  },
+  {
+    subject_uri: "http://invincible-agent/cost#RateComparison",
+    object_uri: "mesh:DeltaSet",
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: DELTA_SET_CONTRACT,
+  },
 ] as const;
 
 /**

@@ -62,3 +62,71 @@ describe("the ELICITATION row is in the payload cortex posts", () => {
     expect(assembleDerivedCapabilities().some((c) => c.archetype === "ELICITATION")).toBe(true);
   });
 });
+
+/**
+ * ENGINE-COST'S SEVEN SUBJECTS.
+ *
+ * "Where did the money go" routed perfectly — conf 1.00, endpoint reached, slot accepted,
+ * `rendersAs` present in the graph — and rendered KNOWLEDGE_DOCUMENT, because
+ * `select_archetype` found no capability on THIS menu whose subject matched, widened to
+ * payload-only, and nothing was declared for it. The archetypes were never missing; only the
+ * subject bindings were.
+ *
+ * THE REFUSAL IS ADR-0017 WORKING. The backend will not hand a surface an archetype the surface
+ * never said it could draw. It reads exactly like a defect, which is the case for wrong answers
+ * having distinguishable shapes.
+ */
+describe("the cost subjects are declared", () => {
+  const COST = {
+    "http://invincible-agent/cost#CategoryBreakdown": "CONTRIBUTION_RANKING",
+    "http://invincible-agent/cost#LaborComposition": "CONTRIBUTION_RANKING",
+    "http://invincible-agent/cost#LotCostBreakdown": "CONTRIBUTION_RANKING",
+    "http://invincible-agent/cost#SupplierConcentration": "CONTRIBUTION_RANKING",
+    "http://invincible-agent/cost#UnitPriceTrend": "MULTI_SERIES",
+    "http://invincible-agent/cost#RateAssumptions": "MULTI_SERIES",
+    "http://invincible-agent/cost#RateComparison": "DELTA_SET",
+  } as const;
+
+  it("every one is bound, to the archetype engine-cost declared for it", () => {
+    for (const [subject, archetype] of Object.entries(COST)) {
+      const row = sent.find((c) => c.subject_uri === subject);
+      expect(row, `${subject} is not declared`).toBeTruthy();
+      expect(row!.archetype, subject).toBe(archetype);
+    }
+  });
+
+  it("each resolves under the registrar's canonicalisation", () => {
+    // `_canonical()` folds a full IRI and a CURIE to the same token, which is what lets these
+    // full IRIs meet the graph's `cost#` classes and cortex's older `cost:` row. Asserted so a
+    // future row spelled a third way is caught here rather than by an unrenderable answer.
+    const canonical = (s: string) => s.split("#").pop()!.split(":").pop()!;
+    for (const subject of Object.keys(COST)) {
+      expect(canonical(subject)).toMatch(/^[A-Za-z]+$/);
+      expect(canonical(subject)).not.toContain("/");
+    }
+    expect(canonical("http://invincible-agent/cost#CategoryBreakdown")).toBe(
+      canonical("cost:CategoryBreakdown"),
+    );
+  });
+
+  it("they REUSE existing archetypes and mint nothing", () => {
+    // The whole point: no new component, no new contract, no prime needed. A row that named an
+    // archetype the interpreter does not dispatch is caught by the dispatch seal above, but a
+    // row that quietly MINTED one would be a much larger change wearing a binding's clothes.
+    const archetypes = new Set(Object.values(COST));
+    for (const a of archetypes) {
+      const drawnElsewhere = sent.filter((c) => c.archetype === a && !c.subject_uri.includes("cost#"));
+      expect(drawnElsewhere.length, `${a} is not already drawn for another subject`).toBeGreaterThan(0);
+    }
+  });
+
+  it("SupplierConcentration is not silently identical to the other three", () => {
+    // Its rows carry an extra `above_threshold`. That is a ROW field and this contract's
+    // `fields` are the ENVELOPE, so the binding is legitimately the same — but the distinction
+    // is recorded here so "they were all the same anyway" is never the reason it stays that way.
+    const supplier = sent.find((c) => c.subject_uri.endsWith("SupplierConcentration"))!;
+    const category = sent.find((c) => c.subject_uri.endsWith("CategoryBreakdown"))!;
+    expect(supplier.archetype).toBe(category.archetype);
+    expect(supplier.subject_uri).not.toBe(category.subject_uri);
+  });
+});
