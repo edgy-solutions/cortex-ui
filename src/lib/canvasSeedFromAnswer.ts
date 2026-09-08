@@ -82,14 +82,35 @@ export function useCanvasSeedFromAnswers(): void {
       if (!known) return;
       for (const a of state.artifacts) {
         if (known.has(a.id)) continue;
+        // NOT YET JUDGEABLE — AND THEREFORE NOT YET SEEN.
+        //
+        // This is why "make me a portfolio canvas" produced no canvas in the session that
+        // asked for it. Every turn appends a PENDING row at submit time, carrying the turn's
+        // artifact id and no `rendered_output` at all. That row arrived here first, was marked
+        // seen, carried no seed because it carried no content — and when the real answer landed
+        // on THE SAME ID moments later it was skipped as already known. The one artifact that
+        // was always going to be the seed answer was the one guaranteed to be pre-empted.
+        //
+        // Marking a row seen is a claim to have JUDGED it, and an empty row cannot be judged.
+        // So the set records only rows that had content to read, and the pending row is passed
+        // over silently until it has some. Whether that content turns out to be a seed is a
+        // different question, and one this loop is now actually allowed to ask.
+        if (!a.rendered_output) continue;
         known.add(a.id);
         const seed = canvasSeedFromArtifact(a);
         if (!seed) continue;
         // The seed answer's own id travels with the composition, and it is what stops boards
         // multiplying: a seed that already has a board does not get another.
+        //
+        // ENTER IS FALSE, AND THAT IS A CHANGE. This ran with `enter: true`, which was
+        // harmless only because the bug above meant it never ran on a live turn. Fixed, it
+        // fires on every hydrated seed answer too — so a reload would have yanked the view
+        // into whichever historical board hydrated last. Building the board is the answer to
+        // "make me a portfolio canvas"; GOING there is a navigation, and navigation belongs to
+        // the person, via the link on the card.
         useStageStore
           .getState()
-          .seedPortfolioCanvas(seed.ids, seed.name ?? "Portfolio Planning", true, a.id);
+          .seedPortfolioCanvas(seed.ids, seed.name ?? "Portfolio Planning", false, a.id);
       }
     });
   }, []);

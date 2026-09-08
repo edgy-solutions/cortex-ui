@@ -116,6 +116,22 @@ interface StageState {
   // ── durable ──
   view: string; // 'global' | canvasId
   canvases: CustomCanvas[];
+  /**
+   * SEED ANSWERS WHOSE BOARD THE USER DELETED — a tombstone, and it has to be durable.
+   *
+   * Deleting a seeded canvas did not stick. The board went, the page was reloaded, every
+   * historical seed answer arrived looking new, `seededFrom` matched no canvas because the
+   * canvas was gone, and the board came straight back. The idempotency check answers "does
+   * this seed already have a board", which is the wrong question after a deletion: absence
+   * is exactly what deleting produced, so the guard read the user's decision as its trigger.
+   *
+   * Recording the DECISION rather than inferring it from state is the only fix that survives
+   * a reload, because the state it would have to infer from is the state the user asked for.
+   *
+   * It does NOT remove the offer. The answer card keeps its link and rebuilding is one click —
+   * a deletion says "not on my board right now", not "never again".
+   */
+  dismissedSeeds: string[];
   // ── ephemeral ──
   focusId: string | null;
   fullPane: boolean;
@@ -179,6 +195,15 @@ interface StageState {
     enter?: boolean,
     /** The seed ANSWER this board comes from. Makes seeding idempotent — see CustomCanvas. */
     seededFrom?: string,
+    /**
+     * A PERSON ASKED FOR THIS BOARD, RIGHT NOW.
+     *
+     * The watcher seeds automatically as answers arrive, and must not resurrect a board the
+     * user deleted. A click on the answer card's link is the opposite case: it is the request
+     * the tombstone was recording the absence of, so it clears it and rebuilds. Without the
+     * distinction the two callers would need the same answer to different questions.
+     */
+    requested?: boolean,
   ) => string;
 }
 
@@ -197,6 +222,7 @@ export const useStageStore = create<StageState>()(
       view: GLOBAL,
       viewport: { w: 1440, h: 900 },
       canvases: [],
+      dismissedSeeds: [],
       focusId: null,
       fullPane: false,
       focusTab: "answer",
@@ -287,10 +313,23 @@ export const useStageStore = create<StageState>()(
           ),
         })),
       deleteCanvas: (id) =>
-        set((s) => ({
-          canvases: s.canvases.filter((c) => c.id !== id),
-          view: s.view === id ? GLOBAL : s.view,
-        })),
+        set((s) => {
+          // RECORD THE DECISION, not just its effect. A seeded board removed from `canvases`
+          // is indistinguishable from one that was never built, and the seed watcher rebuilds
+          // anything it cannot find — so without this the delete undoes itself on the next
+          // load. Only seeded boards need a tombstone; a hand-made canvas has nothing that
+          // would recreate it.
+          const gone = s.canvases.find((c) => c.id === id);
+          const seed = gone?.seededFrom;
+          return {
+            canvases: s.canvases.filter((c) => c.id !== id),
+            view: s.view === id ? GLOBAL : s.view,
+            dismissedSeeds:
+              seed && !s.dismissedSeeds.includes(seed)
+                ? [...s.dismissedSeeds, seed]
+                : s.dismissedSeeds,
+          };
+        }),
 
       addItemAuto: (canvasId, answerId, rowContentH) =>
         set((s) => ({
@@ -383,7 +422,13 @@ export const useStageStore = create<StageState>()(
       // ORDER IS THE DECLARATION: the caller decides which measure lands in which slot by
       // the order it passes them. That belongs to the seeding intent, not here — a template
       // that assigned measures to slots would be reaching into the seeder's job.
-      seedPortfolioCanvas: (artifactIds, name = "Portfolio Planning", enter = true, seededFrom) => {
+      seedPortfolioCanvas: (
+        artifactIds,
+        name = "Portfolio Planning",
+        enter = true,
+        seededFrom,
+        requested = false,
+      ) => {
         // ALREADY SEEDED IS A NO-OP that returns the board it made last time rather than a
         // second one. The check lives HERE, not only in the receiver, because this is the one
         // place a board is minted — a guard at a caller protects that caller and nothing else.
@@ -392,6 +437,15 @@ export const useStageStore = create<StageState>()(
           if (existing) {
             if (enter) set({ view: existing.id, focusId: null, fullPane: false });
             return existing.id;
+          }
+          // DELETED ON PURPOSE STAYS DELETED — unless a person is asking for it again.
+          //
+          // Reached on every reload, because hydration replays every historical seed answer
+          // through here. Before the tombstone this branch did not exist and the board was
+          // rebuilt each time, which is why deleting one never appeared to work.
+          if (!requested && get().dismissedSeeds.includes(seededFrom)) return "";
+          if (requested) {
+            set((z) => ({ dismissedSeeds: z.dismissedSeeds.filter((d) => d !== seededFrom) }));
           }
         }
         const id = get().createCanvas(name, "portfolio_planning", enter);
@@ -425,7 +479,14 @@ export const useStageStore = create<StageState>()(
       name: "cortex-stage",
       // Persist only the durable structure; navigation is ephemeral. Guard a
       // stale `view` pointing at a deleted canvas back to global on hydrate.
-      partialize: (s) => ({ canvases: s.canvases, view: s.view }),
+      // `dismissedSeeds` is durable for the same reason `seededFrom` is: the thing it
+      // protects against is a RELOAD re-seeding from history, so a tombstone that lived only
+      // in memory would be gone at exactly the moment it is needed.
+      partialize: (s) => ({
+        canvases: s.canvases,
+        view: s.view,
+        dismissedSeeds: s.dismissedSeeds,
+      }),
       merge: (persisted, current) => {
         const p = (persisted as Partial<StageState>) || {};
         const canvases = p.canvases ?? [];

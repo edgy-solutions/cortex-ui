@@ -33,6 +33,43 @@ const CAM_MS = 620;
 const EASE = "cubic-bezier(.3,.75,.25,1)";
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * The overview camera: fit the whole world into the pane.
+ *
+ * ── A FIT SHRINKS TO FIT. IT NEVER MAGNIFIES. ────────────────────────────────────────────
+ *
+ * This was the only camera branch with no bound — the focused and grouped branches both clamp —
+ * so whenever the world was SMALLER than the pane the scale went above 1 and every card was
+ * blown up past the size it was designed at. Opening a seeded board landed near 170%:
+ * `customWorld` floors a small board at 1500x950, a wide pane is far larger than that, and
+ * "fit" faithfully magnified to fill it. That is the "zoomed into super large" on a board the
+ * user had just asked to see.
+ *
+ * Filling the pane by enlarging the cards is not showing MORE of the board, it is showing the
+ * same board worse. Empty margin around a correctly-sized board is the honest answer when the
+ * board is smaller than the room it has.
+ *
+ * EXTRACTED so the bound can be asserted. Inline in the memo it was reachable only by mounting
+ * the whole stage, which is why the one branch that most needed a test was the one that never
+ * got one.
+ */
+export function worldFitCam(
+  world: { w: number; h: number },
+  vp: { w: number; h: number },
+  isGlobal: boolean,
+): { tx: number; ty: number; s: number } {
+  // The global overview keeps a generous margin — it is a wall of many cards and the dock
+  // overlaps its lower edge. A CUSTOM canvas is a laid-out board built to the pane on purpose,
+  // so the same margin is just unused width.
+  const fill = isGlobal ? 0.9 : 0.97;
+  const s = Math.min(Math.min(vp.w / world.w, vp.h / world.h) * fill, 1);
+  return {
+    tx: (vp.w - world.w * s) / 2,
+    ty: (vp.h - world.h * s) / 2 - (isGlobal ? 20 : 6),
+    s,
+  };
+}
+
 function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) {
   if (!items.length) return { w: 1500, h: 950 };
   let mx = 0;
@@ -259,9 +296,7 @@ export function GlobalCanvasStage() {
     // overlaps its lower edge. A CUSTOM canvas is a laid-out board that was built to the pane
     // on purpose, so the same margin is just unused width: three insets compounded (this one,
     // the world pad, and the template margin) left a seeded board at 78% of its pane.
-    const fill = isGlobal ? 0.9 : 0.97;
-    const s = Math.min(vw / world.w, vh / world.h) * fill;
-    return { tx: (vw - world.w * s) / 2, ty: (vh - world.h * s) / 2 - (isGlobal ? 20 : 6), s };
+    return worldFitCam(world, { w: vw, h: vh }, isGlobal);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h]);
 
@@ -564,6 +599,32 @@ export function GlobalCanvasStage() {
         <div className="absolute inset-0 flex items-center justify-center px-6">
           <p className="text-[12px] font-mono uppercase tracking-widest text-slate-600 text-center max-w-md leading-relaxed">
             Empty canvas — drag rows in from the list, or go to ▦ Global and drop cards onto this canvas's chip
+          </p>
+        </div>
+      )}
+      {/*
+        A BOARD THAT HOLDS CARDS AND CAN DRAW NONE OF THEM IS NOT AN EMPTY BOARD.
+        Cards whose artifact is not in this client's collection are filtered out of `entries`,
+        so such a board rendered as blank space — identical to a canvas nobody has put anything
+        on, and it is the opposite situation. It is what a person sees after the substrate is
+        wiped: canvases are durable server-side (ADR-0028, `/me/canvases`) and survive a prime
+        that removes every answer they point at.
+
+        IT DOES NOT SAY THEY ARE GONE, and it must not: answers hydrate from Electric AFTER
+        mount, so "not here" is the normal state for the first moments of every load. It says
+        what is true at every moment it renders — the board names N cards and this client does
+        not have them — and leaves the conclusion to the reader, who knows whether they just
+        wiped the backend. Nothing is deleted for them either: removing a board on a transient
+        absence is the timing assumption this file has been bitten by before, and the cost of
+        being wrong is somebody's arrangement.
+      */}
+      {!isGlobal && activeCanvas!.items.length > 0 && entries.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center px-6" data-canvas-orphaned>
+          <p className="text-[12px] font-mono uppercase tracking-widest text-slate-600 text-center max-w-md leading-relaxed">
+            {activeCanvas!.items.length}{" "}
+            {activeCanvas!.items.length === 1 ? "card is" : "cards are"} arranged here, and none
+            of them are in this client's answers — still loading, or the answers they point at
+            were cleared. The arrangement is kept.
           </p>
         </div>
       )}

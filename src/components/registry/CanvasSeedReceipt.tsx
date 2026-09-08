@@ -22,23 +22,41 @@ import { answerSummary, hasCapturedSummary } from "@/lib/answerDisplay";
  * The manifest is not that claim. "This seed names these five artifacts, in this order" is a
  * reading of the payload, true whenever the row is read and by whom.
  *
- * ── WHY THE LINK IS MATCHED AND NOT RECORDED ─────────────────────────────────────────────
+ * ── THE LINK IS RECORDED NOW, AND THE OLD REASON IS GONE ─────────────────────────────────
  *
- * The obvious design records the seed's artifact id on the canvas it composed. It was built
- * and reverted: the interpreter receives a payload COMPONENT and not the artifact it came
- * from, so reading such a field would mean threading an artifact id through all five
- * SemanticInterpreter call sites — and a recorded field nothing can reach is the
- * declared-but-unwired shape this repo keeps filing findings about.
+ * This once matched the board by its CONTENTS, because "the interpreter receives a payload
+ * component and not the artifact it came from, so reading a recorded field would mean
+ * threading an artifact id through all five SemanticInterpreter call sites". That threading
+ * happened — the ask card needs the same id to answer against — so the reason expired, and
+ * content-matching was never as good: a board the user had added one card to stopped matching
+ * and the link silently vanished.
  *
- * So the link is derived from local state instead: a canvas that holds exactly the artifacts
- * this seed names IS the board those artifacts were placed on. NAVIGATION, NEVER EVIDENCE —
- * its absence means "this client cannot offer a link" (deleted board, another browser), never
- * "the seed did not run", so nothing is rendered to mark the absence.
+ * `seededFrom` is the board's own record of which answer built it. Matching on it is exact,
+ * survives editing the board, and is the same key the store's idempotency and its tombstone
+ * use — one identity for the relationship instead of three approximations of it.
+ *
+ * ── AND THE OFFER NO LONGER DEPENDS ON THE BOARD EXISTING ────────────────────────────────
+ *
+ * Hiding the button when no board was found meant the card said nothing at the two moments a
+ * reader most needs it: before the board has been built, and after they deleted it. Both look
+ * identical to "this feature did nothing".
+ *
+ * So the button is always offered when the seed names ids, and says which act it will perform.
+ * NAVIGATION, NEVER EVIDENCE still holds: "build canvas" is an offer to compose a board now,
+ * not a claim that one was composed before.
  */
-export function CanvasSeedReceipt({ comp }: { comp: { archetype: string; [k: string]: unknown } }) {
+export function CanvasSeedReceipt({
+  comp,
+  artifactId,
+}: {
+  comp: { archetype: string; [k: string]: unknown };
+  /** The seed ANSWER this receipt is drawn for. Absent only where nothing threaded it. */
+  artifactId?: string;
+}) {
   const artifacts = useCanvasStore((s) => s.artifacts);
   const canvases = useStageStore((s) => s.canvases);
   const setView = useStageStore((s) => s.setView);
+  const seedCanvas = useStageStore((s) => s.seedPortfolioCanvas);
 
   const raw = Array.isArray(comp.artifact_ids) ? comp.artifact_ids : [];
   const ids = raw.filter((v): v is string => typeof v === "string" && v.length > 0);
@@ -47,16 +65,33 @@ export function CanvasSeedReceipt({ comp }: { comp: { archetype: string; [k: str
   // default is shown as a default rather than dressed up as a title the seed chose.
   const declaredName = typeof comp.name === "string" && comp.name.trim() ? comp.name.trim() : null;
 
-  // Exactly-these-artifacts, not merely contains: a board that happens to include the five
-  // among twenty others is a different board, and offering it would send the reader somewhere
-  // they did not ask to go.
+  // BY RECORD FIRST. `seededFrom` is exact and survives a board the user has edited.
+  //
+  // The contents match stays as a FALLBACK, and only that: boards composed before boards
+  // recorded their seed have no `seededFrom`, and dropping the old rule would have made every
+  // one of them lose its link on upgrade. Exactly-these-artifacts, never merely-contains — a
+  // board holding the five among twenty others is a different board.
   const board =
-    ids.length > 0
-      ? canvases.find(
+    ids.length === 0
+      ? undefined
+      : (artifactId ? canvases.find((c) => c.seededFrom === artifactId) : undefined) ??
+        canvases.find(
           (c) =>
-            c.items.length === ids.length && ids.every((id) => c.items.some((it) => it.id === id)),
-        )
-      : undefined;
+            !c.seededFrom &&
+            c.items.length === ids.length &&
+            ids.every((id) => c.items.some((it) => it.id === id)),
+        );
+
+  const open = () => {
+    if (board) {
+      setView(board.id);
+      return;
+    }
+    // REQUESTED, so a board the user deleted is rebuilt rather than refused. The tombstone
+    // exists to stop the WATCHER resurrecting it on reload; a click is the opposite instruction.
+    const id = seedCanvas(ids, declaredName ?? "Portfolio Planning", true, artifactId, true);
+    if (id) setView(id);
+  };
 
   const byId = new Map(artifacts.map((a) => [a.id, a]));
 
@@ -77,12 +112,15 @@ export function CanvasSeedReceipt({ comp }: { comp: { archetype: string; [k: str
             </p>
           </div>
         </div>
-        {board && (
+        {ids.length > 0 && (
           <button
-            onClick={() => setView(board.id)}
+            onClick={open}
             className="flex items-center gap-1 px-2 py-1 rounded border border-teal-500/30 text-teal-300/90 hover:bg-teal-500/10 font-mono text-[10px] flex-shrink-0"
           >
-            view canvas
+            {/* The VERB is the honest part. "view" promises a board that exists; "build"
+                promises to compose one now. Saying "view" in both states would be the
+                manufactured-confidence failure applied to a button. */}
+            {board ? "view canvas" : "build canvas"}
             <ArrowUpRight className="w-3 h-3" />
           </button>
         )}

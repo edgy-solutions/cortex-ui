@@ -265,9 +265,9 @@ describe("seeding is idempotent per seed answer", () => {
   });
 
   it("and a DELETED board stays deleted across the next delivery", () => {
-    // "I delete them and more appear" — the part that made it feel unfixable. Deleting removes
-    // the claim, so this documents the residual honestly: the seed answer becomes eligible
-    // again. What it must NOT do is grow the count on every reload.
+    // "I delete them and they come right back." This used to document an accepted residual —
+    // deleting removed the claim, so the seed answer became eligible again and the board
+    // returned on the next delivery. It is a tombstone now: see the last block in this file.
     renderHook(() => useCanvasSeedFromAnswers());
     const history = [
       { id: "h1", status: "complete", rendered_output: seedRO(["a", "b"]) },
@@ -278,5 +278,161 @@ describe("seeding is idempotent per seed answer", () => {
     useCanvasStore.setState({ artifacts: [...history] } as never);
     useCanvasStore.setState({ artifacts: [...history] } as never);
     expect(useStageStore.getState().canvases).toHaveLength(1);
+  });
+});
+
+
+/**
+ * THE PENDING ROW ATE THE SEED ANSWER.
+ *
+ * "When the portfolio canvas card is first completed the list appears, but there is no view
+ * canvas link and no canvas below. Then after a pretty large delay the canvas appears."
+ *
+ * Every turn appends a PENDING artifact at submit time — the turn's own id, no rendered_output
+ * at all — so the canvas has something to draw the instant Enter is pressed. That row reached
+ * this watcher FIRST. It was marked seen, carried no seed because it carried nothing, and when
+ * the real answer landed on THE SAME ID it was skipped as already known. The one artifact
+ * guaranteed to become the seed answer was the one guaranteed to be pre-empted.
+ *
+ * So no board was built during the session that asked for one. The "delay" was the next page
+ * load, where hydration replays the answer against an empty seen-set.
+ *
+ * The rule: marking a row seen is a claim to have JUDGED it, and an empty row cannot be judged.
+ */
+describe("a pending row must not consume the answer's turn to be judged", () => {
+  const seedRO = (ids: string[]) => ({
+    components: [{ archetype: "CANVAS_SEED", artifact_ids: ids }],
+  });
+  beforeEach(() => {
+    useStageStore.setState({ canvases: [], view: "global", dismissedSeeds: [] } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
+  });
+
+  const pending = (id: string) =>
+    ({ id, status: "pending", rendered_output: null }) as unknown as Artifact;
+
+  it("seeds when the answer lands on the id the pending row already occupied", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+
+    // Turn start: the pending row, carrying the turn's artifact id and no content.
+    useCanvasStore.setState({ artifacts: [pending("t1")] } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+
+    // The answer arrives ON THE SAME ROW. Before the fix this was skipped for ever.
+    useCanvasStore.setState({
+      artifacts: [{ id: "t1", status: "complete", rendered_output: seedRO(["a", "b"]) }],
+    } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+    expect(useStageStore.getState().canvases[0].seededFrom).toBe("t1");
+  });
+
+  it("does not seed, or churn, while the row is still empty", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+    for (let i = 0; i < 5; i++) {
+      useCanvasStore.setState({ artifacts: [pending("t1")] } as never);
+    }
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+  });
+
+  it("a row that gains NON-seed content is judged once and then left alone", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+    useCanvasStore.setState({ artifacts: [pending("t1")] } as never);
+    useCanvasStore.setState({
+      artifacts: [
+        { id: "t1", status: "complete", rendered_output: { components: [{ archetype: "TABLE" }] } },
+      ],
+    } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+  });
+
+  it("BUILDS the board but does not NAVIGATE to it", () => {
+    // Auto-seeding ran with enter:true, harmless only while the bug above meant it never ran on
+    // a live turn. Fixed, it also fires for every seed answer that hydrates on a reload — so
+    // entering would yank the view into whichever historical board arrived last. Composing is
+    // the answer to the question; going there is the person's to choose.
+    renderHook(() => useCanvasSeedFromAnswers());
+    useCanvasStore.setState({ artifacts: [pending("t1")] } as never);
+    useCanvasStore.setState({
+      artifacts: [{ id: "t1", status: "complete", rendered_output: seedRO(["a", "b"]) }],
+    } as never);
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+    expect(useStageStore.getState().view).toBe("global");
+  });
+});
+
+/**
+ * DELETING A SEEDED BOARD HAS TO SURVIVE THE NEXT LOAD.
+ *
+ * "When I delete portfolio canvases and remove all of them and refresh, they come right back."
+ *
+ * The idempotency check asks "does this seed already have a board" — the wrong question after a
+ * deletion, because absence is exactly what deleting produced. Hydration replays every
+ * historical seed answer, each found no board, and each rebuilt one. The guard read the user's
+ * decision as its trigger.
+ *
+ * A decision has to be RECORDED, never inferred from the state it produced.
+ */
+describe("a deleted board stays deleted, and can be asked for again", () => {
+  const seedRO = (ids: string[]) => ({
+    components: [{ archetype: "CANVAS_SEED", artifact_ids: ids }],
+  });
+  beforeEach(() => {
+    useStageStore.setState({ canvases: [], view: "global", dismissedSeeds: [] } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
+  });
+
+  const deliver = (id: string) =>
+    useCanvasStore.setState({
+      artifacts: [{ id, status: "complete", rendered_output: seedRO(["a", "b"]) }],
+    } as never);
+
+  it("survives the reload that used to bring it back", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("h1");
+    const board = useStageStore.getState().canvases[0];
+    useStageStore.getState().deleteCanvas(board.id);
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+    expect(useStageStore.getState().dismissedSeeds).toEqual(["h1"]);
+
+    // A fresh load: a new watcher, an empty seen-set, the same answer replayed.
+    useCanvasStore.setState({ artifacts: [] } as never);
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("h1");
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+  });
+
+  it("REBUILDS when a person asks for it, and forgets the tombstone", () => {
+    // The link on the answer card. A deletion says "not on my board right now", never "never
+    // again" — so an explicit request must not be refused by the guard that exists to stop the
+    // watcher acting on its own.
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("h1");
+    useStageStore.getState().deleteCanvas(useStageStore.getState().canvases[0].id);
+
+    const id = useStageStore
+      .getState()
+      .seedPortfolioCanvas(["a", "b"], "Portfolio Planning", true, "h1", true);
+    expect(id).not.toBe("");
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+    expect(useStageStore.getState().dismissedSeeds).toEqual([]);
+
+    // And having been asked for, the watcher may keep it — the tombstone is gone.
+    useCanvasStore.setState({ artifacts: [] } as never);
+    deliver("h1");
+    expect(useStageStore.getState().canvases).toHaveLength(1);
+  });
+
+  it("tombstones only SEEDED boards — a hand-made canvas has nothing to resurrect it", () => {
+    const id = useStageStore.getState().createCanvas("By hand", undefined, false);
+    useStageStore.getState().deleteCanvas(id);
+    expect(useStageStore.getState().dismissedSeeds).toEqual([]);
+  });
+
+  it("is DURABLE — a reload is the thing it protects against", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("h1");
+    useStageStore.getState().deleteCanvas(useStageStore.getState().canvases[0].id);
+    const persisted = JSON.parse(window.localStorage.getItem("cortex-stage") ?? "{}");
+    expect(persisted.state.dismissedSeeds).toEqual(["h1"]);
   });
 });

@@ -743,7 +743,8 @@ const renderComponent = (
         // is the PRESENTATION, never the escape from the alarm — the not-found branch is avoided
         // by the CATEGORY check above it, so the next consumer binding is covered the day it is
         // declared even though nobody has written it a card yet.
-        if (comp.archetype === "CANVAS_SEED") return <CanvasSeedReceipt comp={comp} />;
+        if (comp.archetype === "CANVAS_SEED")
+          return <CanvasSeedReceipt comp={comp} artifactId={artifactId} />;
         // WHAT THIS MAY AND MAY NOT SAY. It states what the answer IS — a seed carrying N
         // ids — and never that the act HAPPENED. A historical seed re-read on a later page
         // load places nothing (the consumer primes its seen-set at mount so scrollback cannot
