@@ -9,7 +9,7 @@ import {
 } from "@/store/useCanvasStore";
 import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
 import { readPresentation } from "@/lib/presentationProvenance";
-import { isAsk } from "@/lib/askFold";
+import { readAskOf, readPick } from "@/lib/askedPick";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import type { Artifact } from "@/api/types";
 import type { GraphTraceNode } from "@/api/types";
@@ -374,12 +374,21 @@ function useAskedBy(artifact: Artifact | null): { question: string; answer: stri
   const parent = useCanvasStore((s) =>
     parentId ? (s.artifacts.find((a) => a.id === parentId) ?? null) : null,
   );
-  if (!parent || !isAsk(parent)) return null;
+  const ask = readAskOf(parent);
+  if (!parent || !ask) return null;
   const question = (parent.question_text || "").trim();
-  // What the reader answered with, in the terms they saw. Absent when this client did not send
-  // the turn — a reload, or another surface — and absence is silence rather than a guess.
-  const w = artifact?.answered_with;
-  const answer = w && w.label ? (w.value && w.value !== w.label ? `${w.label} → ${w.value}` : w.label) : "";
+  /**
+   * THIS READ THE PICK FROM `answered_with` ALONE, and the gap was visible on screen: that field
+   * is what THIS BROWSER sent and does not survive a reload, so an artifact arriving via Electric
+   * showed "asked first — what is the capability path" with nothing beside it, while the card
+   * below showed both. Two surfaces, one fact, two readings.
+   *
+   * `readPick` is now the single rule — the producer's `accepted_slots` decides the value, the
+   * menu supplies the label, and the client's record is the fallback for a label the menu no
+   * longer lists.
+   */
+  const pick = readPick(artifact, ask);
+  const answer = pick ? (pick.value && pick.value !== pick.label ? `${pick.label} → ${pick.value}` : pick.label) : "";
   if (!question && !answer) return null;
   return { question, answer };
 }

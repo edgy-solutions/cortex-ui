@@ -4,7 +4,8 @@ import type { Artifact } from "@/api/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAgent } from "@/hooks/useAgent";
 import { slotWord } from "@/lib/slotWord";
-import { resolveAsk, validateAsk, type AskCardPayload } from "./Elicitation.contract";
+import { readAskOf, readPick } from "@/lib/askedPick";
+import { resolveAsk } from "./Elicitation.contract";
 import { dispatchReroute } from "./rerouteDispatch";
 
 /**
@@ -54,13 +55,8 @@ export function AskedSection({ artifact }: { artifact: Artifact }) {
    * means the guard is unreachable, and the honest response is to delete it rather than to
    * invent a case that makes it look alive.
    */
-  const comp = (parent.rendered_output?.components ?? []).find(
-    (c) =>
-      typeof c === "object" && c !== null && (c as Record<string, unknown>).archetype === "ELICITATION",
-  );
-  const result = validateAsk(comp);
-  if (result.kind !== "ok") return null;
-  const ask: AskCardPayload = result.ask;
+  const ask = readAskOf(parent);
+  if (!ask) return null;
   // NOTHING TO REOPEN WITHOUT A MENU. A no-menu ask was answered in words; there is no set to
   // show, and a section promising one would open on nothing.
   if (ask.options.length === 0) return null;
@@ -72,11 +68,9 @@ export function AskedSection({ artifact }: { artifact: Artifact }) {
    * is what the producer says reached the verb. Reading the client's first is only a nicety
    * for the label — the id comes from whichever is present, and after a reload only one is.
    */
-  const accepted = artifact.resolved_intent?.accepted_slots?.[ask.slot];
-  const chosenValue =
-    artifact.answered_with?.value || (typeof accepted === "string" ? accepted : "");
-  const chosenOption = ask.options.find((o) => o.value === chosenValue);
-  const chosenLabel = chosenOption?.label || artifact.answered_with?.label || chosenValue;
+  const pick = readPick(artifact, ask);
+  const chosenValue = pick?.value ?? "";
+  const chosenLabel = pick?.label ?? "";
 
   const repick = (value: string) => {
     try {
