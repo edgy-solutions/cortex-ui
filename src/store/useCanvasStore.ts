@@ -121,6 +121,22 @@ export const ELECTRIC_COVERED_FIELDS: readonly (keyof Artifact)[] = [
   // because it arrives ONLY via the projection — no local path writes it, and
   // the absence probe should say so if one ever starts.
   "duration_ms",
+  // ── Added by the derived coverage check, not by anyone noticing ──────────────
+  //
+  // Both were projected by `rowToArtifact` and absent from this list, which meant
+  // the absence probe never asked about them and reported green over them
+  // forever. They meet the `duration_ms` rule above exactly: nothing local
+  // writes either one, so an `sse:*` tag on them at rest is a bug.
+  //
+  // `derived_from_artifact_id` is the one that mattered. It is the LINEAGE the
+  // whole ask-fold reads — which pick a given answer replaced — so an SSE path
+  // that started writing it would have had the canvas following a
+  // client-invented parent, silently, with nothing able to notice.
+  "derived_from_artifact_id",
+  // Sibling of the covered `graph_trace`, and its own comment in `rowToArtifact`
+  // calls it projector-covered. Being a sibling of a covered field is not what
+  // put it here; having no local writer is.
+  "graph_trace_alternates",
 ] as const;
 
 /**

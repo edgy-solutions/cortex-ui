@@ -91,8 +91,15 @@ const serverRow = (id: string, overrides: Partial<Artifact> = {}): Artifact => (
   routing: ROUTING,
   sources: [{ type: "catalog_asset", label: "Alpha", uri: "urn:x:alpha", relevance: 1 }],
   graph_trace: [{ uri: "urn:x:Dataset", label: "Dataset", role: "resolved_subject", hops: 0 }],
-  graph_trace_alternates: [],
-  derived_from_artifact_id: null,
+  // Both differ from the pending row for the same reason `duration_ms` above does, and both
+  // are here because a DERIVED coverage check found them projected but unwatched — the sweep
+  // never asked about either, so an `sse:*` write landing on them was invisible.
+  // `derived_from_artifact_id` is the lineage the ask-fold reads to decide which pick an
+  // answer replaced, which makes a client-invented value the expensive kind of wrong.
+  graph_trace_alternates: [
+    { uri: "urn:x:Report", label: "Report", role: "alternate_verb", hops: 1 },
+  ],
+  derived_from_artifact_id: "a0-the-ask-this-answered",
   durability_status: "durable",
   watermark: 42,
   ...overrides,
