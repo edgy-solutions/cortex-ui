@@ -107,7 +107,32 @@ export function rowToArtifact(row: Row): Artifact {
    */
   const parseDurationMs = (v: unknown): number | null => {
     const n = parseBigIntOrNull(v);
-    if (n === null || !Number.isFinite(n) || n < 0) return null;
+    if (n === null || !Number.isFinite(n) || n < 0) {
+      // ABSENT AND REFUSED RENDER THE SAME AND MUST NOT DIAGNOSE THE SAME.
+      //
+      // Both end as `null`, which is right for the card — a wrong duration reads as a
+      // measurement, so refusing to absence is the correct render. But the two states have
+      // DIFFERENT OWNERS: a column that is null or missing is the projection's, a value that
+      // arrived and was refused is the producer's. Collapsed, "no time is showing" sends
+      // everyone to look in the same wrong place, which is what it just cost.
+      //
+      // This is the `fetch_registered_entries` rule applied to a scalar: `None` for could-not-
+      // reach and `{}` for reached-and-empty have opposite repairs and must not fold together.
+      // Said to the console rather than the surface, because the reader is owed absence and the
+      // ENGINEER is owed the reason.
+      if (v != null) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[electric] duration_ms ARRIVED AND WAS REFUSED for row",
+          row.id,
+          "— raw value:",
+          v,
+          `(${typeof v})`,
+          ". Absent is the projection's to fix; refused is the producer's. This is the second.",
+        );
+      }
+      return null;
+    }
     return n;
   };
   // Electric's JS client decodes jsonb columns to native JS objects

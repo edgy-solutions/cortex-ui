@@ -11,7 +11,7 @@
  * the refusal lives in `artifactDuration` rather than at each call site: a surface
  * that renders a duration inherits the decision instead of re-making it.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { formatDuration, artifactDuration } from "./formatDuration";
@@ -89,6 +89,65 @@ describe("the projection row carries it, or honestly does not", () => {
     // depending on the client version, which is why the parser tolerates both.
     expect(rowToArtifact({ ...base, duration_ms: 900n } as never).duration_ms).toBe(900);
     expect(rowToArtifact({ ...base, duration_ms: "1500" } as never).duration_ms).toBe(1500);
+  });
+
+  /**
+   * ABSENT AND REFUSED RENDER THE SAME AND MUST NOT DIAGNOSE THE SAME.
+   *
+   * Both yield `null`, which is the right RENDER — a wrong duration reads as a measurement,
+   * so refusing to absence is correct on the card. But the two states have different owners:
+   * a column that is null or missing belongs to the projection, a value that arrived and was
+   * refused belongs to the producer. Collapsed, "no time is showing" sends everyone to look in
+   * the same wrong place.
+   *
+   * This is `fetch_registered_entries`' rule applied to a scalar — `None` for could-not-reach
+   * and `{}` for reached-and-empty have opposite repairs and must not fold together — and it
+   * came up because exactly that question was live: the backend had the value written, read and
+   * upserted, and nothing downstream could say whether the client ever saw it.
+   */
+  describe("a refused duration is distinguishable from an absent one", () => {
+    const warnings = (row: Record<string, unknown>): unknown[][] => {
+      const seen: unknown[][] = [];
+      const spy = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+        seen.push(args);
+      });
+      try {
+        rowToArtifact(row as never);
+      } finally {
+        spy.mockRestore();
+      }
+      return seen;
+    };
+
+    it("says nothing when the column is simply not there", () => {
+      // The common case and the one that must stay quiet: every historical row predates the
+      // column. A warning here would fire on every row of a full canvas and be turned off
+      // within a day, taking the useful half with it.
+      expect(warnings(base)).toEqual([]);
+      expect(warnings({ ...base, duration_ms: null })).toEqual([]);
+    });
+
+    it("SAYS SO when a value arrived and was refused", () => {
+      const negative = warnings({ ...base, duration_ms: -3 });
+      expect(negative).toHaveLength(1);
+      expect(String(negative[0].join(" "))).toContain("ARRIVED AND WAS REFUSED");
+
+      const nonsense = warnings({ ...base, duration_ms: "abc" });
+      expect(nonsense).toHaveLength(1);
+    });
+
+    it("names the row and the raw value, since neither is recoverable afterwards", () => {
+      // The refused value never reaches the artifact, so a warning that omitted it would say
+      // "something was wrong somewhere" — which is the shape of report that gets ignored.
+      const [args] = warnings({ ...base, duration_ms: -3 });
+      expect(args).toContain("a1");
+      expect(args).toContain(-3);
+    });
+
+    it("still renders as absence — the card is unchanged", () => {
+      // The warning is for the engineer. The reader is owed absence, exactly as before.
+      expect(rowToArtifact({ ...base, duration_ms: -3 } as never).duration_ms).toBeNull();
+    });
   });
 });
 
