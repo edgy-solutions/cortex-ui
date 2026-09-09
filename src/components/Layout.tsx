@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { BuildStamp } from "./BuildStamp";
 import { motion } from "framer-motion";
 import { Brain, Minimize2, Maximize2 } from "lucide-react";
 import { usePresentationStore, railOpen, revealRightOnSelection } from "@/store/usePresentationStore";
@@ -56,11 +57,16 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
         </span>
 
         <div className="ml-auto flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse-neon" />
-            <span className="text-xs font-mono text-neon-green/80 uppercase tracking-widest">
-              MESH ONLINE
-            </span>
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse-neon" />
+              <span className="text-xs font-mono text-neon-green/80 uppercase tracking-widest">
+                MESH ONLINE
+              </span>
+            </div>
+            {/* Quiet by design — it answers a question nobody asks most days, and a status
+                line that competes with MESH ONLINE for attention would be turned off. */}
+            <BuildStamp />
           </div>
           
           <HumanTaskInboxBadge />

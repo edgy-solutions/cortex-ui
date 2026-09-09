@@ -24,6 +24,15 @@ RUN npm ci
 # Copy application source code
 COPY . .
 
+# THE COMMIT THIS IMAGE WAS BUILT FROM, baked in — never injected by the chart.
+#
+# The mesh services take the same ARG for the same reason: a runtime-injected sha reports what
+# the deployment BELIEVES it is running, which is the exact claim under suspicion when somebody
+# asks whether what they are looking at is what was pushed. Absent is absent — vite.config.ts
+# falls back to asking git, and emits null rather than a placeholder if there is no checkout.
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
 # Build the static Vite bundle (outputs to /app/dist)
 RUN npm run build
 

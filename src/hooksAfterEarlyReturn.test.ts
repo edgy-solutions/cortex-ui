@@ -115,22 +115,50 @@ function violations(file: string): string[] {
     }
   };
 
-  const visit = (node: ts.Node): void => {
-    if (ts.isFunctionDeclaration(node) && node.body && node.name) {
-      checkBody(node.body, node.name.text);
+  /**
+   * EVERY FUNCTION BODY, rather than every way of DECLARING one.
+   *
+   * This enumerated two shapes — a function declaration, and a `const X = () => {}` — and so
+   * silently omitted every component that reaches its body any other way. Four in this tree do:
+   * `export const ActionNode = memo(function ActionNode(...))` and its three neighbours. The
+   * initializer there is a CALL, not a function, so the scan walked straight past them and
+   * reported a clean population that was missing them.
+   *
+   * That is the LangGraph lane's route scanner exactly — decorator-only, so fourteen routes
+   * mounted by a shared helper were invisible, and the manifest then called real routes stale.
+   * A scan that recognises one syntactic form measures that form, not the population.
+   *
+   * The repair is not to add `memo` and `forwardRef` to the list, which is the same mistake
+   * with a longer list and would miss the next wrapper anybody adopts. There is nothing to
+   * enumerate: a body is a body, wherever it is written, and each is analysed on its own.
+   *
+   * Nested functions are still not descended into WHILE looking for hooks after a return —
+   * they are reached here instead, as bodies in their own right, which is the same coverage
+   * without the double-counting.
+   */
+  const nameOf = (node: ts.Node): string => {
+    const named = node as { name?: ts.Node };
+    if (named.name && ts.isIdentifier(named.name as ts.Node)) return (named.name as ts.Identifier).text;
+    // An anonymous body still has to be reportable, or a finding inside one names nothing.
+    const parent = node.parent;
+    if (parent && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
     }
-    if (ts.isVariableStatement(node)) {
-      for (const decl of node.declarationList.declarations) {
-        const init = decl.initializer;
-        if (
-          init &&
-          (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) &&
-          init.body &&
-          ts.isIdentifier(decl.name)
-        ) {
-          checkBody(init.body, decl.name.text);
-        }
-      }
+    if (parent && ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+    return "(anonymous)";
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isMethodDeclaration(node)) &&
+      node.body
+    ) {
+      checkBody(node.body, nameOf(node));
     }
     ts.forEachChild(node, visit);
   };
@@ -170,6 +198,54 @@ describe("hook order cannot differ between renders", () => {
       const hits = violations(tmp);
       expect(hits).toHaveLength(1);
       expect(hits[0]).toContain("useAskedBy");
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+
+  it("SEES a component the old walker could not — memo, forwardRef, and an inline callback", () => {
+    // The scan enumerated two ways of declaring a function, so anything reaching its body some
+    // other way was invisible. Four components in this tree are written
+    // `export const X = memo(function X(...))`, and the walk went straight past all four while
+    // reporting a clean population.
+    //
+    // This is the control for the widening: green on the real tree afterwards means nothing
+    // else, unless the scanner can be SHOWN to find a violation in each of these shapes. That
+    // is the identical mistake to the LangGraph lane's decorator-only route scanner, and the
+    // identical repair — stop recognising forms, analyse every body.
+    const shapes = `
+      export const Wrapped = memo(function Wrapped() {
+        const routing = useCurrentRouting();
+        if (!routing) return null;
+        const asked = useAskedBy(routing);
+        return <div>{asked}</div>;
+      });
+      export const Fwd = forwardRef((props, ref) => {
+        const a = useOne();
+        if (!a) return null;
+        const b = useTwo();
+        return <div ref={ref}>{b}</div>;
+      });
+      export const obj = {
+        render() {
+          const a = useOne();
+          if (!a) return null;
+          const b = useTwo();
+          return b;
+        },
+      };
+    `;
+    const tmp = path.join(os.tmpdir(), "__hookscan_shapes__.tsx");
+    const fs = require("node:fs") as typeof import("node:fs");
+    fs.writeFileSync(tmp, shapes);
+    try {
+      const hits = violations(tmp);
+      // One per shape. Before the widening this was zero, and read as a clean file.
+      expect(hits, hits.join("\n")).toHaveLength(3);
+      expect(hits.some((h) => h.includes("useAskedBy"))).toBe(true);
+      // The finding has to NAME something, or a violation inside an anonymous body is a
+      // location with no subject.
+      expect(hits.every((h) => !h.includes("undefined"))).toBe(true);
     } finally {
       fs.unlinkSync(tmp);
     }

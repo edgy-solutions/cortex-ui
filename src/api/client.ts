@@ -667,3 +667,32 @@ export async function publishToSuperset(
   const { data } = await api.post<{ summary: string }>("/analyze", taskPayload);
   return data;
 }
+
+// ── Fleet version (what is actually serving) ──────────────
+/**
+ * The BFF's own build, from `GET /fleet/version`'s `self`.
+ *
+ * ONLY `self` IS READ HERE. That endpoint also fans out across the mesh and returns
+ * `services`, `distinct_shas`, `asked` and `unreachable` — a fleet census, which is a
+ * different surface with a different audience. The header answers one question ("what is
+ * serving me"), and pulling the whole census to render one field would put a fan-out behind
+ * a status line.
+ *
+ * Returns null rather than throwing: an unreachable BFF is a legitimate answer to "what is
+ * serving", and one the caller has to be able to SAY rather than silently omit.
+ */
+export interface ServiceVersion {
+  component?: string;
+  repo?: string;
+  git_sha?: string | null;
+  built_at?: string | null;
+  image_tag?: string | null;
+}
+export async function fetchBffVersion(): Promise<ServiceVersion | null> {
+  try {
+    const { data } = await api.get<{ self?: ServiceVersion }>("/fleet/version");
+    return data?.self ?? null;
+  } catch {
+    return null;
+  }
+}
