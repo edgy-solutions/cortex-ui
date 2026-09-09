@@ -13,13 +13,14 @@ import path from "node:path";
  * and the pair beneath it does not overlap" survives a redesign and still catches a broken
  * template.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   STAGE_CARD,
   PORTFOLIO_PLANNING_SLOTS,
   portfolioPlanningTemplate,
   templateSlot,
   PORTFOLIO_TEMPLATE_ID,
+  KNOWN_TEMPLATE_IDS,
   PANEL_MIN,
   type CardSlot,
 } from "./stageConstants";
@@ -640,5 +641,78 @@ describe("templates are keyed by template_id, not by lens", () => {
     // places new cards by lens.
     expect(STORE.match(/c\.template_id \?\? c\.use/g)?.length).toBe(2);
     expect(STORE).toContain("template_id?: string;");
+  });
+});
+
+/**
+ * THE UNLANDED ROW HAS TO BE AUDIBLE.
+ *
+ * §7's hazard is an ORDERING one: the backend advertises a second template, this registry has
+ * no row for it yet, and every board it seeds lays out generically. The fallback is right —
+ * it does not throw and it does not borrow another template's arrangement, which would draw a
+ * board nobody authored — and it was completely SILENT, which makes the failure look like a
+ * disappointing layout rather than a missing row.
+ *
+ * A board that draws WRONG is harder to catch than one that does not draw. This is the same
+ * shape as the unjudged ranking that drew grey bars under a legend advertising two colours,
+ * and as the answer that rendered KNOWLEDGE_DOCUMENT while routing perfectly.
+ */
+describe("an unlanded template row says so", () => {
+  const warnings = (fn: () => void): string[] => {
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+      seen.push(args.join(" "));
+    });
+    try {
+      fn();
+    } finally {
+      spy.mockRestore();
+    }
+    return seen;
+  };
+
+  it("NAMES the id it has no row for, and what it does know", () => {
+    // Naming both is what turns "the layout looks off" into "that row has not landed here yet".
+    const out = warnings(() => templateSlot("funding-status-not-landed", 0, VP));
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("funding-status-not-landed");
+    expect(out[0]).toContain("portfolio");
+  });
+
+  it("still places generically — the WARNING is not a refusal", () => {
+    // The behaviour must not change. A board seeded with an unknown template keeps working;
+    // the warning is for the engineer, exactly as with the refused duration.
+    expect(templateSlot("another-unlanded-id", 0, VP)).toBeNull();
+  });
+
+  it("says NOTHING for a board with no template at all", () => {
+    // The ordinary case for anything a person built by hand. Warning here would fire on every
+    // freeform canvas and get the channel muted, taking the useful half with it.
+    expect(warnings(() => templateSlot(undefined, 0, VP))).toEqual([]);
+  });
+
+  it("says NOTHING for a template it can lay out", () => {
+    expect(warnings(() => templateSlot(PORTFOLIO_TEMPLATE_ID, 0, VP))).toEqual([]);
+    expect(warnings(() => templateSlot("portfolio_planning", 0, VP))).toEqual([]);
+  });
+
+  it("warns ONCE per id, not once per card per render", () => {
+    // A board of five cards calls this five times and re-renders on every camera move.
+    // Hundreds of identical lines is indistinguishable from noise, and noise gets muted.
+    const out = warnings(() => {
+      for (let n = 0; n < 5; n++) templateSlot("repeated-unlanded-id", n, VP);
+      for (let n = 0; n < 5; n++) templateSlot("repeated-unlanded-id", n, VP);
+    });
+    expect(out).toHaveLength(1);
+  });
+
+  it("KNOWN_TEMPLATE_IDS is derived from the registry, not a second list", () => {
+    // A hand-kept list is how a row gets added on one side and spelled differently on the
+    // other — the failure PORTFOLIO_TEMPLATE_ID already exists to prevent at the lookup site.
+    expect(KNOWN_TEMPLATE_IDS).toContain(PORTFOLIO_TEMPLATE_ID);
+    expect(KNOWN_TEMPLATE_IDS).toContain("portfolio_planning");
+    for (const id of KNOWN_TEMPLATE_IDS) {
+      expect(templateSlot(id, 0, VP), id).not.toBeNull();
+    }
   });
 });

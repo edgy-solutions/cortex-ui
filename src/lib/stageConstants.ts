@@ -192,6 +192,30 @@ const TEMPLATES: Record<
 };
 
 /**
+ * Every `template_id` this build can lay out — the frontend half of ADR-0050 §7's ordering rule.
+ *
+ * ONE SOURCE, so adding the second ratified template is a row in `TEMPLATES` and nothing else.
+ * A second list kept in step by hand is how a row gets added on one side and spelled
+ * differently on the other, which is the failure `PORTFOLIO_TEMPLATE_ID` already exists to
+ * prevent at the lookup site.
+ *
+ * The legacy `use` key is deliberately included: it is a key this build genuinely resolves, and
+ * a reader asking "can this client lay out that board" is owed the true answer rather than the
+ * tidy one.
+ */
+export const KNOWN_TEMPLATE_IDS: readonly string[] = Object.keys(TEMPLATES);
+
+/**
+ * Ids already reported, so the warning below fires ONCE rather than per card per render.
+ *
+ * A board of five cards calls `templateSlot` five times, and re-renders on every camera move.
+ * A warning without this would produce hundreds of identical lines, which is indistinguishable
+ * from noise and gets the whole channel muted — taking the useful half with it, the same way a
+ * duration warning on every historical row would have.
+ */
+const warnedTemplateIds = new Set<string>();
+
+/**
  * The slot a template assigns to the nth card, or null when there is no template for this
  * board or it has run past its end. Null means "fall back to the generic placement" — a
  * template declares where its FIRST cards go, and a canvas that outgrows it keeps working.
@@ -221,7 +245,36 @@ export function templateSlot(
   anchorContentH?: number,
 ): CardSlot | null {
   const build = templateId ? TEMPLATES[templateId] : undefined;
-  if (!build) return null;
+  if (!build) {
+    /**
+     * THE LANDING ORDER, SAID OUT LOUD.
+     *
+     * Falling back to generic placement is the right BEHAVIOUR — it does not throw, and it does
+     * not borrow another template's arrangement, which would draw a board nobody authored. It
+     * was also completely silent, which makes the one failure §7 warns about invisible: the
+     * backend advertises a second template, this registry has no row for it yet, and every
+     * seeded board lays out generically while looking merely disappointing.
+     *
+     * A board that draws WRONG is harder to catch than one that does not draw. Naming the id is
+     * what turns "the layout looks off" into "that row has not landed here yet".
+     *
+     * Only a NAMED id is reported. `undefined` means the board has no template at all — the
+     * ordinary case for anything a person built by hand — and is not a finding.
+     */
+    if (templateId && !warnedTemplateIds.has(templateId)) {
+      warnedTemplateIds.add(templateId);
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ADR-0050 §7] no arrangement for template_id " +
+          JSON.stringify(templateId) +
+          " — this build knows " +
+          JSON.stringify(KNOWN_TEMPLATE_IDS) +
+          ". The board is placing generically. The frontend row must land BEFORE the backend " +
+          "advertises the template; this is that gap, from the far side of it.",
+      );
+    }
+    return null;
+  }
   const t = build(vp, rowContentH, anchorContentH);
   return n >= 0 && n < t.length ? t[n] : null;
 }
