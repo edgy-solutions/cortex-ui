@@ -92,7 +92,8 @@ export const PANEL_MIN = { w: 260, h: 200 };
  * The reference is the planning-workspace mock — schedule across the top, cost curve beside
  * site load, funding gap beside the maturity grid.
  */
-export function portfolioPlanningTemplate(
+function pairedTemplate(
+  panels: number,
   vp: CardSize,
   rowContentH?: number,
   anchorContentH?: number,
@@ -134,28 +135,74 @@ export function portfolioPlanningTemplate(
     anchorContentH > ANCHOR_CONTENT_H
       ? anchorContentH
       : ANCHOR_CONTENT_H;
-  const boardH = anchorH + rowH * 2 + GUTTER * 2;
+  // ROWS ARE DERIVED FROM THE PANEL COUNT, not assumed. This was `rowH * 2` and a literal
+  // five-element array, which is the fixed-count assumption the second ratified template found:
+  // `program_finance` declares SIX panels to `portfolio`'s five. A builder that assumed the
+  // count would have laid the sixth card on top of the fifth, or dropped it, and either would
+  // have looked like a template that "nearly works".
+  const rows = Math.max(1, Math.ceil((panels - 1) / 2));
+  const boardH = anchorH + rowH * rows + GUTTER * rows;
   const boardW = Math.max(PANEL_MIN.w * 2 + GUTTER, boardH * aspect);
 
   const colW = (boardW - GUTTER) / 2;
-  const row2Y = anchorH + GUTTER;
-  const row3Y = row2Y + rowH + GUTTER;
   const col2X = colW + GUTTER;
+  const rowY = (i: number) => anchorH + GUTTER + i * (rowH + GUTTER);
 
-  return [
-    // Anchor: the schedule, full width across the top.
-    { x: 0, y: 0, w: boardW, h: anchorH },
-    // The pair beneath it — cost curve beside site load.
-    { x: 0, y: row2Y, w: colW, h: rowH },
-    { x: col2X, y: row2Y, w: colW, h: rowH },
-    // The lower pair — funding gap beside the maturity grid.
-    { x: 0, y: row3Y, w: colW, h: rowH },
-    { x: col2X, y: row3Y, w: colW, h: rowH },
-  ];
+  // Position 0 is the ANCHOR, full width across the top. Every panel after it is a `pair`
+  // slot, filling left-then-right, row by row — the roles the ratified YAML declares, and
+  // never pixels, per §7.
+  const slots: CardSlot[] = [{ x: 0, y: 0, w: boardW, h: anchorH }];
+  for (let k = 1; k < panels; k++) {
+    const i = Math.floor((k - 1) / 2);
+    const leftColumn = (k - 1) % 2 === 0;
+    // AN ODD TRAILING PAIR KEEPS ITS PAIR WIDTH and leaves the right column empty.
+    //
+    // `program_finance` has five pair panels, so its last row holds one. Widening it to fill
+    // the row would draw the final measure at twice the size of its siblings — a claim about
+    // importance that the template did not make, and one a reader would take from the layout.
+    // An empty half-row says what is true: this board has an odd number of pairs. Same rule as
+    // an absent cell being a gap rather than a zero.
+    slots.push({ x: leftColumn ? 0 : col2X, y: rowY(i), w: colW, h: rowH });
+  }
+  return slots;
 }
 
-/** The number of slots a template declares, without needing a viewport to ask. */
+/**
+ * The first ratified board — `policy/canvases/portfolio.yaml`, five panels.
+ *
+ *   0 anchor  mesh:planSchedule
+ *   1 pair    mesh:planCostCurve      2 pair  mesh:planSiteLoad
+ *   3 pair    mesh:planFundingGap     4 pair  mesh:planMaturityGrid
+ */
+export const portfolioPlanningTemplate = (
+  vp: CardSize,
+  rowContentH?: number,
+  anchorContentH?: number,
+): CardSlot[] => pairedTemplate(PORTFOLIO_PLANNING_SLOTS, vp, rowContentH, anchorContentH);
+
+/**
+ * The second ratified board — `policy/canvases/program_finance.yaml`, SIX panels.
+ *
+ *   0 anchor  mesh:finFundingStatus
+ *   1 pair    mesh:finBurnRate            2 pair  mesh:finPerformanceIndices
+ *   3 pair    mesh:finVarianceAnalysis    4 pair  mesh:finVarianceDrivers
+ *   5 pair    mesh:finEacCalculation
+ *
+ * IT CANNOT SEED TODAY, and that is not this row's problem. All six fin verbs require
+ * `program_id` with no default and `finEacCalculation` also requires `method`, with
+ * `shared_slots` empty by dispatch — so every panel refuses at seed time. The registry entry
+ * governs PLACEMENT, and placement is correct whether or not the panels can currently be
+ * filled. Recorded here so a refusing board is not read as this row being wrong.
+ */
+export const programFinanceTemplate = (
+  vp: CardSize,
+  rowContentH?: number,
+  anchorContentH?: number,
+): CardSlot[] => pairedTemplate(PROGRAM_FINANCE_SLOTS, vp, rowContentH, anchorContentH);
+
+/** The number of slots each template declares, without needing a viewport to ask. */
 export const PORTFOLIO_PLANNING_SLOTS = 5;
+export const PROGRAM_FINANCE_SLOTS = 6;
 
 /**
  * The first ratified template's id — ADR-0050 §1, `policy/canvases/portfolio.yaml`.
@@ -166,6 +213,15 @@ export const PORTFOLIO_PLANNING_SLOTS = 5;
  * the lookup site is how a row gets added on one side and spelled differently on the other.
  */
 export const PORTFOLIO_TEMPLATE_ID = "portfolio";
+
+/**
+ * The second ratified template's id — `policy/canvases/program_finance.yaml`.
+ *
+ * A constant for the same reason as the first: a literal at the lookup site is how a row gets
+ * added on one side and spelled differently on the other, and a WRONG key is worse than a
+ * missing one because a missing one now announces itself.
+ */
+export const PROGRAM_FINANCE_TEMPLATE_ID = "program_finance";
 
 /**
  * Keyed by the canvas's `use`, as a plain string so this module stays dependency-free and
@@ -189,6 +245,8 @@ const TEMPLATES: Record<
   // laying out exactly as they did — a template that silently stopped applying would reflow
   // somebody's board on the next render and look like the fold breaking.
   portfolio_planning: portfolioPlanningTemplate,
+  // The second ratified board (ADR-0050 §9.2). No legacy alias: nothing predates its id.
+  [PROGRAM_FINANCE_TEMPLATE_ID]: programFinanceTemplate,
 };
 
 /**

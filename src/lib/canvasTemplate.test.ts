@@ -21,6 +21,8 @@ import {
   templateSlot,
   PORTFOLIO_TEMPLATE_ID,
   KNOWN_TEMPLATE_IDS,
+  PROGRAM_FINANCE_TEMPLATE_ID,
+  programFinanceTemplate,
   PANEL_MIN,
   type CardSlot,
 } from "./stageConstants";
@@ -714,5 +716,146 @@ describe("an unlanded template row says so", () => {
     for (const id of KNOWN_TEMPLATE_IDS) {
       expect(templateSlot(id, 0, VP), id).not.toBeNull();
     }
+  });
+});
+
+/**
+ * THE SECOND RATIFIED TEMPLATE, AND THE FIXED-COUNT ASSUMPTION IT FOUND.
+ *
+ * `program_finance` declares SIX panels to `portfolio`'s five. The builder was `rowH * 2` and a
+ * literal five-element array — an assumption that had been correct for as long as there was one
+ * template, and would have laid the sixth card on top of the fifth or dropped it. Either draws
+ * a board that "nearly works", which is the failure mode that does not get investigated.
+ *
+ * The lane authoring the YAML flagged the count BEFORE it could draw, which is the only reason
+ * this is a test rather than an incident.
+ *
+ * NOTE `program_finance` CANNOT SEED TODAY: all six fin verbs require `program_id` with no
+ * default, `finEacCalculation` also requires `method`, and `shared_slots` is empty by dispatch,
+ * so every panel refuses at seed time. The registry row governs PLACEMENT, which is correct
+ * whether or not the panels can be filled — a refusing board is not this row being wrong.
+ */
+describe("the second ratified template, and the count it does not assume", () => {
+  it("resolves by its id and declares SIX panels", () => {
+    expect(PROGRAM_FINANCE_TEMPLATE_ID).toBe("program_finance");
+    expect(programFinanceTemplate(VP)).toHaveLength(6);
+    expect(templateSlot(PROGRAM_FINANCE_TEMPLATE_ID, 5, VP)).not.toBeNull();
+  });
+
+  it("places the SIXTH card, which the old builder could not", () => {
+    // The regression in one line. Before generalising, index 5 did not exist.
+    const sixth = templateSlot(PROGRAM_FINANCE_TEMPLATE_ID, 5, VP);
+    expect(sixth).not.toBeNull();
+    expect(Number.isFinite(sixth!.x) && Number.isFinite(sixth!.y)).toBe(true);
+  });
+
+  it("the odd trailing pair keeps PAIR width and leaves the row half empty", () => {
+    // Widening it to fill the row would draw the final measure at twice the size of its
+    // siblings — a claim about importance the template never made, and one a reader takes from
+    // the layout. An empty half-row says what is true: an odd number of pairs.
+    const t = programFinanceTemplate(VP);
+    expect(t[5].w).toBe(t[1].w);
+    expect(t[5].w).toBeLessThan(t[0].w);
+    expect(t[5].x).toBe(t[1].x); // left column
+  });
+
+  it("gives the finance board a THIRD row, and the portfolio board still two", () => {
+    const fin = programFinanceTemplate(VP);
+    const port = portfolioPlanningTemplate(VP);
+    const rowsOf = (t: CardSlot[]) => new Set(t.slice(1).map((s) => s.y)).size;
+    expect(rowsOf(fin)).toBe(3);
+    expect(rowsOf(port)).toBe(2);
+    // A third row is taller board, not tighter cards: the pair height must not shrink to fit.
+    expect(fin[1].h).toBe(port[1].h);
+  });
+
+  it("PORTFOLIO IS UNCHANGED — generalising must not reflow the board people have", () => {
+    // Arrangement is durable. A template that quietly moved would reflow every seeded board on
+    // its next render and read as the fold breaking, which is exactly what the legacy `use`
+    // alias exists to prevent.
+    const t = portfolioPlanningTemplate(VP);
+    expect(t).toHaveLength(5);
+    expect(t[0].x).toBe(0);
+    expect(t[0].y).toBe(0);
+    expect(t[1].y).toBe(t[2].y);
+    expect(t[3].y).toBe(t[4].y);
+    expect(t[1].x).toBe(0);
+    expect(t[2].x).toBe(t[4].x);
+    expect(t[1].w).toBe(t[2].w);
+  });
+
+  it("both templates are in the registry, and every id in it lays out", () => {
+    expect(KNOWN_TEMPLATE_IDS).toContain(PROGRAM_FINANCE_TEMPLATE_ID);
+    for (const id of KNOWN_TEMPLATE_IDS) {
+      expect(templateSlot(id, 0, VP), id).not.toBeNull();
+    }
+  });
+
+  it("NO PANEL OVERLAPS ANOTHER, in either template", () => {
+    // The concrete failure a fixed count produces: a card laid on top of another. Asserted as a
+    // property over the whole board rather than by checking the one index that broke.
+    const overlaps = (a: CardSlot, b: CardSlot) =>
+      a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const t of [portfolioPlanningTemplate(VP), programFinanceTemplate(VP)]) {
+      for (let i = 0; i < t.length; i++) {
+        for (let j = i + 1; j < t.length; j++) {
+          expect(overlaps(t[i], t[j]), `slots ${i} and ${j} overlap`).toBe(false);
+        }
+      }
+    }
+  });
+});
+
+/**
+ * THE BOARD MUST BE AS TALL AS ITS OWN ROWS.
+ *
+ * Added because three mutations survived: `rows = 2`, `Math.floor` instead of `ceil`, and a
+ * board height hard-coded to two rows. All three leave the SLOTS correct — `rowY` is derived
+ * from the anchor and the gutter, not from the row count — so nothing overlapped, nothing was
+ * dropped, and every assertion above passed.
+ *
+ * What they broke is the shape of the BOARD the slots sit in: the row count feeds the height,
+ * the height feeds the width through the pane's aspect, and a six-panel board measured for two
+ * rows declares itself shorter than its own content. The camera then fits a box that does not
+ * contain the board, which is the same class as the per-item footprint bug `customWorld`
+ * already carries a comment about.
+ *
+ * The property is the design intent stated directly — a template is a function of the pane it
+ * will be read in — and it is the only assertion that can see a height that is merely WRONG
+ * rather than absent.
+ */
+describe("a template is shaped to the pane it will be read in", () => {
+  const bounds = (t: CardSlot[]) => ({
+    w: Math.max(...t.map((s) => s.x + s.w)),
+    h: Math.max(...t.map((s) => s.y + s.h)),
+  });
+
+  it("both boards carry the pane's aspect, whatever their row count", () => {
+    for (const [name, t] of [
+      ["portfolio", portfolioPlanningTemplate(VP)],
+      ["program_finance", programFinanceTemplate(VP)],
+    ] as [string, CardSlot[]][]) {
+      const b = bounds(t);
+      expect(b.w / b.h, name).toBeCloseTo(VP.w / VP.h, 1);
+    }
+  });
+
+  it("holds across pane shapes, so it is not one lucky viewport", () => {
+    for (const vp of [
+      { w: 1600, h: 900 },
+      { w: 2600, h: 1000 },
+      { w: 1200, h: 1000 },
+    ]) {
+      const b = bounds(programFinanceTemplate(vp));
+      expect(b.w / b.h, `${vp.w}x${vp.h}`).toBeCloseTo(vp.w / vp.h, 1);
+    }
+  });
+
+  it("the taller board is TALLER — a third row is not absorbed by shrinking cards", () => {
+    // The other way a fixed height could hide: keep the board and squeeze the rows into it.
+    // Arrangement is durable, so a card silently shorter than its content is a saved layout.
+    expect(bounds(programFinanceTemplate(VP)).h).toBeGreaterThan(
+      bounds(portfolioPlanningTemplate(VP)).h,
+    );
   });
 });
