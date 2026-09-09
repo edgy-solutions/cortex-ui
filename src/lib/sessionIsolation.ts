@@ -36,6 +36,12 @@ const USER_SCOPED_STORAGE_KEYS = ["cortex-answers-panel-v1", "cortex-stage"];
  * visible enough to disagree with.
  */
 export const PURGE_EXEMPT_STORES: Record<string, string> = {
+  useRegistrationStore:
+    "Describes what THIS BUILD advertised about itself — how many capability rows it offered " +
+    "and how many the server kept. Identical for every caller, derived from code rather than " +
+    "from any person's answers, boards or identity, so there is nothing for the next caller " +
+    "to see. Purging it would blank a diagnostic mid-session and say, falsely, that it held " +
+    "something belonging to the previous owner. It is also not persisted.",
   usePresentationStore:
     "Holds NO user data. Three booleans describing how the shell is arranged right now — " +
     "full screen, and whether each rail is pinned. Nothing in it is derived from an answer, " +

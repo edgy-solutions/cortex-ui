@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { BuildStamp } from "./BuildStamp";
+import { CapabilityBadge } from "./CapabilityBadge";
 import { motion } from "framer-motion";
 import { Brain, Minimize2, Maximize2 } from "lucide-react";
 import { usePresentationStore, railOpen, revealRightOnSelection } from "@/store/usePresentationStore";
@@ -66,7 +67,11 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
             </div>
             {/* Quiet by design — it answers a question nobody asks most days, and a status
                 line that competes with MESH ONLINE for attention would be turned off. */}
-            <BuildStamp />
+            <span className="flex items-center gap-2">
+              <BuildStamp />
+              <span className="text-slate-700 font-mono text-[9px]">·</span>
+              <CapabilityBadge />
+            </span>
           </div>
           
           <HumanTaskInboxBadge />

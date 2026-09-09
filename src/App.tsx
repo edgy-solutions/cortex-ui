@@ -20,6 +20,8 @@ import {
   type RegistrationLifecycle,
 } from "@/registry/registrationLifecycle";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { useRegistrationStore } from "@/store/useRegistrationStore";
+import { buildVersion } from "@/lib/buildVersion";
 import type { Artifact } from "@/api/types";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
@@ -117,7 +119,11 @@ function useHumanTaskSync() {
 // The trigger is the server's own report, which it stamps on every answer, so a stable session
 // still costs exactly one request. See `registrationLifecycle.ts` for why the widened
 // `selection_basis` is NOT the trigger, and `menuPresence.ts` for the label that is.
-function useFrontendCapabilityRegistration() {
+// EXPORTED FOR ITS TEST, and the reason is a defect this repo has now shipped three times:
+// the wiring is where these break, not the helpers. A mutation deleting both publish calls
+// below left the whole suite green — the badge would have sat at "…" for ever and nothing
+// would have said so. See `capabilityRegistration.test.tsx`.
+export function useFrontendCapabilityRegistration() {
   const auth = useAuth();
   const lifecycleRef = useRef<RegistrationLifecycle | null>(null);
   if (!lifecycleRef.current) {
@@ -139,9 +145,26 @@ function useFrontendCapabilityRegistration() {
     const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
     return registerFrontendCapabilities({
       frontend_id: CORTEX_UI_FRONTEND_ID,
-      // Read at runtime from Vite's build-time injected version string;
-      // falls back to a placeholder if the env wasn't set.
-      frontend_version: (import.meta as any).env?.VITE_APP_VERSION ?? "dev",
+      // THE COMMIT, NOT THE WORD "dev".
+      //
+      // This read `VITE_APP_VERSION`, which nothing in this repo sets — no Dockerfile, no CI
+      // step, no .env — so every registration this surface has ever made recorded its version
+      // as the literal string "dev". Server-side that is indistinguishable from a real value:
+      // truthy, printable, and useless for answering which build advertised which menu.
+      //
+      // The build now carries a real sha (`buildVersion`), so it reports one.
+      //
+      // NOT NULL, DELIBERATELY, AND NOT YET. The fleet contract says `git_sha` is null rather
+      // than a placeholder, and this field should follow — but `frontend_version` is a
+      // pre-existing `string` on the wire and the server owns its validation. Sending null
+      // unilaterally risks a 422 that would break registration outright, which is a great deal
+      // worse than a cosmetic placeholder. Raised with the backend lane rather than changed
+      // here.
+      //
+      // Until then the no-sha case says "unstamped": a word that cannot be read as a commit,
+      // an environment or a release, so nobody can mistake it for a version the way "dev" was
+      // mistaken for one. The case is rare — the build falls back to asking git.
+      frontend_version: buildVersion().git_sha ?? "unstamped",
       // ASSEMBLED from component contract exports, not hand-authored (ADR-0017
       // amendment 2026-08-20). Rows whose component exports a contract are derived;
       // the rest stay legacy until their export lands, one row at a time.
@@ -160,6 +183,13 @@ function useFrontendCapabilityRegistration() {
         // graph query confirms what landed (the other instrument). The gap between them is now
         // visible rather than inferred.
         lifecycle.attemptSettled(true);
+        // PUBLISHED, not only logged. `sent != accepted` is the one signal that says the two
+        // halves disagree about what can be RENDERED — a shorter menu selects a plausible
+        // WRONG card rather than failing visibly — and it has lived in the console, which is
+        // read by whoever thinks to open it, which is nobody at the moment the card is wrong.
+        useRegistrationStore
+          .getState()
+          .report({ sent: sent.length, accepted: resp.accepted, reassertion: reason === "re-assert" });
         const names = sent.map((c) => c.archetype + " | " + c.subject_uri).sort();
         // eslint-disable-next-line no-console
         console.info(
@@ -185,6 +215,10 @@ function useFrontendCapabilityRegistration() {
       },
       (err) => {
         lifecycle.attemptSettled(false);
+        // A REQUEST THAT NEVER RETURNED IS NOT A PARTIAL ACCEPTANCE. Nothing was established
+        // either way, and the repair is to retry rather than to go and find which row the
+        // server refused.
+        useRegistrationStore.getState().reportFailure();
         // Best-effort: a failed registration just means Engine F's
         // in-memory default table continues to speak for cortex-ui,
         // which is the pre-Stage-2 baseline anyway.
