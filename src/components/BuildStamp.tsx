@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { buildVersion, shortSha } from "@/lib/buildVersion";
-import { fetchBffVersion } from "@/api/client";
+import { fetchBffVersion, type BffVersionResult } from "@/api/client";
 
 /**
  * WHAT IS SERVING, WHERE A PERSON CAN SEE IT.
@@ -20,26 +20,71 @@ import { fetchBffVersion } from "@/api/client";
  * The compatibility question — do the two halves agree about what can be RENDERED — is answered
  * by the registration count, not by shas, and it is a separate signal for that reason.
  *
- * ── ABSENCE IS SAID, NOT LEFT BLANK ───────────────────────────────────────────────────────
+ * ── FOUR STATES, BECAUSE THERE ARE FOUR ───────────────────────────────────────────────────
  *
- * A build with no sha and a BFF that could not be reached are DIFFERENT facts, and neither is
- * "nothing to report". Rendering an empty slot for either would make the row look like it had
- * answered when it had not — the same failure as a duration that draws as absent when it was
- * really refused. Each says which it is, in words that cannot be mistaken for a hash.
+ * This shipped with two — a sha, or "unreachable" for everything else — and the first person to
+ * look at it caught the collapse immediately. The BFF was UP and serving picks; it had 404'd an
+ * endpoint it does not have yet, and the row called that unreachable. "The service is down" and
+ * "the service has not been rolled" have opposite repairs and nothing to do with each other.
+ *
+ *   a sha         it answered, and reports its build
+ *   no /version   it answered; the endpoint is not there yet. Roll the backend.
+ *   no sha        it answered and has the endpoint; that build was not stamped.
+ *   unreachable   nothing came back at all. NOW the word is true, and only now.
+ *
+ * The value of the last one is entirely in how rarely it is right. A label covering four
+ * situations is not a label, it is a shrug — and the next person to read "unreachable" would
+ * have gone hunting for a service that was working perfectly.
+ *
+ * Absence is SAID in every case rather than left blank: an empty slot makes the row look like
+ * it answered when it did not, the same failure as a duration drawing as absent when it was
+ * really refused.
  */
+
+/** What the BFF slot says, given what came back. Pure, so every state can be asserted. */
+export function bffLabel(r: BffVersionResult | null): string {
+  if (r === null) return "…";
+  switch (r.kind) {
+    case "ok":
+      // Answered and has the endpoint. A missing sha HERE is an unstamped build — a third fact
+      // again, and not worth collapsing into either neighbour.
+      return shortSha(r.version.git_sha ?? null) ?? "no sha";
+    case "no_endpoint":
+      // The state that was being called "unreachable". It names the repair by naming the fact.
+      return "no /version";
+    case "error":
+      // Neither down nor missing: it replied, and the reply was a failure. The status is the
+      // only actionable thing there is, so the status is what is shown.
+      return `/version ${r.status}`;
+    case "unreachable":
+      return "unreachable";
+  }
+}
+
+/** The long form, for the tooltip — the same four states said in words. */
+function bffDetail(r: BffVersionResult | null): string {
+  if (r === null) return "checking…";
+  switch (r.kind) {
+    case "ok":
+      return r.version.git_sha ?? "answered; that build recorded no sha";
+    case "no_endpoint":
+      return "answered, but has no /version endpoint yet — roll the backend";
+    case "error":
+      return `answered with HTTP ${r.status}`;
+    case "unreachable":
+      return "did not answer at all";
+  }
+}
+
 export function BuildStamp() {
   const mine = buildVersion();
-  const [bff, setBff] = useState<{ sha: string | null; reached: boolean } | null>(null);
+  const [bff, setBff] = useState<BffVersionResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchBffVersion().then((v) => {
+    fetchBffVersion().then((r) => {
       if (cancelled) return;
-      // REACHED-WITH-NO-SHA AND NOT-REACHED ARE DIFFERENT STATES, and they have different
-      // repairs: the first is a build that was not stamped, the second is a service that is
-      // not answering. Folding them into one blank is the collapse this codebase keeps
-      // finding — `None` for could-not-reach against `{}` for reached-and-empty.
-      setBff(v ? { sha: v.git_sha ?? null, reached: true } : { sha: null, reached: false });
+      setBff(r);
     });
     return () => {
       cancelled = true;
@@ -55,16 +100,13 @@ export function BuildStamp() {
       title={
         `cortex-ui ${mine.git_sha ?? "sha not recorded at build time"}` +
         (mine.built_at ? ` · built ${mine.built_at}` : "") +
-        `\ncortex-bff ${bff === null ? "checking…" : !bff.reached ? "unreachable" : (bff.sha ?? "sha not recorded at build time")}` +
+        `\ncortex-bff ${bffDetail(bff)}` +
         "\nSeparate repositories — these are not meant to match."
       }
     >
       <span data-build-stamp-ui>ui {ui ?? "no sha"}</span>
       <span className="text-slate-700"> · </span>
-      <span data-build-stamp-bff>
-        bff{" "}
-        {bff === null ? "…" : !bff.reached ? "unreachable" : (shortSha(bff.sha) ?? "no sha")}
-      </span>
+      <span data-build-stamp-bff>bff {bffLabel(bff)}</span>
     </span>
   );
 }

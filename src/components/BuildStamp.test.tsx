@@ -29,7 +29,7 @@ vi.mock("@/api/client", () => ({
 }));
 
 import { fetchBffVersion } from "@/api/client";
-import { BuildStamp } from "./BuildStamp";
+import { BuildStamp, bffLabel } from "./BuildStamp";
 
 const mocked = fetchBffVersion as unknown as ReturnType<typeof vi.fn>;
 
@@ -66,53 +66,77 @@ describe("a missing sha is never a placeholder", () => {
   });
 });
 
-describe("the BFF's two absences stay distinguishable", () => {
-  it("says UNREACHABLE when the call failed", async () => {
-    mocked.mockResolvedValue(null);
-    render(<BuildStamp />);
-    await waitFor(() => expect(bffSlot()).toContain("unreachable"));
+describe("the BFF's failures are four states, not one word", () => {
+  /**
+   * SHIPPED WITH TWO, AND THE FIRST PERSON TO LOOK AT IT CAUGHT THE COLLAPSE.
+   *
+   * The client caught every error and returned null, so the row said UNREACHABLE for a BFF that
+   * was up, serving picks, and had simply 404'd an endpoint it does not have yet. "The service
+   * is down" and "the service has not been rolled" have opposite repairs and nothing to do with
+   * each other — and the one that was wrong is the one that sends somebody hunting a service
+   * that is working perfectly.
+   *
+   * The word "unreachable" is worth exactly as much as its rarity. These tests are what keep it
+   * rare.
+   */
+  const label = (r: unknown) => bffLabel(r as never);
+
+  it("A 404 is NOT unreachable — the endpoint is missing, the service is not", () => {
+    expect(label({ kind: "no_endpoint" })).toBe("no /version");
+    expect(label({ kind: "no_endpoint" })).not.toContain("unreachable");
   });
 
-  it("says NO SHA when it answered without one", async () => {
-    // Reached, and its build carried no stamp. A different problem from "not answering", and
-    // the one the row would hide if both rendered blank.
-    mocked.mockResolvedValue({ component: "cortex-bff", git_sha: null });
-    render(<BuildStamp />);
-    await waitFor(() => expect(bffSlot()).toContain("no sha"));
-    expect(bffSlot()).not.toContain("unreachable");
+  it("UNREACHABLE is reserved for nothing coming back at all", () => {
+    expect(label({ kind: "unreachable" })).toBe("unreachable");
   });
 
-  it("shows the sha when it has one", async () => {
-    mocked.mockResolvedValue({ component: "cortex-bff", git_sha: "50649d9abcdef0123456789" });
-    render(<BuildStamp />);
-    await waitFor(() => expect(bffSlot()).toContain("50649d9"));
-    expect(bffSlot()).not.toContain("unreachable");
-    expect(bffSlot()).not.toContain("no sha");
+  it("another HTTP status is neither down nor missing, and carries the status", () => {
+    // 401 and 500 are different problems and neither is "no endpoint". The status is the only
+    // actionable thing available, so it is what gets shown rather than a fourth adjective.
+    expect(label({ kind: "error", status: 500 })).toBe("/version 500");
+    expect(label({ kind: "error", status: 401 })).toBe("/version 401");
   });
 
-  it("never renders an empty slot — the row always answers", async () => {
-    // The control for the two tests above. A component that rendered nothing in either absence
-    // would satisfy "not unreachable" and "not no sha" by saying nothing at all.
-    for (const value of [null, { git_sha: null }, { git_sha: "abc1234def" }]) {
-      mocked.mockResolvedValue(value);
-      const { unmount } = render(<BuildStamp />);
-      await waitFor(() => expect(bffSlot().replace(/bff\s*/, "").trim().length).toBeGreaterThan(0));
-      unmount();
+  it("an answer with no sha is an unstamped BUILD — a third fact again", () => {
+    expect(label({ kind: "ok", version: { git_sha: null } })).toBe("no sha");
+    expect(label({ kind: "ok", version: {} })).toBe("no sha");
+  });
+
+  it("and a real sha is shortened", () => {
+    expect(label({ kind: "ok", version: { git_sha: "50649d9abcdef0123456789" } })).toBe("50649d9");
+  });
+
+  it("the four labels are all DIFFERENT — the property, not the spellings", () => {
+    // The assertion that would have caught the original defect on its own. Any two states
+    // sharing a label is the collapse, whatever words are chosen.
+    const labels = [
+      label({ kind: "ok", version: { git_sha: "abc1234def" } }),
+      label({ kind: "ok", version: { git_sha: null } }),
+      label({ kind: "no_endpoint" }),
+      label({ kind: "unreachable" }),
+    ];
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("never renders an empty slot — the row always answers", () => {
+    for (const r of [
+      null,
+      { kind: "ok", version: {} },
+      { kind: "ok", version: { git_sha: "abc1234def" } },
+      { kind: "no_endpoint" },
+      { kind: "error", status: 503 },
+      { kind: "unreachable" },
+    ]) {
+      expect(label(r).trim().length, JSON.stringify(r)).toBeGreaterThan(0);
     }
   });
-});
 
-describe("it reports, and does not judge", () => {
-  it("draws no warning when the two shas differ — they are separate repos", async () => {
-    // A mismatch here is the NORMAL state: two repositories, two heads, two rolls. Colouring it
-    // as a problem would make the row cry wolf on every ordinary day, and a status line nobody
-    // believes is worse than no status line.
-    mocked.mockResolvedValue({ git_sha: "ffffffffffffffffff" });
+  it("renders through the component, from what the client actually returns", () => {
+    // The label function is pure and the component must actually use it — the seam between the
+    // two is where a correct helper gets rendered by a component that decided for itself.
+    mocked.mockResolvedValue({ kind: "no_endpoint" });
     render(<BuildStamp />);
-    await waitFor(() => expect(bffSlot()).toContain("fffffff"));
-    const text = stamp().textContent ?? "";
-    expect(text).not.toMatch(/mismatch|stale|out of date|behind/i);
-    expect(stamp().querySelector(".text-rose-400, .text-red-500")).toBeNull();
+    return waitFor(() => expect(bffSlot()).toContain("no /version"));
   });
 });
 
@@ -131,5 +155,19 @@ describe("the values a build can actually inject", () => {
     // The positive control: a rejection list that rejected everything would pass the test above.
     const { readDefine } = await import("@/lib/buildVersion");
     expect(readDefine("  d7b0874  ")).toBe("d7b0874");
+  });
+});
+
+describe("it reports, and does not judge", () => {
+  it("draws no warning when the two shas differ — they are separate repos", async () => {
+    // A difference here is the NORMAL state: two repositories, two heads, two rolls. Colouring
+    // it as a problem would make the row cry wolf on every ordinary day, and a status line
+    // nobody believes is worse than no status line.
+    mocked.mockResolvedValue({ kind: "ok", version: { git_sha: "ffffffffffffffffff" } });
+    render(<BuildStamp />);
+    await waitFor(() => expect(bffSlot()).toContain("fffffff"));
+    const text = stamp().textContent ?? "";
+    expect(text).not.toMatch(/mismatch|stale|out of date|behind/i);
+    expect(stamp().querySelector(".text-rose-400, .text-red-500")).toBeNull();
   });
 });

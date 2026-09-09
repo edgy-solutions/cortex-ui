@@ -675,11 +675,19 @@ export async function publishToSuperset(
  * ONLY `self` IS READ HERE. That endpoint also fans out across the mesh and returns
  * `services`, `distinct_shas`, `asked` and `unreachable` — a fleet census, which is a
  * different surface with a different audience. The header answers one question ("what is
- * serving me"), and pulling the whole census to render one field would put a fan-out behind
- * a status line.
+ * serving me"), and pulling the whole census to render one field would put a fan-out behind a
+ * status line.
  *
- * Returns null rather than throwing: an unreachable BFF is a legitimate answer to "what is
- * serving", and one the caller has to be able to SAY rather than silently omit.
+ * ── WHY THIS RETURNS A REASON AND NOT NULL ────────────────────────────────────────────────
+ *
+ * It caught everything and returned null, so the header said UNREACHABLE for a BFF that was up
+ * and serving picks and had simply 404'd an endpoint it does not have yet. Two states, opposite
+ * repairs — roll the backend, versus go and find out why the service is down — and one word
+ * covering both. Reported by the person who was looking at it, in the same week this codebase
+ * separated absent from refused twice and could-not-reach from reached-and-empty once.
+ *
+ * A RESPONSE IS AN ANSWER, whatever its status. The discriminator is whether the service spoke
+ * at all: axios attaches `response` when it did, and does not when the request never landed.
  */
 export interface ServiceVersion {
   component?: string;
@@ -688,11 +696,28 @@ export interface ServiceVersion {
   built_at?: string | null;
   image_tag?: string | null;
 }
-export async function fetchBffVersion(): Promise<ServiceVersion | null> {
+
+export type BffVersionResult =
+  /** It answered and reported its build. */
+  | { kind: "ok"; version: ServiceVersion }
+  /** It answered, with no such endpoint. The repair is a roll, not a rescue. */
+  | { kind: "no_endpoint" }
+  /** It answered, and the call failed for some other reason. The status is carried because
+   *  401 and 500 are different problems and neither is "no endpoint". */
+  | { kind: "error"; status: number }
+  /** Nothing came back at all — DNS, connection refused, timeout, offline. */
+  | { kind: "unreachable" };
+
+export async function fetchBffVersion(): Promise<BffVersionResult> {
   try {
     const { data } = await api.get<{ self?: ServiceVersion }>("/fleet/version");
-    return data?.self ?? null;
-  } catch {
-    return null;
+    return { kind: "ok", version: data?.self ?? {} };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    // NO `response` MEANS NOTHING ANSWERED. With one, the service replied — it is up, and the
+    // reply is the finding.
+    if (typeof status !== "number") return { kind: "unreachable" };
+    if (status === 404) return { kind: "no_endpoint" };
+    return { kind: "error", status };
   }
 }
