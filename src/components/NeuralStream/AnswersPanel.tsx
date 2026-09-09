@@ -6,7 +6,7 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
 import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
 import { taskKindLabel } from "@/lib/taskArtifact";
-import { artifactDuration } from "@/lib/formatDuration";
+import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -199,12 +199,21 @@ export function AnswersPanel() {
 
   const total = sorted.length;
 
+  // Built over the WHOLE collection, not the filtered list: a hop's parent may be filtered
+  // out of view, and the total time is a fact about the answer rather than about the filter.
+  const byIdMap = useMemo(() => {
+    const m = new Map<string, Artifact>();
+    for (const a of artifacts) m.set(a.id, a);
+    return m;
+  }, [artifacts]);
+
   const rowCtx: RowCtx = {
     currentArtifactId,
     pinnedIds,
     draggingId,
     onPointerDown: onRowPointerDown,
     searchHit: q,
+    byId: (id) => byIdMap.get(id),
   };
 
   return (
@@ -311,6 +320,15 @@ interface RowCtx {
   draggingId: string | null;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   searchHit: string;
+  /**
+   * Lineage lookup, THREADED rather than read from the store per row.
+   *
+   * A row needs its parents to total the work that produced it, and the obvious way to get
+   * them is a store subscription inside the row. That is the per-card watcher on a global
+   * store this repo swept for on 2026-08-25 — one subscription per visible row, all firing on
+   * every artifact change. The panel already holds the collection; it passes a reader.
+   */
+  byId: (id: string) => Artifact | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -383,9 +401,11 @@ function DayHeader({ label, onClick }: { label: string; onClick?: () => void }) 
 }
 
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
-  // null when the producer never measured it — the row then shows no duration
-  // at all, which is the honest rendering of "not recorded".
-  const took = artifactDuration(a.duration_ms);
+  // null when nothing in the chain was measured — the row then shows no duration at all,
+  // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
+  // from an ask is two pieces of work, and reporting only the last leg understated it by the
+  // whole routing turn. The label says how many hops it covers when that is not one.
+  const took = answerElapsedLabel(answerElapsed(a, ctx.byId));
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);
@@ -686,9 +706,11 @@ function ClusterHeader({
 }
 
 function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
-  // null when the producer never measured it — the row then shows no duration
-  // at all, which is the honest rendering of "not recorded".
-  const took = artifactDuration(a.duration_ms);
+  // null when nothing in the chain was measured — the row then shows no duration at all,
+  // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
+  // from an ask is two pieces of work, and reporting only the last leg understated it by the
+  // whole routing turn. The label says how many hops it covers when that is not one.
+  const took = answerElapsedLabel(answerElapsed(a, ctx.byId));
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);

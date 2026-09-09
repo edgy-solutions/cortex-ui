@@ -153,15 +153,31 @@ describe("the projection row carries it, or honestly does not", () => {
 
 describe("the panel never manufactures a duration", () => {
   it("both rows gate rendering on the refusal, and neither defaults the absence away", () => {
-    // The specific regression: `formatDuration(a.duration_ms ?? 0)` typechecks,
-    // reads as defensive, and prints "0.0s" on every legacy row in the list.
+    // The specific regression: `formatDuration(a.duration_ms ?? 0)` typechecks, reads as
+    // defensive, and prints "0.0s" on every legacy row in the list.
+    //
+    // REWRITTEN, because the first version pinned a NAME. It required the literal
+    // `const took = artifactDuration(a.duration_ms)` twice, so when the rows moved to a helper
+    // that totals a multi-hop answer this went red with the behaviour completely intact — the
+    // panel still refused, still never defaulted, and the seal failed anyway. A check that
+    // fires on a change that does not matter teaches everyone to edit the check.
+    //
+    // The RULE is what it guards, and the rule is about what the panel must not do: never
+    // format a duration itself, never read the raw field, never substitute a value for
+    // absence. Any call shape that obeys those is fine, which is what makes it a seal on
+    // behaviour rather than on a spelling.
     const panel = readFileSync(
       path.join(__dirname, "../components/NeuralStream/AnswersPanel.tsx"),
       "utf8",
     );
-    expect(panel).toContain("const took = artifactDuration(a.duration_ms)"); // positive control
-    expect(panel.split("const took = artifactDuration(a.duration_ms)").length - 1).toBe(2);
-    expect(panel).not.toMatch(/duration_ms\s*\?\?/);
+    // Positive control: the panel does render a duration, so this cannot pass on a file that
+    // simply stopped showing one.
+    expect(panel).toMatch(/const took = /);
+    expect(panel.split("const took = ").length - 1).toBe(2);
+    // It delegates the decision instead of making it.
     expect(panel).not.toContain("formatDuration(");
+    expect(panel).not.toMatch(/a\.duration_ms/);
+    // And nothing anywhere defaults the absence into a number.
+    expect(panel).not.toMatch(/duration_ms\s*\?\?/);
   });
 });
