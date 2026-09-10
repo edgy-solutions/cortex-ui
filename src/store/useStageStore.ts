@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { STAGE_CARD, templateSlot, type CardSize } from "@/lib/stageConstants";
+import {
+  STAGE_CARD,
+  templateSlot,
+  PORTFOLIO_TEMPLATE_ID,
+  type CardSize,
+} from "@/lib/stageConstants";
 import { naturalContentHeight, tallestContentHeight } from "@/lib/naturalCardSize";
 import { useCanvasStore } from "@/store/useCanvasStore";
 
@@ -204,6 +209,18 @@ interface StageState {
      * distinction the two callers would need the same answer to different questions.
      */
     requested?: boolean,
+    /**
+     * Which ratified template arranges this board — ADR-0050 §7's `template_id`.
+     *
+     * WITHOUT THIS, EVERY SEEDED BOARD WAS A PORTFOLIO BOARD. `createCanvas` was called with a
+     * hardcoded `portfolio_planning` lens and nothing set `template_id` at all, so placement
+     * fell through to the legacy `use` alias — correct while one template existed, and wrong
+     * the moment a second one seeds: the six finance panels would have been laid out by the
+     * five-slot portfolio arrangement and the sixth placed generically. SILENTLY, because the
+     * lookup SUCCEEDS — it just succeeds with the wrong template, which is the one case the
+     * unlanded-row warning cannot see.
+     */
+    templateId?: string,
   ) => string;
 }
 
@@ -428,6 +445,7 @@ export const useStageStore = create<StageState>()(
         enter = true,
         seededFrom,
         requested = false,
+        templateId,
       ) => {
         // ALREADY SEEDED IS A NO-OP that returns the board it made last time rather than a
         // second one. The check lives HERE, not only in the receiver, because this is the one
@@ -448,7 +466,20 @@ export const useStageStore = create<StageState>()(
             set((z) => ({ dismissedSeeds: z.dismissedSeeds.filter((d) => d !== seededFrom) }));
           }
         }
+        // THE LENS STAYS `portfolio_planning` AND THE TEMPLATE IS RECORDED SEPARATELY, which
+        // is §7's whole point: `use` is the chrome a person reads the board through, and
+        // `template_id` names the ratified YAML that arranged it. Giving the finance board its
+        // own lens is a product ruling nobody has made; giving it its own ARRANGEMENT is what
+        // the ratified file already says.
+        //
+        // Defaulting to the first template preserves exactly today's behaviour for a producer
+        // that sends no id — which is every producer today.
         const id = get().createCanvas(name, "portfolio_planning", enter);
+        set((z) => ({
+          canvases: z.canvases.map((c) =>
+            c.id === id ? { ...c, template_id: templateId || PORTFOLIO_TEMPLATE_ID } : c,
+          ),
+        }));
         // MEASURED ONCE, OVER THE WHOLE SET, BEFORE ANYTHING IS PLACED. Measuring
         // incrementally would size each card against only what preceded it, so the tallest
         // card arriving last would get a taller slot than its neighbours and the two lower

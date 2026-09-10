@@ -218,10 +218,21 @@ describe("the template applies through the ORDINARY add path", () => {
     expect(items[n - 1].w).toBeUndefined();
   });
 
-  it("a SEEDED canvas is byte-identical to a hand-built one — the whole point", () => {
+  it("a SEEDED canvas is ARRANGED identically to a hand-built one — the whole point", () => {
     // The property that makes seeding a starting point rather than a second kind of object.
-    // If these ever diverge, "built the way a user would build it" has become a claim instead
-    // of a fact, and every consumer that reads canvases needs to learn about a special case.
+    // If the ARRANGEMENT diverges, "built the way a user would build it" has become a claim
+    // instead of a fact, and every consumer that reads canvases needs a special case.
+    //
+    // NARROWED FROM BYTE-IDENTICAL, and the narrowing is the interesting part. It compared the
+    // whole object, which also forbade the seeded board from RECORDING ANYTHING ABOUT ITS OWN
+    // ORIGIN — and `template_id` is exactly that: which ratified YAML arranged it, a fact that
+    // is true of a seeded board and genuinely false of a hand-built one. The seal was written
+    // when those were the same object in every respect, and it would have had to be deleted to
+    // let a second template exist at all.
+    //
+    // So it keeps its teeth where they matter — the items, the geometry, the lens — and the
+    // fields allowed to differ are ENUMERATED rather than the comparison being dropped. A
+    // seeded board that grew some arrangement field a hand-built one lacks still fails here.
     const ids = ["a1", "a2", "a3"];
 
     const seeded = useStageStore.getState().seedPortfolioCanvas(ids, "Seeded", false);
@@ -234,8 +245,18 @@ describe("the template applies through the ORDINARY add path", () => {
 
     expect(s.items).toEqual(h.items);
     expect(s.use).toBe(h.use);
-    // Everything except the identity fields, which are the only things allowed to differ.
-    expect({ ...s, id: "", name: "" }).toEqual({ ...h, id: "", name: "" });
+
+    // PROVENANCE MAY DIFFER; ARRANGEMENT MAY NOT. Anything outside this list that differs is
+    // the divergence the seal exists to catch.
+    const PROVENANCE = new Set(["id", "name", "template_id", "seededFrom", "ratified_as"]);
+    const strip = (c: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(c).filter(([k]) => !PROVENANCE.has(k)));
+    expect(strip(s as never)).toEqual(strip(h as never));
+
+    // And the positive control for the narrowing: the seeded board really does record its
+    // template, so this is not a comparison that passes by ignoring everything.
+    expect(s.template_id).toBe(PORTFOLIO_TEMPLATE_ID);
+    expect(h.template_id).toBeUndefined();
   });
 
   it("ORDER decides the slot — the caller's ordering is the declaration", () => {

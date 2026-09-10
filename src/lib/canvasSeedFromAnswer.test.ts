@@ -436,3 +436,88 @@ describe("a deleted board stays deleted, and can be asked for again", () => {
     expect(persisted.state.dismissedSeeds).toEqual(["h1"]);
   });
 });
+
+/**
+ * THE SEED HAS TO REACH THE RIGHT TEMPLATE — the walk that closes slice 2.
+ *
+ * "Seeding a `program_finance` board should fire one program ask and fill all six."
+ *
+ * Every seeded board was a PORTFOLIO board. `seedPortfolioCanvas` called `createCanvas` with a
+ * hardcoded `portfolio_planning` lens and nothing set `template_id` at all, so placement fell
+ * through to the legacy `use` alias. Correct while one template existed. Wrong the moment a
+ * second one seeds: six finance panels laid out by the five-slot portfolio arrangement, with
+ * the sixth falling to generic placement.
+ *
+ * AND SILENTLY — this is the part that matters. The unlanded-row warning fires when a lookup
+ * FAILS. Here the lookup SUCCEEDS; it just succeeds with the wrong template. A board that draws
+ * wrong is harder to catch than one that does not draw, and this is that failure with the
+ * warning looking straight past it.
+ */
+describe("a seed names its template, and the board records it", () => {
+  const seedRO = (ids: string[], extra: Record<string, unknown> = {}) => ({
+    components: [{ archetype: "CANVAS_SEED", artifact_ids: ids, ...extra }],
+  });
+
+  beforeEach(() => {
+    useStageStore.setState({ canvases: [], view: "global", dismissedSeeds: [] } as never);
+    useCanvasStore.setState({ artifacts: [] } as never);
+  });
+
+  const deliver = (id: string, ro: unknown) =>
+    useCanvasStore.setState({
+      artifacts: [{ id, status: "complete", rendered_output: ro }],
+    } as never);
+
+  it("reads `template_id` — ADR-0050's name", () => {
+    expect(
+      canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], { template_id: "program_finance" }),
+      } as never)?.templateId,
+    ).toBe("program_finance");
+  });
+
+  it("reads `canvas_type` too — the contract's older name", () => {
+    // Which one the producer sends is not settled and today it sends NEITHER. A reader that
+    // accepted only one would lay a board out with the wrong template the first time the other
+    // arrived, which is the silent case above.
+    expect(
+      canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], { canvas_type: "program_finance" }),
+      } as never)?.templateId,
+    ).toBe("program_finance");
+  });
+
+  it("prefers `template_id` when both are present — the ratified name wins", () => {
+    expect(
+      canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], { template_id: "program_finance", canvas_type: "portfolio" }),
+      } as never)?.templateId,
+    ).toBe("program_finance");
+  });
+
+  it("carries the template ONTO the board, end to end", () => {
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("t1", seedRO(["a", "b", "c"], { template_id: "program_finance" }));
+    const board = useStageStore.getState().canvases[0];
+    expect(board.template_id).toBe("program_finance");
+  });
+
+  it("DEFAULTS to the first template when the producer names none — today's every producer", () => {
+    // Behaviour must not change for the seed that actually ships. Portfolio boards laid out
+    // through the legacy `use` alias before; they lay out through a recorded id now, and the
+    // arrangement is the same builder either way.
+    renderHook(() => useCanvasSeedFromAnswers());
+    deliver("t1", seedRO(["a", "b", "c"]));
+    expect(useStageStore.getState().canvases[0].template_id).toBe("portfolio");
+  });
+
+  it("ignores a blank or non-string template, rather than recording a hole", () => {
+    for (const bad of ["", "   ", 42, null, {}]) {
+      expect(
+        canvasSeedFromArtifact({
+          rendered_output: seedRO(["a"], { template_id: bad }),
+        } as never)?.templateId,
+      ).toBeUndefined();
+    }
+  });
+});

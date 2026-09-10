@@ -16,7 +16,14 @@ import type { Artifact } from "@/api/types";
  * No contract for this existed when the client half was written, so rather than let two lanes
  * invent it separately, the expectation is stated in ONE function and nowhere else:
  *
- *     { archetype: "CANVAS_SEED", canvas_type?: string, name?: string, artifact_ids: string[] }
+ *     { archetype: "CANVAS_SEED", template_id?: string, canvas_type?: string,
+ *       name?: string, artifact_ids: string[] }
+ *
+ * BOTH TEMPLATE KEYS ARE READ, and that is not indecision. ADR-0050 names the field
+ * `template_id`; `CanvasSeed.contract.ts` declares `canvas_type` from before templates had
+ * ids. Which one the producer sends is not settled — today it sends NEITHER — and a reader that
+ * accepted only one would silently lay a board out with the wrong template the first time the
+ * other arrived. `template_id` wins when both are present, because it is the ratified name.
  *
  * `artifact_ids` is ORDERED and the order is the producer's declaration of which measure lands
  * in which slot. If the server half chooses a different shape, `canvasSeedFromArtifact` is the
@@ -39,7 +46,7 @@ import type { Artifact } from "@/api/types";
 /** The slot-ordered ids a seed answer carries, or null if this artifact is not one. */
 export function canvasSeedFromArtifact(
   a: Artifact,
-): { ids: string[]; name?: string } | null {
+): { ids: string[]; name?: string; templateId?: string } | null {
   const components = a.rendered_output?.components as
     | Array<Record<string, unknown>>
     | undefined;
@@ -53,7 +60,14 @@ export function canvasSeedFromArtifact(
     // slot-shaped hole with nothing explaining it, which is worse than a shorter board.
     const ids = raw.filter((v): v is string => typeof v === "string" && v.length > 0);
     if (ids.length === 0) return null;
-    return { ids, name: typeof c.name === "string" && c.name ? c.name : undefined };
+    const declared = [c.template_id, c.canvas_type].find(
+      (v): v is string => typeof v === "string" && v.trim().length > 0,
+    );
+    return {
+      ids,
+      name: typeof c.name === "string" && c.name ? c.name : undefined,
+      templateId: declared?.trim(),
+    };
   }
   return null;
 }
@@ -110,7 +124,14 @@ export function useCanvasSeedFromAnswers(): void {
         // the person, via the link on the card.
         useStageStore
           .getState()
-          .seedPortfolioCanvas(seed.ids, seed.name ?? "Portfolio Planning", false, a.id);
+          .seedPortfolioCanvas(
+            seed.ids,
+            seed.name ?? "Portfolio Planning",
+            false,
+            a.id,
+            false,
+            seed.templateId,
+          );
       }
     });
   }, []);
