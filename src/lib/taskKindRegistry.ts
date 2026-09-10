@@ -21,7 +21,7 @@
  * retire in ONE change: a served `rendersAs` declaration that says how a task
  * RENDERS while a code table still decides what it can DO is the worse half
  * surviving. See invincible-agent
- * `docs/plans/m3-grouped-review-definition-design.md` §"TWO interim per-kind tables".
+ * `docs/reference/m3-grouped-review-definition-design.md` §"TWO interim per-kind tables".
  */
 
 export interface TaskKindDisplay {
