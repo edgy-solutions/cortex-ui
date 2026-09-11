@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { actOnHumanTask } from "@/api/client";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
+import { isRegisteredKind } from "@/lib/taskKindRegistry";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task that is a simple
@@ -11,6 +12,39 @@ import { formatRequestedBy } from "@/lib/requestedBy";
  * every task that is NOT a grouped review (those render GROUPED_REVIEW). It acts
  * through the SAME sealed `/act` bridge as the old inbox card; nothing about the
  * decision path changes — it just lives on the canvas now, not in a modal.
+ *
+ * ── AN UNDECLARED KIND GETS NO VERBS ──────────────────────────────────────────────────────
+ *
+ * This card offered Approve and Reject to EVERY kind that reached it, and an unregistered kind
+ * reaches it by default: `taskKindRegistry`'s fallback archetype is APPROVAL_TASK, so any task
+ * species nobody has declared lands here and is handed two buttons.
+ *
+ * That is not a labelling problem. Pressing one posts a decision through `/act`, and ADR-0034
+ * archives decision records immutably as promotion evidence — so the cost of guessing is a
+ * permanent record of a judgement the data may not even represent. "Approve" on *this notice
+ * could not be prepared for review* is the case that produced the TRIAGE_TASK species, and it
+ * shipped exactly this way.
+ *
+ * DEFAULT-DENY. An affordance is a CLAIM that the system knows what this decision means, and
+ * that claim needs a declaration behind it. A label that says nothing is harmless; an
+ * affordance that says nothing still acts.
+ *
+ * The registry's own comment already asserted this card "renders the card in a NO-VERB
+ * read-only mode" — it did not, and had not since the sentence was written. A recorded
+ * conclusion about behaviour deserves the same suspicion as the behaviour.
+ *
+ * ── BUILT TO RETIRE ───────────────────────────────────────────────────────────────────────
+ *
+ * `isRegisteredKind` is INTERIM by construction: it asks a hardcoded table, and its opposite
+ * number is `_VERBS_BY_KIND` in the backend. Both retire together when the SDK's `TaskKind`
+ * row carries `renders_as`, `accepts` and `reason_required` as one served declaration.
+ *
+ * Nothing here assumes the table is permanent, and nothing here assumes the verb set is
+ * {approve, reject}: the question asked is "is this kind DECLARED", which is the same question
+ * the served row will answer, and the answer's SHAPE is what changes — a list of accepted
+ * verbs rather than a boolean. That is why the deny is keyed on declaration rather than on a
+ * kind string: a check against a list of known kinds would have to be rewritten; this one is
+ * repointed.
  */
 export interface ApprovalTaskPayload {
   task_id: string;
@@ -26,6 +60,10 @@ export interface ApprovalTaskPayload {
 export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const [acting, setActing] = useState(false);
   const [done, setDone] = useState<null | "approved" | "rejected">(null);
+
+  // DECLARED, not recognised-by-name. See the header: this is the seam the served TaskKind row
+  // repoints, and the reason the deny is not a list of kind strings.
+  const declared = isRegisteredKind(task.kind);
 
   const act = async (decision: "approved" | "rejected") => {
     setActing(true);
@@ -86,7 +124,30 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         {task.subject_ref && <p className="break-all">subject · {task.subject_ref}</p>}
       </div>
 
-      {done ? (
+      {!declared ? (
+        /*
+         * NO VERBS, AND THE REASON NAMED. Not a disabled button: a greyed Approve still says
+         * "this is an approval, you merely cannot do it right now", which is a claim about the
+         * species. Nothing here knows what decisions this kind accepts, so it offers none and
+         * says which kind it could not place.
+         *
+         * The task is still READ in full above — title, summary, who asked. Reading is safe;
+         * only deciding needs a declaration.
+         */
+        <div
+          className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2.5"
+          data-undeclared-kind={task.kind}
+        >
+          <p className="text-[11px] font-mono uppercase tracking-widest text-amber-400/90">
+            unknown species here
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+            Nothing has declared what <span className="font-mono text-slate-300">{task.kind}</span>{" "}
+            tasks accept, so no decision is offered. Acting on a guess would archive a record of
+            a judgement this card cannot justify.
+          </p>
+        </div>
+      ) : done ? (
         <div className="text-[11px] font-mono uppercase tracking-widest text-neon-green">
           {done === "approved" ? "Approved" : "Rejected"}
         </div>

@@ -52,9 +52,15 @@ const REGISTRY: Record<string, TaskKindDisplay> = {
 // THE DEFAULT WAS HONEST ABOUT LABELS AND DISHONEST ABOUT AFFORDANCES. "TASK" as a badge says
 // nothing and is harmless; `APPROVAL_TASK` as an archetype says "this is a decision you accept
 // or refuse" and hands the user two buttons to prove it. A label that says nothing is fine; an
-// affordance that says nothing still acts. The badge default stays; the ARCHETYPE default now
+// affordance that says nothing still acts. The badge default stays; the ARCHETYPE default
 // renders the card in a NO-VERB read-only mode (see ApprovalTaskCard) so an unregistered kind
 // degrades visibly instead of borrowing another species' semantics.
+//
+// THAT SENTENCE WAS FALSE WHEN IT WAS WRITTEN and stayed false for as long as it stood.
+// `ApprovalTaskCard` had no no-verb mode; it offered Approve and Reject to every kind that
+// reached it, which by this very default is every UNDECLARED kind. Corrected in place rather
+// than deleted, because a false reason that is deleted is a false reason somebody re-derives.
+// The behaviour now matches the claim, and `approvalTaskCard.test.tsx` is what keeps it true.
 const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task", archetype: "APPROVAL_TASK" };
 
 /** Is this kind explicitly declared, or is it riding the default? Consumers use this to
