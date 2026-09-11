@@ -10,6 +10,7 @@ import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
+import { CompetingMeasures } from "../planning/CompetingMeasures";
 import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
@@ -674,6 +675,31 @@ const renderComponent = (
         />
       );
 
+    case "COMPETING_MEASURES":
+      // N METHODS MEASURING ONE QUANTITY, where the SPREAD is the finding. The plural of
+      // FORECAST_MEASURE — whose own contract says "a list of them is a series, which is a
+      // different archetype" and whose header names this exact three-way disagreement as its
+      // reason to exist. Not MATRIX_GRID, which is the closest fit and would draw every figure
+      // while withholding the finding: a spread spans ROWS and a matrix renders cells.
+      //
+      // Envelope facts are read from the component, never recomputed from the rows — see the
+      // contract's `spreadIsUpstream`.
+      return (
+        <CompetingMeasures
+          methods={comp.methods}
+          spread={comp.spread}
+          spread_percent_of_bac={comp.spread_percent_of_bac}
+          lowest_value={comp.lowest_value}
+          highest_value={comp.highest_value}
+          methods_compared={comp.methods_compared}
+          methods_answered={comp.methods_answered}
+          all_methods_answered={comp.all_methods_answered}
+          reference_value={comp.reference_value}
+          value_unit={comp.value_unit}
+          scope_label={comp.scope_label}
+        />
+      );
+
     case "CONTRIBUTION_RANKING":
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -808,6 +834,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "DELTA_SET" ||
   archetype === "FORECAST_MEASURE" ||
   archetype === "CONTRIBUTION_RANKING" ||
+  archetype === "COMPETING_MEASURES" ||
   archetype === "VARIANCE_TREE" ||
   archetype === "MULTI_SERIES" ||
   archetype === "INTERVAL_TIMELINE" ||

@@ -48,6 +48,12 @@ export type AnswerArchetype =
   | "NAMED_HOLE"
   | "ELICITATION"
   | "MULTI_SERIES"
+  // N methods measuring one quantity, where the SPREAD is the finding — the plural of
+  // FORECAST_MEASURE. Added WITH its dispatch and its glyph in one change, because this union
+  // is the file that learned late last time: the interpreter dispatched the planning family
+  // for weeks while this union had never heard of it, so every one of them drew a question
+  // mark in the answer list. The seal that caught it is what caught this one too.
+  | "COMPETING_MEASURES"
   | "VARIANCE_TREE"
   | "CONTRIBUTION_RANKING"
   | "FORECAST_MEASURE"
@@ -84,6 +90,7 @@ export const DISPLAY_ARCHETYPES = [
   "MULTI_SERIES",
   "VARIANCE_TREE",
   "CONTRIBUTION_RANKING",
+  "COMPETING_MEASURES",
   "FORECAST_MEASURE",
   "DELTA_SET",
   "DECISION_RECORD",
@@ -211,6 +218,12 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Ranking";
     case "FORECAST_MEASURE":
       return "Forecast";
+    case "COMPETING_MEASURES":
+      // NOT "Forecast". It sits beside FORECAST_MEASURE as its plural, and a row in the answer
+      // list has to say at a glance whether the reader is about to see one method's answer or
+      // the disagreement between several. Sharing a label would hide exactly the distinction
+      // the archetype exists to draw.
+      return "Spread";
     case "DELTA_SET":
       return "Delta";
     case "DECISION_RECORD":

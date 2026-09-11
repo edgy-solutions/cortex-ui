@@ -1,4 +1,5 @@
 import {
+  Spline,
   FileText,
   BarChart3,
   Gauge,
@@ -116,6 +117,17 @@ export function glyphFor(t: AnswerArchetype): {
       // A projection forward, not a measurement of now — which is what separates it at a
       // glance from the grids and series around it in the list.
       return { Icon: Target, color: "text-neon-purple/80" };
+    case "COMPETING_MEASURES":
+      // SEVERAL claims about one quantity, and the SPREAD between them is the finding. It sits
+      // beside FORECAST_MEASURE as its plural, so it must not borrow that glyph: a row in the
+      // list has to say at a glance whether the reader is about to see one method's answer or
+      // the disagreement between three.
+      //
+      // NOT `Scale`, which SHORTFALL_GRID already owns — caught by the no-two-share-an-icon
+      // seal, and rightly: a glyph is only an identity if it identifies ONE thing, and two
+      // archetypes sharing one makes the list say "some kind of comparison" where it used to
+      // say which. Three diverging rays: several claims from one origin, drawing apart.
+      return { Icon: Spline, color: "text-neon-purple/80" };
     case "DELTA_SET":
       return { Icon: GitCompare, color: "text-neon-blue/80" };
     case "DECISION_RECORD":
