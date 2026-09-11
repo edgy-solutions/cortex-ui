@@ -16,7 +16,8 @@ import {
  * subtract two of them has published the numbers and withheld the answer.
  */
 export interface CompetingMeasuresProps {
-  methods: unknown;
+  /** The methods, as `rows` — the key every planning archetype and the projector use. */
+  rows: unknown;
   /**
    * THE FIRST CONSUMER'S NAMES FOR THE RANGE, accepted through the same alias rule as the rows.
    * Declared here rather than swallowed, so a reader of this interface can see that the
@@ -43,7 +44,7 @@ const num = (v: unknown): number | null =>
 export function CompetingMeasures(props: CompetingMeasuresProps) {
   const envelope = props as unknown as Record<string, unknown>;
   const {
-  methods,
+  rows: methodRows,
   spread,
   spread_percent_of_bac,
   methods_compared,
@@ -52,7 +53,7 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
   value_unit,
   scope_label,
   } = props;
-  const result = validateCompetingMeasures(methods);
+  const result = validateCompetingMeasures(methodRows);
   if (result.kind === "empty") {
     return (
       <div className="rounded-md border border-slate-700/50 bg-slate-800/30 p-4" data-refused>

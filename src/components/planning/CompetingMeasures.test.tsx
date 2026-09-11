@@ -29,7 +29,12 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { CompetingMeasures } from "./CompetingMeasures";
-import { validateCompetingMeasures } from "./CompetingMeasures.contract";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  validateCompetingMeasures,
+  COMPETING_MEASURES_CONTRACT,
+} from "./CompetingMeasures.contract";
 
 afterEach(cleanup);
 
@@ -76,7 +81,7 @@ describe("the spread is shown, and never computed here", () => {
   it("states the spread and what fraction of the reference it is", () => {
     // 1,662,607 is 13.9% of a 12M budget. A reader who has to work that out has been handed
     // the data and not the finding.
-    render(<CompetingMeasures methods={SEED()} {...ENVELOPE} />);
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
     const line = document.querySelector("[data-spread]")!;
     expect(line).not.toBeNull();
     expect(line.textContent).toMatch(/13\.9% of reference/);
@@ -87,7 +92,7 @@ describe("the spread is shown, and never computed here", () => {
     // show 1,662,607 here; the producer said 999, so 999 is what must appear. Two places
     // subtracting is two places to disagree, and on float money the second place disagrees in
     // the digits the reader is being asked to trust.
-    render(<CompetingMeasures methods={SEED()} {...ENVELOPE} spread={999} />);
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} spread={999} />);
     expect(document.querySelector("[data-spread]")!.textContent).toContain("999");
   });
 
@@ -95,7 +100,7 @@ describe("the spread is shown, and never computed here", () => {
     // The methods below genuinely disagree, so a card showing the figures with no spread line
     // reads as agreement. Same rule as the ranking that says "no direction stated".
     const { spread: _s, spread_percent_of_bac: _p, ...rest } = ENVELOPE;
-    render(<CompetingMeasures methods={SEED()} {...rest} />);
+    render(<CompetingMeasures rows={SEED()} {...rest} />);
     expect(document.querySelector("[data-spread]")).toBeNull();
     expect(document.querySelector("[data-spread-unreported]")).not.toBeNull();
   });
@@ -108,7 +113,7 @@ describe("the spread is shown, and never computed here", () => {
       { method: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
       { method: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
     ];
-    render(<CompetingMeasures methods={rows} methods_compared={3} methods_answered={1} />);
+    render(<CompetingMeasures rows={rows} methods_compared={3} methods_answered={1} />);
     expect(document.querySelector("[data-spread-unreported]")).toBeNull();
   });
 });
@@ -129,7 +134,7 @@ describe("an undefined method keeps its row", () => {
     // The specific failure this verb exists to prevent. A quietly shorter panel cannot be
     // detected by the reader: they never saw the row that is missing.
     render(
-      <CompetingMeasures methods={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
+      <CompetingMeasures rows={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
     );
     expect(document.querySelectorAll("li")).toHaveLength(3);
     expect(document.querySelector('[data-method="CPI_SPI"]')).not.toBeNull();
@@ -137,7 +142,7 @@ describe("an undefined method keeps its row", () => {
 
   it("shows the REASON where the figure would have been", () => {
     render(
-      <CompetingMeasures methods={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
+      <CompetingMeasures rows={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
     );
     const blankRow = document.querySelector('[data-method="CPI_SPI"]')!;
     expect(blankRow.querySelector("[data-unavailable]")!.textContent).toContain("undefined");
@@ -145,14 +150,14 @@ describe("an undefined method keeps its row", () => {
 
   it("says the comparison is INCOMPLETE, so it cannot imply completeness", () => {
     render(
-      <CompetingMeasures methods={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
+      <CompetingMeasures rows={withBlank()} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
     );
     expect(document.querySelector("[data-incomplete]")!.textContent).toMatch(/2 of 3/);
   });
 
   it("says NOTHING when every method answered — the control", () => {
     // Without this, a card that always warned would pass the assertion above.
-    render(<CompetingMeasures methods={SEED()} {...ENVELOPE} />);
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
     expect(document.querySelector("[data-incomplete]")).toBeNull();
   });
 
@@ -160,7 +165,7 @@ describe("an undefined method keeps its row", () => {
     // A bar of zero beside real ones reads as "this method says nothing is left", which is a
     // measurement this method explicitly did not make.
     const { container } = render(
-      <CompetingMeasures methods={withBlank()} {...ENVELOPE} methods_answered={2} />,
+      <CompetingMeasures rows={withBlank()} {...ENVELOPE} methods_answered={2} />,
     );
     expect(container.querySelectorAll("span[style]")).toHaveLength(2);
   });
@@ -170,7 +175,7 @@ describe("the formula rides with the figure", () => {
   it("every row shows its formula", () => {
     // Three figures with no formulas are three unattributed numbers, and the formula is what
     // lets a reader see WHY two methods diverge rather than only that they do.
-    render(<CompetingMeasures methods={SEED()} {...ENVELOPE} />);
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
     expect(screen.getByText("EAC = BAC / CPI")).toBeTruthy();
     expect(screen.getByText(/CPI x SPI/)).toBeTruthy();
     expect(screen.getByText("EAC = ACWP + (BAC - BCWP)")).toBeTruthy();
@@ -178,7 +183,7 @@ describe("the formula rides with the figure", () => {
 
   it("REFUSES a row with no formula", () => {
     const rows = SEED().map((r, i) => (i === 1 ? { ...r, formula: "" } : r));
-    render(<CompetingMeasures methods={rows} {...ENVELOPE} />);
+    render(<CompetingMeasures rows={rows} {...ENVELOPE} />);
     expect(document.querySelector("[data-refused]")!.textContent).toMatch(/no formula/);
   });
 });
@@ -261,7 +266,7 @@ describe("the first consumer's field names are read, and named", () => {
   };
 
   it("DRAWS the producer's real payload — the integration this could have failed silently", () => {
-    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    render(<CompetingMeasures rows={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
     expect(document.querySelector("[data-refused]")).toBeNull();
     expect(document.querySelectorAll("li")).toHaveLength(3);
     expect(document.querySelector("[data-spread]")!.textContent).toMatch(/13\.9%/);
@@ -270,7 +275,7 @@ describe("the first consumer's field names are read, and named", () => {
   it("renders the figures, not three blanks", () => {
     // The specific way it would have failed: every `eac` unread, so every row carries neither
     // a figure nor a reason, and the card refuses a payload that was entirely correct.
-    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    render(<CompetingMeasures rows={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
     expect(document.querySelector('[data-method="CPI"]')!.textContent).toMatch(/14/);
     expect(document.querySelectorAll("[data-unavailable]")).toHaveLength(0);
   });
@@ -283,7 +288,7 @@ describe("the first consumer's field names are read, and named", () => {
     // ALSO the lowest method's own figure two rows down — so the assertion passed whether or not
     // the range was read, and a mutation blanking it survived. Third time tonight the page has
     // contained the evidence for a claim the element never made.
-    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    render(<CompetingMeasures rows={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
     const range = document.querySelector("[data-range]")!;
     expect(range.textContent).toMatch(/13(,130,000|\.1M)/);
     expect(range.textContent).toMatch(/14(,792,608|\.8M)/);
@@ -292,7 +297,7 @@ describe("the first consumer's field names are read, and named", () => {
   it("turns `vac` and `etc` into secondary figures, not columns", () => {
     // Promoting them to columns would make this a matrix — the archetype the header explains
     // this one is not.
-    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    render(<CompetingMeasures rows={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
     expect(document.querySelector('[data-method="CPI"]')!.textContent).toContain("VAC");
     expect(document.querySelector('[data-method="CPI"]')!.textContent).toContain("ETC");
   });
@@ -303,7 +308,7 @@ describe("the first consumer's field names are read, and named", () => {
     // "$1EAC = BAC / CPI" — so a word-boundary assertion could not match a correct render. The
     // instrument and the subject sharing a surface, in miniature.
     const rows = PRODUCER_ROWS().map((r) => ({ ...r, value: 1 }));
-    render(<CompetingMeasures methods={rows} {...PRODUCER_ENVELOPE} />);
+    render(<CompetingMeasures rows={rows} {...PRODUCER_ENVELOPE} />);
     const amount = document.querySelector('[data-method="CPI"] .tabular-nums')!;
     expect(amount.textContent!.trim()).toMatch(/^\$1(\.00?)?$/);
   });
@@ -346,5 +351,47 @@ describe("the first consumer's field names are read, and named", () => {
       spy.mockRestore();
     }
     expect(seen).toEqual([]);
+  });
+});
+
+/**
+ * THE ROWS KEY — the second hop of the same seam, still live after the first was fixed.
+ *
+ * The `eac`/`value` mismatch was the FIELD inside a row. This is the key the rows arrive UNDER,
+ * and it was wrong in the same way for the same reason: this contract invented `methods` while
+ * every other planning archetype in the repo carries `rows`, and the projector's passthrough
+ * registers `("rows", ...)`.
+ *
+ * So the payload would have arrived with `rows`, the component would have read `methods`, found
+ * nothing, and refused "no methods recorded" for three perfectly good figures — the identical
+ * failure to the one fixed an hour earlier, one hop further out, and invisible to every test
+ * that had just been written to catch it.
+ *
+ * ALIGNED, NOT ALIASED. A component prop that differs from the payload key IS the seam, and
+ * tolerating a name no producer sends would only hide the next one.
+ */
+describe("the payload arrives under the key the projector registers", () => {
+  it("the contract declares `rows`, like every sibling archetype", () => {
+    // Asserted on the contract rather than the component, because `expected_fields` is derived
+    // from these keys and is what cortex publishes to the server as its acceptance rules.
+    expect(Object.keys(COMPETING_MEASURES_CONTRACT.fields)).toContain("rows");
+    expect(Object.keys(COMPETING_MEASURES_CONTRACT.fields)).not.toContain("methods");
+  });
+
+  it("the interpreter reads `comp.rows` for this archetype", () => {
+    // The hop a component test cannot see: which key the dispatch pulls out of the payload.
+    // Every node verified and the connection unasserted is how the first one survived.
+    const src = readFileSync(path.join(__dirname, "../registry/SemanticInterpreter.tsx"), "utf8");
+    const dispatch = src.slice(src.indexOf('case "COMPETING_MEASURES":'));
+    const block = dispatch.slice(0, dispatch.indexOf("case \"CONTRIBUTION_RANKING\""));
+    expect(block).toContain("rows={comp.rows}");
+    // WORD-BOUNDED, because `comp.methods_compared` and `comp.methods_answered` are legitimate
+    // envelope reads two lines below and both CONTAIN the substring `comp.methods`. The plain
+    // containment assertion failed against a correct dispatch — the fourth time tonight a check
+    // has matched a neighbour instead of its subject, and the first time inside a test written
+    // to catch exactly that. A substring is not a name.
+    expect(block).not.toMatch(/comp\.methods\b/);
+    // Positive control: the bounded pattern really does match the thing it forbids.
+    expect("methods={comp.methods}").toMatch(/comp\.methods\b/);
   });
 });

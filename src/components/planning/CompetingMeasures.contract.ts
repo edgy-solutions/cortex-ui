@@ -139,7 +139,21 @@ export const COMPETING_MEASURES_CONTRACT = {
    */
   recomputes: false,
   fields: {
-    methods: { encoding: "array", parsesTo: "array-of-objects", required: true },
+    /**
+     * `rows`, NOT `methods`, and the rename is a defect repair rather than a preference.
+     *
+     * Every other planning archetype in this repo carries its list as `rows`, and the
+     * projector's passthrough for this verb registers `("rows", ...)`. This contract had
+     * invented `methods` — so the payload would have arrived with `rows`, the component would
+     * have read `methods`, found nothing, and refused with "no methods recorded" for a payload
+     * carrying three good figures.
+     *
+     * That is the SECOND hop of the same two-hop seam that produced the `eac`/`value` defect
+     * an hour ago, found the same way and still live after the first was fixed. Aligned rather
+     * than aliased: a component prop that differs from the payload key is the seam itself, and
+     * tolerating a name no producer sends would only hide the next one.
+     */
+    rows: { encoding: "array", parsesTo: "array-of-objects", required: true },
     /** The spread between the highest and lowest answering method. RENDERED, never derived. */
     spread: { type: "number", required: false },
     /** The spread as a fraction of the reference quantity — the finding, without arithmetic. */

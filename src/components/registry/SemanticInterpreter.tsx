@@ -686,7 +686,7 @@ const renderComponent = (
       // contract's `spreadIsUpstream`.
       return (
         <CompetingMeasures
-          methods={comp.methods}
+          rows={comp.rows}
           spread={comp.spread}
           spread_percent_of_bac={comp.spread_percent_of_bac}
           lowest_value={comp.lowest_value}

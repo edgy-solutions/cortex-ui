@@ -174,7 +174,7 @@ describe("the EAC comparison is bound", () => {
 
   it("its expected_fields are the contract's, not a restatement", () => {
     expect(row!.expected_fields).toEqual(Object.keys(COMPETING_MEASURES_CONTRACT.fields));
-    expect(row!.expected_fields).toContain("methods");
+    expect(row!.expected_fields).toContain("rows");
     expect(row!.expected_fields).toContain("spread");
   });
 });
