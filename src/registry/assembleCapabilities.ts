@@ -42,6 +42,7 @@ import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
+import { COMPETING_MEASURES_CONTRACT } from "../components/planning/CompetingMeasures.contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
@@ -327,6 +328,17 @@ const DERIVED_BINDINGS = [
     persona_fit: ["PROGRAM_FINANCE_ANALYST"],
     domain_fit: ["PROGRAM_FINANCE"],
     contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  {
+    // THE PLURAL OF THE ROW BELOW. `fin:EstimateAtCompletion` draws ONE method and refuses to
+    // choose among three silently; this draws the disagreement itself, which R-001 rules is the
+    // finding. The two subjects are deliberately adjacent here so nobody adds a third that
+    // means either.
+    subject_uri: "fin:EstimateAtCompletionComparison",
+    object_uri: "mesh:CompetingMeasures",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: COMPETING_MEASURES_CONTRACT,
   },
   {
     subject_uri: "fin:EstimateAtCompletion",

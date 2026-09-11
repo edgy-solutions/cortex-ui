@@ -26,7 +26,7 @@
  * compute it — by giving it a spread that disagrees with the figures and requiring the
  * producer's to be shown.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { CompetingMeasures } from "./CompetingMeasures";
 import { validateCompetingMeasures } from "./CompetingMeasures.contract";
@@ -221,5 +221,130 @@ describe("it refuses rather than drawing a comparison of nothing", () => {
   it("a blank reason is not a reason", () => {
     const rows = [SEED()[0], { method: "X", formula: "f", value: null, unavailable_reason: "   " }];
     expect(reasonOf(rows)).toBe("method carries neither a figure nor a reason");
+  });
+});
+
+/**
+ * THE PRODUCER'S ACTUAL PAYLOAD, which is not the shape this contract named.
+ *
+ * The archetype is structural — three inflation indices and three sizing techniques want this
+ * card, and none of them have an "eac". The first consumer is finance and sends `eac`, `vac`,
+ * `etc`, `lowest_eac`, `highest_eac`.
+ *
+ * BUILT AGAINST THE STRUCTURAL NAMES AND BOUND AGAINST THE DOMAIN ONES is exactly how a card
+ * lands, draws, and shows nothing: the binding succeeds, the rows arrive, every figure reads as
+ * absent, and the card refuses with "neither a figure nor a reason" for a payload that carried
+ * three perfectly good figures. That is the failure this file exists to catch, and it would
+ * have looked like the producer's fault.
+ *
+ * Both names are read, structural preferred, and the alias ANNOUNCES itself — the `canvas_type`
+ * ruling applied again: a quietly-honoured alias is indistinguishable from the name a producer
+ * should be sending.
+ */
+describe("the first consumer's field names are read, and named", () => {
+  /** Exactly what `fin_eac_comparison` emits after the envelope move (854e76d). */
+  const PRODUCER_ROWS = () => [
+    { method: "CPI", formula: "EAC = BAC / CPI", eac: 14152380.95, vac: -2152380.95, etc: 6722380.95, unavailable_reason: null },
+    { method: "CPI_SPI", formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)", eac: 14792607.71, vac: -2792607.71, etc: 7362607.71, unavailable_reason: null },
+    { method: "REMAINING_AT_BUDGET", formula: "EAC = ACWP + (BAC - BCWP)", eac: 13130000.0, vac: -1130000.0, etc: 5700000.0, unavailable_reason: null },
+  ];
+  const PRODUCER_ENVELOPE = {
+    spread: 1662607.71,
+    spread_percent_of_bac: 0.1386,
+    lowest_eac: 13130000.0,
+    highest_eac: 14792607.71,
+    methods_compared: 3,
+    methods_answered: 3,
+    all_methods_answered: true,
+    value_unit: "USD",
+    scope_label: "Notional Program Meridian",
+  };
+
+  it("DRAWS the producer's real payload — the integration this could have failed silently", () => {
+    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    expect(document.querySelector("[data-refused]")).toBeNull();
+    expect(document.querySelectorAll("li")).toHaveLength(3);
+    expect(document.querySelector("[data-spread]")!.textContent).toMatch(/13\.9%/);
+  });
+
+  it("renders the figures, not three blanks", () => {
+    // The specific way it would have failed: every `eac` unread, so every row carries neither
+    // a figure nor a reason, and the card refuses a payload that was entirely correct.
+    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    expect(document.querySelector('[data-method="CPI"]')!.textContent).toMatch(/14/);
+    expect(document.querySelectorAll("[data-unavailable]")).toHaveLength(0);
+  });
+
+  it("reads the RANGE from the producer's names too", () => {
+    // The half that fails quietly rather than loudly: a missing range blanks one line and the
+    // card still looks fine, so nothing reports it.
+    //
+    // SCOPED TO THE RANGE ELEMENT. The first version matched `document.body`, and 13,130,000 is
+    // ALSO the lowest method's own figure two rows down — so the assertion passed whether or not
+    // the range was read, and a mutation blanking it survived. Third time tonight the page has
+    // contained the evidence for a claim the element never made.
+    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    const range = document.querySelector("[data-range]")!;
+    expect(range.textContent).toMatch(/13(,130,000|\.1M)/);
+    expect(range.textContent).toMatch(/14(,792,608|\.8M)/);
+  });
+
+  it("turns `vac` and `etc` into secondary figures, not columns", () => {
+    // Promoting them to columns would make this a matrix — the archetype the header explains
+    // this one is not.
+    render(<CompetingMeasures methods={PRODUCER_ROWS()} {...PRODUCER_ENVELOPE} />);
+    expect(document.querySelector('[data-method="CPI"]')!.textContent).toContain("VAC");
+    expect(document.querySelector('[data-method="CPI"]')!.textContent).toContain("ETC");
+  });
+
+  it("PREFERS the structural name when both are present", () => {
+    // Asserted on the rendered AMOUNT element, not the row's whole text. The first version
+    // matched against the row — where the figure is immediately followed by the formula,
+    // "$1EAC = BAC / CPI" — so a word-boundary assertion could not match a correct render. The
+    // instrument and the subject sharing a surface, in miniature.
+    const rows = PRODUCER_ROWS().map((r) => ({ ...r, value: 1 }));
+    render(<CompetingMeasures methods={rows} {...PRODUCER_ENVELOPE} />);
+    const amount = document.querySelector('[data-method="CPI"] .tabular-nums')!;
+    expect(amount.textContent!.trim()).toMatch(/^\$1(\.00?)?$/);
+  });
+
+  it("SAYS it read a domain alias — tolerated is not standard", async () => {
+    // A FRESH MODULE, because the once-per-name guard is module state and the renders above
+    // have already tripped every name. Written first against the shared module, where it failed
+    // for a reason with nothing to do with the behaviour — a test whose subject is "this
+    // happens exactly once" has to control the thing that remembers.
+    vi.resetModules();
+    const fresh = await import("./CompetingMeasures.contract");
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      fresh.readField({ highest_eac: 5 }, "highest_value");
+      // And only once, however many times it is asked.
+      fresh.readField({ highest_eac: 5 }, "highest_value");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain("highest_eac");
+    expect(seen[0]).toContain("highest_value");
+  });
+
+  it("says NOTHING when the structural name is used, and returns IT", async () => {
+    vi.resetModules();
+    const fresh = await import("./CompetingMeasures.contract");
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      // Both present: the structural name wins AND nothing is reported, because no alias was
+      // read. Asserting the return value too, so this cannot pass by reading neither.
+      expect(fresh.readField({ lowest_value: 5, lowest_eac: 9 }, "lowest_value")).toBe(5);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toEqual([]);
   });
 });

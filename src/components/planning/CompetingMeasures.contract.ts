@@ -165,6 +165,71 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * THE ONE PLACE THE FIRST CONSUMER'S VOCABULARY APPEARS.
+ *
+ * The archetype is structural — three inflation indices and three sizing techniques want this
+ * card, and none of them have an "eac". The producer's first consumer is finance and sends
+ * `eac`, `vac`, `etc`, `lowest_eac`, `highest_eac`.
+ *
+ * BOTH ARE READ, structural preferred, and the domain name is NOT silently accepted — the same
+ * ruling as `canvas_type`: a quietly-honoured alias is indistinguishable from a name that is
+ * the standard, so the producer never learns which one to send and the day it is dropped the
+ * card stops drawing for no visible reason.
+ *
+ * This is NOT the translation layer FORECAST_MEASURE refuses. That contract reads `bac`,
+ * `cpi`, `spi` verbatim because they are IPMDAR terms — a published standard an analyst
+ * types and a program system exports. `lowest_eac` is a derived summary name, not a standard,
+ * and a second consumer would need `lowest_spi` for the identical structural fact.
+ */
+const DOMAIN_ALIASES: Record<string, string> = {
+  value: "eac",
+  lowest_value: "lowest_eac",
+  highest_value: "highest_eac",
+};
+
+const notedAliases = new Set<string>();
+
+/** Read a structural field, falling back to the first consumer's name, and say when it did. */
+export function readField(src: Record<string, unknown>, structural: string): unknown {
+  if (src[structural] !== undefined) return src[structural];
+  const alias = DOMAIN_ALIASES[structural];
+  if (!alias || src[alias] === undefined) return undefined;
+  if (!notedAliases.has(structural)) {
+    notedAliases.add(structural);
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[COMPETING_MEASURES] read `" +
+        alias +
+        "` for `" +
+        structural +
+        "` — the archetype is structural and three inflation indices want this card too. The " +
+        "domain name is honoured and is NOT the standard; a silently-accepted alias is " +
+        "indistinguishable from the name a producer should be sending.",
+    );
+  }
+  return src[alias];
+}
+
+/**
+ * Normalise a producer row into the structural shape.
+ *
+ * `vac` and `etc` become `secondary` entries because they are further producer-computed
+ * figures for the same method — rendered, never derived, exactly like the primary. They are
+ * NOT promoted to their own columns: that would make this a matrix, which is the archetype the
+ * header explains this one is not.
+ */
+export function normaliseMeasureRow(raw: Record<string, unknown>): Record<string, unknown> {
+  const value = readField(raw, "value");
+  const secondary = Array.isArray(raw.secondary)
+    ? raw.secondary
+    : [
+        ...(raw.vac !== undefined ? [{ label: "VAC", value: raw.vac }] : []),
+        ...(raw.etc !== undefined ? [{ label: "ETC", value: raw.etc }] : []),
+      ];
+  return { ...raw, value, secondary: secondary.length > 0 ? secondary : undefined };
+}
+
+/**
  * Accept or refuse the rows, by the requirements above.
  *
  * A row is refused per-row rather than the card degrading, because every one of these absences
@@ -180,7 +245,7 @@ export function validateCompetingMeasures(
   if (!Array.isArray(rows) || rows.length === 0) {
     return { kind: "empty", reason: "no methods recorded" };
   }
-  const objs = rows.filter(isRecord);
+  const objs = rows.filter(isRecord).map(normaliseMeasureRow);
   if (objs.length !== rows.length) {
     return { kind: "empty", reason: "method is missing its name" };
   }

@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import { assembleCapabilities, assembleDerivedCapabilities } from "./assembleCapabilities";
 import { CORTEX_UI_CAPABILITIES } from "./frontendCapabilities";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
+import { COMPETING_MEASURES_CONTRACT } from "../components/planning/CompetingMeasures.contract";
 
 const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
 const row = sent.find((c) => c.archetype === "ELICITATION");
@@ -128,5 +129,52 @@ describe("the cost subjects are declared", () => {
     const category = sent.find((c) => c.subject_uri.endsWith("CategoryBreakdown"))!;
     expect(supplier.archetype).toBe(category.archetype);
     expect(supplier.subject_uri).not.toBe(category.subject_uri);
+  });
+});
+
+/**
+ * COMPETING_MEASURES — the binding, asserted because nothing else could see it.
+ *
+ * The archetype, its contract, its component and its dispatch were all sealed and all green
+ * while the REGISTRY ROW was a mutation away from naming the wrong subject. Two mutations —
+ * delete the binding, and point it at `fin:EstimateAtCompletion` instead of its Comparison —
+ * both survived the component suite, because a component test cannot see which subject the
+ * server will be told this card draws.
+ *
+ * That is the edge again: every node verified, the connection unasserted. And the second
+ * mutation is the worse one — pointing at the SINGULAR subject would bind the comparison card
+ * to the one-forecast verb, so a single EAC would render as a comparison of one. It would look
+ * like a working binding.
+ */
+describe("the EAC comparison is bound", () => {
+  const row = sent.find((c) => c.archetype === "COMPETING_MEASURES");
+
+  it("is present, exactly once", () => {
+    expect(row, "no COMPETING_MEASURES row in the registration payload").toBeTruthy();
+    expect(sent.filter((c) => c.archetype === "COMPETING_MEASURES")).toHaveLength(1);
+  });
+
+  it("names the COMPARISON subject, not the singular one", () => {
+    // `fin:EstimateAtCompletion` is FORECAST_MEASURE's — one method, chosen deliberately by a
+    // mandatory slot. Binding this card there would draw a comparison of one and look fine.
+    expect(row!.subject_uri).toBe("fin:EstimateAtCompletionComparison");
+    expect(row!.subject_uri).not.toBe("fin:EstimateAtCompletion");
+  });
+
+  it("does not steal the singular subject from FORECAST_MEASURE", () => {
+    // The other direction of the same mistake: both rows must survive, each with its own card.
+    const singular = sent.find((c) => c.subject_uri === "fin:EstimateAtCompletion");
+    expect(singular, "fin:EstimateAtCompletion lost its binding").toBeTruthy();
+    expect(singular!.archetype).toBe("FORECAST_MEASURE");
+  });
+
+  it("dispatches to the component the interpreter actually renders", () => {
+    expect(row!.component).toBe("CompetingMeasures");
+  });
+
+  it("its expected_fields are the contract's, not a restatement", () => {
+    expect(row!.expected_fields).toEqual(Object.keys(COMPETING_MEASURES_CONTRACT.fields));
+    expect(row!.expected_fields).toContain("methods");
+    expect(row!.expected_fields).toContain("spread");
   });
 });

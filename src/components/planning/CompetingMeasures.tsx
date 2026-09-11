@@ -1,6 +1,7 @@
 import { formatAmount } from "@/lib/formatAmount";
 import {
   validateCompetingMeasures,
+  readField,
   type CompetingMeasureRow,
 } from "./CompetingMeasures.contract";
 
@@ -16,6 +17,13 @@ import {
  */
 export interface CompetingMeasuresProps {
   methods: unknown;
+  /**
+   * THE FIRST CONSUMER'S NAMES FOR THE RANGE, accepted through the same alias rule as the rows.
+   * Declared here rather than swallowed, so a reader of this interface can see that the
+   * producer sends `lowest_eac` while the archetype's name is `lowest_value`.
+   */
+  lowest_eac?: number | null;
+  highest_eac?: number | null;
   /** Producer-computed. Never derived here — see the contract's `spreadIsUpstream`. */
   spread?: number | null;
   spread_percent_of_bac?: number | null;
@@ -32,18 +40,18 @@ export interface CompetingMeasuresProps {
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 
-export function CompetingMeasures({
+export function CompetingMeasures(props: CompetingMeasuresProps) {
+  const envelope = props as unknown as Record<string, unknown>;
+  const {
   methods,
   spread,
   spread_percent_of_bac,
-  lowest_value,
-  highest_value,
   methods_compared,
   methods_answered,
   all_methods_answered,
   value_unit,
   scope_label,
-}: CompetingMeasuresProps) {
+  } = props;
   const result = validateCompetingMeasures(methods);
   if (result.kind === "empty") {
     return (
@@ -57,8 +65,11 @@ export function CompetingMeasures({
 
   const rows = result.rows;
   const answered = rows.filter((r) => num(r.value) !== null);
-  const lo = num(lowest_value);
-  const hi = num(highest_value);
+  // Through the alias rule, so a bound card shows its range whichever name the producer uses.
+  // Without this the binding would land, the card would draw, and the high–low line would be
+  // silently blank — which reads as a card with nothing to say rather than a name mismatch.
+  const lo = num(readField(envelope, "lowest_value"));
+  const hi = num(readField(envelope, "highest_value"));
   const spreadValue = num(spread);
   const spreadPct = num(spread_percent_of_bac);
 
@@ -103,7 +114,10 @@ export function CompetingMeasures({
             </p>
           ) : null}
         </div>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
+        <span
+          className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
+          data-range
+        >
           {lo !== null && hi !== null
             ? `${formatAmount(lo, value_unit)} – ${formatAmount(hi, value_unit)}`
             : value_unit ?? ""}
