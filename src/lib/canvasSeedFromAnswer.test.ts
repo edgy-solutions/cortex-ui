@@ -12,7 +12,7 @@
  * The guard for 1 and 2 is the same one: artifacts present at mount are recorded as SEEN
  * without acting. A historical seed answer is history; a new one is an event.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { canvasSeedFromArtifact, useCanvasSeedFromAnswers } from "./canvasSeedFromAnswer";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -476,15 +476,95 @@ describe("a seed names its template, and the board records it", () => {
     ).toBe("program_finance");
   });
 
-  it("reads `canvas_type` too — the contract's older name", () => {
-    // Which one the producer sends is not settled and today it sends NEITHER. A reader that
-    // accepted only one would lay a board out with the wrong template the first time the other
-    // arrived, which is the silent case above.
+  it("HONOURS `canvas_type` — read-only legacy, not ignored", () => {
+    // Ruled: `template_id` is the field. `canvas_type` is tolerated so a producer still
+    // sending it is not silently mis-laid out — dropping it would change arrangements with no
+    // visible cause, which is the failure this whole area keeps producing.
     expect(
       canvasSeedFromArtifact({
         rendered_output: seedRO(["a"], { canvas_type: "program_finance" }),
       } as never)?.templateId,
     ).toBe("program_finance");
+  });
+
+  it("SAYS SO when the legacy field is used — tolerated is not ignored", () => {
+    // A quietly-accepted field is indistinguishable from one that still works: the producer
+    // keeps sending it, nobody learns it is deprecated, and the day it is finally dropped every
+    // board it named changes arrangement for no reason anyone can see.
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], { canvas_type: "a_legacy_value_seen_once" }),
+      } as never);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain("canvas_type");
+    // It must name the REPLACEMENT, or the notice reports a problem with no repair.
+    expect(seen[0]).toContain("template_id");
+    expect(seen[0]).toContain("a_legacy_value_seen_once");
+  });
+
+  it("says nothing about legacy when BOTH are present and the ratified one wins", () => {
+    // The discriminating fixture, and the first version of this file did not have it. "Says
+    // nothing when template_id is used" passed a payload with NO canvas_type at all, so a
+    // mutant that warned whenever canvas_type merely EXISTED was unreachable and survived.
+    //
+    // The notice says the legacy field "was honoured". When `template_id` wins, it was not —
+    // so firing here would report an honouring that did not happen, which is a worse lie than
+    // silence.
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      const r = canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], {
+          template_id: "portfolio",
+          canvas_type: "a_losing_legacy_value",
+        }),
+      } as never);
+      expect(r?.templateId).toBe("portfolio");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it("says NOTHING when the ratified field is used", () => {
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      canvasSeedFromArtifact({
+        rendered_output: seedRO(["a"], { template_id: "program_finance" }),
+      } as never);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it("warns ONCE per value — Electric re-delivers the same row", () => {
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      seen.push(a.join(" "));
+    });
+    try {
+      for (let i = 0; i < 4; i++) {
+        canvasSeedFromArtifact({
+          rendered_output: seedRO(["a"], { canvas_type: "a_repeated_legacy_value" }),
+        } as never);
+      }
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toHaveLength(1);
   });
 
   it("prefers `template_id` when both are present — the ratified name wins", () => {

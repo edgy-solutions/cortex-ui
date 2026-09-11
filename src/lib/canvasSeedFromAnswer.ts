@@ -43,6 +43,26 @@ import type { Artifact } from "@/api/types";
  * that arrive afterwards can seed. A historical seed answer is history; a new one is an event.
  */
 
+/**
+ * Values already reported, so the legacy notice fires ONCE per template rather than once per
+ * delivery. Electric re-delivers rows and the watcher re-reads them; a line per read is noise,
+ * and noise is what gets a channel muted along with the half of it worth reading.
+ */
+const notedLegacyTypes = new Set<string>();
+
+function noteLegacyCanvasType(value: string): void {
+  if (notedLegacyTypes.has(value)) return;
+  notedLegacyTypes.add(value);
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[ADR-0050 §7] seed used the legacy field `canvas_type: " +
+      JSON.stringify(value) +
+      "` — `template_id` is the field. It was honoured, and it is READ-ONLY LEGACY: a " +
+      "silently-accepted field is indistinguishable from one that still works, and the day it " +
+      "stops being read every board it named changes arrangement for no visible reason.",
+  );
+}
+
 /** The slot-ordered ids a seed answer carries, or null if this artifact is not one. */
 export function canvasSeedFromArtifact(
   a: Artifact,
@@ -60,13 +80,26 @@ export function canvasSeedFromArtifact(
     // slot-shaped hole with nothing explaining it, which is worse than a shorter board.
     const ids = raw.filter((v): v is string => typeof v === "string" && v.length > 0);
     if (ids.length === 0) return null;
-    const declared = [c.template_id, c.canvas_type].find(
-      (v): v is string => typeof v === "string" && v.trim().length > 0,
-    );
+    /**
+     * `template_id` IS THE FIELD. `canvas_type` is READ-ONLY LEGACY, and it announces itself.
+     *
+     * Both names were accepted as equals while the producer sent neither and nobody had ruled.
+     * The ruling is in: ADR-0050's `template_id` is the field, and `canvas_type` is tolerated
+     * so a producer still sending it is not silently mis-laid out.
+     *
+     * TOLERATED IS NOT IGNORED. A field that is quietly accepted is indistinguishable from a
+     * field that still works — the producer keeps sending it, nobody learns it is deprecated,
+     * and the day it is finally dropped the boards change arrangement for no visible reason.
+     * So the legacy path says so, once per value, naming both the field and its replacement.
+     */
+    const fromRatified = typeof c.template_id === "string" ? c.template_id.trim() : "";
+    const fromLegacy = typeof c.canvas_type === "string" ? c.canvas_type.trim() : "";
+    if (!fromRatified && fromLegacy) noteLegacyCanvasType(fromLegacy);
+    const declared = fromRatified || fromLegacy || undefined;
     return {
       ids,
       name: typeof c.name === "string" && c.name ? c.name : undefined,
-      templateId: declared?.trim(),
+      templateId: declared,
     };
   }
   return null;
