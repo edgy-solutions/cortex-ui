@@ -243,3 +243,144 @@ describe("an unjudged ranking says so", () => {
     expect(src).toMatch(/\.\s*favourable\b/);
   });
 });
+
+/**
+ * THE COST CARD WALK — two findings measured on the rolled fleet, both render-side.
+ *
+ * The engine payload was correct in both cases. That is what makes them the dangerous kind: the
+ * card drew, the numbers matched the walk sheet to the decimal, and the defects were in what it
+ * did NOT draw and what it asserted on the data's behalf.
+ *
+ * `expected_fields` cannot catch either. Every archetype but CHART_WIDGET returns NOT_EVALUATED,
+ * so a card with a missing column satisfies its declaration and scores as a pass.
+ */
+describe("the payload's own columns are not dropped", () => {
+  /** Q6's labour rows, field for field — a breakdown that carries hours and a rate. */
+  const labour = () => [
+    { entity_id: "L1", entity_name: "Direct labour", contribution: 4938800.0, share_of_total: 0.6236, hours: "61735", rate: "80" },
+    { entity_id: "L2", entity_name: "Overhead", contribution: 1888300.0, share_of_total: 0.2385, hours: "23604", rate: "80" },
+    { entity_id: "L3", entity_name: "Fringe", contribution: 1092000.0, share_of_total: 0.1379, hours: "13650", rate: "80" },
+  ];
+
+  it("SHOWS hours and rate, which the card was dropping", () => {
+    // The walk sheet predicted this and said why it is invisible: if the card shows only money,
+    // the extra columns are being dropped and nothing reports it.
+    render(<ContributionRanking rows={labour()} value_unit="USD" />);
+    const first = screen.getAllByRole("button")[0];
+    expect(first.querySelector("[data-extra-columns]")).not.toBeNull();
+    expect(first.textContent).toContain("61735");
+    expect(first.textContent).toContain("hours");
+    expect(first.textContent).toContain("rate");
+  });
+
+  it("labels them with the PRODUCER's field names, not prettified", () => {
+    // A title-cased local synonym is the translation layer ADR-0045 refused — and the cost lane
+    // hit exactly that when one verb title-cased its keys while another read a label table.
+    const rows = [{ ...labour()[0], rate_vintage: "2021-02-01" }, labour()[1]];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(screen.getAllByRole("button")[0].textContent).toContain("rate_vintage");
+  });
+
+  it("does NOT format a NUMERIC extra as money either", () => {
+    // Q6 sends hours and rate as STRINGS, so the string path alone left a money-formatting
+    // mutation alive — it only fires on numbers. Another verb sending a numeric hours count is
+    // the case that would have shipped wrong: the money formatter prints it as dollars, a unit
+    // this card was never told the column carries.
+    const rows = [
+      { entity_id: "a", entity_name: "A", contribution: 100, share_of_total: 0.5, quantity: 61735 },
+      { entity_id: "b", entity_name: "B", contribution: 50, share_of_total: 0.5 },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    const extras = screen.getAllByRole("button")[0].querySelector("[data-extra-columns]")!;
+    expect(extras.textContent).toContain("61735");
+    // The money formatter prefixes and abbreviates; the raw figure does neither. Asserted as
+    // plain containment, because the regex written here carried literal BACKSPACE bytes — a
+    // shell heredoc turned each \b into 0x08 — leaving a bare end-of-string anchor that
+    // matched everything and failed against a correct render.
+    expect(extras.textContent).not.toContain("$");
+    expect(extras.textContent).not.toContain("61.7K");
+  });
+
+  it("does NOT format them as money — hours are not dollars", () => {
+    // The money formatter would print an hours count as dollars, a unit this card was never
+    // told they carry. Asserted by requiring the raw figure and forbidding a currency mark on it.
+    render(<ContributionRanking rows={labour()} value_unit="USD" />);
+    const extras = screen.getAllByRole("button")[0].querySelector("[data-extra-columns]")!;
+    expect(extras.textContent).toContain("61735");
+    expect(extras.textContent).not.toContain("$61");
+  });
+
+  it("shows NOTHING when the row carries nothing extra — the control", () => {
+    // Without this, a card that always drew an empty extras strip would pass the assertions
+    // above while adding a blank line to every row in the list.
+    render(<ContributionRanking rows={rows()} value_unit="USD" />);
+    expect(document.querySelector("[data-extra-columns]")).toBeNull();
+  });
+
+  it("does not re-show a field the card already speaks for", () => {
+    // share_of_total, favourable and the note are rendered in their own places; repeating them
+    // as raw columns would be the same figure twice with two formattings.
+    render(<ContributionRanking rows={rows()} value_unit="USD" />);
+    const first = screen.getAllByRole("button")[0];
+    expect(first.textContent).not.toContain("share_of_total");
+    expect(first.textContent).not.toContain("favourable");
+  });
+
+  it("does not resurrect `direction` as a column", () => {
+    // It is deliberately not read as a judgement. Showing it as a column would reintroduce it
+    // as one, with the reader doing the inference this card refuses to.
+    const rows = [
+      { entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 0.5, direction: "up" },
+      { entity_id: "b", entity_name: "B", contribution: 10, share_of_total: 0.5, direction: "down" },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(document.body.textContent).not.toContain("direction up");
+  });
+
+  it("skips a field that is null or blank rather than printing a hole", () => {
+    const rows = [
+      { entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1, vintage: null, tag: "   " },
+      { entity_id: "b", entity_name: "B", contribution: 5, share_of_total: 1 },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(document.querySelector("[data-extra-columns]")).toBeNull();
+  });
+});
+
+describe("a share is not signed like a delta", () => {
+  it("a wholly positive breakdown carries NO plus", () => {
+    // `+$4.9M` reads as a RISE of 4.9M when the figure is 62% of the spend. The payload sends a
+    // plain positive number and asserts no direction; the plus asserted one for it.
+    const rows = [
+      { entity_id: "L1", entity_name: "Direct labour", contribution: 4938800.0, share_of_total: 0.6236 },
+      { entity_id: "L2", entity_name: "Overhead", contribution: 1888300.0, share_of_total: 0.2385 },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(document.body.textContent).not.toContain("+$");
+    expect(document.body.textContent).toMatch(/\$4\.9M/);
+  });
+
+  it("a SIGNED set keeps its plus — the control, and the case it was built for", () => {
+    // A variance decomposition where some rows push the total up and others pull it down. There
+    // a bare number reads as a magnitude and the direction has to come from a colour, which is
+    // the channel a projector loses first. Removing the plus outright would have broken this.
+    const rows = [
+      { entity_id: "a", entity_name: "A", contribution: 120000, share_of_total: 0.1, favourable: true },
+      { entity_id: "b", entity_name: "B", contribution: -800000, share_of_total: 0.6, favourable: false },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(document.body.textContent).toMatch(/\+\$120(\.0)?K/);
+    expect(document.body.textContent).toMatch(/-\$800(\.0)?K/);
+  });
+
+  it("ONE negative row is enough to make the whole set signed", () => {
+    // The discriminator is the SET, not the row: in a mixed list every positive figure needs to
+    // be distinguishable from the negatives beside it.
+    const rows = [
+      { entity_id: "a", entity_name: "A", contribution: 10000, share_of_total: 0.5 },
+      { entity_id: "b", entity_name: "B", contribution: -1, share_of_total: 0.5 },
+    ];
+    render(<ContributionRanking rows={rows} value_unit="USD" />);
+    expect(document.body.textContent).toContain("+$");
+  });
+});

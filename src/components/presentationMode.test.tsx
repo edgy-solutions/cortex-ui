@@ -195,10 +195,25 @@ describe("nothing is reachable only by hovering", () => {
       // getAttribute, not `.className` — for an SVG that property is an SVGAnimatedString, and
       // an assertion that silently receives an object is an assertion that stops checking.
       const cls = el.getAttribute("class") ?? "";
-      expect(cls, `a way out is hover-gated: ${cls}`).not.toMatch(/hidden/);
+      // WORD-BOUNDED, and it carried literal BACKSPACE bytes until now: a shell heredoc turned
+      // each \\b into 0x08, so this read /\\x08hidden\\x08/ and could only match a class name
+      // containing control characters. IT COULD NOT FAIL. A dead check in the middle of a
+      // working seal, and the loudest possible instance of the rule this file already states —
+      // a check that cannot fail is no check.
+      //
+      // MATCHED AS A CLASS TOKEN, not by word boundary. `\b` treats a hyphen as a boundary, so
+      // /\bhidden\b/ matches Tailwind's `overflow-hidden` — the repaired pattern's own positive
+      // control caught that on the first run, which is the whole reason to write one. Tailwind
+      // classes are whitespace-separated tokens, so the token is what to look for.
+      expect(cls, `a way out is hover-gated: ${cls}`).not.toMatch(/(^|\s)hidden(\s|$)/);
       expect(cls, `a way out is hover-gated: ${cls}`).not.toMatch(/hover:(flex|block|inline)/);
       expect(cls).not.toMatch(/group-hover/);
     }
+    // POSITIVE CONTROL FOR THE REPAIRED PATTERN. The assertion above spent its life unable
+    // to fail; this is what stops that being true again, and it distinguishes the bare word
+    // from Tailwind's `overflow-hidden`, which must NOT be flagged.
+    expect("flex hidden md:flex").toMatch(/(^|\s)hidden(\s|$)/);
+    expect("flex overflow-hidden").not.toMatch(/(^|\s)hidden(\s|$)/);
   });
 
   it("and no control ANYWHERE in these files is hover-gated — the wider net", () => {

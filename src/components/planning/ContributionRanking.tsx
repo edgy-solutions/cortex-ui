@@ -29,6 +29,80 @@ const TONE = {
   unstated: { bar: "bg-slate-500/60", text: "text-slate-300" },
 } as const;
 
+/**
+ * Row fields this card ALREADY renders or reasons about. Anything else the producer sends is a
+ * column being dropped, and is shown.
+ *
+ * A DENYLIST RATHER THAN AN ALLOWLIST, deliberately. An allowlist of renderable extras has to
+ * be extended for every verb that adds a field, and until someone does the column is silently
+ * missing — which is the defect being repaired. A denylist only grows when this card starts
+ * consuming a NEW field itself, which is a change whoever makes it is already inside.
+ */
+const CONSUMED_FIELDS = new Set([
+  "entity_id",
+  "entity_name",
+  "contribution",
+  "share_of_total",
+  "favourable",
+  "note",
+  "rank",
+  // Read by the inspection panel rather than the row, so consumed rather than dropped.
+  "bcws",
+  "bcwp",
+  "acwp",
+  // The producer's own verdict vocabulary, deliberately NOT read as a judgement — see the
+  // unjudged-ranking block. Showing it as a column would reintroduce it as one.
+  "direction",
+]);
+
+/** A scalar worth showing beside a figure — a real number, or a non-empty string. */
+function displayableExtra(v: unknown): string | number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t.length > 0 ? t : null;
+  }
+  return null;
+}
+
+/**
+ * The columns the payload carries and this card was dropping.
+ *
+ * Rows arrive with fields beyond contribution and share — a labour breakdown sends hours and
+ * rate, an earned-value row sends its own inputs — and the card showed only the money.
+ * `expected_fields` gates nothing, because every archetype but CHART_WIDGET returns
+ * NOT_EVALUATED, so a card with a missing column draws happily and scores as a pass. It is
+ * invisible unless somebody looks for it.
+ *
+ * THE LABEL IS THE PRODUCER'S FIELD NAME AND IS NOT PRETTIFIED. A title-cased local synonym is
+ * the translation layer ADR-0045 refused, and the cost lane hit exactly that this week: one
+ * verb title-cased its own keys while another read a label table, so two verbs over the same
+ * six factors spoke two vocabularies.
+ *
+ * NOT FORMATTED AS MONEY EITHER. An hours count and an hourly rate are not currency, and the
+ * money formatter would print them as dollars — a unit this card was never told they carry.
+ */
+function ExtraColumns({ row }: { row: ContributionRow }) {
+  const extras: [string, string | number][] = [];
+  for (const [k, v] of Object.entries(row as unknown as Record<string, unknown>)) {
+    if (CONSUMED_FIELDS.has(k)) continue;
+    const shown = displayableExtra(v);
+    if (shown === null) continue;
+    extras.push([k, shown]);
+  }
+  if (extras.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5" data-extra-columns>
+      {extras.map(([k, v]) => (
+        <span key={k} className="font-mono text-[10px] text-slate-500 tabular-nums">
+          <span className="text-slate-600">{k} </span>
+          {String(v)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function toneOf(row: ContributionRow) {
   // THE PRODUCER'S VERDICT, never inferred from the sign. In cost variance a positive number is
   // favourable; in another measure the same sign is not. Absent means UNSTATED — a neutral mark
@@ -102,6 +176,25 @@ export function ContributionRanking({
   const judged = ranked.filter((r) => typeof r.favourable === "boolean").length;
   const noneJudged = judged === 0;
 
+  /**
+   * IS THIS A SIGNED SET, OR A SET OF SHARES?
+   *
+   * The plus was added for a variance decomposition, where some contributions push a total up
+   * and others pull it down: there a bare number reads as a magnitude and the direction has to
+   * be inferred from a colour, which is the channel a projector loses first.
+   *
+   * IT IS WRONG ON A PURE BREAKDOWN. A cost breakdown's rows are all positive shares of one
+   * total, and "+$4.9M" reads as MOVEMENT — a rise of 4.9M — when the figure is 62% of the
+   * spend. The payload sends a plain positive number and asserts no direction; the plus
+   * asserted one on its behalf, which is the manufactured-confidence failure this card refuses
+   * everywhere else.
+   *
+   * DECIDED FROM THE DATA, not from the domain. If any row is negative the set is signed and
+   * the plus distinguishes two directions; if none is, there is no second direction for it to
+   * distinguish and it is decoration with a false reading attached.
+   */
+  const signedSet = ranked.some((r) => r.contribution < 0);
+
   return (
     <div className="glass-panel p-4">
       <div className="flex items-baseline gap-3 flex-wrap">
@@ -148,7 +241,7 @@ export function ContributionRanking({
                       is the channel a projector loses first. `formatAmount` already carries a
                       minus; only the plus has to be added. */}
                   <span className={`font-mono text-[15px] font-semibold tabular-nums ${tone.text}`}>
-                    {r.contribution > 0 ? "+" : ""}
+                    {signedSet && r.contribution > 0 ? "+" : ""}
                     {formatAmount(r.contribution, value_unit)}
                   </span>
                   <span className="font-mono text-[11px] text-slate-500 w-16 text-right tabular-nums">
@@ -168,6 +261,8 @@ export function ContributionRanking({
                     }}
                   />
                 </span>
+                {/* Every other field the producer sent for this row — see ExtraColumns. */}
+                <ExtraColumns row={r} />
                 {/* A CAVEAT BELONGS ON ITS ROW. This one says a level-of-effort account's
                     schedule variance is structurally zero and carries no information about
                     progress — shown anywhere else, it is a caveat nobody connects to the

@@ -286,3 +286,83 @@ describe("each option_source renders distinguishably", () => {
     expect(seen.size, "two sources read identically").toBe(3);
   });
 });
+
+/**
+ * A REFUSAL THAT OFFERS TWO VALUES AND MAKES YOU TYPE ONE IS THE ASK CARD WITHOUT THE ASK.
+ *
+ * The cost walk reported this screen drawing "this takes a value, not a name" with a free-text
+ * input for a mandatory `rate_vintage`. That string is THIS FILE'S no-menu copy, which renders
+ * only when `options` is empty — so the card was right and the payload was empty: `OPTION_SOURCES`
+ * was keyed `(verb, slot)` with one entry, so two verbs declaring the same mandatory slot
+ * carried no options at all. Keyed by SLOT now, and the vintage ask carries real values.
+ *
+ * SO THIS IS A SEAL, NOT A REPAIR, and saying which matters: a fix invented here would have
+ * been a second code path for a shape this component already handles, and the next walk would
+ * have verified the wrong thing.
+ *
+ * What it pins is the branch the second walk depends on — options present means a MENU, and no
+ * free-text input anywhere near it.
+ */
+describe("a mandatory slot with options draws a menu, not a text box", () => {
+  /** The vintage ask as the fixed OPTION_SOURCES now emits it. */
+  const vintageAsk = {
+    archetype: "ELICITATION",
+    disposition: "ask",
+    status: "slot_elicitation",
+    slot: "rate_vintage",
+    option_source: "slot_catalogue",
+    options: [
+      { value: "2021-02-01", label: "2021-02-01" },
+      { value: "2021-08-01", label: "2021-08-01" },
+    ],
+    total_count: 2,
+    message: "Which rate vintage?",
+  };
+
+  it("renders both values as options", () => {
+    render(<AskCard component={vintageAsk} />);
+    const menu = document.querySelector("[data-ask-options]")!;
+    expect(menu).not.toBeNull();
+    expect(menu.textContent).toContain("2021-02-01");
+    expect(menu.textContent).toContain("2021-08-01");
+  });
+
+  it("offers NO free-text input when there are options", () => {
+    // The reported symptom. Two values offered and a box to type one in is the ask card with
+    // its ask removed — and typing is where an exact-equality pick goes wrong.
+    render(<AskCard component={vintageAsk} />);
+    expect(document.querySelectorAll("input")).toHaveLength(0);
+  });
+
+  it("says nothing about there being no menu, EVEN IF the reason field is still set", () => {
+    // "this takes a value, not a name" is the no-menu copy. With a menu present it must be
+    // absent, or the card contradicts itself in the same breath.
+    //
+    // THE STALE REASON IS THE CASE THAT MATTERS, and the first version of this test did not
+    // carry one: with `free_text_reason` unset the line is empty anyway, so a mutation
+    // dropping the options-are-empty guard changed nothing and survived. A producer that adds
+    // options and leaves the reason behind is the realistic shape — the contract says the
+    // reason is required whenever options are empty, not forbidden when they are not.
+    render(<AskCard component={{ ...vintageAsk, free_text_reason: "no_referent" }} />);
+    expect(document.querySelector("[data-ask-options]")).not.toBeNull();
+    expect(document.body.textContent).not.toMatch(/takes a value, not a name/i);
+    expect(document.querySelector("[data-free-text-reason]")).toBeNull();
+  });
+
+  it("STILL offers free text when the slot genuinely has no menu — the control", () => {
+    // Without this, a component that never rendered an input would pass everything above while
+    // making every open-valued slot unanswerable.
+    render(
+      <AskCard
+        component={{
+          ...vintageAsk,
+          options: [],
+          total_count: 0,
+          free_text_reason: "no_referent",
+        }}
+      />,
+    );
+    expect(document.querySelectorAll("input")).toHaveLength(1);
+    expect(document.body.textContent).toMatch(/takes a value, not a name/i);
+  });
+});
