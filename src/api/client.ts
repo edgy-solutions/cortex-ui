@@ -721,3 +721,34 @@ export async function fetchBffVersion(): Promise<BffVersionResult> {
     return { kind: "error", status };
   }
 }
+
+/**
+ * Save the canvases when the page is about to go away.
+ *
+ * `keepalive` is the whole point: a normal fetch is CANCELLED when the document unloads, so a
+ * flush-on-unload written with the ordinary client would have looked implemented and changed
+ * nothing — the request would be created and then killed microseconds later. This is the one
+ * place in this client that bypasses the axios wrapper, and the reason is that axios has no
+ * way to set it.
+ *
+ * transport-exception: `keepalive` is a fetch-only option with no axios equivalent, and it is
+ * required for a request that must outlive its document. Same bearer, same cortex-bff route as
+ * `saveCanvases`; nothing about the authorisation path changes.
+ */
+export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
+  const url = `${API_URL}/me/canvases`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const auth = api.defaults.headers.common?.Authorization;
+  if (typeof auth === "string" && auth) headers.Authorization = auth;
+  try {
+    await fetch(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ canvases }),
+      keepalive: true,
+    });
+  } catch {
+    // The page is leaving. There is no retry to schedule and nobody to tell — the durable
+    // fallback is the store's own localStorage copy, which has already been written.
+  }
+}

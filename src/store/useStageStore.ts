@@ -313,7 +313,31 @@ export const useStageStore = create<StageState>()(
       setGroup: (id) => set({ groupKey: id, focusId: null, fullPane: false }),
       clearGroup: () => set({ groupKey: null }),
 
-      setCanvases: (canvases) => set({ canvases }),
+      /**
+       * THE SERVER HYDRATE, AND IT HONOURS THE TOMBSTONE.
+       *
+       * This was a blind replace, and it is the SECOND path that recreates a deleted board —
+       * the one the first repair missed. `dismissedSeeds` stopped the seed WATCHER rebuilding a
+       * board from its answer; it did nothing about `/me/canvases` handing the same board
+       * straight back on the next load. Two producers of a canvas, one guarded.
+       *
+       * "I delete them all, refresh, and they come right back" was therefore STILL TRUE after a
+       * fix that closed the path I happened to be reading. The lesson is one this repo already
+       * has written down: mount the guard on the POPULATION of writers, not on the site you
+       * were looking at.
+       *
+       * THE TOMBSTONE OUTRANKS THE SERVER COPY, and only for seeded boards. A deletion is the
+       * user's recorded DECISION; the server copy is derived state that can lag it — the save
+       * is debounced, so a delete followed quickly by a reload may never have been sent. When
+       * they disagree, the decision wins. A hand-built canvas has no seed and is never
+       * filtered: nothing would recreate it, so nothing needs to stop it coming back.
+       */
+      setCanvases: (canvases) =>
+        set((s) => ({
+          canvases: canvases.filter(
+            (c) => !c.seededFrom || !s.dismissedSeeds.includes(c.seededFrom),
+          ),
+        })),
       createCanvas: (name, use, enter = true) => {
         const id = genId();
         const canvas: CustomCanvas = { id, name: name.trim() || "Canvas", use, items: [] };
