@@ -403,3 +403,132 @@ describe("the declaration reader refuses a shape it cannot trust", () => {
     }
   });
 });
+
+/**
+ * CAPTURED FROM THE SERVING POD — `declaration_for(...)` on `cortex-bff`, fleet `a45a8dd`.
+ *
+ * The fixtures above were written from a spec in a message. These are what the deployment
+ * actually returns, read in-process because `/task_kinds` requires auth over HTTP. Two things
+ * differed from the spec and neither was in the description:
+ *
+ *   `archetype`, `badge`, `title` come back **null** for an undeclared kind — not absent, not
+ *   empty string. The reader coerces them, and a reader that spread them into a template
+ *   would have printed "null" into a badge.
+ *
+ *   `risk_acceptance_high` requires a reason for TWO verbs, not one. The single-verb fixture
+ *   would still have passed every assertion, which is the ordinary way a fixture drifts from
+ *   the payload it stands for.
+ *
+ * A fixture written from a description is a second-hand account of the wire. This file is the
+ * wire.
+ */
+describe("the live declarations, captured", () => {
+  const LIVE = {
+    hazard_link_review: {
+      kind: "hazard_link_review",
+      declared: true,
+      archetype: "GROUPED_REVIEW",
+      badge: "LINK",
+      title: "Hazard link review",
+      accepts: ["linked", "new_hazard", "dismissed"],
+      reason_required: ["dismissed", "new_hazard"],
+    },
+    risk_acceptance_high: {
+      kind: "risk_acceptance_high",
+      declared: true,
+      archetype: "APPROVAL_TASK",
+      badge: "ACCEPT-H",
+      title: "High risk acceptance",
+      accepts: ["accepted", "rejected", "returned_for_rework"],
+      reason_required: ["accepted", "rejected"],
+    },
+    pcn_disposition: {
+      kind: "pcn_disposition",
+      declared: true,
+      archetype: "APPROVAL_TASK",
+      badge: "DISPOSE",
+      title: "PCN disposition",
+      accepts: ["approved", "rejected"],
+      reason_required: [],
+    },
+    risk_acceptance: {
+      kind: "risk_acceptance",
+      declared: false,
+      archetype: null,
+      badge: null,
+      title: null,
+      accepts: [],
+      reason_required: [],
+    },
+  };
+
+  it("renders the High acceptance's three verbs, in the declared order", () => {
+    render(
+      <ApprovalTaskCard
+        task={{ ...task("risk_acceptance_high"), declaration: LIVE.risk_acceptance_high }}
+      />,
+    );
+    expect(verbs()).toEqual(["accepted", "rejected", "returned_for_rework"]);
+    expect(verbs()).not.toContain("approved");
+  });
+
+  it("requires a reason for BOTH verbs that declare one", () => {
+    // The live row requires it for `accepted` AND `rejected`. A fixture with one would pass
+    // every assertion while leaving the second unchecked.
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(
+      <ApprovalTaskCard
+        task={{ ...task("risk_acceptance_high"), declaration: LIVE.risk_acceptance_high }}
+      />,
+    );
+    fireEvent.click(document.querySelector('[data-verb="rejected"]')!);
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+    fireEvent.click(document.querySelector('[data-verb="returned_for_rework"]')!);
+    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "returned_for_rework", "");
+  });
+
+  it("draws NULL archetype/badge/title without printing them", () => {
+    // They arrive as null rather than absent. A reader that spread them into a template would
+    // put the word "null" in a badge.
+    render(
+      <ApprovalTaskCard task={{ ...task("risk_acceptance"), declaration: LIVE.risk_acceptance }} />,
+    );
+    expect(document.body.textContent).not.toContain("null");
+    expect(document.querySelector("[data-undeclared-kind]")).not.toBeNull();
+  });
+
+  it("pcn_disposition is unchanged by the declaration arriving", () => {
+    // The species that already worked through the interim table. Its declaration must produce
+    // the same two buttons in the same order, or the read path is a regression for the one
+    // kind that was fine.
+    const { unmount } = render(<ApprovalTaskCard task={task("pcn_disposition")} />);
+    const fallback = verbs();
+    unmount();
+    render(
+      <ApprovalTaskCard
+        task={{ ...task("pcn_disposition"), declaration: LIVE.pcn_disposition }}
+      />,
+    );
+    expect(verbs()).toEqual(fallback);
+    expect(document.querySelector("[data-reason-input]")).toBeNull();
+  });
+
+  it("the hazard review's declared order is NOT its sorted order — the non-degenerate case", () => {
+    // Sorted is [dismissed, linked, new_hazard]; declared is [linked, new_hazard, dismissed].
+    // Every deployed APPROVAL_TASK declaration is alphabetical by accident, so this is the only
+    // live row on which a sorting card and an order-preserving card differ at all.
+    const d = readTaskDeclaration(LIVE.hazard_link_review)!;
+    expect(d.accepts).toEqual(["linked", "new_hazard", "dismissed"]);
+    expect(d.accepts).not.toEqual([...d.accepts].sort());
+  });
+
+  it("every live declaration survives the reader", () => {
+    // The floor. A reader that returned null for these would make every assertion above vacuous
+    // by never rendering anything at all.
+    for (const [name, raw] of Object.entries(LIVE)) {
+      const d = readTaskDeclaration(raw);
+      expect(d, name).not.toBeNull();
+      expect(d!.kind, name).toBe(name);
+    }
+  });
+});
