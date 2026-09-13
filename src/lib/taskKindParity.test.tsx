@@ -48,9 +48,11 @@
  * goes red on a correct pair; one comparing both as sets goes green on a re-sorted `accepts`.
  * They are compared differently here, and that asymmetry is asserted rather than assumed.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, cleanup } from "@testing-library/react";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { taskKindDisplay, isRegisteredKind } from "./taskKindRegistry";
 
 /**
@@ -283,5 +285,173 @@ describe.skipIf(!HAVE_PRODUCER)("the two orders are compared DIFFERENTLY, on pur
       const orphan = d.reasonRequired.filter((v) => !d.accepts.includes(v));
       expect(orphan, `${d.kind}: reason_required names a verb not in accepts`).toEqual([]);
     }
+  });
+});
+
+/**
+ * THE JOIN ITSELF — the buttons cortex RENDERS against the verbs the declaration DECLARES.
+ *
+ * Everything above compares two tables. This drives the real card with every real declaration
+ * and reads the affordances off the rendered DOM, because that is the assertion the ruling
+ * actually asked for: "the buttons cortex renders equal the verbs `/task_kinds` reports, IN
+ * ORDER". A table-to-table comparison can be green while the card renders something else
+ * entirely — the two halves each correct alone is exactly the state this seal exists to refuse.
+ *
+ * READ OFF `data-verb`, NEVER LABEL TEXT. Labels are the declaration's verb verbatim —
+ * "Approved", not "Approve" — because the word on the button is the word posted and archived.
+ * `"Approved"` CONTAINS `"Approve"`, so a substring assertion on labels passes whether or not
+ * the right verb is offered.
+ *
+ * THREE STATES, NOT TWO. `declared: true` with `accepts: []` is "the mesh knows this species
+ * and it is not decided on this surface" — a different fact from "nothing has declared this
+ * species", with a different repair. A seal asserting "no buttons implies unknown species"
+ * would be wrong at the first instance of the third state, so each state is asserted by its
+ * own marker.
+ */
+vi.mock("@/api/client", () => ({ actOnHumanTask: vi.fn() }));
+vi.mock("@/store/useHumanTaskStore", () => ({ markTaskResolvedByTaskId: vi.fn() }));
+vi.mock("react-hot-toast", () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+
+const payload = (kind: string) => ({
+  task_id: "t1",
+  kind,
+  task_state: "pending" as const,
+  title: "A task",
+  summary: "A summary",
+  audience: "stewards",
+  requested_by: "bob",
+  subject_ref: null,
+});
+
+const renderedVerbs = () =>
+  [...document.querySelectorAll("[data-verb]")].map((b) => b.getAttribute("data-verb"));
+
+describe.skipIf(!HAVE_PRODUCER)("the RENDERED affordances equal the DECLARED verbs, in order", () => {
+  afterEach(cleanup);
+
+  it("every APPROVAL_TASK declaration renders exactly its accepts, in the declaration's order", () => {
+    const approvals = [...composed().values()].filter((d) => d.archetype === "APPROVAL_TASK");
+    // The floor for this arm specifically: filtering to one archetype could silently select
+    // nothing, and a loop over nothing asserts nothing.
+    expect(approvals.length, "no APPROVAL_TASK declarations to drive the card with").toBeGreaterThan(0);
+
+    for (const d of approvals) {
+      cleanup();
+      render(
+        <ApprovalTaskCard
+          task={{
+            ...payload(d.kind),
+            declaration: {
+              kind: d.kind,
+              declared: true,
+              archetype: d.archetype,
+              badge: d.badge,
+              title: d.title,
+              accepts: d.accepts,
+              reason_required: d.reasonRequired,
+            },
+          } as never}
+        />,
+      );
+      // ORDER-BEARING: `toEqual` on arrays compares sequence, which is the point. A re-sorted
+      // declaration must not render the same card.
+      expect(renderedVerbs(), `${d.kind}`).toEqual(d.accepts);
+      expect(document.querySelector("[data-undeclared-kind]"), `${d.kind}`).toBeNull();
+      expect(document.querySelector("[data-declared-no-verbs]"), `${d.kind}`).toBeNull();
+    }
+  });
+
+  it("STATE 2 — declared with an empty accept-set renders no-verbs, NOT unknown-species", () => {
+    // The state the spec did not name. The mesh has the species; it takes no decisions here.
+    render(
+      <ApprovalTaskCard
+        task={{
+          ...payload("declared_but_undecided"),
+          declaration: {
+            kind: "declared_but_undecided", declared: true, archetype: "APPROVAL_TASK",
+            badge: "NONE", title: "Declared, not decided here", accepts: [], reason_required: [],
+          },
+        } as never}
+      />,
+    );
+    expect(renderedVerbs()).toEqual([]);
+    expect(document.querySelector("[data-declared-no-verbs]")).not.toBeNull();
+    // The distinction that makes this a separate state rather than a synonym.
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
+  });
+
+  it("STATE 3 — no declaration at all renders unknown-species, NOT no-verbs", () => {
+    render(<ApprovalTaskCard task={payload("some_kind_nobody_declared") as never} />);
+    expect(renderedVerbs()).toEqual([]);
+    const refusal = document.querySelector("[data-undeclared-kind]");
+    expect(refusal).not.toBeNull();
+    // SCOPED TO THE REFUSAL BLOCK, never `document.body`: the card header prints the kind two
+    // lines up, so a body-scoped assertion passes with the name stripped out of the refusal.
+    // The instrument and the subject sharing a surface — the instrument reads the subject's
+    // NEIGHBOUR and reports success.
+    expect(refusal!.textContent).toContain("some_kind_nobody_declared");
+    expect(document.querySelector("[data-declared-no-verbs]")).toBeNull();
+  });
+
+  it("the three states are mutually exclusive — no card shows two of them", () => {
+    // Red-proofs the three above. Markers that could co-occur would let a card satisfy two
+    // states at once and each assertion would still pass in isolation.
+    const cases: Array<[string, unknown]> = [
+      ["verbs", { ...payload("pcn_disposition"), declaration: { kind: "pcn_disposition", declared: true, archetype: "APPROVAL_TASK", badge: "DISPOSE", title: "PCN disposition", accepts: ["approved", "rejected"], reason_required: [] } }],
+      ["no-verbs", { ...payload("x"), declaration: { kind: "x", declared: true, archetype: "APPROVAL_TASK", badge: "X", title: "X", accepts: [], reason_required: [] } }],
+      ["unknown", payload("nobody_declared_this")],
+    ];
+    for (const [name, task] of cases) {
+      cleanup();
+      render(<ApprovalTaskCard task={task as never} />);
+      const markers = [
+        renderedVerbs().length > 0,
+        document.querySelector("[data-declared-no-verbs]") !== null,
+        document.querySelector("[data-undeclared-kind]") !== null,
+      ].filter(Boolean).length;
+      expect(markers, `${name}: expected exactly one state marker`).toBe(1);
+    }
+  });
+});
+
+describe("ORDER IS PRESERVED — proven where it can diverge, not where it cannot", () => {
+  afterEach(cleanup);
+
+  /**
+   * THE REAL POPULATION CANNOT PROVE THIS, AND THAT IS THE WHOLE REASON THIS BLOCK EXISTS.
+   *
+   * Every APPROVAL_TASK declaration deployed today is ALREADY in alphabetical order —
+   * `[approved, rejected]`, `[accepted, rejected, returned_for_rework]`,
+   * `[concurred, not_concurred, returned_for_rework]`. So a card that sorted its verbs would
+   * render identically to one that preserved them, and the arm above stays green with
+   * `[...decl.accepts].sort()` spliced into the card. Mutation-verified: it does.
+   *
+   * The one non-alphabetical declaration, `hazard_link_review`'s
+   * `[linked, new_hazard, dismissed]`, is a GROUPED_REVIEW and never reaches this card.
+   *
+   * This is the coincidence shape: a defect invisible because two values happen to agree on
+   * ordinary data, catchable only where they diverge. The divergent input is constructed here
+   * rather than waited for — the order contract is load-bearing NOW, and the first
+   * non-alphabetical APPROVAL_TASK species must not be the thing that discovers it was never
+   * being checked.
+   */
+  const UNSORTED = ["returned_for_rework", "accepted", "rejected"];
+
+  it("a declaration whose verbs are NOT alphabetical renders in the DECLARATION's order", () => {
+    expect(UNSORTED, "the control must actually diverge from its sorted form")
+      .not.toEqual([...UNSORTED].sort());
+
+    render(
+      <ApprovalTaskCard
+        task={{
+          ...payload("order_control"),
+          declaration: {
+            kind: "order_control", declared: true, archetype: "APPROVAL_TASK",
+            badge: "ORD", title: "Order control", accepts: UNSORTED, reason_required: [],
+          },
+        } as never}
+      />,
+    );
+    expect(renderedVerbs()).toEqual(UNSORTED);
   });
 });
