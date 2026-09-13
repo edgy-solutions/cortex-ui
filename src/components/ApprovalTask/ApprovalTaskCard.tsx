@@ -5,46 +5,50 @@ import { actOnHumanTask } from "@/api/client";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
+import { readTaskDeclaration, verbLabel } from "@/lib/taskDeclaration";
 
 /**
- * APPROVAL_TASK archetype — the canvas card for a HITL task that is a simple
- * accept/reject (bob's qualification items, workflow_ack, access_request), i.e.
- * every task that is NOT a grouped review (those render GROUPED_REVIEW). It acts
- * through the SAME sealed `/act` bridge as the old inbox card; nothing about the
- * decision path changes — it just lives on the canvas now, not in a modal.
+ * APPROVAL_TASK archetype — the canvas card for a HITL task decided by naming a verb. It acts
+ * through the SAME sealed `/act` bridge as the old inbox card; nothing about the decision path
+ * changes — it just lives on the canvas now, not in a modal.
  *
  * ── AN UNDECLARED KIND GETS NO VERBS ──────────────────────────────────────────────────────
  *
  * This card offered Approve and Reject to EVERY kind that reached it, and an unregistered kind
  * reaches it by default: `taskKindRegistry`'s fallback archetype is APPROVAL_TASK, so any task
- * species nobody has declared lands here and is handed two buttons.
+ * species nobody had declared landed here and was handed two buttons.
  *
  * That is not a labelling problem. Pressing one posts a decision through `/act`, and ADR-0034
  * archives decision records immutably as promotion evidence — so the cost of guessing is a
- * permanent record of a judgement the data may not even represent. "Approve" on *this notice
- * could not be prepared for review* is the case that produced the TRIAGE_TASK species, and it
- * shipped exactly this way.
+ * permanent record of a judgement the data may not represent. "Approve" on *this notice could
+ * not be prepared for review* is the case that produced the TRIAGE_TASK species, and it shipped
+ * exactly this way.
  *
  * DEFAULT-DENY. An affordance is a CLAIM that the system knows what this decision means, and
  * that claim needs a declaration behind it. A label that says nothing is harmless; an
  * affordance that says nothing still acts.
  *
- * The registry's own comment already asserted this card "renders the card in a NO-VERB
- * read-only mode" — it did not, and had not since the sentence was written. A recorded
- * conclusion about behaviour deserves the same suspicion as the behaviour.
+ * ── THE VERBS ARE THE DECLARATION'S NOW, NOT THIS FILE'S ──────────────────────────────────
  *
- * ── BUILT TO RETIRE ───────────────────────────────────────────────────────────────────────
+ * The deny was right and it was also the ONLY behaviour available, because a hardcoded table of
+ * five kinds was the only thing being asked. The deployment declares eight, six of them
+ * APPROVAL_TASK, and cortex had never heard of the six `risk_acceptance_*` species — so every
+ * one of them drew "unknown species here" with no buttons at all.
  *
- * `isRegisteredKind` is INTERIM by construction: it asks a hardcoded table, and its opposite
- * number is `_VERBS_BY_KIND` in the backend. Both retire together when the SDK's `TaskKind`
- * row carries `renders_as`, `accepts` and `reason_required` as one served declaration.
+ * Extending the table would not have fixed it either. A High acceptance takes `accepted` and
+ * the gate REFUSES `approved`: an approval says the artifact is in order, an acceptance says a
+ * named authority is taking the residual risk onto themselves. Two different acts, and a card
+ * offering the generic verb offers one nobody can submit.
  *
- * Nothing here assumes the table is permanent, and nothing here assumes the verb set is
- * {approve, reject}: the question asked is "is this kind DECLARED", which is the same question
- * the served row will answer, and the answer's SHAPE is what changes — a list of accepted
- * verbs rather than a boolean. That is why the deny is keyed on declaration rather than on a
- * kind string: a check against a list of known kinds would have to be rewritten; this one is
- * repointed.
+ * So the served declaration decides, in ITS order, and `taskDeclaration.ts` carries why the two
+ * orders in that payload differ and why a MISSING declaration is not `declared: false`.
+ *
+ * ── THE TABLE REMAINS AS A FALLBACK, AND ONLY UNTIL THE READ PATH ROLLS ───────────────────
+ *
+ * The endpoint is built and not yet merged, so no row carries a declaration today. Dropping
+ * `isRegisteredKind` now would take the buttons off `pcn_disposition` — a species that works —
+ * for the length of a deploy window, which is a regression bought with no benefit. It goes when
+ * a declaration is actually reaching this card.
  */
 export interface ApprovalTaskPayload {
   task_id: string;
@@ -55,28 +59,62 @@ export interface ApprovalTaskPayload {
   audience: string;
   requested_by: string;
   subject_ref: string | null;
+  /**
+   * The served task-kind declaration, when the row carries one.
+   *
+   * ABSENT IS NOT EMPTY — see the component and `readTaskDeclaration`. Reading its absence as
+   * "declares nothing" would strip the buttons off every task that works today, during a deploy
+   * window, for no reason a reader could see.
+   */
+  declaration?: unknown;
 }
+
+/**
+ * Which verbs read as AFFIRMING, for COLOUR ONLY.
+ *
+ * The label is the claim; this only makes a three-verb card scannable. Deliberately a small
+ * closed list rather than a guess: a verb nobody has classified gets the cautious styling, which
+ * is the honest default for a decision this client does not understand. Nothing is hidden,
+ * reordered or renamed by it.
+ */
+const AFFIRMING = new Set(["approved", "accepted", "acknowledged", "concurred", "linked"]);
 
 export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const [acting, setActing] = useState(false);
-  const [done, setDone] = useState<null | "approved" | "rejected">(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
 
-  // DECLARED, not recognised-by-name. See the header: this is the seam the served TaskKind row
-  // repoints, and the reason the deny is not a list of kind strings.
-  const declared = isRegisteredKind(task.kind);
+  // THE SERVED DECLARATION IS THE AUTHORITY WHERE THERE IS ONE; the interim table where there
+  // is not. See the header for why both, and for how long.
+  const decl = readTaskDeclaration(task.declaration);
+  const declared = decl ? decl.declared : isRegisteredKind(task.kind);
 
-  const act = async (decision: "approved" | "rejected") => {
+  /**
+   * The verbs to offer, IN THE DECLARATION'S ORDER.
+   *
+   * NEVER SORTED. The producer emits `list(...)` rather than `sorted(...)` and seals it, because
+   * re-sorting reproduces the defect the SDK's ordering fix was cut to close and it arrives
+   * looking like tidiness. A sort here would undo that one surface further out.
+   *
+   * With no declaration, the two seed verbs this card has always offered — correct for
+   * `pcn_disposition`, which is the one declared species the interim table knows.
+   */
+  const verbs = decl ? decl.accepts : ["approved", "rejected"];
+  const needsReason = (v: string) => (decl ? decl.reasonRequired.has(v) : false);
+
+  const act = async (decision: string) => {
+    // A REASON-REQUIRED VERB IS NOT SUBMITTED WITHOUT ONE. Dismissing a reported hazard with no
+    // stated rationale is the erasure this domain cares about most; the gate refuses it, and a
+    // card that posted anyway would turn a declared requirement into a server error the reader
+    // cannot act on.
+    if (needsReason(decision) && !reason.trim()) return;
     setActing(true);
     try {
-      const res = await actOnHumanTask(task.task_id, decision);
+      const res = await actOnHumanTask(task.task_id, decision, reason.trim());
       setDone(decision);
       markTaskResolvedByTaskId(task.task_id);
       toast.success(
-        decision === "approved"
-          ? res.workflow_resumed
-            ? "Approved — workflow resumed"
-            : "Approved"
-          : "Rejected"
+        res.workflow_resumed ? `${verbLabel(decision)} — workflow resumed` : verbLabel(decision),
       );
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -85,7 +123,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
           ? "Not authorized to act on this task"
           : status === 404
             ? "Task no longer available"
-            : "Action failed"
+            : "Action failed",
       );
     } finally {
       setActing(false);
@@ -124,7 +162,26 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         {task.subject_ref && <p className="break-all">subject · {task.subject_ref}</p>}
       </div>
 
-      {!declared ? (
+      {declared && decl && decl.accepts.length === 0 ? (
+        /*
+         * DECLARED, AND TAKES NOTHING. A different fact from an undeclared species, and the
+         * reason `declared` is read rather than inferred from an empty list: one says the mesh
+         * has no such species, the other says this species is not decided on this surface. Same
+         * distinction as absent-versus-refused, and the same justification — different repairs.
+         */
+        <div
+          className="rounded border border-slate-600/40 bg-slate-500/5 px-3 py-2.5"
+          data-declared-no-verbs
+        >
+          <p className="text-[11px] font-mono uppercase tracking-widest text-slate-400">
+            no decision here
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+            <span className="font-mono text-slate-300">{task.kind}</span> is declared and accepts
+            no decisions on this surface.
+          </p>
+        </div>
+      ) : !declared ? (
         /*
          * NO VERBS, AND THE REASON NAMED. Not a disabled button: a greyed Approve still says
          * "this is an approval, you merely cannot do it right now", which is a claim about the
@@ -149,24 +206,51 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         </div>
       ) : done ? (
         <div className="text-[11px] font-mono uppercase tracking-widest text-neon-green">
-          {done === "approved" ? "Approved" : "Rejected"}
+          {verbLabel(done)}
         </div>
       ) : (
-        <div className="flex gap-2">
-          <button
-            onClick={() => act("approved")}
-            disabled={acting}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-neon-green/10 border border-neon-green/50 text-neon-green text-[11px] font-mono uppercase tracking-widest hover:bg-neon-green/20 disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-          </button>
-          <button
-            onClick={() => act("rejected")}
-            disabled={acting}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-neon-pink/10 border border-neon-pink/50 text-neon-pink text-[11px] font-mono uppercase tracking-widest hover:bg-neon-pink/20 disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            <XCircle className="w-3.5 h-3.5" /> Reject
-          </button>
+        <div className="flex flex-col gap-2">
+          {/*
+            THE REASON FIELD APPEARS FOR THE VERBS THAT DECLARE IT, and BEFORE the press rather
+            than after a refusal. A field that materialised only once a decision was rejected
+            would make the requirement discoverable by failing — which on a surface that archives
+            decisions is exactly the wrong way round.
+          */}
+          {verbs.some(needsReason) && (
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="reason — required for some decisions below"
+              data-reason-input
+              className="w-full px-2 py-1.5 rounded bg-black/30 border border-white/10 text-[11px] font-mono text-slate-200 placeholder:text-slate-600"
+            />
+          )}
+          <div className="flex flex-wrap gap-2">
+            {verbs.map((v) => {
+              const blocked = needsReason(v) && !reason.trim();
+              return (
+                <button
+                  key={v}
+                  onClick={() => act(v)}
+                  disabled={acting || blocked}
+                  data-verb={v}
+                  title={blocked ? `${verbLabel(v)} requires a reason` : undefined}
+                  className={`flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 transition-colors cursor-pointer ${
+                    AFFIRMING.has(v)
+                      ? "bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
+                      : "bg-neon-pink/10 border-neon-pink/50 text-neon-pink hover:bg-neon-pink/20"
+                  }`}
+                >
+                  {AFFIRMING.has(v) ? (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5" />
+                  )}{" "}
+                  {verbLabel(v)}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

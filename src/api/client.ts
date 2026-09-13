@@ -138,7 +138,27 @@ export interface ActOnTaskResult {
  *  decision the data cannot represent, which ADR-0034's records would then archive immutably
  *  as promotion evidence. The server is the authority; this union only stops the wrong verb
  *  being spelled here. */
-export type TaskDecision = "approved" | "rejected" | "acknowledged" | "redriven";
+/**
+ * A DECIDED VERB, AND THE DECLARATION IS THE AUTHORITY ON WHICH ONES EXIST.
+ *
+ * This was a closed union of four — approved, rejected, acknowledged, redriven — and the
+ * deployment accepts verbs it cannot express: `accepted`, `returned_for_rework`, `concurred`,
+ * `not_concurred`, `linked`, `new_hazard`, `dismissed`. A High risk acceptance takes
+ * `accepted` and the gate REFUSES `approved`, so the union could not even spell the right
+ * answer for a species already in the fleet.
+ *
+ * WIDENED RATHER THAN EXTENDED. A union here is a second source of truth that has to be edited
+ * every time an overlay declares a species — by someone who does not know this file exists, and
+ * until they do the verb cannot be sent. That is the same argument as the extra-columns
+ * denylist: the served declaration names the vocabulary, so the client's job is to carry it,
+ * not to re-state it.
+ *
+ * The four originals are kept as documentation of what the structural seed declares; they are
+ * no longer a constraint.
+ */
+export type TaskDecision = string;
+/** What the structural seed declares. A HINT for readers — the declaration is the authority. */
+export const SEED_TASK_DECISIONS = ["approved", "rejected", "acknowledged", "redriven"] as const;
 
 export async function actOnHumanTask(
   taskId: string,

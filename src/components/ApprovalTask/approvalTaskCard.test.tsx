@@ -37,6 +37,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
+import { readTaskDeclaration } from "@/lib/taskDeclaration";
 
 const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTaskPayload => ({
   task_id: "t1",
@@ -56,21 +57,34 @@ afterEach(cleanup);
 const buttons = () =>
   screen.queryAllByRole("button").map((b) => (b.textContent ?? "").trim());
 
+/**
+ * The VERBS offered, read off `data-verb` rather than the label text.
+ *
+ * Labels are now the declaration's verbs verbatim — "Approved", not "Approve" — because the word
+ * on the button is the word that gets POSTED and archived, and on a risk acceptance the reader
+ * must see `accepted` rather than a generic approval. That makes label text the wrong selector
+ * twice over: it moves with wording, and "Approved" CONTAINS "Approve", so a substring assertion
+ * passes whether or not the right verb is on offer.
+ */
+const verbs = () =>
+  [...document.querySelectorAll("[data-verb]")].map((b) => b.getAttribute("data-verb"));
+
 describe("a DECLARED kind keeps its verbs", () => {
   it("offers Approve and Reject", () => {
     // The positive control, and it carries the whole file: a card that showed no buttons for
     // anything would pass every refusal assertion below.
     render(<ApprovalTaskCard task={task("workflow_ack")} />);
-    expect(buttons().join(" ")).toContain("Approve");
-    expect(buttons().join(" ")).toContain("Reject");
+    expect(verbs()).toEqual(["approved", "rejected"]);
     expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
   });
 
   it("still acts through the sealed bridge", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
     render(<ApprovalTaskCard task={task("access_request")} />);
-    fireEvent.click(screen.getByText("Approve"));
-    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "approved");
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    // The third argument is the reason, empty when the verb does not require one. Passed
+    // always rather than conditionally, so the bridge has one shape.
+    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "approved", "");
   });
 });
 
@@ -104,8 +118,7 @@ describe("an UNDECLARED kind gets none", () => {
     // the claim that has no declaration behind it. There must be no approve/reject control at
     // all, enabled or otherwise.
     render(<ApprovalTaskCard task={task("some_kind_nobody_declared")} />);
-    expect(screen.queryByText("Approve")).toBeNull();
-    expect(screen.queryByText("Reject")).toBeNull();
+    expect(verbs()).toEqual([]);
     expect(document.querySelectorAll("button")).toHaveLength(0);
   });
 
@@ -143,5 +156,250 @@ describe("the default-deny survives a hostile kind string", () => {
   it("an empty kind is undeclared, not a default approval", () => {
     render(<ApprovalTaskCard task={task("")} />);
     expect(buttons()).toEqual([]);
+  });
+});
+
+/**
+ * THE VERBS ARE THE DECLARATION'S, IN ITS ORDER.
+ *
+ * The interim table held five kinds. The deployment declares eight, six of them APPROVAL_TASK,
+ * and cortex had never heard of the six `risk_acceptance_*` species — so every one drew "unknown
+ * species here" with no buttons. Extending the table would not have fixed it either: a High
+ * acceptance takes `accepted` and the gate REFUSES `approved`, because an approval says the
+ * artifact is in order while an acceptance says a named authority is taking the residual risk.
+ *
+ * ── WHAT THESE SEALS CANNOT DISTINGUISH ───────────────────────────────────────────────────
+ *
+ * They cannot tell whether the gate would ACCEPT the verb pressed. They assert what the card
+ * offers and posts, never what the server permits — the declaration is the only claim available
+ * on this side, and trusting it is the point.
+ *
+ * They also cannot see the two-surface split (the task row versus the kinds endpoint). The card
+ * is handed a declaration; where it came from is the caller's business.
+ */
+describe("the served declaration decides the verbs", () => {
+  /** A High risk acceptance, exactly as the read path returns it. */
+  const HIGH = {
+    kind: "risk_acceptance_high",
+    declared: true,
+    archetype: "APPROVAL_TASK",
+    badge: "ACCEPT",
+    title: "Risk acceptance (high)",
+    accepts: ["accepted", "rejected", "returned_for_rework"],
+    reason_required: ["accepted"],
+  };
+
+  it("offers the declared verbs for a kind the interim table never knew", () => {
+    // The whole point: this species was undecidable in cortex an hour ago.
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_high"), declaration: HIGH }} />);
+    expect(verbs()).toEqual(["accepted", "rejected", "returned_for_rework"]);
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
+  });
+
+  it("offers `accepted` and NOT the generic `approved`", () => {
+    // The gate refuses `approved` for this species, so a card offering it offers a verb nobody
+    // can submit — and the label must show the word being archived.
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_high"), declaration: HIGH }} />);
+    expect(verbs()).toContain("accepted");
+    expect(verbs()).not.toContain("approved");
+  });
+
+  it("keeps the DECLARATION's order, never sorted", () => {
+    // Asserted on a declared order that is NOT alphabetical — otherwise a sort passes the test.
+    const shuffled = { ...HIGH, accepts: ["returned_for_rework", "accepted", "rejected"] };
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_high"), declaration: shuffled }} />);
+    expect(verbs()).toEqual(["returned_for_rework", "accepted", "rejected"]);
+  });
+
+  it("posts the declared verb, with the reason", () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_high"), declaration: HIGH }} />);
+    fireEvent.change(document.querySelector("[data-reason-input]")!, {
+      target: { value: "residual accepted by CE" },
+    });
+    fireEvent.click(document.querySelector('[data-verb="accepted"]')!);
+    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "accepted", "residual accepted by CE");
+  });
+});
+
+describe("a reason-required verb is not submitted without one", () => {
+  const DISMISS = {
+    kind: "hazard_link_review",
+    declared: true,
+    archetype: "GROUPED_REVIEW",
+    badge: "LINK",
+    title: "Hazard link review",
+    accepts: ["linked", "new_hazard", "dismissed"],
+    reason_required: ["dismissed", "new_hazard"],
+  };
+
+  /*
+   * WHICH GUARD THIS TEST ACTUALLY EXERCISES, because there are two and they are not equal.
+   *
+   * The button carries `disabled`, and a disabled button never fires its handler — so this
+   * asserts the DISABLED STATE, and the guard inside `act()` is unreachable from the UI. A
+   * mutation deleting that guard survives, and it is redundancy rather than blindness: it is
+   * the thing that still refuses if anyone later removes `disabled`, or calls the handler
+   * programmatically. Both kept; noted so a passing test here is not read as proof of the
+   * second one.
+   */
+  it("BLOCKS the verb until a reason is given, and posts nothing", () => {
+    // Dismissing a reported hazard with no stated rationale is the erasure this domain cares
+    // about most. The gate refuses it; a card that posted anyway would turn a declared
+    // requirement into a server error the reader cannot act on.
+    render(<ApprovalTaskCard task={{ ...task("hazard_link_review"), declaration: DISMISS }} />);
+    fireEvent.click(document.querySelector('[data-verb="dismissed"]')!);
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+  });
+
+  it("allows it once a reason is typed", () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(<ApprovalTaskCard task={{ ...task("hazard_link_review"), declaration: DISMISS }} />);
+    fireEvent.change(document.querySelector("[data-reason-input]")!, {
+      target: { value: "duplicate of H-114" },
+    });
+    fireEvent.click(document.querySelector('[data-verb="dismissed"]')!);
+    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "dismissed", "duplicate of H-114");
+  });
+
+  it("does NOT block a verb that requires no reason", () => {
+    // The control. A card gating every verb on the reason field would satisfy the assertions
+    // above while making `linked` unreachable.
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(<ApprovalTaskCard task={{ ...task("hazard_link_review"), declaration: DISMISS }} />);
+    fireEvent.click(document.querySelector('[data-verb="linked"]')!);
+    expect(actOnHumanTask).toHaveBeenCalledWith("t1", "linked", "");
+  });
+
+  it("offers NO reason field when no declared verb requires one", () => {
+    // Otherwise every card grows an input nobody needs, and the field stops meaning anything.
+    const noReason = { ...DISMISS, reason_required: [] as string[] };
+    render(<ApprovalTaskCard task={{ ...task("hazard_link_review"), declaration: noReason }} />);
+    expect(document.querySelector("[data-reason-input]")).toBeNull();
+  });
+});
+
+describe("the two absences stay distinguishable", () => {
+  it("DECLARED with no verbs says so — not 'unknown species'", () => {
+    // Bare `risk_acceptance` is undeclared on purpose (the species are per authority level), but
+    // a declared species accepting nothing is a different fact: the mesh has it, and it is not
+    // decided on this surface. Different repairs, so different renderings.
+    const empty = {
+      kind: "something_declared",
+      declared: true,
+      archetype: "APPROVAL_TASK",
+      badge: "X",
+      title: "X",
+      accepts: [] as string[],
+      reason_required: [] as string[],
+    };
+    render(<ApprovalTaskCard task={{ ...task("something_declared"), declaration: empty }} />);
+    expect(document.querySelector("[data-declared-no-verbs]")).not.toBeNull();
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
+    expect(verbs()).toEqual([]);
+  });
+
+  it("NOT DECLARED says unknown species, even with the field present", () => {
+    const undeclared = {
+      kind: "totally_made_up",
+      declared: false,
+      archetype: "",
+      badge: "",
+      title: "",
+      accepts: [] as string[],
+      reason_required: [] as string[],
+    };
+    render(<ApprovalTaskCard task={{ ...task("totally_made_up"), declaration: undeclared }} />);
+    expect(document.querySelector("[data-undeclared-kind]")).not.toBeNull();
+    expect(document.querySelector("[data-declared-no-verbs]")).toBeNull();
+  });
+
+  it("a MISSING declaration falls back to the interim table, not to 'undeclared'", () => {
+    // The deploy window. No row carries a declaration until the read path rolls, and reading its
+    // absence as "declares nothing" would strip the buttons off every task that works today.
+    render(<ApprovalTaskCard task={task("pcn_disposition")} />);
+    expect(verbs()).toEqual(["approved", "rejected"]);
+    expect(document.querySelector("[data-declared-no-verbs]")).toBeNull();
+  });
+});
+
+/**
+ * THE READER REFUSES WHAT IT CANNOT TRUST, and two of these are the producer's own near-misses.
+ *
+ * Added because a mutation survey found the fixtures above could not reach them: every
+ * declaration in them is well-formed, so the guards that matter were untested.
+ */
+describe("the declaration reader refuses a shape it cannot trust", () => {
+  it("drops a reason_required verb that is NOT in accepts — the producer's first defect", () => {
+    // Their read path's first version returned the kind-blind GLOBAL set, so bare
+    // `risk_acceptance` came back `accepts: []` with `reason_required: ['accepted',
+    // 'acknowledged']` — two verbs required to carry a reason on a species that accepts nothing.
+    // Rendering that is a reason box for verbs nobody can submit.
+    //
+    // Re-applied on this side rather than trusted, because this reader is the thing that would
+    // draw the field. Their own subset seal was green throughout: it reads the SOURCE and this
+    // reads the PROJECTION, and an invariant true of a source is not automatically true of
+    // every projection of it.
+    const d = readTaskDeclaration({
+      kind: "risk_acceptance",
+      declared: true,
+      accepts: [],
+      reason_required: ["accepted", "acknowledged"],
+    })!;
+    expect(d.accepts).toEqual([]);
+    expect([...d.reasonRequired]).toEqual([]);
+  });
+
+  it("keeps the reason_required verbs that ARE in accepts — the control", () => {
+    // Without this, an intersection that returned nothing would pass the test above while
+    // losing every legitimate requirement.
+    const d = readTaskDeclaration({
+      kind: "hazard_link_review",
+      declared: true,
+      accepts: ["linked", "new_hazard", "dismissed"],
+      reason_required: ["dismissed", "new_hazard", "not_a_verb_here"],
+    })!;
+    expect([...d.reasonRequired].sort()).toEqual(["dismissed", "new_hazard"]);
+  });
+
+  it("REFUSES a declaration with no `declared` field rather than guessing", () => {
+    // `declared` is the field that separates "the mesh has no such species" from "this species
+    // decides nothing here". Guessing true claims a declaration nobody sent; guessing false
+    // reports a species as unknown on the strength of a missing boolean. Null means "no
+    // declaration to read", which is the honest third thing.
+    expect(readTaskDeclaration({ kind: "x", accepts: ["approved"] })).toBeNull();
+    expect(readTaskDeclaration({ kind: "x", declared: "yes", accepts: [] })).toBeNull();
+  });
+
+  it("REFUSES a declaration that cannot name its own species", () => {
+    expect(readTaskDeclaration({ declared: true, accepts: ["approved"] })).toBeNull();
+    expect(readTaskDeclaration({ kind: "   ", declared: true, accepts: [] })).toBeNull();
+  });
+
+  it("accepts a well-formed one — the positive control for all four refusals", () => {
+    const d = readTaskDeclaration({
+      kind: "risk_acceptance_high",
+      declared: true,
+      archetype: "APPROVAL_TASK",
+      accepts: ["accepted", "rejected"],
+      reason_required: ["accepted"],
+    });
+    expect(d).not.toBeNull();
+    expect(d!.accepts).toEqual(["accepted", "rejected"]);
+  });
+
+  it("preserves accepts ORDER and drops duplicates", () => {
+    const d = readTaskDeclaration({
+      kind: "k",
+      declared: true,
+      accepts: ["returned_for_rework", "accepted", "returned_for_rework", ""],
+    })!;
+    expect(d.accepts).toEqual(["returned_for_rework", "accepted"]);
+  });
+
+  it("says nothing about a non-record", () => {
+    for (const junk of [null, undefined, 42, "declared", []]) {
+      expect(readTaskDeclaration(junk), String(junk)).toBeNull();
+    }
   });
 });
