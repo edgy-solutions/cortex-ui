@@ -84,6 +84,21 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const [done, setDone] = useState<string | null>(null);
   const [reason, setReason] = useState("");
 
+  /**
+   * WHAT THE SERVER SAID IT ACTUALLY ACCEPTS, after refusing what we offered.
+   *
+   * `/act` answers a wrong verb with 422 and a body carrying `allowed` — the declaration's own
+   * order, `list(...)` and never `sorted(...)` on that side too. That list is authoritative in
+   * a way the card's copy is not: it is read at decision time, from the species the task really
+   * has.
+   *
+   * THIS IS A CORRECTION PATH, NOT A DISCOVERY PATH. The declaration is how the card learns its
+   * verbs; probing to find them would mean posting decisions nobody made, on a surface that
+   * archives them. This only fires when the two disagree — a stale bundle, a declaration that
+   * moved under a long-lived tab — and the disagreement is itself the fact worth rendering.
+   */
+  const [corrected, setCorrected] = useState<{ allowed: string[]; message: string } | null>(null);
+
   // THE SERVED DECLARATION IS THE AUTHORITY WHERE THERE IS ONE; the interim table where there
   // is not. See the header for why both, and for how long.
   const decl = readTaskDeclaration(task.declaration);
@@ -99,7 +114,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
    * With no declaration, the two seed verbs this card has always offered — correct for
    * `pcn_disposition`, which is the one declared species the interim table knows.
    */
-  const verbs = decl ? decl.accepts : ["approved", "rejected"];
+  const verbs = corrected ? corrected.allowed : decl ? decl.accepts : ["approved", "rejected"];
   const needsReason = (v: string) => (decl ? decl.reasonRequired.has(v) : false);
 
   const act = async (decision: string) => {
@@ -117,7 +132,25 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         res.workflow_resumed ? `${verbLabel(decision)} — workflow resumed` : verbLabel(decision),
       );
     } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const res = (err as { response?: { status?: number; data?: unknown } })?.response;
+      const status = res?.status;
+      // THE REFUSAL CARRIES THE MENU. 422 `invalid_decision_for_kind` names the verbs this
+      // species really takes, in the declaration's order. Adopting them turns a dead end into
+      // the next action, and a toast saying "Action failed" would have thrown that list away —
+      // leaving the reader to guess at exactly the thing the server just told them.
+      const detail = (res?.data as { detail?: unknown } | undefined)?.detail;
+      const d = typeof detail === "object" && detail !== null ? (detail as Record<string, unknown>) : null;
+      const allowed =
+        d && d.error === "invalid_decision_for_kind" && Array.isArray(d.allowed)
+          ? d.allowed.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+          : null;
+      if (allowed && allowed.length > 0) {
+        setCorrected({
+          allowed,
+          message: typeof d?.message === "string" ? d.message : "That decision was refused.",
+        });
+        return;
+      }
       toast.error(
         status === 403
           ? "Not authorized to act on this task"
@@ -210,6 +243,25 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
+          {/*
+            THE BUTTONS CHANGED UNDER THE READER'S HAND, so the card says why. A menu that
+            silently rearranged itself after a press is worse than the refusal it is reporting:
+            the reader would not know whether their decision landed, and the second press would
+            be made blind.
+          */}
+          {corrected && (
+            <div
+              className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2"
+              data-decision-corrected
+            >
+              <p className="text-[10px] font-mono uppercase tracking-widest text-amber-400/90">
+                that decision was refused — nothing was recorded
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                {corrected.message} These are the decisions this task accepts.
+              </p>
+            </div>
+          )}
           {/*
             THE REASON FIELD APPEARS FOR THE VERBS THAT DECLARE IT, and BEFORE the press rather
             than after a refusal. A field that materialised only once a decision was rejected

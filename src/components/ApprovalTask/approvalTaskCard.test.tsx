@@ -27,7 +27,7 @@
  * lives in another repo.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({
@@ -35,6 +35,9 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
+
+import { toast } from "sonner";
+import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
@@ -51,7 +54,11 @@ const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTa
   ...over,
 });
 
-beforeEach(() => actOnHumanTask.mockReset());
+beforeEach(() => {
+  actOnHumanTask.mockReset();
+  vi.mocked(toast.error).mockReset();
+  vi.mocked(markTaskResolvedByTaskId).mockReset();
+});
 afterEach(cleanup);
 
 const buttons = () =>
@@ -530,5 +537,162 @@ describe("the live declarations, captured", () => {
       expect(d, name).not.toBeNull();
       expect(d!.kind, name).toBe(name);
     }
+  });
+});
+
+/**
+ * THE REFUSAL CARRIES THE MENU.
+ *
+ * `/act` answers a wrong verb with 422 and a body naming the verbs the species really takes,
+ * in the declaration's order — `list(...)` and never `sorted(...)` on that side too. The shape
+ * is captured from `gateway.py` in the serving pod:
+ *
+ *   422 {"detail": {"error": "invalid_decision_for_kind", "kind": ..., "allowed": [...],
+ *                   "message": ...}}
+ *
+ * A toast reading "Action failed" threw that list away and left the reader guessing at exactly
+ * the thing the server had just told them.
+ *
+ * ── A CORRECTION PATH, NOT A DISCOVERY PATH ───────────────────────────────────────────────
+ *
+ * The declaration is how the card learns its verbs. Probing to find them would mean posting
+ * decisions nobody made on a surface that archives them, which is why this fires only when the
+ * card's copy and the server disagree — a stale bundle, a declaration that moved under a
+ * long-lived tab. The disagreement is itself the fact worth rendering.
+ *
+ * ── WHAT THIS SEAL CANNOT DISTINGUISH ─────────────────────────────────────────────────────
+ *
+ * It cannot tell a stale bundle from a declaration that changed mid-session — both produce the
+ * same 422 and the same correction, and the repair for both is the same press. It also cannot
+ * assert that nothing was written: it checks the card says so, and the claim that no record was
+ * archived is the gateway's, made before any write.
+ */
+describe("a refused decision offers what the server accepts", () => {
+  const refusal = (allowed: string[], message = "approved is not valid for this kind") =>
+    Object.assign(new Error("Request failed with status code 422"), {
+      response: {
+        status: 422,
+        data: {
+          detail: {
+            error: "invalid_decision_for_kind",
+            kind: "risk_acceptance_high",
+            allowed,
+            message,
+          },
+        },
+      },
+    });
+
+  it("ADOPTS the allowed verbs, in the order the server sent them", () => {
+    actOnHumanTask.mockRejectedValue(
+      refusal(["accepted", "rejected", "returned_for_rework"]),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    // The card offered the seed pair; the server says otherwise.
+    expect(verbs()).toEqual(["approved", "rejected"]);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() =>
+      expect(verbs()).toEqual(["accepted", "rejected", "returned_for_rework"]),
+    );
+  });
+
+  it("keeps the SERVER's order, even when it is not sorted", () => {
+    // Asserted on an order that is not alphabetical, so a sort cannot pass. Re-sorting here
+    // reproduces one surface out the defect the ordering fix was cut to close.
+    actOnHumanTask.mockRejectedValue(refusal(["returned_for_rework", "accepted", "rejected"]));
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() =>
+      expect(verbs()).toEqual(["returned_for_rework", "accepted", "rejected"]),
+    );
+  });
+
+  it("SAYS the buttons changed, and that nothing was recorded", () => {
+    // A menu that silently rearranged itself after a press is worse than the refusal it is
+    // reporting: the reader would not know whether their decision landed, and the next press
+    // would be made blind.
+    actOnHumanTask.mockRejectedValue(refusal(["accepted"]));
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => {
+      const note = document.querySelector("[data-decision-corrected]")!;
+      expect(note).not.toBeNull();
+      expect(note.textContent).toMatch(/nothing was recorded/i);
+      expect(note.textContent).toContain("approved is not valid for this kind");
+    });
+  });
+
+  it("does NOT mark the task done — the decision did not land", () => {
+    actOnHumanTask.mockRejectedValue(refusal(["accepted"]));
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => expect(document.querySelector("[data-decision-corrected]")).not.toBeNull())
+      .then(() => {
+        expect(markTaskResolvedByTaskId).not.toHaveBeenCalled();
+        expect(verbs().length).toBeGreaterThan(0);
+      });
+  });
+
+  it("falls back to a TOAST for a refusal that names no verbs", () => {
+    // 403 and 404 are not menu problems and must not be rendered as one — a card that showed
+    // "these are the decisions this task accepts" with an empty list would be inventing a menu
+    // out of an authorization failure.
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("403"), { response: { status: 403, data: {} } }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => expect(toast.error).toHaveBeenCalled()).then(() => {
+      expect(document.querySelector("[data-decision-corrected]")).toBeNull();
+      expect(verbs()).toEqual(["approved", "rejected"]);
+    });
+  });
+
+  it("ignores a 422 whose allowed list is empty or junk", () => {
+    // An empty correction would blank the card's buttons and leave no way to act at all —
+    // strictly worse than the toast it replaced.
+    actOnHumanTask.mockRejectedValue(refusal([]));
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => expect(toast.error).toHaveBeenCalled()).then(() => {
+      expect(verbs()).toEqual(["approved", "rejected"]);
+    });
+  });
+
+
+  it("keys on the ERROR CODE, not on the presence of an allowed list", () => {
+    // CONSTRUCTED, because no live response is non-degenerate here: the 403 branch returns
+    // `not_authorized_to_act` with no `allowed`, so a check that merely looked for the FIELD
+    // would pass against every real payload today and be wrong the first time another refusal
+    // shape carries one. Same reason the parity seal needs a constructed control — the found
+    // examples cannot tell the two implementations apart.
+    //
+    // The settled-task 409 is the realistic candidate: a teammate already resolved it, and a
+    // future body naming that species' verbs would be reported here as "your decision was
+    // refused, pick another" when the truth is that the task is gone.
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("409"), {
+        response: {
+          status: 409,
+          data: { detail: { error: "already_resolved", allowed: ["accepted", "rejected"] } },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => expect(toast.error).toHaveBeenCalled()).then(() => {
+      expect(document.querySelector("[data-decision-corrected]")).toBeNull();
+      expect(verbs()).toEqual(["approved", "rejected"]);
+    });
+  });
+
+  it("says NOTHING on a success — the control", () => {
+    // Without this, a card that always drew the correction would satisfy every assertion above.
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    return waitFor(() => expect(markTaskResolvedByTaskId).toHaveBeenCalled()).then(() => {
+      expect(document.querySelector("[data-decision-corrected]")).toBeNull();
+    });
   });
 });
