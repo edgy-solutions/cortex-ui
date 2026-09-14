@@ -7,7 +7,7 @@ import {
   useCurrentGraphTrace,
   useCurrentGraphAlternates,
 } from "@/store/useCanvasStore";
-import { presentAbstention, readExclusions, type RouteSeverity } from "@/lib/routing";
+import { presentAbstention, readExclusionSplit, type RouteSeverity } from "@/lib/routing";
 import { readPresentation } from "@/lib/presentationProvenance";
 import { askParentOf } from "@/lib/askFold";
 import { readAskOf, readPick } from "@/lib/askedPick";
@@ -106,7 +106,14 @@ export function DecisionPathDiagram() {
   // Drawn on EVERY decision, not only on an abstention: a gate that removed the better verb
   // while a worse one survived is the same defect with an answer on top of it, and that case
   // shows no fallback at all.
-  const removed = readExclusions(routing.excluded);
+  // PARTITIONED. The arity gate stopped EXCLUDING on 2026-09-04 — removing the only verb that
+  // fits abstains for the reason it would have asked about, so it keeps the verb and marks it.
+  // Those rows arrive under the same key and rendered here as "excluded by arity", which
+  // asserts the opposite of the decision taken.
+  const { removed, flagged } = readExclusionSplit(
+    routing.excluded,
+    (routing as { flags?: unknown }).flags,
+  );
   // HOW THE CARD WAS CHOSEN, which is a different question from how the VERB was. The path
   // above ends at an output class; this says which renderer was picked for it and whether the
   // caller had actually declared one.
@@ -193,6 +200,10 @@ export function DecisionPathDiagram() {
                   all: a gate deleted them, and the record afterwards showed only the survivors,
                   so an abstention on a pool of one wore a classifier-uncertainty costume. */}
               {removed.length > 0 && <Removed items={removed} />}
+              {/* A SEPARATE LIST, not a differently-worded row inside the removed one. They are
+                  opposite decisions, and a reader scanning a list headed "removed" does not
+                  re-read each line looking for the one that was kept. */}
+              {flagged.length > 0 && <Removed items={flagged} flagged />}
 
               {/* TERMINAL — the output class, OR the loud fallback node */}
               {isFallback && fb ? (
@@ -325,14 +336,22 @@ function Connector({ label, verb }: { label: string; verb?: boolean }) {
  * differs in kind rather than in degree: an offshoot carries a SCORE, which is a comparison
  * these never got to be part of. What they carry instead is a gate and a sentence.
  */
-function Removed({ items }: { items: { verb: string; gate: string; reason: string }[] }) {
+function Removed({
+  items,
+  flagged = false,
+}: {
+  items: { verb: string; gate: string; reason: string }[];
+  /** Kept-and-marked rather than deleted — see the wording below and `readExclusionSplit`. */
+  flagged?: boolean;
+}) {
   return (
     <div
       className="ml-3 mb-1 border-l border-dashed border-amber-700/50 pl-3 py-1"
-      data-removed-candidates
+      data-removed-candidates={flagged ? undefined : true}
+      data-flagged-candidates={flagged ? true : undefined}
     >
       <div className="text-[9px] font-mono uppercase tracking-wider text-amber-500/70 mb-1">
-        candidates removed (eligibility)
+        {flagged ? "candidates flagged (kept)" : "candidates removed (eligibility)"}
       </div>
       <div className="flex flex-col gap-1">
         {items.map((it, i) => (
@@ -342,7 +361,18 @@ function Removed({ items }: { items: { verb: string; gate: string; reason: strin
             data-removed-gate={it.gate || undefined}
           >
             <span className="text-slate-300">{_short(it.verb)}</span>
-            {it.gate && <span className="text-amber-500/80"> — excluded by {it.gate}</span>}
+            {it.gate && (
+              <span className="text-amber-500/80">
+                {" "}
+                {flagged
+                  ? // KEPT, NOT DELETED. A flagged verb is a live candidate the disposition
+                    // should have ASKED about, and "excluded by" told the reader it was gone —
+                    // removing the one action available to them, which is supplying the
+                    // instance. The label asserted the reverse of the decision taken.
+                    "— needs an instance: asked rather than excluded"
+                  : `— excluded by ${it.gate}`}
+              </span>
+            )}
             {/* THE GATE'S OWN WORDS, verbatim. This surface has no vocabulary of gates and must
                 not acquire one, or the next gate anyone adds renders as an unknown token. */}
             {it.reason && <span className="text-slate-500">: {it.reason}</span>}

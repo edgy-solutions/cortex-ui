@@ -27,7 +27,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { AttemptFailed } from "./AttemptFailed";
-import { readExclusions } from "@/lib/routing";
+import { readExclusions, readExclusionSplit } from "@/lib/routing";
 import type { Artifact } from "@/api/types";
 
 afterEach(cleanup);
@@ -156,5 +156,109 @@ describe("it is mounted on BOTH surfaces", () => {
 
   it("the full pane mounts it", () => {
     expect(src("CanvasPane.tsx")).toContain("<AttemptFailed");
+  });
+});
+
+/**
+ * FLAGGED IS NOT REMOVED — the same key, opposite decisions.
+ *
+ * The arity gate STOPPED EXCLUDING on 2026-09-04: removing the only verb that fits abstains for
+ * the reason it would have asked about, so it keeps the verb and marks it. Measured at
+ * `direct_dispatch.py:507` in the serving pod (`cd924db`):
+ *
+ *     {"uri": ..., "gate": "arity", "reason": "needs_instance", "disposal": "flagged"}
+ *
+ * So a LIVE candidate rendered as "excluded by arity" — under a key whose name says deleted,
+ * with a label asserting the reverse of the decision taken. And the reverse is the ACTIONABLE
+ * half: a flagged verb tells the reader to supply the instance, while "excluded" tells them the
+ * verb is gone and there is nothing to supply.
+ *
+ * ── MY OWN FIXTURE WAS THE PARAPHRASE, NOT THE WIRE ───────────────────────────────────────
+ *
+ * The exclusion fixture in this file carried no `disposal` at all, because I built it from a
+ * description in a message rather than from the producer. It passed — as a REMOVAL — which is
+ * exactly the mislabel being fixed. A fixture written from an account of the payload agrees
+ * with the account, not with the payload.
+ */
+describe("a flagged candidate is not reported as removed", () => {
+  /** The producer's real arity row. */
+  const FLAGGED = {
+    uri: "mesh:finProgramBrief",
+    gate: "arity",
+    reason: "needs_instance",
+    disposal: "flagged",
+  };
+  /** A genuine removal, for the other half of the partition. */
+  const REMOVED = {
+    uri: "mesh:someOtherVerb",
+    gate: "domain",
+    reason: "out of scope",
+    disposal: "removed",
+  };
+
+  it("partitions the two, and neither half is the other's leftovers", () => {
+    const { removed, flagged } = readExclusionSplit([FLAGGED, REMOVED], undefined);
+    expect(flagged.map((r) => r.verb)).toEqual(["mesh:finProgramBrief"]);
+    expect(removed.map((r) => r.verb)).toEqual(["mesh:someOtherVerb"]);
+  });
+
+  it("treats an ABSENT disposal as removed — mislabel is visible, absence is not", () => {
+    // Every row predating the field meant "removed", which is what the key name says. It can
+    // mislabel an older flagged row; a disappearance could not be seen at all.
+    const { removed, flagged } = readExclusionSplit([{ uri: "a:X", gate: "arity" }], undefined);
+    expect(removed).toHaveLength(1);
+    expect(flagged).toHaveLength(0);
+  });
+
+  it("does NOT absorb an unrecognised disposal into flagged", () => {
+    // The partition's whole point. A `flagged` computed as "everything not removed" would take
+    // any third disposal the gate ever adds and render it as a live candidate — a claim about a
+    // decision, made from not recognising a word.
+    const { removed, flagged } = readExclusionSplit(
+      [{ uri: "a:X", gate: "arity", disposal: "deferred" }],
+      undefined,
+    );
+    expect(flagged).toHaveLength(0);
+    expect(removed).toHaveLength(1);
+  });
+
+  it("reads the producer's newer `flags` key as flagged regardless of the row's own field", () => {
+    // A row arriving under that key is one the gate kept; the key is the claim.
+    const { removed, flagged } = readExclusionSplit(undefined, [{ uri: "a:X", gate: "arity" }]);
+    expect(flagged).toHaveLength(1);
+    expect(removed).toHaveLength(0);
+  });
+
+  it("DE-DUPLICATES across the additive window, where both keys carry the same row", () => {
+    // The producer added `flags` without narrowing `excluded`, on purpose, so this reader is
+    // not the second place an arity row vanishes. Reading both naively lists every flagged
+    // candidate twice, and the fix would look like a new defect.
+    const { removed, flagged } = readExclusionSplit([FLAGGED], [FLAGGED]);
+    expect(flagged).toHaveLength(1);
+    expect(removed).toHaveLength(0);
+  });
+
+  it("the CARD says kept-and-flagged, never excluded", () => {
+    render(<AttemptFailed artifact={artifact({ routing: { excluded: [FLAGGED] } })} />);
+    const flags = document.querySelector("[data-failure-flags]")!;
+    expect(flags).not.toBeNull();
+    expect(flags.textContent).toContain("finProgramBrief");
+    expect(flags.textContent).toMatch(/asked rather than excluded/i);
+    // And it must not also appear as a removal.
+    expect(document.querySelector("[data-failure-exclusions]")).toBeNull();
+  });
+
+  it("a failure explained ONLY by flags is explained — not 'no trace'", () => {
+    // `data-failure-untraced` means nothing was recorded. A flagged candidate IS the record.
+    render(<AttemptFailed artifact={artifact({ routing: { excluded: [FLAGGED] } })} />);
+    expect(document.querySelector("[data-failure-untraced]")).toBeNull();
+  });
+
+  it("still reports a genuine removal as removed — the control", () => {
+    // Without this, a card that rendered everything as a flag would pass every assertion above
+    // while telling a reader that a domain-excluded verb is waiting for an instance.
+    render(<AttemptFailed artifact={artifact({ routing: { excluded: [REMOVED] } })} />);
+    expect(document.querySelector("[data-failure-exclusions]")).not.toBeNull();
+    expect(document.querySelector("[data-failure-flags]")).toBeNull();
   });
 });

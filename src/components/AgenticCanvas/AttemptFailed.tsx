@@ -1,5 +1,5 @@
 import type { Artifact } from "@/api/types";
-import { readExclusions } from "@/lib/routing";
+import { readExclusionSplit } from "@/lib/routing";
 
 /**
  * A FAILED ARTIFACT, SAID SO — and named, where the person who hit it is already looking.
@@ -39,7 +39,13 @@ import { readExclusions } from "@/lib/routing";
 export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compact?: boolean }) {
   if (artifact.status !== "failed") return null;
 
-  const excluded = readExclusions(artifact.routing?.excluded);
+  // PARTITIONED, because the two are opposite decisions arriving under one key. A verb the
+  // arity gate KEPT and marked is a live candidate the disposition should have ASKED about —
+  // rendering it as "excluded" asserts the reverse of what happened.
+  const { removed, flagged } = readExclusionSplit(
+    artifact.routing?.excluded,
+    (artifact.routing as { flags?: unknown } | null | undefined)?.flags,
+  );
 
   return (
     <div
@@ -49,9 +55,24 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
       <p className="font-mono text-[10px] uppercase tracking-widest text-rose-400/90">
         this attempt failed
       </p>
-      {excluded.length > 0 ? (
+      {flagged.length > 0 && (
+        <ul className="mt-1 flex flex-col gap-0.5" data-failure-flags>
+          {flagged.map((e) => (
+            <li key={`${e.verb}-${e.gate}`} className="font-mono text-[11px] text-slate-300">
+              <span className="text-slate-200">{shortVerb(e.verb)}</span>
+              {/* NOT "excluded". The gate kept this verb — the turn abstained for the reason it
+                  should have asked about, which is the actionable half: the reader can supply
+                  the missing thing. Saying "excluded by arity" tells them the opposite. */}
+              <span className="text-slate-500"> was kept and flagged: </span>
+              <span className="text-amber-400/90">{e.reason || e.gate || "unstated"}</span>
+              <span className="text-slate-500"> — asked rather than excluded</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {removed.length > 0 ? (
         <ul className="mt-1 flex flex-col gap-0.5" data-failure-exclusions>
-          {excluded.map((e) => (
+          {removed.map((e) => (
             <li key={`${e.verb}-${e.gate}`} className="font-mono text-[11px] text-slate-300">
               {/* The verb, then the gate that removed it. Verbatim — see the header. */}
               <span className="text-slate-200">{shortVerb(e.verb)}</span>
@@ -63,16 +84,18 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
             </li>
           ))}
         </ul>
-      ) : (
+      ) : flagged.length === 0 ? (
         /*
          * FAILED WITH NO TRACE is a different fact from failed-and-explained, and saying so is
          * what stops a reader hunting for a reason that was never recorded. The producer may
          * not have captured one; this surface must not invent one.
+         *
+         * Only when NEITHER half has rows: a failure explained entirely by flags is explained.
          */
         <p className="mt-1 font-mono text-[11px] text-slate-400" data-failure-untraced>
           No eligibility trace was recorded for this attempt.
         </p>
-      )}
+      ) : null}
       {!compact && artifact.routing?.fallback_reason && (
         <p className="mt-1 font-mono text-[10px] text-slate-500">
           {artifact.routing.fallback_reason}

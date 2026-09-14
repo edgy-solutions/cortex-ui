@@ -176,3 +176,61 @@ describe("which CARD was chosen, and whether anyone declared it", () => {
     expect(document.querySelector("[data-presentation-basis]")).toBeNull();
   });
 });
+
+/**
+ * A KEPT CANDIDATE IS NOT A REMOVED ONE, and this panel said it was.
+ *
+ * The arity gate stopped EXCLUDING on 2026-09-04: removing the only verb that fits abstains for
+ * the reason it would have asked about, so it keeps the verb and marks it `disposal: "flagged"`.
+ * This panel appended "— excluded by arity" to every row unconditionally, so a LIVE candidate
+ * was reported as deleted.
+ *
+ * That is worse than a cosmetic mislabel. A flagged verb tells the reader to supply the missing
+ * instance; "excluded" tells them the verb is gone and there is nothing to supply — so the label
+ * removed the only action available to them.
+ */
+describe("a flagged candidate is shown as kept, not removed", () => {
+  const flagged = {
+    uri: "mesh:finProgramBrief",
+    gate: "arity",
+    reason: "needs_instance",
+    disposal: "flagged",
+  };
+
+  it("lists it under FLAGGED, not under removed", () => {
+    seed(routing({ excluded: [flagged] } as never));
+    render(<DecisionPathDiagram />);
+    const block = document.querySelector("[data-flagged-candidates]")!;
+    expect(block).toBeTruthy();
+    expect(block.textContent).toContain("finProgramBrief");
+    expect(document.querySelector("[data-removed-candidates]")).toBeNull();
+  });
+
+  it("does NOT say excluded", () => {
+    seed(routing({ excluded: [flagged] } as never));
+    render(<DecisionPathDiagram />);
+    const block = document.querySelector("[data-flagged-candidates]")!;
+    expect(block.textContent).not.toMatch(/excluded by/);
+    expect(block.textContent).toMatch(/asked rather than excluded/);
+  });
+
+  it("still lists a genuine removal as removed — the control", () => {
+    // Without this, a panel that rendered everything as flagged would pass both assertions
+    // above while telling a reader that a domain-excluded verb is waiting for an instance.
+    seed(routing({ excluded: [arity] }));
+    render(<DecisionPathDiagram />);
+    expect(document.querySelector("[data-removed-candidates]")).toBeTruthy();
+    expect(document.querySelector("[data-flagged-candidates]")).toBeNull();
+  });
+
+  it("shows BOTH lists when the trace carries both", () => {
+    seed(routing({ excluded: [arity, flagged] } as never));
+    render(<DecisionPathDiagram />);
+    expect(document.querySelector("[data-removed-candidates]")!.textContent).toContain(
+      "planCapabilityPath",
+    );
+    expect(document.querySelector("[data-flagged-candidates]")!.textContent).toContain(
+      "finProgramBrief",
+    );
+  });
+});

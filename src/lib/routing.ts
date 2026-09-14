@@ -201,6 +201,92 @@ export function readExclusions(excluded: unknown): ReadExclusion[] {
 }
 
 /**
+ * REMOVED AND FLAGGED ARE OPPOSITE DECISIONS, and they arrive under one key.
+ *
+ * ── WHAT THE PRODUCER DOES NOW ────────────────────────────────────────────────────────────
+ *
+ * The arity gate STOPPED EXCLUDING on 2026-09-04: removing the only verb that fits abstains for
+ * the reason it would have asked about, so it now sets `needs_instance` and KEEPS the verb as a
+ * candidate. Those rows carry `disposal: "flagged"`; genuine removals carry `"removed"`.
+ *
+ * Measured at `direct_dispatch.py:507` in the serving pod, not inferred:
+ *
+ *     {"uri": ..., "gate": "arity", "reason": "needs_instance", "disposal": "flagged"}
+ *
+ * So a LIVE candidate was rendering as "excluded by arity" — under a key whose name says it was
+ * deleted, with a label asserting the opposite of the decision actually taken.
+ *
+ * ── PARTITION, NOT FILTER ─────────────────────────────────────────────────────────────────
+ *
+ * Neither half is derived from the other's absence. A `flagged` list computed as "everything
+ * not removed" would silently absorb any third disposal the gate ever adds, and a row with a
+ * disposal nobody has taught this reader about would render as a flag — which is a claim about
+ * a decision, made from not recognising a word.
+ *
+ * AN ABSENT `disposal` IS TREATED AS REMOVED, deliberately. That is what the key name has always
+ * meant and what every row predating the field meant. It can mislabel a flagged row from an
+ * older record — and a mislabel is VISIBLE while a disappearance is not, which is the same
+ * trade that governs the whole of this file.
+ *
+ * ── BOTH KEYS CARRY THE FLAGGED ROWS RIGHT NOW ────────────────────────────────────────────
+ *
+ * The producer added `routing.flags` ADDITIVELY and has not yet narrowed `excluded`, precisely
+ * so this reader is not the second place an arity row vanishes. While that window is open the
+ * same row arrives twice, so the halves are de-duplicated on verb+gate — otherwise the panel
+ * would list every flagged candidate twice and the fix would look like a new defect.
+ */
+export interface ExclusionSplit {
+  /** Verbs a gate actually deleted. */
+  removed: ReadExclusion[];
+  /** Verbs a gate KEPT and marked — live candidates, not removals. */
+  flagged: ReadExclusion[];
+}
+
+const FLAGGED = "flagged";
+
+/** One row, with its disposal — read from either key. */
+function readDisposal(e: unknown): { row: ReadExclusion; flagged: boolean } | null {
+  if (typeof e !== "object" || e === null) return null;
+  const r = e as Record<string, unknown>;
+  const rows = readExclusions([e]);
+  if (rows.length === 0) return null;
+  const disposal = typeof r.disposal === "string" ? r.disposal.trim() : "";
+  return { row: rows[0], flagged: disposal === FLAGGED };
+}
+
+/**
+ * Split the eligibility trace into what was deleted and what was kept-and-marked.
+ *
+ * `flags` is the producer's newer key and is read as flagged REGARDLESS of its rows' own
+ * `disposal`: a row arriving under that key is one the gate kept, and the key is the claim.
+ */
+export function readExclusionSplit(excluded: unknown, flags: unknown): ExclusionSplit {
+  const removed: ReadExclusion[] = [];
+  const flagged: ReadExclusion[] = [];
+  const seen = new Set<string>();
+  const key = (r: ReadExclusion) => `${r.verb} ${r.gate}`;
+
+  const take = (raw: unknown, forceFlagged: boolean) => {
+    if (!Array.isArray(raw)) return;
+    for (const e of raw) {
+      const read = readDisposal(e);
+      if (!read) continue;
+      const k = key(read.row);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      (forceFlagged || read.flagged ? flagged : removed).push(read.row);
+    }
+  };
+
+  // FLAGS FIRST, so that during the additive window a row present under both keys is counted
+  // as the flag it is. Reading `excluded` first would classify it by its own `disposal` — the
+  // same answer today, and the wrong one the moment a producer emits a flag row without one.
+  take(flags, true);
+  take(excluded, false);
+  return { removed, flagged };
+}
+
+/**
  * The abstention, told apart.
  *
  * NOTHING FIT and SOMETHING FIT AND WAS REMOVED are different events with different remedies,
