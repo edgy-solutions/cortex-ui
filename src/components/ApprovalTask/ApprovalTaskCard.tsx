@@ -6,6 +6,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { readTaskDeclaration, verbLabel } from "@/lib/taskDeclaration";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task decided by naming a verb. It acts
@@ -101,7 +102,11 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
 
   // THE SERVED DECLARATION IS THE AUTHORITY WHERE THERE IS ONE; the interim table where there
   // is not. See the header for why both, and for how long.
-  const decl = readTaskDeclaration(task.declaration);
+  // THE SERVED MENU, then the row, then the interim table. The row field is kept because the
+  // task listing also carries a declaration and a row-level one is the more specific claim; the
+  // store is what makes the path reachable at all, since nothing populates that field today.
+  const fromKinds = useTaskKindStore((s) => s.declarationFor(task.kind));
+  const decl = readTaskDeclaration(task.declaration) ?? fromKinds;
   const declared = decl ? decl.declared : isRegisteredKind(task.kind);
 
   /**

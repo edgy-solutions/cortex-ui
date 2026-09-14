@@ -36,6 +36,12 @@ const USER_SCOPED_STORAGE_KEYS = ["cortex-answers-panel-v1", "cortex-stage"];
  * visible enough to disagree with.
  */
 export const PURGE_EXEMPT_STORES: Record<string, string> = {
+  useTaskKindStore:
+    "Holds the MESH's task-kind declarations — which species exist and what verbs they take. " +
+    "Identical for every caller, derived from policy rather than from anyone's answers, tasks " +
+    "or identity, so there is nothing for the next caller to see. Purging it would blank the " +
+    "menu mid-session and say, falsely, that it held something belonging to the previous " +
+    "owner. It is also not persisted.",
   useRegistrationStore:
     "Describes what THIS BUILD advertised about itself — how many capability rows it offered " +
     "and how many the server kept. Identical for every caller, derived from code rather than " +

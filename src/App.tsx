@@ -21,6 +21,7 @@ import {
 } from "@/registry/registrationLifecycle";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useRegistrationStore } from "@/store/useRegistrationStore";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
 import type { Artifact } from "@/api/types";
 import { registerFrontendCapabilities } from "@/api/client";
@@ -274,6 +275,22 @@ export function useFrontendCapabilityRegistration() {
  * repopulates. Returns false until the check has run, so the tree can withhold
  * render and no prior user's answers/tasks ever paint. See sessionIsolation.ts.
  */
+/**
+ * Load the served task-kind menu once per authenticated session.
+ *
+ * MOUNTED HERE, BESIDE THE OTHER ONCE-PER-SESSION LOADS, and not inside the card. A fetch in the
+ * card is a fetch per rendered task — the fan-out species this repo swept for — and it would
+ * also never run for an empty queue, which is one of the two cases the menu exists to answer.
+ */
+function useTaskKindDeclarations(): void {
+  const auth = useAuth();
+  const load = useTaskKindStore((s) => s.load);
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    void load();
+  }, [auth.isAuthenticated, load]);
+}
+
 function useSessionIsolation(): boolean {
   const auth = useAuth();
   const owner = auth.user?.profile?.sub ?? null;
@@ -330,6 +347,7 @@ export default function App() {
   const phase = useInterviewStore((s) => s.phase);
   const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
+  useTaskKindDeclarations();
   useEntitlementsSync();
   // ADR-0042 OQ1: ONE subscription for the whole surface, not one per card — a per-card
   // watcher on a global signal is the fan-out species swept for on 2026-08-25.

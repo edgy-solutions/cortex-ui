@@ -772,3 +772,32 @@ export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
     // fallback is the store's own localStorage copy, which has already been written.
   }
 }
+
+// ── Task-kind declarations (the served menu) ──────────────
+/**
+ * Every declared task species, from `GET /task_kinds`.
+ *
+ * THE WHOLE MENU, FETCHED ONCE, rather than a declaration threaded onto each row. The
+ * declaration is a property of the KIND and not of the task, and carrying it per row would mean
+ * plumbing it through BOTH task producers — the REST seed and the Electric projection — and
+ * then defending it against the projection replacing a seeded row with one that has no such
+ * column. That is the shape the `answered_with` comment in the canvas store already describes,
+ * and the `payload` comment in the Electric mapper describes again: two producers, one field,
+ * and a card whose content vanishes when the live path overwrites the seeded one.
+ *
+ * It also answers for an EMPTY queue, which a per-row field cannot: a filter or a legend needs
+ * the species that exist, not the ones that happen to have tasks.
+ *
+ * Returns null rather than throwing. An unreachable menu is not an empty menu — the card falls
+ * back to its interim table, which is the honest behaviour while the two are still both present.
+ */
+export async function fetchTaskKinds(): Promise<unknown[] | null> {
+  try {
+    const { data } = await api.get<unknown>("/task_kinds");
+    if (Array.isArray(data)) return data;
+    const rows = (data as { kinds?: unknown } | null)?.kinds;
+    return Array.isArray(rows) ? rows : null;
+  } catch {
+    return null;
+  }
+}

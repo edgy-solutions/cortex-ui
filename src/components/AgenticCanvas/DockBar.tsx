@@ -23,12 +23,44 @@ import {
  * Replaces the old "MY CANVAS" toggle + pins overlay.
  */
 
+/**
+ * THE LENSES THIS PICKER OFFERS — and the type is what keeps the list complete.
+ *
+ * ── WHAT THIS PICKER IS, AND THE COLLISION THAT MAKES IT READ OTHERWISE ───────────────────
+ *
+ * It offers a canvas's `use` — the LENS, the chrome a board is read through. It has never
+ * offered TEMPLATES. `program_finance` is a `template_id`, which names the ratified YAML that
+ * ARRANGES a board, and ADR-0050 §7 separated the two deliberately because they were one
+ * concept only while there was one template.
+ *
+ * The two names collide at exactly one point and that is why this reads as a template picker:
+ * the lens `portfolio_planning` and the template registry's legacy alias `portfolio_planning`
+ * are the same string. So "Portfolio planning" in this list looks like a template on offer, and
+ * the natural next question is where its Program Finance sibling went. It was never here.
+ *
+ * ── A `Record`, NOT AN ARRAY LITERAL, AND THAT IS THE REPAIR ──────────────────────────────
+ *
+ * This was a hand-written array. A literal that is correct when written and a derivation are
+ * INDISTINGUISHABLE until a second member arrives — and a fifth `CanvasUse` would have been
+ * silently absent from this picker with nothing anywhere going red.
+ *
+ * A union type is erased at runtime, so there is nothing to derive FROM. Keying the labels by
+ * the union instead makes the compiler the derivation: adding a lens without a label fails the
+ * build, which is the closest thing to a population check a type can give.
+ */
+const USE_LABELS: Record<CanvasUse, string> = {
+  aggregation: "Aggregation",
+  workflow: "Workflow seed",
+  relationship: "Relationship",
+  portfolio_planning: "Portfolio planning",
+};
+
 const USES: { value: CanvasUse | ""; label: string }[] = [
   { value: "", label: "None" },
-  { value: "aggregation", label: "Aggregation" },
-  { value: "workflow", label: "Workflow seed" },
-  { value: "relationship", label: "Relationship" },
-  { value: "portfolio_planning", label: "Portfolio planning" },
+  ...(Object.entries(USE_LABELS) as [CanvasUse, string][]).map(([value, label]) => ({
+    value,
+    label,
+  })),
 ];
 
 export function DockBar() {
