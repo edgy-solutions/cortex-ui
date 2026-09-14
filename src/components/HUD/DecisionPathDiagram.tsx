@@ -7,7 +7,12 @@ import {
   useCurrentGraphTrace,
   useCurrentGraphAlternates,
 } from "@/store/useCanvasStore";
-import { presentAbstention, readExclusionSplit, type RouteSeverity } from "@/lib/routing";
+import {
+  flagStanding,
+  presentAbstention,
+  readExclusionSplit,
+  type RouteSeverity,
+} from "@/lib/routing";
 import { readPresentation } from "@/lib/presentationProvenance";
 import { askParentOf } from "@/lib/askFold";
 import { readAskOf, readPick } from "@/lib/askedPick";
@@ -203,7 +208,13 @@ export function DecisionPathDiagram() {
               {/* A SEPARATE LIST, not a differently-worded row inside the removed one. They are
                   opposite decisions, and a reader scanning a list headed "removed" does not
                   re-read each line looking for the one that was kept. */}
-              {flagged.length > 0 && <Removed items={flagged} flagged />}
+              {flagged.length > 0 && (
+                <Removed
+                  items={flagged}
+                  flagged
+                  instanceResolved={routing.about?.instance_resolved}
+                />
+              )}
 
               {/* TERMINAL — the output class, OR the loud fallback node */}
               {isFallback && fb ? (
@@ -339,10 +350,18 @@ function Connector({ label, verb }: { label: string; verb?: boolean }) {
 function Removed({
   items,
   flagged = false,
+  instanceResolved,
 }: {
   items: { verb: string; gate: string; reason: string }[];
   /** Kept-and-marked rather than deleted — see the wording below and `readExclusionSplit`. */
   flagged?: boolean;
+  /**
+   * Whether THIS turn resolved an instance. Joined against the flag as a REGRESSION guard on
+   * two declarations of one fact — it cannot fire while both derive from `subject_instance_id`,
+   * and a clean panel is therefore not evidence of anything. See `flagStanding`. Passed rather
+   * than re-derived so both surfaces answer identically.
+   */
+  instanceResolved?: boolean;
 }) {
   return (
     <div
@@ -359,6 +378,9 @@ function Removed({
             key={`${it.verb}-${i}`}
             className="text-[10px] font-mono leading-snug text-slate-400"
             data-removed-gate={it.gate || undefined}
+            data-flag-standing={
+              flagged ? flagStanding(it, instanceResolved) : undefined
+            }
           >
             <span className="text-slate-300">{_short(it.verb)}</span>
             {it.gate && (
@@ -376,6 +398,15 @@ function Removed({
             {/* THE GATE'S OWN WORDS, verbatim. This surface has no vocabulary of gates and must
                 not acquire one, or the next gate anyone adds renders as an unknown token. */}
             {it.reason && <span className="text-slate-500">: {it.reason}</span>}
+            {flagged && flagStanding(it, instanceResolved) === "contradicted" && (
+              /* The record denies itself — see `flagStanding`. Shown, not merely emitted as an
+                 attribute, because a reader looking at this path would otherwise try to supply
+                 an instance the turn demonstrably already had. */
+              <span className="text-rose-400/90">
+                {" "}
+                — but an instance resolved here; the flag contradicts the record
+              </span>
+            )}
           </div>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import type { Artifact } from "@/api/types";
-import { readExclusionSplit } from "@/lib/routing";
+import { flagStanding, readExclusionSplit } from "@/lib/routing";
 
 /**
  * A FAILED ARTIFACT, SAID SO — and named, where the person who hit it is already looking.
@@ -58,7 +58,15 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
       {flagged.length > 0 && (
         <ul className="mt-1 flex flex-col gap-0.5" data-failure-flags>
           {flagged.map((e) => (
-            <li key={`${e.verb}-${e.gate}`} className="font-mono text-[11px] text-slate-300">
+            <li
+              key={`${e.verb}-${e.gate}`}
+              className="font-mono text-[11px] text-slate-300"
+              // THE JOIN GUARD, not a defect count. Both halves derive from one field, so
+              // this CANNOT fire today and a panel of "consistent" is not evidence of zero
+              // defects — see `flagStanding`. It watches for the two declarations drifting
+              // apart, which is the only way contradiction becomes possible.
+              data-flag-standing={flagStanding(e, artifact.routing?.about?.instance_resolved)}
+            >
               <span className="text-slate-200">{shortVerb(e.verb)}</span>
               {/* NOT "excluded". The gate kept this verb — the turn abstained for the reason it
                   should have asked about, which is the actionable half: the reader can supply
@@ -66,6 +74,17 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
               <span className="text-slate-500"> was kept and flagged: </span>
               <span className="text-amber-400/90">{e.reason || e.gate || "unstated"}</span>
               <span className="text-slate-500"> — asked rather than excluded</span>
+              {flagStanding(e, artifact.routing?.about?.instance_resolved) ===
+                "contradicted" && (
+                /* The record denies itself: an instance DID resolve on this turn, and the only
+                   condition under which this gate flags is that none did. Said plainly, because
+                   the reader would otherwise go looking for an instance to supply that the turn
+                   already had. */
+                <span className="text-rose-400/90">
+                  {" "}
+                  — but an instance resolved on this turn; the flag contradicts the record
+                </span>
+              )}
             </li>
           ))}
         </ul>

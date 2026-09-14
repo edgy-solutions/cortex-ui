@@ -264,7 +264,11 @@ export function readExclusionSplit(excluded: unknown, flags: unknown): Exclusion
   const removed: ReadExclusion[] = [];
   const flagged: ReadExclusion[] = [];
   const seen = new Set<string>();
-  const key = (r: ReadExclusion) => `${r.verb} ${r.gate}`;
+  // NUL joins the two fields because it cannot occur in either, so no verb/gate pair can
+  // collide with a different one by straddling the separator. Written as an ESCAPE, not a
+  // raw byte: a literal NUL makes this whole file read as BINARY to grep, and every census
+  // sweep over `src/` then skips it silently.
+  const key = (r: ReadExclusion) => `${r.verb}\u0000${r.gate}`;
 
   const take = (raw: unknown, forceFlagged: boolean) => {
     if (!Array.isArray(raw)) return;
@@ -285,6 +289,63 @@ export function readExclusionSplit(excluded: unknown, flags: unknown): Exclusion
   take(excluded, false);
   return { removed, flagged };
 }
+
+/**
+ * A JOIN ASSERTION OVER TWO DECLARATIONS OF ONE FACT — NOT a partition of the population.
+ *
+ * ⛔ THIS CANNOT FIRE TODAY, AND "ZERO CONTRADICTED" IS NOT EVIDENCE OF ZERO DEFECTS. Read that
+ * first, because a clean result from a check that cannot fail is the plausible-negative shape:
+ * it looks like evidence and is worth less than no check at all.
+ *
+ * The two halves are not independent. Both derive from ONE field:
+ *
+ *   gateway.py:3340,3399       instance_resolved = bool(md["subject_instance_id"])
+ *   dynamic_supervisor.py:956  query_is_set      = not subject_instance_id
+ *   direct_dispatch.py:198     instance_id assigned ONCE, read at :214 by the gate and at
+ *                              :374/:460 by the materialization — never reassigned between
+ *
+ * A flag is emitted only when the gate saw no referent, which means the field is empty, which
+ * means the projection renders `instance_resolved` false. So `flagged + instance_resolved true`
+ * is UNREACHABLE BY CONSTRUCTION. Corrected by invincible-agent-65 after this shipped believing
+ * otherwise; the reachability is what I failed to check, having proved only that the renderer
+ * handles the input correctly when a fixture hands it that input.
+ *
+ * AND THE DEFECT THIS WAS BUILT TO CATCH WOULD NOT TRIP IT. On the NP-MERIDIAN turn the field
+ * was empty and `instance_resolved` was false: both halves AGREED, and both were wrong, because
+ * the bound value sat in the chain's slots where neither of them looked. A record can be
+ * self-consistent and false, and a consistency check is blind to exactly that case.
+ *
+ * ── WHY IT SHIPS ANYWAY ───────────────────────────────────────────────────────────────────
+ *
+ * Because the JOIN is the thing nobody checks. Two declarations of one fact, rendered on
+ * separate surfaces since June, each happy alone — that is how a divergence would survive. The
+ * day someone makes the gate read a different field than the projection reports, contradiction
+ * becomes possible and this is the only thing watching. It is a REGRESSION GUARD against the
+ * two declarations drifting apart, and it should be read as nothing else.
+ *
+ * ⛔ Contradiction is claimed only on a POSITIVE match of both halves. An absent
+ * `instance_resolved` reports consistent — a record that never carried the fact cannot deny
+ * anything with it — because announcing a defect from not recognising a word is the same error
+ * the partition above exists to avoid.
+ */
+export type FlagStanding = "contradicted" | "consistent";
+
+/** The producer's own word for the arity flag's reason. */
+const NEEDS_INSTANCE = "needs_instance";
+
+export function flagStanding(
+  flag: ReadExclusion,
+  instanceResolved: boolean | undefined,
+): FlagStanding {
+  // STRICTLY `true`: absent is not false. A record that never said whether an instance resolved
+  // cannot contradict anything, and treating undefined as "no instance" would silently vote
+  // every legacy row into the consistent pile on a fact it never carried.
+  if (instanceResolved !== true) return "consistent";
+  const saysNeedsInstance =
+    flag.reason.includes(NEEDS_INSTANCE) || flag.gate.trim().toLowerCase() === "arity";
+  return saysNeedsInstance ? "contradicted" : "consistent";
+}
+
 
 /**
  * The abstention, told apart.

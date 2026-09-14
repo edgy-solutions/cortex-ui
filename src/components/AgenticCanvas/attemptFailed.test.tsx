@@ -27,7 +27,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { AttemptFailed } from "./AttemptFailed";
-import { readExclusions, readExclusionSplit } from "@/lib/routing";
+import { flagStanding, readExclusions, readExclusionSplit } from "@/lib/routing";
 import type { Artifact } from "@/api/types";
 
 afterEach(cleanup);
@@ -260,5 +260,101 @@ describe("a flagged candidate is not reported as removed", () => {
     render(<AttemptFailed artifact={artifact({ routing: { excluded: [REMOVED] } })} />);
     expect(document.querySelector("[data-failure-exclusions]")).not.toBeNull();
     expect(document.querySelector("[data-failure-flags]")).toBeNull();
+  });
+});
+
+/**
+ * THE JOIN BETWEEN TWO DECLARATIONS OF ONE FACT — a regression guard, NOT a population split.
+ *
+ * ⛔ THESE TESTS CANNOT TELL YOU THE WORLD PRODUCES A CONTRADICTED ROW. They prove the renderer
+ * behaves correctly when handed one, and the fixture is the thing handing it over. That is the
+ * gap between a guard being RIGHT and a guard being REACHABLE, and only the first is sealed
+ * here.
+ *
+ * It is unreachable today. `instance_resolved` is `bool(subject_instance_id)` (gateway.py:3340,
+ * :3399) and the gate flags on `not subject_instance_id` (dynamic_supervisor.py:956), off one
+ * variable assigned once at direct_dispatch.py:198 and never reassigned before either read. So
+ * ZERO CONTRADICTED MEANS NOTHING ABOUT DEFECTS — do not let a clean panel be read as evidence.
+ *
+ * AND THE DEFECT THIS WAS BUILT FOR WOULD NOT TRIP IT: on NP-MERIDIAN both halves said "no
+ * instance" and both were wrong, the bound value being in the chain's slots where neither
+ * looked. Self-consistent and false is precisely the case a consistency check cannot see.
+ *
+ * It ships as the guard on the JOIN: two declarations of one fact, rendered on separate surfaces
+ * since June, each happy alone. If someone ever makes the gate read a different field than the
+ * projection reports, this is the only thing watching.
+ */
+describe("the two declarations of the instance fact are joined, not merely rendered", () => {
+  const FLAG = {
+    uri: "mesh:finProgramBrief",
+    gate: "arity",
+    reason: "needs_instance",
+    disposal: "flagged",
+  };
+  const withInstance = (instance_resolved?: boolean) =>
+    artifact({
+      routing: {
+        excluded: [FLAG],
+        about: instance_resolved === undefined ? {} : { instance_resolved },
+      },
+    });
+
+  it("calls it CONTRADICTED when an instance resolved on the same turn", () => {
+    render(<AttemptFailed artifact={withInstance(true)} />);
+    const row = document.querySelector("[data-flag-standing]")!;
+    expect(row).not.toBeNull();
+    expect(row.getAttribute("data-flag-standing")).toBe("contradicted");
+    expect(row.textContent).toMatch(/contradicts the record/i);
+  });
+
+  it("calls it CONSISTENT when no instance resolved — THE CONTROL", () => {
+    // Without this, a surface that stamped "contradicted" on every flag would pass the test
+    // above and report the whole pre-fix population as defects. This is the assertion that
+    // makes the one above mean something.
+    render(<AttemptFailed artifact={withInstance(false)} />);
+    const row = document.querySelector("[data-flag-standing]")!;
+    expect(row.getAttribute("data-flag-standing")).toBe("consistent");
+    expect(row.textContent).not.toMatch(/contradicts the record/i);
+  });
+
+  it("treats an ABSENT instance_resolved as no contradiction, not as a false", () => {
+    // A record that never carried the fact cannot deny anything with it. Voting absence into
+    // either pile is a claim made from a field that was never sent.
+    render(<AttemptFailed artifact={withInstance(undefined)} />);
+    expect(document.querySelector("[data-flag-standing]")!.getAttribute("data-flag-standing")).toBe(
+      "consistent",
+    );
+  });
+
+  it("claims nothing from a gate it does not recognise", () => {
+    // Announcing a defect from not recognising a word is the error the partition above exists
+    // to avoid; here it would send someone hunting a bug that is not there.
+    expect(flagStanding({ verb: "a:X", gate: "budget", reason: "over cap" }, true)).toBe(
+      "consistent",
+    );
+  });
+
+  it("reads the producer's reason as well as the gate name", () => {
+    // The gate label is the weaker signal — a renamed gate must not silently stop the check.
+    expect(flagStanding({ verb: "a:X", gate: "", reason: "needs_instance" }, true)).toBe(
+      "contradicted",
+    );
+    expect(flagStanding({ verb: "a:X", gate: "ARITY", reason: "" }, true)).toBe("contradicted");
+  });
+
+  it("the OTHER surface carries the same discriminator", () => {
+    // A defect visible on the canvas card and blank in the HUD is the intermittent shape this
+    // file already paid for once.
+    const src = (require("node:fs") as typeof import("node:fs")).readFileSync(
+      (require("node:path") as typeof import("node:path")).join(
+        __dirname,
+        "..",
+        "HUD",
+        "DecisionPathDiagram.tsx",
+      ),
+      "utf8",
+    );
+    expect(src).toContain("flagStanding");
+    expect(src).toContain("data-flag-standing");
   });
 });
