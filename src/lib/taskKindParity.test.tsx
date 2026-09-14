@@ -238,6 +238,16 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
    * who could have acted. The list shrinks to empty at cutover, when REGISTRY retires.
    */
   const KNOWN_UNREGISTERED = [
+    // ADDED 2026-09-14, AND THE ADDITION IS THE ARM'S OWN EVIDENCE. This species appeared
+    // upstream a day after the seal landed and reded it, unprompted, on real drift — which is
+    // the difference between a pinned gap that is a comment and one that is a mechanism.
+    //
+    // PINNED RATHER THAN GIVEN A REGISTRY ROW, and that is a classification, not a waiver.
+    // Since `e837239` the card consults the SERVED menu (`useTaskKindStore`) rather than the
+    // interim table, so `safety_redraft` renders its declared verbs today with no table entry.
+    // Adding a row would feed the table M3.3 is deleting. What stays red-able here is the
+    // TABLE'S coverage, which is the retirement this arm measures.
+    "safety_redraft",
     "hazard_link_review",
     "risk_acceptance_concurrence_high",
     "risk_acceptance_concurrence_serious",
