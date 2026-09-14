@@ -171,7 +171,26 @@ export function readExclusions(excluded: unknown): ReadExclusion[] {
   for (const e of excluded) {
     if (typeof e !== "object" || e === null) continue;
     const r = e as Record<string, unknown>;
-    const verb = typeof r.verb === "string" ? r.verb.trim() : "";
+    /**
+     * `verb` OR `uri`, AND THE SECOND IS WHAT THE PRODUCER ACTUALLY SENDS.
+     *
+     * This read `verb` alone and dropped any row without one. `direct_dispatch.py` emits
+     * `{"uri": ..., "gate": "arity", ...}` — measured in the serving pod, not inferred — so
+     * EVERY ARITY EXCLUSION WAS SILENTLY DISCARDED HERE.
+     *
+     * That is this function's own stated purpose failing: the contract above it says *a silent
+     * removal is indistinguishable from "there was never an answer"*, and the reader built to
+     * prevent that was itself removing them silently, over a field name.
+     *
+     * Both are read because the gateway passes `eligibility_excluded` through from whichever
+     * producer wrote it, so either name can arrive. `verb` is preferred as the declared one.
+     */
+    const verb =
+      typeof r.verb === "string" && r.verb.trim()
+        ? r.verb.trim()
+        : typeof r.uri === "string"
+          ? r.uri.trim()
+          : "";
     const gate = typeof r.gate === "string" ? r.gate.trim() : "";
     const reason = typeof r.reason === "string" ? r.reason.trim() : "";
     if (!verb) continue;

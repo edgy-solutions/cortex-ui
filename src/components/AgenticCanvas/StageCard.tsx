@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { AskedSection } from "@/components/elicitation/AskedSection";
+import { AttemptFailed } from "./AttemptFailed";
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
@@ -474,6 +475,10 @@ export function StageCard({
               >
                 {answerSummary(artifact)}
               </p>
+              {/* A FAILED ARTIFACT LOOKED EXACTLY LIKE ONE IN FLIGHT HERE — summary line, no
+                  body, nothing saying which. `status` was in the row and this branch did not
+                  read it. See AttemptFailed. */}
+              <AttemptFailed artifact={artifact} compact />
             </div>
           )}
         </div>

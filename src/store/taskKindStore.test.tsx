@@ -21,7 +21,7 @@
  * not report a species as undeclared on the strength of a pending fetch.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 
 const fetchTaskKinds = vi.fn();
 vi.mock("@/api/client", () => ({

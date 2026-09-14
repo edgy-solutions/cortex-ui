@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { AttemptFailed } from "./AttemptFailed";
 import { AskedSection } from "@/components/elicitation/AskedSection";
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { useStageStore } from '@/store/useStageStore';
@@ -231,6 +232,9 @@ export const CanvasPane = () => {
       <div className="h-full w-full flex flex-col bg-slate-950/50 border-l border-white/10">
         {artifactHeader}
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          {/* NAMES THE REASON, which this surface never did — it said the attempt failed and
+              left the exclusion trace in the row unread. */}
+          <AttemptFailed artifact={artifact} />
           {/* THE OTHER IN-FLIGHT SURFACE. The chip was mounted on `StageCard` alone, so a
               reader watching the full pane — which is where you land after picking from an ask
               — saw the bare question and no trace of what they had chosen. Two surfaces show a
