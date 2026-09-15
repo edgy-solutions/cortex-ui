@@ -71,3 +71,67 @@ Recorded here because a seal written against two states is wrong at the third's 
 
 "No buttons" does not imply "unknown species". The two absences have different causes and
 different repairs, which is the same absent-versus-refused distinction the gate itself turns on.
+
+---
+
+## R-043 (mirror) — trace the mutation point to every arm of the comparison
+
+**Source of record:** `invincible-agent/docs/rulings/` — R-043. Mirrored here because both of its
+instances so far were found in this repo's seals.
+
+### The ruling
+
+> If the mutation point reaches more than one arm of the comparison, the experiment is **void,
+> not negative**.
+
+### Instance one — the mutation reached both arms
+
+The parity seal's render arm fed a declaration into the card and compared the rendered buttons
+against that same declaration. Re-sorting the declaration **upstream** moved both arms together:
+the card received the sorted list and was checked against the sorted list. Green on every
+implementation, including a card that sorts. The mutation that means something is on the
+**subject** — the card's own ordering — with the declaration held fixed.
+
+### Instance two — the mutation reached *no* occurrence, which is the sharper one
+
+Cutting the card's store read was attempted against `fromStore`. **The variable is
+`fromKinds`.** The edit applied to nothing, the suite came back green, and that green read as
+*"the seal doesn't bite"* — a conclusion about the instrument drawn from an experiment that was
+never performed.
+
+Aimed at the wrong occurrence and aimed at **no** occurrence produce the identical symptom: a
+green run that looks like a negative result. So the check is the same in both directions, and
+it is cheap:
+
+**Confirm the mutation LANDED before reading the colour.** Print the mutated line, or make the
+edit throw when its target is absent:
+
+```js
+const before = s;
+s = s.replace(TARGET, MUTANT);
+if (s === before) throw new Error("mutation did not apply");
+```
+
+A survey that cannot prove its own baseline reports nothing, and a mutation that cannot prove it
+was applied is the same claim one level in.
+
+---
+
+## Companion note — a red that means "wrong directory" teaches readers to wave through red
+
+Recorded beside the seal it shaped (`src/lib/taskKindParity.test.tsx`).
+
+The seal asserts that it **RAN** — a suite of skips reports as a pass, so "found nothing wrong"
+and "never executed" are otherwise indistinguishable in a green summary.
+
+That guard is only safe because a **checkout resolver** sits under it. This machine carries the
+producer twice (`invincible-agent` on master, `ia-01` on `lane/01`). With a hardcoded path, the
+did-it-run guard would fire on any machine holding the other name — and a red that means
+*"you looked in the wrong place"* is a red readers learn to dismiss. **That acquired immunity is
+what hides the one real failure**, which is the entire cost.
+
+So the guard must fire for **"measured nothing"** and never for **"looked in the wrong place"**.
+
+And when two checkouts resolve and **disagree**, that is an error rather than a preference: a
+silent pick is a confident answer about the wrong tree — the same partial-population move this
+seal itself made on its first pass, when it read the platform seed and called it the population.
