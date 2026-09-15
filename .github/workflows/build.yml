@@ -104,6 +104,22 @@ jobs:
         run: |
           set -euo pipefail
           mv _producer ../invincible-agent
+
+          # ⛔ ASSERT THE BASELINE, because a GREEN RUN OTHERWISE PROVES NOTHING ABOUT IT. The
+          # seal names its producer only in an assertion MESSAGE, which appears on failure — so
+          # if `PRODUCER_REF` ever resolved to empty, checkout would silently fall back to the
+          # default branch, the counts below would still print, the suite would still pass, and
+          # the seal would be measuring master while this file claimed a pin. That is the same
+          # "measures one producer, reports another" failure as two literals drifting, reached
+          # through a different door: a claim nothing could contradict.
+          ACTUAL="$(git -C ../invincible-agent rev-parse HEAD)"
+          echo "producer HEAD: $ACTUAL"
+          echo "pinned ref:    $PRODUCER_REF"
+          if [ "$ACTUAL" != "$PRODUCER_REF" ]; then
+            echo "::error::producer checkout is at $ACTUAL but the pin says $PRODUCER_REF — the"                  "seal would measure one producer and report another. Not a flake."
+            exit 1
+          fi
+
           test -d ../invincible-agent/policy/task_kinds
           test -d ../invincible-agent/policy/overlays/sample/task_kinds
           echo "producer seed declarations:    $(ls ../invincible-agent/policy/task_kinds | wc -l)"
