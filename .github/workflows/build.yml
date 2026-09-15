@@ -66,14 +66,38 @@ jobs:
           # ⛔ WHICH COMPONENT'S SHA THIS IS, because the producer repo is deployed at MORE THAN
           # ONE at a time. Measured 2026-09-15 in the sandbox:
           #
-          #   iagent-cortex-bff   cortex-bff:3830de1…   <- this pin
-          #   iagent-projector    cortex-bff:3830de1…   <- SAME sha; they agree again
+          #   iagent-cortex-bff   cortex-bff:ca3a38f…   serves the DECLARATIONS this seal reads
+          #   iagent-projector    cortex-bff:3830de1…   writes answer_artifact_projection
           #
-          # THEY WERE SPLIT when this pin was first set — bff at 9ede76c, seventeen other
-          # services at 280e6103 — and the producer's own pre-roll census exited 1 over it,
-          # flagging the bff as AHEAD of record. So the divergence was real and already known on
-          # that side. The 2026-09-15 roll pinned everything via `global.imageTag`, so both rows
-          # now carry one sha. Verified from the pods, not from the values file.
+          # ⛔ SPLIT AGAIN, DELIBERATELY, AND THIS PIN IS HELD AT 3830de1 ON PURPOSE. A targeted
+          # `--no-hooks` bff roll put a dispatch fix live without restarting the fleet, so the
+          # two deployments run different shas by design and the projector rejoins on the next
+          # full roll. Measured from the pods 2026-09-16.
+          #
+          # THE OPEN QUESTION THIS MAKES LIVE — do not resolve it by bumping. The seal reads
+          # `policy/task_kinds`, which the BFF serves, so on one reading the pin should follow the
+          # bff and be ca3a38f today. But a seal over artifact FIELDS would belong to the
+          # PROJECTOR, still at 3830de1. Bumping now would quietly settle "this pin means the
+          # task-kind producer" without anyone having decided it, so it stays put until someone
+          # does.
+          #
+          # HELD SAFELY, AND THAT IS MEASURED RATHER THAN ASSUMED: `git diff 3830de1 ca3a38f`
+          # touches five files — direct_dispatch.py, gateway.py, graph_host/main.py and two
+          # tests — and NOTHING under `policy/task_kinds` or the sample overlay. So the seal's
+          # result is identical either way.
+          #
+          # ⛔ AND THE EARLIER "they agree" NOTE HAS NOW BEEN ASKED ITS QUESTION AND HELD BY
+          # CONTENT, NOT BY THE PODS AGREEING. It was recorded as a coincidence precisely because
+          # correct-by-accident and correct-by-construction read identically at the moment you
+          # look. The pods have since diverged and the seal is still right — which is the
+          # coincidence holding for a DIFFERENT reason than the one that made it look safe.
+          # If a future bff roll touches the declarations, this stops being free and the pin's
+          # meaning must be decided before it is moved.
+          #
+          # HISTORY: they were also split when this pin was first set — bff at 9ede76c,
+          # seventeen other services at 280e6103 — and the producer lane's own pre-roll census
+          # exited 1 over it, flagging the bff as AHEAD of record. The 2026-09-15 roll pinned
+          # everything via `global.imageTag` and closed that one.
           #
           # One repo, two live versions, and "the producer" names neither on its own. The
           # projector is the one that writes `answer_artifact_projection`, which is what cortex
