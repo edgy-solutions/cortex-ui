@@ -32,6 +32,74 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── THE GATE LIVES HERE, NOT IN THE CONTAINER ──────────────────────
+      #
+      # The task-kind parity seal compares cortex's rendering against the PRODUCER's declared
+      # task kinds, which means it needs two repos on one filesystem. `docker build` gets one
+      # (`COPY . .`), which is the point of a hermetic context — so the seal could never run
+      # there, and when a skipped seal was correctly made red, no image could be built at all.
+      #
+      # ⛔ AND IT HAD NEVER RUN IN CI. A single `actions/checkout` meant the producer was absent
+      # on every build since the seal landed, so all 28 parity assertions silently skipped and
+      # every green build appeared to carry coverage it did not have. The red that broke the
+      # image did not introduce that; it revealed it, in the only place loud enough to notice.
+      #
+      # So the producer is checked out BESIDE cortex-ui and the suite runs in this job.
+      - name: Check out the producer beside cortex-ui
+        uses: actions/checkout@v4
+        with:
+          repository: edgy-solutions/invincible-agent
+          # PINNED, AND THE SEAL PRINTS IT. A moving `master` makes a parity red
+          # unattributable — nobody can tell whether cortex changed or the producer did. Pinned
+          # to the sha THE FLEET IS ACTUALLY SERVING, read off the deployed image tag
+          # (`ghcr.io/.../cortex-bff:9ede76c…`) rather than from anyone's branch, because merged
+          # and served are different facts and this seal is about the deployed contract.
+          #
+          # Bump this deliberately, with the new sha measured the same way. A parity red after a
+          # bump is a real finding about drift between the two repos; it is not a flake and must
+          # not be retried away.
+          ref: 9ede76c1acf136cddd693c958832a92b33e366a9
+          path: _producer
+          persist-credentials: false
+
+      # `actions/checkout` refuses any `path` outside GITHUB_WORKSPACE, and the seal resolves
+      # the producer as a SIBLING of the cortex-ui checkout root. So it lands in-workspace and is
+      # moved one level up. The seal needs only `policy/task_kinds` and the sample overlay — no
+      # git history — so a plain move is sufficient.
+      - name: Put the producer where the seal looks for it
+        run: |
+          set -euo pipefail
+          mv _producer ../invincible-agent
+          test -d ../invincible-agent/policy/task_kinds
+          test -d ../invincible-agent/policy/overlays/sample/task_kinds
+          echo "producer seed declarations:    $(ls ../invincible-agent/policy/task_kinds | wc -l)"
+          echo "producer overlay declarations: $(ls ../invincible-agent/policy/overlays/sample/task_kinds | wc -l)"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # THE FULL GATE, with the producer present — so the parity seal actually executes. It runs
+      # BEFORE the image build, and a failure here means no image is produced, which is the same
+      # contract the old in-container build had and the reason this is not a weakening.
+      - name: Transport declaration check
+        run: npm run check:transport
+
+      - name: Test suite, with the producer present
+        env:
+          # Named in the seal's own assertion messages, so a parity red says which producer
+          # state it was measured against instead of leaving the reader to guess.
+          CORTEX_PRODUCER_REF: 9ede76c1acf136cddd693c958832a92b33e366a9
+        run: npm run test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Set up pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.7.4
 

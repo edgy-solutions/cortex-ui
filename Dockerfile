@@ -34,7 +34,24 @@ ARG GIT_SHA=""
 ENV GIT_SHA=$GIT_SHA
 
 # Build the static Vite bundle (outputs to /app/dist)
-RUN npm run build
+#
+# `build:bundle` IS tsc + vite ONLY — the suite deliberately does NOT run here.
+#
+# It used to: `npm run build` was check:transport + test + tsc + vite, so the image build was
+# the gate. That broke the moment a seal needed TWO REPOS on one filesystem — the task-kind
+# parity seal compares cortex's rendering against the producer's declarations, and `COPY . .`
+# gives this stage exactly one repo, which is the POINT of a hermetic build context. The seal
+# could never be satisfied here, so once a skipped seal was correctly made red, no image could
+# be built at all.
+#
+# The gate did not weaken, it MOVED: the CI job checks the producer out beside cortex-ui at a
+# pinned sha and runs the whole suite there, with the producer present, before this build is
+# invoked. See .github/workflows/build.yml. The job is the gate; the container compiles.
+#
+# ⛔ DO NOT restore `npm run build` here to "make CI stricter". It does the opposite — it
+# reintroduces a build that cannot satisfy its own seal, and the only ways out of that are an
+# exemption or a silent skip.
+RUN npm run build:bundle
 
 # ── Stage 2: Serve with Nginx ──
 FROM nginx:1.25-alpine

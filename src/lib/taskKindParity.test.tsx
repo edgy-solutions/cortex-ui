@@ -105,6 +105,24 @@ function resolveProducers(): Producer[] {
   return found;
 }
 
+/**
+ * WHICH PRODUCER STATE THIS SEAL WAS MEASURED AGAINST.
+ *
+ * A two-repo seal has a BASELINE, and an unnamed baseline makes every red unattributable: a
+ * drift between cortex and the producer says nothing about WHICH SIDE MOVED unless the reader
+ * knows where the other side was standing. CI pins the producer to a sha and passes it here, so
+ * a failure reads "producer at <sha>" rather than leaving the reader to guess at a moving
+ * master.
+ *
+ * Locally there is no pin — the checkout is whatever the developer has — and that is said
+ * plainly rather than dressed as a version. ⛔ An unpinned baseline is not a defect locally and
+ * IS one in CI, which is why the string differs instead of defaulting to something tidy.
+ */
+const PRODUCER_REF = (process.env.CORTEX_PRODUCER_REF || "").trim();
+const PRODUCER_AT = PRODUCER_REF
+  ? `producer at ${PRODUCER_REF.slice(0, 7)}`
+  : "producer at the local checkout (UNPINNED — this is CI-pinned only)";
+
 const PRODUCERS = resolveProducers();
 const HAVE_PRODUCER = PRODUCERS.length > 0;
 const SEED_DIR = PRODUCERS[0]?.seed ?? "";
@@ -210,7 +228,10 @@ describe.skipIf(!HAVE_PRODUCER)("REGISTRY -> declarations: everything cortex har
   it("every REGISTRY kind has a declaration in the composed set", () => {
     const all = composed();
     const undeclared = REGISTRY_KINDS.filter((k) => !all.has(k));
-    expect(undeclared, "cortex hardcodes a species nobody declares").toEqual([]);
+    expect(
+      undeclared,
+      `cortex hardcodes a species nobody declares — ${PRODUCER_AT}`,
+    ).toEqual([]);
   });
 
   /**
@@ -242,7 +263,13 @@ describe.skipIf(!HAVE_PRODUCER)("REGISTRY -> declarations: everything cortex har
       if (ui.title !== d.title) drift.push(`${kind}.title: cortex "${ui.title}" vs declared "${d.title}"`);
       if (ui.archetype !== d.archetype) drift.push(`${kind}.archetype: cortex ${ui.archetype} vs declared ${d.archetype}`);
     }
-    expect(drift).toEqual(KNOWN_DRIFT);
+    expect(
+      drift,
+      `render-hint drift between cortex and the producer — ${PRODUCER_AT}. Each line reads ` +
+        `"<kind>.<field>: cortex X vs declared Y". If the producer moved, bump the pinned ref ` +
+        `in .github/workflows/build.yml deliberately; if cortex moved, fix the registry. This ` +
+        `is a finding either way and must not be retried away.`,
+    ).toEqual(KNOWN_DRIFT);
   });
 
   it("the ARCHETYPE agrees everywhere — the field that decides which card renders", () => {
@@ -595,7 +622,9 @@ describe("the seal RAN, or says so", () => {
     expect(
       PRODUCERS.length,
       `no producer checkout found under any of ${CANDIDATE_ROOTS.join(", ")} — the parity seal ` +
-        `SKIPPED ENTIRELY and verified nothing. A seal that skips is not a seal that passed.`,
+        `SKIPPED ENTIRELY and verified nothing. A seal that skips is not a seal that passed. ` +
+        `In CI the producer is checked out beside cortex-ui at a pinned sha (see ` +
+        `.github/workflows/build.yml); locally, clone it as a sibling of this repo.`,
     ).toBeGreaterThan(0);
   });
 

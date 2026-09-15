@@ -11,6 +11,7 @@
     "check:transport": "node scripts/check-transport-declarations.mjs",
     "check:transport:redproof": "node scripts/redproof-transport-guard.mjs",
     "build": "npm run check:transport && npm run test && tsc && vite build",
+    "build:bundle": "tsc && vite build",
     "start": "serve dist -s -l ${PORT:-8080}",
     "preview": "vite preview",
     "test": "vitest run",
