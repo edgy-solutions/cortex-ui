@@ -446,7 +446,13 @@ export function readFailureCause(routing: unknown): FailureCause | null {
  *                 `body` are missing while `exception` and `message` are always present. ⛔ THE
  *                 COMMONEST INFRASTRUCTURE FAILURE CARRIES THE LEAST IN THE RECORD, so this
  *                 must read as "the engine did not answer" rather than render blanks.
- *   no_outcome    `NoOutcomeRecorded` — NOT an engine failure. The turn ended without recording
+ *   no_outcome    `NoOutcomeRecorded` — NOT an engine failure. ⛔ THE PRODUCER FOR THIS STATE
+ *                 LANDED AT `4294b61` AND IS NOT YET ROLLED, so the branch cannot fire in
+ *                 the sandbox and its absence there is NOT evidence that it is dead code.
+ *                 This renderer is deliberately AHEAD of its producer, which is the safe
+ *                 direction. Do not delete it for want of a live example — and do not read
+ *                 a zero count off it, for the same reason `flagStanding` carries a banner.
+ *                 The turn ended without recording
  *                 an outcome at all, written by the boundary so a silent turn produces a row
  *                 instead of nothing. Nothing failed downstream; the pipeline lost the thread,
  *                 and the repair is in the pipeline rather than in any engine.
