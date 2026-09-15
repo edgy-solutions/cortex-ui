@@ -55,9 +55,29 @@ jobs:
           # (`ghcr.io/.../cortex-bff:9ede76c…`) rather than from anyone's branch, because merged
           # and served are different facts and this seal is about the deployed contract.
           #
-          # Bump this deliberately, with the new sha measured the same way. A parity red after a
-          # bump is a real finding about drift between the two repos; it is not a flake and must
-          # not be retried away.
+          # ⛔ WHICH COMPONENT'S SHA THIS IS, because the producer repo is deployed at MORE THAN
+          # ONE at a time. Measured 2026-09-15 in the sandbox:
+          #
+          #   iagent-cortex-bff   cortex-bff:9ede76c…   <- this pin
+          #   iagent-projector    cortex-bff:280e6103…  <- same image, different sha
+          #
+          # One repo, two live versions, and "the producer" names neither on its own. The
+          # projector is the one that writes `answer_artifact_projection`, which is what cortex
+          # consumes over Electric, so for ARTIFACT SHAPE it is arguably the more relevant half.
+          # The pin follows the BFF because the task-kind declarations this seal reads are served
+          # by it. The two currently agree on `policy/task_kinds` and the sample overlay — a
+          # `git diff` between them over those paths is EMPTY — so the choice does not change the
+          # result today. That is a coincidence and not a guarantee: if they diverge, this pin
+          # must name which contract is being sealed rather than silently tracking one.
+          #
+          # NOT THE FRONTEND. cortex-ui's own deployment is `frontend:latest` with pullPolicy
+          # Always and carries no sha tag — a real gap, but a different one, and it is already
+          # closed by the served bundle self-reporting `git_sha` in /version.json rather than by
+          # anything here.
+          #
+          # Bump this deliberately, with the new sha measured from the POD the same way. A parity
+          # red after a bump is a real finding about drift between the two repos; it is not a
+          # flake and must not be retried away.
           ref: 9ede76c1acf136cddd693c958832a92b33e366a9
           path: _producer
           persist-credentials: false
