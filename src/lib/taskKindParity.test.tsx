@@ -53,6 +53,8 @@ import { render, cleanup } from "@testing-library/react";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { readTaskDeclaration, type TaskDeclaration } from "./taskDeclaration";
 import { taskKindDisplay, isRegisteredKind } from "./taskKindRegistry";
 
 /**
@@ -75,10 +77,38 @@ const REGISTRY_KINDS: string[] = (() => {
   return [...body.matchAll(/^ {2}([a-z_][a-z0-9_]*): \{/gm)].map((m) => m[1]);
 })();
 
-const PRODUCER = path.join(__dirname, "../../../invincible-agent");
-const SEED_DIR = path.join(PRODUCER, "policy/task_kinds");
-const OVERLAY_DIR = path.join(PRODUCER, "policy/overlays/sample/task_kinds");
-const HAVE_PRODUCER = existsSync(SEED_DIR) && existsSync(OVERLAY_DIR);
+/**
+ * RESOLVED ACROSS KNOWN CHECKOUT NAMES, AND LOUD WHEN TWO DISAGREE.
+ *
+ * This machine carries the producer twice — `invincible-agent` on master and `ia-01` on
+ * `lane/01` — with byte-identical overlays today and no guarantee of that tomorrow. Hardcoding
+ * one name means the seal silently skips on a machine that has the other, and a skipped seal
+ * reports as a pass.
+ *
+ * TWO THAT DISAGREE IS AN ERROR, NOT A PREFERENCE. A silent pick between two checkouts at
+ * different shas produces a confident answer about the wrong tree, which is worse than no
+ * answer. Picking the first would be exactly the partial-population move this seal already
+ * made once.
+ */
+const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
+
+interface Producer { root: string; seed: string; overlay: string }
+
+function resolveProducers(): Producer[] {
+  const found: Producer[] = [];
+  for (const name of CANDIDATE_ROOTS) {
+    const root = path.join(__dirname, "../../..", name);
+    const seed = path.join(root, "policy/task_kinds");
+    const overlay = path.join(root, "policy/overlays/sample/task_kinds");
+    if (existsSync(seed) && existsSync(overlay)) found.push({ root: name, seed, overlay });
+  }
+  return found;
+}
+
+const PRODUCERS = resolveProducers();
+const HAVE_PRODUCER = PRODUCERS.length > 0;
+const SEED_DIR = PRODUCERS[0]?.seed ?? "";
+const OVERLAY_DIR = PRODUCERS[0]?.overlay ?? "";
 
 interface Declaration {
   kind: string;
@@ -463,5 +493,134 @@ describe("ORDER IS PRESERVED — proven where it can diverge, not where it canno
       />,
     );
     expect(renderedVerbs()).toEqual(UNSORTED);
+  });
+});
+
+/**
+ * THE SUBJECT, MOVED — every declared species gets its DECLARED verbs rendered, in order.
+ *
+ * ── WHY THE OLD SUBJECT COULD NOT SURVIVE THE CUTOVER ─────────────────────────────────────
+ *
+ * The arms above assert cortex's interim REGISTRY against the declarations. That table is what
+ * M3.3 DELETES, so those arms die with it by construction — they measure the remaining
+ * retirement distance, which is worth measuring right up to the deletion and worthless after.
+ * The property that has to hold AFTERWARDS is this one: whatever the mesh declares, the card
+ * offers, in the declaration's order.
+ *
+ * ── DRIVEN THROUGH THE STORE, NOT HAND-FED THROUGH A PROP, AND THAT IS THE WHOLE POINT ────
+ *
+ * The earlier render arm passed a `declaration` straight into the card and asserted the buttons
+ * matched it. It was green — while NOTHING IN THE RUNNING APP EVER SUPPLIED ONE. `taskArtifact`
+ * built the payload and had no such field, so every card fell back to the interim table
+ * regardless of what the mesh declared. Every node verified, the connection unasserted.
+ *
+ * A prop-fed assertion tests a CAPABILITY. This one tests the WIRE: the declaration is put where
+ * the served menu puts it — `useTaskKindStore` — and the card is left to find it. If the wiring
+ * is removed again, this goes red where the prop-fed version would not.
+ */
+describe.skipIf(!HAVE_PRODUCER)("THE POST-CUTOVER SUBJECT: declared verbs reach the card through the STORE", () => {
+  afterEach(() => {
+    cleanup();
+    useTaskKindStore.setState({ status: "idle", byKind: {} });
+  });
+
+  /** Put the real declarations where the served menu puts them, then render nothing but a kind. */
+  function seedStore(decls: Declaration[]) {
+    const byKind: Record<string, TaskDeclaration> = {};
+    for (const d of decls) {
+      const read = readTaskDeclaration({
+        kind: d.kind, declared: true, archetype: d.archetype,
+        badge: d.badge, title: d.title,
+        accepts: d.accepts, reason_required: d.reasonRequired,
+      });
+      // The reader is the thing the store keeps, so a declaration it REFUSES must not be
+      // silently dropped into a green run — that would assert against a smaller population.
+      expect(read, `${d.kind}: the declaration reader refused a real declaration`).not.toBeNull();
+      byKind[d.kind] = read!;
+    }
+    useTaskKindStore.setState({ status: "loaded", byKind });
+  }
+
+  it("every declared APPROVAL_TASK species renders its declared verbs, in order, with NO prop", () => {
+    const approvals = [...composed().values()].filter((d) => d.archetype === "APPROVAL_TASK");
+    expect(approvals.length, "no APPROVAL_TASK declarations — this arm would assert nothing").toBeGreaterThan(0);
+    seedStore(approvals);
+
+    for (const d of approvals) {
+      cleanup();
+      // NO `declaration` FIELD. The card must find it in the store or render the refusal.
+      render(<ApprovalTaskCard task={payload(d.kind) as never} />);
+      expect(renderedVerbs(), `${d.kind}`).toEqual(d.accepts);
+      expect(document.querySelector("[data-undeclared-kind]"), `${d.kind} fell back to the table`).toBeNull();
+    }
+  });
+
+  it("a species the INTERIM TABLE never knew still renders — the table is not consulted first", () => {
+    // `safety_redraft` is declared upstream and has no REGISTRY row. Before `e837239` this
+    // rendered "unknown species here"; the whole point of the served menu is that it no longer
+    // does. This is the assertion that would have caught the dead wire directly.
+    const safety = composed().get("safety_redraft");
+    expect(safety, "safety_redraft is gone upstream — repoint this to another unregistered species").toBeTruthy();
+    expect(isRegisteredKind("safety_redraft"), "it gained a REGISTRY row; this arm no longer proves anything").toBe(false);
+
+    seedStore([safety!]);
+    render(<ApprovalTaskCard task={payload("safety_redraft") as never} />);
+    expect(renderedVerbs()).toEqual(safety!.accepts);
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
+  });
+
+  it("an UNREACHABLE menu falls back and refuses — it does not claim the species is undeclared", () => {
+    // `unreachable` is not `empty`. A failed fetch must not render "nothing has declared this
+    // species", which is a claim about the deployment made from a broken request.
+    useTaskKindStore.setState({ status: "unreachable", byKind: {} });
+    render(<ApprovalTaskCard task={payload("safety_redraft") as never} />);
+    expect(renderedVerbs()).toEqual([]);
+    expect(document.querySelector("[data-undeclared-kind]")).not.toBeNull();
+  });
+});
+
+/**
+ * THE SEAL MUST BE ABLE TO REPORT THAT IT DID NOT RUN.
+ *
+ * Every block above is `describe.skipIf(!HAVE_PRODUCER)`. That is right when the producer is
+ * genuinely absent — faking a comparand would be worse than not making one. But a suite of
+ * skips reports as a PASS, so "the check found nothing wrong" and "the check never ran" are
+ * indistinguishable in a green summary. The floor inside the seal guards an empty READ; this
+ * guards the seal not executing at all, which is the same failure one level out.
+ *
+ * NOT INSIDE THE SKIP, obviously — a guard that skips with the thing it guards is decorative.
+ */
+describe("the seal RAN, or says so", () => {
+  it("resolved exactly one producer checkout", () => {
+    expect(
+      PRODUCERS.length,
+      `no producer checkout found under any of ${CANDIDATE_ROOTS.join(", ")} — the parity seal ` +
+        `SKIPPED ENTIRELY and verified nothing. A seal that skips is not a seal that passed.`,
+    ).toBeGreaterThan(0);
+  });
+
+  it("and if there are two, they AGREE — otherwise the answer is about the wrong tree", () => {
+    // The reason this exists is subtler than the duplicate itself: without it, the assertion
+    // above would red for "wrong directory" on a machine with only `ia-01`, and a red that
+    // means "wrong directory" teaches readers to wave through red. That acquired immunity is
+    // what hides the one real failure.
+    if (PRODUCERS.length < 2) return;
+    const [a, b] = PRODUCERS;
+    const rows = (p: Producer) =>
+      [p.seed, p.overlay]
+        .flatMap((d) => readdirSync(d).filter((f) => f.endsWith(".yaml")).map((f) => path.join(d, f)))
+        .map((f) => `${path.basename(f)}::${readFileSync(f, "utf8")}`)
+        .sort();
+    expect(
+      rows(a),
+      `${a.root} and ${b.root} declare different task kinds — a silent pick would give a ` +
+        `confident answer about the wrong tree. Reconcile them, or drop one from CANDIDATE_ROOTS.`,
+    ).toEqual(rows(b));
+  });
+
+  it("the skip flag is derived from that resolution and nothing else", () => {
+    // Red-proofs the two above: a `HAVE_PRODUCER` that stopped tracking the resolver would let
+    // the seal skip while these still passed.
+    expect(HAVE_PRODUCER).toBe(PRODUCERS.length > 0);
   });
 });
