@@ -17,6 +17,14 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
+  # ⛔ THE PRODUCER SHA, DECLARED ONCE. It is needed in two places — the checkout `ref` and the
+  # env the seal reads to print its baseline — and carrying it twice is the same
+  # two-declarations-of-one-fact defect this repo found three times today, once in its own type
+  # system. Two literals that must agree, with nothing checking that they do, is how the seal
+  # ends up measuring one producer and REPORTING another.
+  #
+  # Bump HERE and nowhere else.
+  PRODUCER_REF: 3830de1c065a3e22b80bb699d16ec96071f797f5
 
 permissions:
   contents: read
@@ -58,8 +66,14 @@ jobs:
           # ⛔ WHICH COMPONENT'S SHA THIS IS, because the producer repo is deployed at MORE THAN
           # ONE at a time. Measured 2026-09-15 in the sandbox:
           #
-          #   iagent-cortex-bff   cortex-bff:9ede76c…   <- this pin
-          #   iagent-projector    cortex-bff:280e6103…  <- same image, different sha
+          #   iagent-cortex-bff   cortex-bff:3830de1…   <- this pin
+          #   iagent-projector    cortex-bff:3830de1…   <- SAME sha; they agree again
+          #
+          # THEY WERE SPLIT when this pin was first set — bff at 9ede76c, seventeen other
+          # services at 280e6103 — and the producer's own pre-roll census exited 1 over it,
+          # flagging the bff as AHEAD of record. So the divergence was real and already known on
+          # that side. The 2026-09-15 roll pinned everything via `global.imageTag`, so both rows
+          # now carry one sha. Verified from the pods, not from the values file.
           #
           # One repo, two live versions, and "the producer" names neither on its own. The
           # projector is the one that writes `answer_artifact_projection`, which is what cortex
@@ -78,7 +92,7 @@ jobs:
           # Bump this deliberately, with the new sha measured from the POD the same way. A parity
           # red after a bump is a real finding about drift between the two repos; it is not a
           # flake and must not be retried away.
-          ref: 9ede76c1acf136cddd693c958832a92b33e366a9
+          ref: ${{ env.PRODUCER_REF }}
           path: _producer
           persist-credentials: false
 
@@ -114,7 +128,7 @@ jobs:
         env:
           # Named in the seal's own assertion messages, so a parity red says which producer
           # state it was measured against instead of leaving the reader to guess.
-          CORTEX_PRODUCER_REF: 9ede76c1acf136cddd693c958832a92b33e366a9
+          CORTEX_PRODUCER_REF: ${{ env.PRODUCER_REF }}
         run: npm run test
 
       - name: Typecheck
