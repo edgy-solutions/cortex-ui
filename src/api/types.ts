@@ -572,6 +572,31 @@ export interface Artifact {
      * a payload is read by a renderer and gets its own shape.
      */
     refused_slots?: { name?: string; reason?: string; spoken?: string }[];
+    /**
+     * WHAT CAME BACK WHEN THE ATTEMPT FAILED — the engine's own account, not the router's.
+     *
+     * ABSENT, never empty, when nothing failed: `None` means no cause was recorded and a
+     * present dict means one was captured. There is deliberately no third state, the same
+     * absent-versus-empty rule the `disposal` split turns on.
+     *
+     * `status_code` and `body` are present ONLY when the engine ANSWERED. A timeout or a DNS
+     * failure has no response, so those keys are missing while `exception` and `message` are
+     * always there — which means the commonest infrastructure failure is the one carrying the
+     * LEAST in the record, and must read as "the engine did not answer" rather than as blanks.
+     *
+     * `request_body` is what was actually SENT, not a reconstruction. Recovering the previous
+     * one of these took a replay against the live pod with a hand-rebuilt body, then a second
+     * read to trust the rebuild. If a 422 names a missing field, the body that omitted it is on
+     * the same row.
+     */
+    failure_cause?: {
+      exception?: string;
+      status_code?: number;
+      message?: string;
+      endpoint?: string;
+      request_body?: unknown;
+      body?: string;
+    } | null;
   };
 
   /**

@@ -1,5 +1,10 @@
 import type { Artifact } from "@/api/types";
-import { flagStanding, readExclusionSplit, readFailureCause } from "@/lib/routing";
+import {
+  flagStanding,
+  readEngineFailure,
+  readExclusionSplit,
+  readFailureCause,
+} from "@/lib/routing";
 
 /**
  * A FAILED ARTIFACT, SAID SO — and named, where the person who hit it is already looking.
@@ -56,6 +61,10 @@ export function AttemptFailed({ artifact }: { artifact: Artifact }) {
   // aside. Read first and rendered first: exclusions are routing WORKING, and leading with them
   // sends a reader to audit a gate that behaved correctly.
   const cause = readFailureCause(artifact.routing);
+  // WHAT CAME BACK, read ahead of what the router considered. The card used to say "no
+  // eligibility trace was recorded" on these — true, and the wrong field: the trace is genuinely
+  // empty when the gate PASSED and the engine then failed.
+  const engine = readEngineFailure(artifact.resolved_intent);
 
   return (
     <div
@@ -65,6 +74,62 @@ export function AttemptFailed({ artifact }: { artifact: Artifact }) {
       <p className="font-mono text-[10px] uppercase tracking-widest text-rose-400/90">
         this attempt failed
       </p>
+      {engine && (
+        <div
+          className="mt-1"
+          data-engine-failure
+          data-failure-kind={engine.kind}
+          data-failure-status={engine.statusCode ?? undefined}
+        >
+          {engine.kind === "no_outcome" ? (
+            /* NOT AN ENGINE FAILURE, and rendered differently because the repair is elsewhere:
+               nothing failed downstream, the pipeline ended without recording an outcome. Drawn
+               in amber rather than rose so it does not read as a fault in a service. */
+            <p className="font-mono text-[11px] text-amber-300/90">
+              the pipeline recorded no outcome for this turn
+            </p>
+          ) : engine.kind === "no_response" ? (
+            /* THE LEAST IN THE RECORD IS THE COMMONEST FAILURE. A timeout or a DNS failure has
+               no response at all, so there is no status and no body — said in words rather than
+               rendered as empty fields, which would read as a malformed record. */
+            <p className="font-mono text-[11px] text-rose-200/90">
+              <span className="text-rose-300">the engine did not answer</span>
+              <span className="text-slate-400"> — {engine.exception}</span>
+              {engine.endpoint && <span className="text-slate-400"> · {engine.endpoint}</span>}
+            </p>
+          ) : (
+            /* The architect's line: status and endpoint are the two a reader acts on. */
+            <p className="font-mono text-[11px] text-rose-200/90">
+              <span className="text-rose-300">
+                {engine.exception} {engine.statusCode}
+              </span>
+              {engine.endpoint && <span className="text-slate-400"> · {engine.endpoint}</span>}
+            </p>
+          )}
+          {engine.message && (
+            <p className="mt-0.5 font-mono text-[10px] leading-snug text-slate-400">
+              {engine.message}
+            </p>
+          )}
+          {engine.requestBody !== undefined && (
+            /* WHAT WAS ACTUALLY SENT, not a reconstruction — behind a disclosure because it is
+               the second look, not the first. Recovering the previous one of these took a replay
+               against the live pod with a hand-rebuilt body; if a 422 names a missing field, the
+               body that omitted it is now on the same row. */
+            <details className="mt-1">
+              <summary className="cursor-pointer font-mono text-[10px] text-slate-500">
+                request body as sent
+              </summary>
+              <pre
+                className="mt-1 overflow-x-auto rounded bg-black/30 p-2 font-mono text-[10px] text-slate-300"
+                data-failure-request-body
+              >
+                {JSON.stringify(engine.requestBody, null, 2)}
+              </pre>
+            </details>
+          )}
+        </div>
+      )}
       {cause && (
         /* SHOWN IN COMPACT TOO. This was previously last, dimmed, and dropped entirely when
            compact — and compact is the canvas tile, which is where a reader actually lands. The
@@ -138,7 +203,7 @@ export function AttemptFailed({ artifact }: { artifact: Artifact }) {
             </li>
           ))}
         </ul>
-      ) : flagged.length === 0 && !cause ? (
+      ) : flagged.length === 0 && !cause && !engine ? (
         /*
          * FAILED WITH NO TRACE is a different fact from failed-and-explained, and saying so is
          * what stops a reader hunting for a reason that was never recorded. The producer may

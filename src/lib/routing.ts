@@ -427,3 +427,87 @@ export function readFailureCause(routing: unknown): FailureCause | null {
   if (!reason && (!status || status === "matched")) return null;
   return { status, reason };
 }
+
+/**
+ * THE ENGINE'S OWN ACCOUNT OF THE FAILURE — read ahead of the router's, because a reader looking
+ * at a failed card wants what came BACK before what the router considered.
+ *
+ * The card previously said "No eligibility trace was recorded for this attempt", which was
+ * honest and was not where the failure lived: the eligibility trace is genuinely empty when the
+ * gate passed and the engine 500s. The card was reporting a true absence in the wrong field.
+ *
+ * FOUR STATES, kept apart because they have four different repairs:
+ *
+ *   absent        nothing failed. Absent, never empty — `null` is the producer's "no cause
+ *                 recorded", and there is deliberately no third state.
+ *   answered      the engine responded with an error status. `status_code` and `body` exist
+ *                 ONLY here. Headline: `HTTPError 500 · /graphs/fin_program_brief`.
+ *   no_response   a timeout or a DNS failure — there was no response, so `status_code` and
+ *                 `body` are missing while `exception` and `message` are always present. ⛔ THE
+ *                 COMMONEST INFRASTRUCTURE FAILURE CARRIES THE LEAST IN THE RECORD, so this
+ *                 must read as "the engine did not answer" rather than render blanks.
+ *   no_outcome    `NoOutcomeRecorded` — NOT an engine failure. The turn ended without recording
+ *                 an outcome at all, written by the boundary so a silent turn produces a row
+ *                 instead of nothing. Nothing failed downstream; the pipeline lost the thread,
+ *                 and the repair is in the pipeline rather than in any engine.
+ */
+export type EngineFailureKind = "answered" | "no_response" | "no_outcome";
+
+export interface EngineFailure {
+  kind: EngineFailureKind;
+  /** The producer's exception name, verbatim. */
+  exception: string;
+  /** Present only when the engine answered. */
+  statusCode?: number;
+  message: string;
+  /** The endpoint's PATH where one can be parsed, else whatever was recorded. */
+  endpoint: string;
+  /** What was actually SENT — a payload, not a reconstruction. */
+  requestBody?: unknown;
+}
+
+/** `NoOutcomeRecorded` is the boundary's marker, not an engine's exception. */
+const NO_OUTCOME = "NoOutcomeRecorded";
+
+/**
+ * The endpoint's path, which is the actionable half of a URL on a card-width line.
+ *
+ * Falls back to the RAW value rather than to a placeholder: an endpoint that does not parse is
+ * still the producer's record of where the call went, and blanking it would lose the one string
+ * a reader needs to find the pod.
+ */
+function endpointPath(raw: string): string {
+  if (!raw) return "";
+  try {
+    return new URL(raw).pathname || raw;
+  } catch {
+    return raw;
+  }
+}
+
+export function readEngineFailure(resolvedIntent: unknown): EngineFailure | null {
+  if (typeof resolvedIntent !== "object" || resolvedIntent === null) return null;
+  const fc = (resolvedIntent as Record<string, unknown>).failure_cause;
+  if (typeof fc !== "object" || fc === null) return null;
+  const c = fc as Record<string, unknown>;
+
+  const exception = typeof c.exception === "string" ? c.exception.trim() : "";
+  const message = typeof c.message === "string" ? c.message.trim() : "";
+  // A dict carrying NEITHER is not an account of anything; reporting it would put an empty
+  // failure row on the card, which is the blank-rendering this reader exists to prevent.
+  if (!exception && !message) return null;
+
+  const endpoint = endpointPath(typeof c.endpoint === "string" ? c.endpoint.trim() : "");
+  const requestBody = "request_body" in c ? c.request_body : undefined;
+
+  if (exception === NO_OUTCOME) {
+    return { kind: "no_outcome", exception, message, endpoint, requestBody };
+  }
+  // POSITIVE TEST for a response. `status_code` present is the only evidence the engine
+  // answered; inferring it from the absence of something else would make a timeout render as a
+  // status-less HTTP error, which is the opposite diagnosis.
+  if (typeof c.status_code === "number") {
+    return { kind: "answered", exception, statusCode: c.status_code, message, endpoint, requestBody };
+  }
+  return { kind: "no_response", exception, message, endpoint, requestBody };
+}

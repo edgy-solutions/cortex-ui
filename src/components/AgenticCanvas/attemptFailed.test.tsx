@@ -31,6 +31,7 @@ import {
   flagStanding,
   readExclusions,
   readExclusionSplit,
+  readEngineFailure,
   readFailureCause,
 } from "@/lib/routing";
 import type { Artifact } from "@/api/types";
@@ -462,5 +463,137 @@ describe("the card leads with the dispatch's own failure", () => {
     // has now bitten this repo five times. Assert the actual claim: no compact prop is passed
     // to THIS component.
     expect(src).not.toMatch(/<AttemptFailed[^>]*compact/);
+  });
+});
+
+/**
+ * THE CARD WAS REPORTING A TRUE ABSENCE IN THE WRONG FIELD.
+ *
+ * "No eligibility trace was recorded for this attempt" was honest and useless: the eligibility
+ * trace IS empty when the gate PASSED and the engine then 500s. Nothing was excluded, so there
+ * was nothing to trace — and the failure was never in that field. It is in
+ * `resolved_intent.failure_cause`, which did not exist until 2026-09-14.
+ *
+ * ── FIXTURE PROVENANCE, stated because this file has been burned by it ────────────────────
+ *
+ * The payload below is invincible-agent-65's verbatim read of artifact-2-1789441260931 from the
+ * 22:01 walk. I did NOT read it myself: the artifact store needs DB credentials this session is
+ * denied, and the Electric shape is auth-gated by design. So this fixture agrees with THEIR
+ * measurement, not independently with the producer — which is a weaker claim than the one made
+ * by the fixtures above it, and is recorded here rather than left for someone to assume.
+ */
+describe("the engine's own account of the failure", () => {
+  /** 65's verbatim read. Not a paraphrase, not a reconstruction. */
+  const MEASURED = {
+    exception: "HTTPError",
+    status_code: 500,
+    message:
+      "500 Server Error: Internal Server Error for url: http://iagent-engine-lg:8098/graphs/fin_program_brief",
+    endpoint: "http://iagent-engine-lg:8098/graphs/fin_program_brief",
+    request_body: {
+      query: "brief on how this program is doing",
+      params: { program_id: "NP-MERIDIAN" },
+    },
+    body: "Internal Server Error",
+  };
+  const withCause = (failure_cause: unknown, over: Record<string, unknown> = {}) =>
+    artifact({ routing: null, resolved_intent: { failure_cause }, ...over });
+
+  it("renders the architect's line — status and endpoint, the two a reader acts on", () => {
+    render(<AttemptFailed artifact={withCause(MEASURED)} />);
+    const el = document.querySelector("[data-engine-failure]")!;
+    expect(el).not.toBeNull();
+    expect(el.getAttribute("data-failure-kind")).toBe("answered");
+    expect(el.textContent).toContain("HTTPError");
+    expect(el.textContent).toContain("500");
+    expect(el.textContent).toContain("/graphs/fin_program_brief");
+  });
+
+  it("reduces the endpoint to its PATH, not the host and port", () => {
+    // A card-width line; the host is noise next to the route. The raw value survives when it
+    // does not parse, because it is still the record of where the call went.
+    render(<AttemptFailed artifact={withCause(MEASURED)} />);
+    const line = document.querySelector("[data-engine-failure] p")!;
+    expect(line.textContent).toContain("/graphs/fin_program_brief");
+    expect(line.textContent).not.toContain("iagent-engine-lg:8098");
+    expect(readEngineFailure({ failure_cause: { exception: "X", endpoint: "not a url" } })!.endpoint).toBe(
+      "not a url",
+    );
+  });
+
+  it("says THE ENGINE DID NOT ANSWER when there was no response", () => {
+    // A timeout or DNS failure has no status and no body — the commonest infrastructure failure
+    // carries the LEAST in the record. Rendering blanks would read as a malformed row instead
+    // of as the diagnosis it is.
+    render(
+      <AttemptFailed
+        artifact={withCause({ exception: "ConnectTimeout", message: "timed out", endpoint: "http://h:1/g/x" })}
+      />,
+    );
+    const el = document.querySelector("[data-engine-failure]")!;
+    expect(el.getAttribute("data-failure-kind")).toBe("no_response");
+    expect(el.textContent).toMatch(/did not answer/i);
+    expect(el.getAttribute("data-failure-status")).toBeNull();
+  });
+
+  it("does NOT infer a response from the absence of one — the discriminating control", () => {
+    // `status_code` present is the ONLY evidence the engine answered. Deriving "answered" from
+    // anything else makes a timeout render as a status-less HTTP error, which is the opposite
+    // diagnosis and sends a reader to the wrong service.
+    expect(readEngineFailure({ failure_cause: { exception: "E", body: "oops" } })!.kind).toBe(
+      "no_response",
+    );
+    expect(readEngineFailure({ failure_cause: { exception: "E", status_code: 422 } })!.kind).toBe(
+      "answered",
+    );
+  });
+
+  it("renders NoOutcomeRecorded as a pipeline fault, not an engine fault", () => {
+    // Nothing failed downstream: the turn ended without recording an outcome, and the repair is
+    // in the pipeline. Reading it as a 500 sends someone to an engine that never misbehaved.
+    render(<AttemptFailed artifact={withCause({ exception: "NoOutcomeRecorded", message: "silent turn" })} />);
+    const el = document.querySelector("[data-engine-failure]")!;
+    expect(el.getAttribute("data-failure-kind")).toBe("no_outcome");
+    expect(el.textContent).toMatch(/recorded no outcome/i);
+    expect(el.textContent).not.toMatch(/did not answer/i);
+  });
+
+  it("treats an ABSENT cause as no cause — never as an empty one", () => {
+    expect(readEngineFailure({})).toBeNull();
+    expect(readEngineFailure({ failure_cause: null })).toBeNull();
+    expect(readEngineFailure(null)).toBeNull();
+    // A dict carrying neither exception nor message is not an account of anything.
+    expect(readEngineFailure({ failure_cause: { endpoint: "http://h/x" } })).toBeNull();
+  });
+
+  it("puts what CAME BACK before what the router considered", () => {
+    // A reader on a failed card wants the response before the candidate list. Order, asserted
+    // as order — presence of both would pass a card that still buries it.
+    render(
+      <AttemptFailed
+        artifact={withCause(MEASURED, {
+          routing: { route_status: "no_match", excluded: [{ uri: "a:X", gate: "domain" }] },
+        })}
+      />,
+    );
+    const engine = document.querySelector("[data-engine-failure]")!;
+    const cause = document.querySelector("[data-failure-cause]")!;
+    const list = document.querySelector("[data-failure-exclusions]")!;
+    expect(engine.compareDocumentPosition(cause) & 4).toBeTruthy();
+    expect(cause.compareDocumentPosition(list) & 4).toBeTruthy();
+  });
+
+  it("a failure explained ONLY by the engine is EXPLAINED — not 'no trace'", () => {
+    // This is the defect being repaired: gate passed, nothing excluded, engine 500d, and the
+    // card announced that no trace existed.
+    render(<AttemptFailed artifact={withCause(MEASURED)} />);
+    expect(document.querySelector("[data-failure-untraced]")).toBeNull();
+  });
+
+  it("carries the request body AS SENT, so a 422 is one look instead of two", () => {
+    render(<AttemptFailed artifact={withCause(MEASURED)} />);
+    const body = document.querySelector("[data-failure-request-body]")!;
+    expect(body).not.toBeNull();
+    expect(body.textContent).toContain("NP-MERIDIAN");
   });
 });
