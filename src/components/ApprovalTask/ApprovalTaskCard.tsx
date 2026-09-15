@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, XCircle, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 import { actOnHumanTask } from "@/api/client";
+import type { TaskState } from "@/api/types";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
@@ -54,7 +55,12 @@ import { useTaskKindStore } from "@/store/useTaskKindStore";
 export interface ApprovalTaskPayload {
   task_id: string;
   kind: string;
-  task_state?: "pending" | "approved" | "rejected" | "expired";
+  /**
+   * THE SHARED UNION, not a second narrower copy. This field used to redeclare four of the
+   * fifteen states, so a task arriving `acknowledged` type-errored here and was fine in
+   * `TaskRef` — one fact, two declarations, and the narrow one governing this surface.
+   */
+  task_state?: TaskState;
   title: string;
   summary: string;
   audience: string;

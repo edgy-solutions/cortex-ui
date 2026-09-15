@@ -843,6 +843,60 @@ export interface Artifact {
 }
 
 /** The HITL task a synthetic task-artifact stands for (see Artifact.task_ref). */
+/**
+ * EVERY TERMINAL STATE A TASK CAN REACH, AND IT IS ONE DECLARATION ON PURPOSE.
+ *
+ * This union was declared TWICE — here with six values and again inside `ApprovalTaskPayload`
+ * with four — so a task arriving `acknowledged` was a type error at one consumer and fine at the
+ * other. Two declarations of one fact drift, and the narrower one silently governs whichever
+ * surface imports it. There is now one, and `ApprovalTaskPayload` references it.
+ *
+ * TERMINAL STATES ARE PER SPECIES: a triage task ends `acknowledged`/`redriven` and never
+ * `approved`; the server refuses the wrong verb on a species with a 422. Grouped by the species
+ * that produces them — MEASURED by invincible-agent-65 against the composed declaration (seed
+ * plus the in-repo sample overlay), not listed from memory:
+ *
+ *   approval            approved, rejected, expired
+ *   triage              acknowledged, redriven
+ *   risk acceptance     accepted, returned_for_rework
+ *   concurrence         concurred, not_concurred, returned_for_rework
+ *   hazard link review  linked, new_hazard, dismissed
+ *   safety redraft      redrafted, withdrawn
+ *
+ * ⛔ `redrafted` AND `withdrawn` WERE ABSENT from the list relayed earlier and present in the
+ * measurement — the difference between a summary of a declaration and the declaration.
+ *
+ * `pending` IS THE OPEN STATE AND NEVER A RESOLUTION. The producer refuses it as a stored
+ * outcome: it is the only status the queue reads as OPEN, so storing it would hand a resolved
+ * task back to every queue that filters on it. It stays in the union because a task genuinely IS
+ * pending before it resolves — the one value the `=== "pending"` checks depend on.
+ *
+ * ⛔ THE RENDERER IS AHEAD OF THE PRODUCER. The producer half landed at `ad29f5c` and is not
+ * rolled, so nine of these cannot arrive yet. That is the SAFE direction, and their absence is
+ * not evidence the values are wrong — the same note the `no_outcome` branch carries.
+ */
+export type TaskState =
+  // approval
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  // triage
+  | "acknowledged"
+  | "redriven"
+  // risk acceptance and concurrence
+  | "accepted"
+  | "concurred"
+  | "not_concurred"
+  | "returned_for_rework"
+  // hazard link review
+  | "linked"
+  | "new_hazard"
+  | "dismissed"
+  // safety redraft
+  | "redrafted"
+  | "withdrawn";
+
 export interface TaskRef {
   /** HumanTask.taskId — the /act + fetchReviewBatch key. */
   taskId: string;
@@ -852,7 +906,7 @@ export interface TaskRef {
   /** The TASK's state (not the artifact's UI status). Terminal states are PER SPECIES:
    *  a triage task ends acknowledged/redriven, never approved/rejected — the server refuses
    *  those verbs on it (422). Only `pending` is load-bearing for filtering. */
-  task_state: "pending" | "approved" | "rejected" | "acknowledged" | "redriven" | "expired";
+  task_state: TaskState;
   audience: string;
   requestedBy: string;
   subjectRef: string | null;

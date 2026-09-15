@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { TaskState } from "@/api/types";
 import { AlertTriangle, CheckCircle2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
@@ -33,7 +34,13 @@ import { formatRequestedBy } from "@/lib/requestedBy";
 export interface TriageTaskPayload {
   task_id: string;
   kind: string;
-  task_state?: "pending" | "acknowledged" | "redriven" | "approved" | "rejected" | "expired";
+  /**
+   * THE SHARED UNION. This was the THIRD inline declaration of one fact — `TaskRef` had six
+   * values, `ApprovalTaskPayload` four, and this a DIFFERENT six. All three typechecked, none
+   * compared, and each governed its own surface. Found by the drift guard in
+   * `src/api/taskState.test.ts`, not by reading — which is the point of having it.
+   */
+  task_state?: TaskState;
   title: string;
   summary: string;
   audience: string;
