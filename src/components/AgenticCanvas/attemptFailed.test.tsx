@@ -27,7 +27,12 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { AttemptFailed } from "./AttemptFailed";
-import { flagStanding, readExclusions, readExclusionSplit } from "@/lib/routing";
+import {
+  flagStanding,
+  readExclusions,
+  readExclusionSplit,
+  readFailureCause,
+} from "@/lib/routing";
 import type { Artifact } from "@/api/types";
 
 afterEach(cleanup);
@@ -356,5 +361,106 @@ describe("the two declarations of the instance fact are joined, not merely rende
     );
     expect(src).toContain("flagStanding");
     expect(src).toContain("data-flag-standing");
+  });
+});
+
+/**
+ * THE CARD LED WITH THE WRONG FACT.
+ *
+ * It opened with the exclusion list, and exclusions are routing WORKING — `no_verb_in_scope`
+ * means the domain gate did its job. A reader landing on that goes off to audit a gate that
+ * behaved correctly, while the supervisor's own account of the failure sat one field away:
+ * rendered LAST, dimmed to `text-slate-500`, and dropped entirely when `compact` — which is the
+ * canvas tile, the surface people actually land on. The most important fact was hidden exactly
+ * where it was most needed, and the variant that hid it had no other effect, so it is gone.
+ *
+ * `route_status` and `fallback_reason` are kept SEPARATE and printed VERBATIM: `infra_error`
+ * (routing could not run) and `no_match` (it ran and landed nowhere) have opposite repairs, and
+ * any paraphrase collapses them.
+ */
+describe("the card leads with the dispatch's own failure", () => {
+  const failed = (routing: Record<string, unknown> | null) =>
+    artifact({ routing }) ;
+
+  it("renders the supervisor's status and reason, verbatim", () => {
+    render(<AttemptFailed artifact={failed({ route_status: "infra_error", fallback_reason: "subject_unknown" })} />);
+    const el = document.querySelector("[data-failure-cause]")!;
+    expect(el).not.toBeNull();
+    expect(el.textContent).toContain("infra_error");
+    expect(el.textContent).toContain("subject_unknown");
+    expect(el.getAttribute("data-route-status")).toBe("infra_error");
+  });
+
+  it("puts the cause BEFORE the candidates in the DOM — the actual requirement", () => {
+    // "Leads with" is an ORDER claim, and a test that only asserts both are present passes a
+    // card that still buries the cause underneath the exclusion list.
+    render(
+      <AttemptFailed
+        artifact={failed({
+          route_status: "no_match",
+          fallback_reason: "no_compatible_verbs",
+          excluded: [{ uri: "a:X", gate: "domain", reason: "no_verb_in_scope" }],
+        })}
+      />,
+    );
+    const cause = document.querySelector("[data-failure-cause]")!;
+    const list = document.querySelector("[data-failure-exclusions]")!;
+    expect(cause).not.toBeNull();
+    expect(list).not.toBeNull();
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4: the list follows the cause.
+    expect(cause.compareDocumentPosition(list) & 4).toBeTruthy();
+  });
+
+  it("distinguishes infra_error from no_match rather than collapsing them", () => {
+    // Opposite repairs: fix the substrate, or fix the question. One label for both is the
+    // "unreachable" mistake this repo has already paid for once on the version row.
+    for (const status of ["infra_error", "no_match"]) {
+      const { unmount } = render(<AttemptFailed artifact={failed({ route_status: status })} />);
+      expect(document.querySelector("[data-failure-cause]")!.textContent, status).toContain(status);
+      unmount();
+    }
+  });
+
+  it("a failure explained ONLY by a cause is EXPLAINED — not 'no trace'", () => {
+    // The same defect the flags fix had to correct: `untraced` keyed on the exclusion list
+    // alone, so a failure the supervisor DID explain reported as unexplained, sending a reader
+    // to hunt for a reason that is on the card.
+    render(<AttemptFailed artifact={failed({ route_status: "infra_error" })} />);
+    expect(document.querySelector("[data-failure-untraced]")).toBeNull();
+  });
+
+  it("still says NO TRACE when nothing at all was recorded — the control", () => {
+    // Without this, a card that never showed the untraced note would pass everything above
+    // while silently dropping the failed-and-unexplained case.
+    render(<AttemptFailed artifact={failed(null)} />);
+    expect(document.querySelector("[data-failure-untraced]")).not.toBeNull();
+    expect(document.querySelector("[data-failure-cause]")).toBeNull();
+  });
+
+  it("does NOT treat a matched route as a failure account", () => {
+    // A matched route that still failed did so downstream of routing. Printing "matched" as the
+    // cause would be an invention, and a confident one.
+    expect(readFailureCause({ route_status: "matched" })).toBeNull();
+    expect(readFailureCause({ route_status: "matched", fallback_reason: "x" })).not.toBeNull();
+  });
+
+  it("reports NO account as null, never as a blank pair", () => {
+    // A producer that recorded nothing must not render as one that recorded an empty string.
+    expect(readFailureCause({})).toBeNull();
+    expect(readFailureCause(null)).toBeNull();
+    expect(readFailureCause({ route_status: "   ", fallback_reason: "  " })).toBeNull();
+  });
+
+  it("the canvas tile no longer hides it — both mounts render one card", () => {
+    const src = (require("node:fs") as typeof import("node:fs")).readFileSync(
+      (require("node:path") as typeof import("node:path")).join(__dirname, "StageCard.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("<AttemptFailed artifact={artifact} />");
+    // SCOPED TO THE TAG. A bare search for "compact" hits StageCard own unrelated density
+    // mode ("the compact card") and fails against correct code — the co-occurrence trap that
+    // has now bitten this repo five times. Assert the actual claim: no compact prop is passed
+    // to THIS component.
+    expect(src).not.toMatch(/<AttemptFailed[^>]*compact/);
   });
 });

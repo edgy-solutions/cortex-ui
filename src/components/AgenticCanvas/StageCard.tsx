@@ -478,7 +478,7 @@ export function StageCard({
               {/* A FAILED ARTIFACT LOOKED EXACTLY LIKE ONE IN FLIGHT HERE — summary line, no
                   body, nothing saying which. `status` was in the row and this branch did not
                   read it. See AttemptFailed. */}
-              <AttemptFailed artifact={artifact} compact />
+              <AttemptFailed artifact={artifact} />
             </div>
           )}
         </div>

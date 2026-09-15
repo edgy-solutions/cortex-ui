@@ -1,5 +1,5 @@
 import type { Artifact } from "@/api/types";
-import { flagStanding, readExclusionSplit } from "@/lib/routing";
+import { flagStanding, readExclusionSplit, readFailureCause } from "@/lib/routing";
 
 /**
  * A FAILED ARTIFACT, SAID SO — and named, where the person who hit it is already looking.
@@ -36,7 +36,13 @@ import { flagStanding, readExclusionSplit } from "@/lib/routing";
  * nothing at all. One component, two mount points — a failure visible on one surface and blank
  * on the other is the shape that makes a defect look intermittent.
  */
-export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compact?: boolean }) {
+/*
+ * NO `compact` VARIANT ANY MORE. It existed to drop the failure reason on the canvas tile, and
+ * the tile is the surface a reader actually lands on — so the variant's only effect was to hide
+ * the most important fact exactly where it was most needed. Both mounts now render the same
+ * card, which is also what stops the two surfaces drifting apart again.
+ */
+export function AttemptFailed({ artifact }: { artifact: Artifact }) {
   if (artifact.status !== "failed") return null;
 
   // PARTITIONED, because the two are opposite decisions arriving under one key. A verb the
@@ -46,6 +52,10 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
     artifact.routing?.excluded,
     (artifact.routing as { flags?: unknown } | null | undefined)?.flags,
   );
+  // THE DISPATCH'S OWN ACCOUNT, which is a different question from which candidates a gate set
+  // aside. Read first and rendered first: exclusions are routing WORKING, and leading with them
+  // sends a reader to audit a gate that behaved correctly.
+  const cause = readFailureCause(artifact.routing);
 
   return (
     <div
@@ -55,6 +65,31 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
       <p className="font-mono text-[10px] uppercase tracking-widest text-rose-400/90">
         this attempt failed
       </p>
+      {cause && (
+        /* SHOWN IN COMPACT TOO. This was previously last, dimmed, and dropped entirely when
+           compact — and compact is the canvas tile, which is where a reader actually lands. The
+           most important fact on the card was the one hidden on the surface people read. */
+        <p
+          className="mt-1 font-mono text-[11px] text-rose-200/90"
+          data-failure-cause
+          data-route-status={cause.status || undefined}
+        >
+          {cause.status && (
+            <>
+              {/* VERBATIM. `infra_error` (routing could not run) and `no_match` (it ran and
+                  landed nowhere) have opposite repairs, and a paraphrase collapses them. */}
+              <span className="text-slate-400">routing reported </span>
+              <span className="text-rose-300">{cause.status}</span>
+            </>
+          )}
+          {cause.reason && (
+            <>
+              <span className="text-slate-400">{cause.status ? " — " : "reason: "}</span>
+              <span className="text-rose-300">{cause.reason}</span>
+            </>
+          )}
+        </p>
+      )}
       {flagged.length > 0 && (
         <ul className="mt-1 flex flex-col gap-0.5" data-failure-flags>
           {flagged.map((e) => (
@@ -103,7 +138,7 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
             </li>
           ))}
         </ul>
-      ) : flagged.length === 0 ? (
+      ) : flagged.length === 0 && !cause ? (
         /*
          * FAILED WITH NO TRACE is a different fact from failed-and-explained, and saying so is
          * what stops a reader hunting for a reason that was never recorded. The producer may
@@ -115,11 +150,6 @@ export function AttemptFailed({ artifact, compact }: { artifact: Artifact; compa
           No eligibility trace was recorded for this attempt.
         </p>
       ) : null}
-      {!compact && artifact.routing?.fallback_reason && (
-        <p className="mt-1 font-mono text-[10px] text-slate-500">
-          {artifact.routing.fallback_reason}
-        </p>
-      )}
     </div>
   );
 }

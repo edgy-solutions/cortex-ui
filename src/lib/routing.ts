@@ -380,3 +380,50 @@ export function presentAbstention(
     excluded: rows,
   };
 }
+
+/**
+ * THE DISPATCH'S OWN ACCOUNT OF WHY IT FAILED — which is not the same question as which
+ * candidates a gate set aside.
+ *
+ * The failure card led with exclusions. Those are routing WORKING: `no_verb_in_scope` says the
+ * domain gate did its job. Reading them as the failure sends someone to audit a gate that
+ * behaved correctly, while the supervisor's own classification sat one field away, rendered
+ * last, dimmed, and dropped entirely in compact — which is the canvas tile, where a reader
+ * actually lands.
+ *
+ * TWO FIELDS, KEPT SEPARATE because they answer different questions and have different repairs:
+ *
+ *   route_status     the supervisor's AUTHORITATIVE outcome (types.ts:132) — `infra_error`
+ *                    means routing could not run at all; `no_match` means it ran and landed
+ *                    nowhere. Opposite repairs: fix the substrate, or fix the question.
+ *   fallback_reason  its classification of that outcome (`subject_unknown`,
+ *                    `instance_not_found`, `no_compatible_verbs`, `domain_scope_excluded`, …).
+ *
+ * ⛔ PRINTED VERBATIM, NEVER TRANSLATED. This surface has no vocabulary of statuses any more
+ * than it has one of gates: the next value anyone adds must render as itself rather than as an
+ * unknown token, and a paraphrase here is how the card and the record came to disagree once
+ * already.
+ */
+export interface FailureCause {
+  /** The supervisor's outcome token, verbatim; empty when it reported none. */
+  status: string;
+  /** Its classification, verbatim; empty when it gave none. */
+  reason: string;
+}
+
+/**
+ * Read the dispatch's own failure account, or null when it gave none.
+ *
+ * Null is a DIFFERENT fact from an empty string and is why this returns null rather than a
+ * blank pair: a producer that recorded no account must not render as one that recorded an empty
+ * one. `matched` is not a failure account — a matched route that still failed did so somewhere
+ * downstream of routing, and claiming routing explained it would be an invention.
+ */
+export function readFailureCause(routing: unknown): FailureCause | null {
+  if (typeof routing !== "object" || routing === null) return null;
+  const r = routing as Record<string, unknown>;
+  const status = typeof r.route_status === "string" ? r.route_status.trim() : "";
+  const reason = typeof r.fallback_reason === "string" ? r.fallback_reason.trim() : "";
+  if (!reason && (!status || status === "matched")) return null;
+  return { status, reason };
+}
