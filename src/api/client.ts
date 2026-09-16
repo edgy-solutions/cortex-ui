@@ -775,6 +775,34 @@ export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
 
 // ── Task-kind declarations (the served menu) ──────────────
 /**
+ * THE RATIFIED TEMPLATE MENU — R-039's read path, the companion to `/task_kinds`.
+ *
+ * Before this, the only way to learn what boards exist was to SEED one and see whether the id
+ * was recognised. A picker cannot be built out of guesses.
+ *
+ * ⛔ RETURNS THE ENVELOPE, NOT A BARE LIST, because the producer distinguishes three states and
+ * flattening them here would destroy the distinction at the first seam:
+ *
+ *   composed true,  templates non-empty  the menu
+ *   composed true,  templates empty      genuinely nothing is ratified
+ *   composed FALSE                       the directory could not be READ — NOT an empty menu
+ *
+ * The third is a deployment accident that would otherwise render as a complete menu with nothing
+ * in it, which is the same None-is-not-empty rule `/task_kinds` turns on.
+ *
+ * `null` is a FOURTH state and distinct again: the endpoint was unreachable, so cortex knows
+ * nothing rather than knowing there is nothing.
+ */
+export async function fetchTemplates(): Promise<unknown | null> {
+  try {
+    const { data } = await api.get<unknown>("/templates");
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Every declared task species, from `GET /task_kinds`.
  *
  * THE WHOLE MENU, FETCHED ONCE, rather than a declaration threaded onto each row. The

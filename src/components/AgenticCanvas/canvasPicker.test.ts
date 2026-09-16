@@ -81,11 +81,33 @@ describe("lenses and templates are different vocabularies", () => {
     expect(src("DockBar.tsx")).toContain("portfolio_planning:");
   });
 
-  it("NO hand-build path sets a template — the open ruling, not a defect", () => {
-    // `createCanvas` takes a name and a lens. Only the seed path stamps `template_id`, so a
-    // person cannot build a templated board by hand at all. Whether they should is a ruling.
+  /**
+   * THE RULING CAME, AND THIS ASSERTION EXPIRED WITH IT.
+   *
+   * It read "NO hand-build path sets a template — the open ruling, not a defect", and it was
+   * right to: only the seed path stamped `template_id`, so a person could not build a
+   * templated board at all. It existed to hold the question OPEN rather than let an absence
+   * age into a design.
+   *
+   * `/templates` now serves the ratified menu (R-039's read path) and `createCanvas` takes a
+   * `templateId`. So it is INVERTED rather than deleted: the fact it guarded still matters,
+   * it is simply the other way round, and a reader finding this later should see the state
+   * changed by RULING rather than by drift.
+   */
+  it("the hand-build path CAN set a template, since a menu now exists to pick from", () => {
     const store = src("../../store/useStageStore.ts");
-    expect(store.match(/template_id:/g)?.length).toBe(1);
-    expect(store).toMatch(/createCanvas:\s*\(name, use, enter = true\)/);
+    expect(store).toContain("createCanvas: (name, use, enter = true, templateId) =>");
+    // ABSENT, NEVER EMPTY-STRING: `template_id` decides which lens arranges the board, so
+    // "" would route as a template named nothing.
+    expect(store).toContain("const tid = templateId?.trim();");
+    expect(store).toContain("...(tid ? { template_id: tid } : {})");
+  });
+
+  it("and the picker offers what the SERVER ratified, not a hardcoded list", () => {
+    // The whole point of the read path: a menu built from cortex's own constants would drift
+    // from the registry silently — the two-declarations shape found three times this week.
+    const dock = src("DockBar.tsx");
+    expect(dock).toContain("useTemplateStore");
+    expect(dock).toContain("catalog.templates.map");
   });
 });

@@ -36,6 +36,11 @@ const USER_SCOPED_STORAGE_KEYS = ["cortex-answers-panel-v1", "cortex-stage"];
  * visible enough to disagree with.
  */
 export const PURGE_EXEMPT_STORES: Record<string, string> = {
+  useTemplateStore:
+    "The ratified template registry — which boards exist, their titles and panel counts. " +
+    "Derived from policy and identical for every caller; the producer refuses to gate the " +
+    "endpoint on entitlement for that reason. Nothing here is read out of the substrate, so " +
+    "there is nothing for the next caller to see.",
   useTaskKindStore:
     "Holds the MESH's task-kind declarations — which species exist and what verbs they take. " +
     "Identical for every caller, derived from policy rather than from anyone's answers, tasks " +

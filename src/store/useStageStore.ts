@@ -170,7 +170,20 @@ interface StageState {
 
   // custom canvases
   setCanvases: (canvases: CustomCanvas[]) => void; // replace all (server hydrate)
-  createCanvas: (name: string, use?: CanvasUse, enter?: boolean) => string;
+  /**
+   * A new board. `templateId` names the RATIFIED template that arranges it — ADR-0050 §7's
+   * `template_id`, the same field seeding sets, so a hand-made finance board and a seeded one
+   * are arranged by one lens instead of two.
+   *
+   * Optional because most boards are freeform: a board with no template is not a board with a
+   * missing one, and defaulting it would claim an arrangement nobody chose.
+   */
+  createCanvas: (
+    name: string,
+    use?: CanvasUse,
+    enter?: boolean,
+    templateId?: string,
+  ) => string;
   renameCanvas: (id: string, name: string) => void;
   deleteCanvas: (id: string) => void;
   /**
@@ -338,9 +351,18 @@ export const useStageStore = create<StageState>()(
             (c) => !c.seededFrom || !s.dismissedSeeds.includes(c.seededFrom),
           ),
         })),
-      createCanvas: (name, use, enter = true) => {
+      createCanvas: (name, use, enter = true, templateId) => {
         const id = genId();
-        const canvas: CustomCanvas = { id, name: name.trim() || "Canvas", use, items: [] };
+        // ABSENT, NEVER EMPTY-STRING. `template_id` is read elsewhere to decide which lens
+        // arranges the board, and "" is a value that would route as a template named nothing.
+        const tid = templateId?.trim();
+        const canvas: CustomCanvas = {
+          id,
+          name: name.trim() || "Canvas",
+          use,
+          items: [],
+          ...(tid ? { template_id: tid } : {}),
+        };
         set((s) => ({
           canvases: [...s.canvases, canvas],
           ...(enter ? { view: id, focusId: null, fullPane: false } : {}),

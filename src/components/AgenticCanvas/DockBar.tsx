@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LayoutGrid, Columns, Plus, X, Check } from "lucide-react";
 import {
   useStageStore,
   type CanvasUse,
   type CustomCanvas,
 } from "@/store/useStageStore";
+import { useTemplateStore } from "@/store/useTemplateStore";
 
 /**
  * DockBar — the canvas dock (ADR-0028 canvas-dock model, Stage 3). Pinned below
@@ -76,6 +77,15 @@ export function DockBar() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUse, setNewUse] = useState<CanvasUse | "">("");
+  const [newTemplate, setNewTemplate] = useState("");
+  const templateStatus = useTemplateStore((s) => s.status);
+  const catalog = useTemplateStore((s) => s.catalog);
+  const loadTemplates = useTemplateStore((s) => s.load);
+  // Fetched when the creation form OPENS, not on mount: the menu is only needed by someone
+  // about to choose from it, and the store makes the call once per session regardless.
+  useEffect(() => {
+    if (creating) void loadTemplates();
+  }, [creating, loadTemplates]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null); // delete arm
@@ -95,9 +105,15 @@ export function DockBar() {
   };
 
   const submitCreate = () => {
-    createCanvas(newName || `Canvas ${canvases.length + 1}`, newUse || undefined, true);
+    createCanvas(
+      newName || `Canvas ${canvases.length + 1}`,
+      newUse || undefined,
+      true,
+      newTemplate || undefined,
+    );
     setNewName("");
     setNewUse("");
+    setNewTemplate("");
     setCreating(false);
   };
 
@@ -222,6 +238,82 @@ export function DockBar() {
                 {u.label}
               </button>
             ))}
+          </div>
+          {/*
+            THE RATIFIED TEMPLATE MENU, and every state of it says what it is.
+
+            Before `/templates` the only way to learn which boards existed was to seed one and
+            see whether the id was recognised. ⛔ THE FOUR STATES ARE DRAWN SEPARATELY ON
+            PURPOSE: an unreachable endpoint and a producer that could not read its template
+            directory both arrive as "no rows", and rendering either as an empty menu tells a
+            reader no boards exist — a claim nobody made, from a failed request.
+          */}
+          <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 mb-1">
+            Template (optional)
+          </div>
+          <div className="mb-3" data-template-picker data-template-status={catalog.status}>
+            {templateStatus === "loading" ? (
+              <div className="text-[9px] font-mono text-slate-600">reading the registry…</div>
+            ) : catalog.status === "unreachable" ? (
+              /* NOT "no templates". cortex knows nothing here. */
+              <div className="text-[9px] font-mono text-amber-500/80" data-template-unreachable>
+                the template registry did not answer — freeform board only
+              </div>
+            ) : catalog.status === "unreadable" ? (
+              /* `composed: false` — a deployment accident, not an empty registry. */
+              <div className="text-[9px] font-mono text-amber-500/80" data-template-unreadable>
+                the server could not read its template directory — this is not an empty menu
+              </div>
+            ) : catalog.status === "empty" ? (
+              <div className="text-[9px] font-mono text-slate-600" data-template-empty>
+                no templates are ratified
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                <button
+                  onClick={() => setNewTemplate("")}
+                  data-template-option=""
+                  className={`rounded px-2 py-1 text-[9px] font-mono uppercase tracking-wider border transition-colors ${
+                    newTemplate === ""
+                      ? "border-neon-purple/50 bg-neon-purple/15 text-neon-purple"
+                      : "border-slate-700/60 text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  None
+                </button>
+                {catalog.templates.map((t) => (
+                  <button
+                    key={t.templateId}
+                    onClick={() => setNewTemplate(t.templateId)}
+                    data-template-option={t.templateId}
+                    /* The producer's own words, and the panel count, so a reader picks a board
+                       by what it IS rather than by decoding an id. */
+                    title={`${t.description || t.templateId} — ${t.panels} panels`}
+                    className={`rounded px-2 py-1 text-[9px] font-mono uppercase tracking-wider border transition-colors ${
+                      newTemplate === t.templateId
+                        ? "border-neon-purple/50 bg-neon-purple/15 text-neon-purple"
+                        : "border-slate-700/60 text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {t.title || t.templateId}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/*
+              NAMED, NEVER DROPPED. A ratified id whose file will not parse is shown as
+              unofferable with the producer's reason — omitting it would make the list shorter
+              with nothing saying why, and a shorter list reads as the complete set.
+            */}
+            {catalog.status !== "unreachable" && catalog.unreadable.length > 0 && (
+              <div className="mt-1 flex flex-col gap-0.5" data-template-unofferable>
+                {catalog.unreadable.map((u) => (
+                  <div key={u.templateId} className="text-[9px] font-mono text-rose-400/80">
+                    {u.templateId} — cannot be offered: {u.reason || "no reason given"}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
