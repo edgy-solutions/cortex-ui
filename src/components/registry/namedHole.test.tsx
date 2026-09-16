@@ -15,7 +15,11 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { NamedHole } from "./NamedHole";
 import { SemanticInterpreter } from "./SemanticInterpreter";
-import { validateNamedHole, NAMED_HOLE_DISPOSITION } from "./NamedHole.contract";
+import {
+  validateNamedHole,
+  NAMED_HOLE_DISPOSITION,
+  DISPOSITIONS,
+} from "./NamedHole.contract";
 
 afterEach(cleanup);
 
@@ -156,12 +160,55 @@ describe("the reader refuses what the card must not draw", () => {
     }
   });
 
-  it("distinguishes 'no disposition' from 'a disposition I do not draw'", () => {
-    // Two different producer mistakes with two different fixes, and one refusal message for
-    // both would hide which one happened.
+  it("distinguishes THREE refusals, not two — the extra one is a routing fact", () => {
+    // This test already argued that two different producer mistakes with two different fixes
+    // must not share one message. R-073 adds a third case that is not a mistake AT ALL:
+    //
+    //   no disposition        the producer omitted a required field   -> fix the producer
+    //   known, draws elsewhere  understood, belongs to another surface -> nothing is wrong
+    //   unrecognised          the payload means nothing here          -> fix the producer
+    //
+    // Collapsing the middle into "this is not a named hole" reports a CORRECT routing decision
+    // in the words of a parse failure, and sends someone to debug a producer that behaved.
     const none = validateNamedHole({ archetype: "NAMED_HOLE" });
-    const other = validateNamedHole(hole({ disposition: "unavailable" }));
     expect(none.kind === "empty" && none.reason).toBe("the hole names no disposition");
-    expect(other.kind === "empty" && other.reason).toBe("this is not a named hole");
+
+    for (const d of ["unavailable", "empty", "unsummarised"]) {
+      const r = validateNamedHole(hole({ disposition: d }));
+      expect(r.kind === "empty" && r.reason, d).toBe("this disposition draws elsewhere");
+    }
+
+    // Still refused as unrecognisable when it names nothing the vocabulary knows — the control
+    // that stops the branch above from swallowing genuine nonsense.
+    for (const d of ["refused", "UNENTITLED ", "whatever"]) {
+      const r = validateNamedHole(hole({ disposition: d }));
+      expect(r.kind === "empty" && r.reason, d).toBe("this is not a named hole");
+    }
+  });
+
+  /**
+   * R-073 — `unsummarised` IS NOT DRAWN HERE, AND THAT IS THE WHOLE POINT OF NAMING IT.
+   *
+   * Content exists and a verdict does not. The caller IS entitled, so drawing this card would
+   * tell a reader they lack an entitlement they have — which is the one error that cannot be
+   * taken back, because it discloses a false fact about their own access.
+   */
+  it("refuses `unsummarised` — a finding is not a hole", () => {
+    const r = validateNamedHole(hole({ disposition: "unsummarised" }));
+    expect(r.kind).toBe("empty");
+    expect(r.kind === "empty" && r.reason).toBe("this disposition draws elsewhere");
+  });
+
+  it("knows exactly four dispositions and draws exactly one", () => {
+    // The vocabulary is mirrored by the presentation producer BY PATH, so its size is a fact
+    // two repos share. A term added here without the producer accepting it is the half-landed
+    // state R-073 refuses.
+    expect(Object.values(DISPOSITIONS).sort()).toEqual([
+      "empty",
+      "unavailable",
+      "unentitled",
+      "unsummarised",
+    ]);
+    expect(NAMED_HOLE_DISPOSITION).toBe("unentitled");
   });
 });
