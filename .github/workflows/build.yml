@@ -24,7 +24,7 @@ env:
   # ends up measuring one producer and REPORTING another.
   #
   # Bump HERE and nowhere else.
-  PRODUCER_REF: 3830de1c065a3e22b80bb699d16ec96071f797f5
+  PRODUCER_REF: cfa3f0d26aa75b4a203d599b62f4471144294cc6
 
 permissions:
   contents: read
@@ -66,13 +66,15 @@ jobs:
           # ⛔ WHICH COMPONENT'S SHA THIS IS, because the producer repo is deployed at MORE THAN
           # ONE at a time. Measured 2026-09-15 in the sandbox:
           #
-          #   iagent-cortex-bff   cortex-bff:ca3a38f…   serves the DECLARATIONS this seal reads
-          #   iagent-projector    cortex-bff:3830de1…   writes answer_artifact_projection
+          #   iagent-cortex-bff   cortex-bff:cfa3f0d…   serves the DECLARATIONS this seal reads
+          #   iagent-projector    cortex-bff:cfa3f0d…   writes answer_artifact_projection
           #
-          # ⛔ SPLIT AGAIN, DELIBERATELY, AND THIS PIN IS HELD AT 3830de1 ON PURPOSE. A targeted
-          # `--no-hooks` bff roll put a dispatch fix live without restarting the fleet, so the
-          # two deployments run different shas by design and the projector rejoins on the next
-          # full roll. Measured from the pods 2026-09-16.
+          # BOTH PRODUCERS ARE BACK ON ONE SHA and the fleet is FROZEN at it, so this pin is
+          # stable rather than merely current. Measured from the pods 2026-09-17.
+          #
+          # The bump also ARMS R-073: `unsummarised` exists on both sides only at cfa3f0d or
+          # later, so `dispositionJoin.test.ts` — the term's retirement mechanism — could not
+          # land until this moved. It lands with it, which is what the ruling asked for.
           #
           # THE OPEN QUESTION THIS MAKES LIVE — do not resolve it by bumping. The seal reads
           # `policy/task_kinds`, which the BFF serves, so on one reading the pin should follow the
