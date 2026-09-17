@@ -5,6 +5,7 @@ import { RoutingDecision } from "./RoutingDecision";
 import { SourcesTrail } from "./SourcesTrail";
 import { DecisionPathDiagram } from "./DecisionPathDiagram";
 import { GraphTrace } from "./GraphTrace";
+import { UnreadFields } from "./UnreadFields";
 import { TaskContextCard } from "./TaskContextCard";
 import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
@@ -74,6 +75,10 @@ export function HUD() {
           {/* Graph Trace (Phase 4) — detailed mode only; the linear text
               audit of the taken walk (URIs), beneath the drawn diagram. */}
           {mode === "detailed" && <GraphTrace />}
+
+          {/* Payload keys nothing read — R-075 the other way round. Detailed mode, because it
+              is an instrument rather than part of the answer. See UnreadFields. */}
+          {mode === "detailed" && <UnreadFields />}
         </>
       )}
 
