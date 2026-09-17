@@ -123,6 +123,21 @@ export const ELICITATION_CONTRACT = {
     accepted_slots: { encoding: "object", parsesTo: "object", required: false },
     /** The producer's honest prose, for any surface that cannot draw a menu. */
     message: { type: "string", required: false },
+    /**
+     * WHY THIS ASK EXISTS, as the producer's own token — `not_in_model`, `vintage_required`,
+     * `no_verb_classified`. Present on an ask MADE OF A REFUSAL or an abstain.
+     *
+     * ⛔ NOT `free_text_reason`, AND THE TWO ARE EASY TO CONFUSE. That one says why there is NO
+     * MENU, from a closed set, and is required whenever `options` is empty. This one says why
+     * the ask was raised AT ALL, and arrives precisely when there IS a menu — a refusal that
+     * names what it accepts. A card reading one for the other would report "too many to list"
+     * on a card showing two options.
+     *
+     * Rendered VERBATIM. It is a producer token and this surface has no vocabulary of outcomes,
+     * for the same reason it has none of gates: the next value anyone adds must render as
+     * itself rather than as an unknown.
+     */
+    reason: { type: "string", required: false },
     /** How many candidates existed before the menu bound. 0 when untruncated. */
     truncated_from: { type: "number", required: false },
     /**
@@ -153,6 +168,8 @@ export interface AskCardPayload {
   sub_query: string;
   accepted_slots: Record<string, unknown>;
   message: string;
+  /** The producer's outcome token — see the contract field. Empty when it sent none. */
+  reason: string;
   truncated_from: number;
   total_count: number;
 }
@@ -224,6 +241,7 @@ export function validateAsk(
       sub_query: str(comp.sub_query),
       accepted_slots: isRecord(comp.accepted_slots) ? comp.accepted_slots : {},
       message: str(comp.message),
+      reason: str(comp.reason),
       truncated_from: typeof comp.truncated_from === "number" ? comp.truncated_from : 0,
       total_count: typeof comp.total_count === "number" ? comp.total_count : 0,
     },

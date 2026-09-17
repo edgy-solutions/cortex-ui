@@ -38,6 +38,15 @@ const SOURCE_LANGUAGE: Record<string, string> = {
   resolution: "from what you said",
   declaration: "the values this accepts",
   enumeration: "everything of this kind",
+  // AN ASK MADE OF A REFUSAL. No enumerate provider was asked — the engine recomputed the legal
+  // values WHILE refusing, so this menu is what that one call actually accepts, which is a
+  // narrower and more trustworthy claim than "everything of this kind". Kept distinct from
+  // `enumeration` deliberately: a reader who can tell "the class was listed" from "the engine
+  // said what it accepts" knows whether the list is scoped to their question.
+  refusal: "what this one accepts",
+  // AN ABSTAIN. The options are VERBS, not values of a slot: the classifier found candidates and
+  // declined to guess between them, which is a different event from a missing slot value.
+  candidates: "capabilities that were considered",
   none: "",
 };
 
@@ -185,6 +194,34 @@ export function AskCard({
               </button>
             ))}
           </div>
+          {/*
+            THE PRODUCER'S OWN ACCOUNT, which was arriving and being dropped.
+
+            `message` has been declared in the contract and validated into the payload since
+            before this card existed, and NOTHING RENDERED IT — a correct field with no reader,
+            in this repo rather than someone else's. On a refusal it is the sentence that says
+            what went wrong ("no rate set for fiscal year 2022 at vintage 2021-02-01"), which is
+            the half a reader acts on; the menu says what to do instead.
+
+            `reason` is the producer's outcome TOKEN — `not_in_model`, `vintage_required`,
+            `no_verb_classified` — rendered verbatim, because this surface has no vocabulary of
+            outcomes any more than it has one of gates.
+
+            ⛔ `reason` IS NOT `free_text_reason`. That one says why there is no MENU and is
+            required when options are empty; this says why the ask was RAISED, and arrives
+            precisely when there IS one.
+          */}
+          {(ask.message || ask.reason) && (
+            <p className="mt-1.5 font-mono text-[10px] leading-snug text-slate-400" data-ask-account>
+              {ask.reason && (
+                <span className="text-amber-400/90" data-ask-reason={ask.reason}>
+                  {ask.reason}
+                </span>
+              )}
+              {ask.reason && ask.message && <span className="text-slate-600"> — </span>}
+              {ask.message && <span data-ask-message>{ask.message}</span>}
+            </p>
+          )}
           <p className="mt-1.5 font-mono text-[9px] uppercase tracking-widest text-slate-500">
             <span data-option-source={ask.option_source}>{sourceLine}</span>
             {/* THE BOUND, SAID. A menu of eight drawn from fourteen is a different object from a

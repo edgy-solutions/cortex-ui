@@ -20,6 +20,7 @@ const ask = (over: Partial<AskCardPayload> = {}): AskCardPayload => ({
   sub_query: "what is the capability path",
   accepted_slots: {},
   message: "",
+  reason: "",
   truncated_from: 0,
   total_count: 0,
   ...over,
