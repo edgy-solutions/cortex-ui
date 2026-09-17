@@ -166,12 +166,45 @@ jobs:
       - name: Transport declaration check
         run: npm run check:transport
 
+      # ⛔ THE COUNT IS CITED WITH ITS CONCURRENCY, or it is a number without conditions.
+      #
+      # ⛔ THE COUNT IS PRINTED WITH ITS CONCURRENCY, so an OOM NAMES ITSELF.
+      #
+      # This suite dies with "JavaScript heap out of memory" on one developer machine and then
+      # reports a VARYING total, because workers die mid-run. It exits nonzero rather than
+      # silently passing, so it is not a hollow green — but a cited count means nothing without
+      # the conditions it ran under, which is why they are echoed below.
+      #
+      # ⛔ AND BOUNDING THE WORKERS WAS TRIED AND DOES NOT FIX IT. Measured rather than assumed,
+      # after TWO earlier "stable and repeatable" claims that were each one lucky run:
+      #
+      #   default, 4GB heap   1030 / 1494 / 1494     26 errors then clean
+      #   2 workers           1337 / 1441 / 1494      7 errors
+      #   1 worker            1494 / 1494 / 1469      1 error
+      #
+      # Every setting fails sometimes, so the cause is the machine and not the concurrency. CI
+      # meanwhile is clean at DEFAULT on every run — 1480, 1491, 1494, each matching its
+      # commit, zero errors. Pinning a worker count here would slow a runner that does not need
+      # it while fixing nothing locally, so it is deliberately NOT pinned.
+      #
+      # If CI's headroom ever goes, the echoes below are what make the failure read as a
+      # resource limit rather than as a code regression — which is the shape that gets a real
+      # red retried away.
       - name: Test suite, with the producer present
         env:
           # Named in the seal's own assertion messages, so a parity red says which producer
           # state it was measured against instead of leaving the reader to guess.
           CORTEX_PRODUCER_REF: ${{ env.PRODUCER_REF }}
-        run: npm run test
+        run: |
+          # REPORTED, NOT ASSERTED. An earlier version of this line said "workers: 1 (pinned)"
+          # after the pin was removed — a hardcoded claim about configuration, in the step added
+          # to stop counts being cited without their conditions. `nproc` is read from the
+          # runner; the worker count is vitest's default and is stated as such rather than
+          # named, because naming a number here is how it goes stale.
+          echo "runner cores:      $(nproc)"
+          echo "vitest maxWorkers: (unset — vitest default, derived from cores)"
+          echo "node heap limit:   $(node -e 'console.log(require("v8").getHeapStatistics().heap_size_limit / 1048576 + " MB")')"
+          npm run test
 
       - name: Typecheck
         run: npx tsc --noEmit
