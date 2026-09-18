@@ -118,3 +118,64 @@ describe("a refusal that names your options draws them", () => {
     expect(r.status, JSON.stringify(r)).toBe("all_read");
   });
 });
+
+/**
+ * A THIRD KIND OF UNNAMED CLAIM — ADR-0055 step 1, the third card.
+ *
+ * `AskCard` went in at 13 branches / 14 attributes, the best ratio of the three, and the ratio
+ * predicted it would be clean. It was not, and the finding is not the em-dash family: it is a
+ * CONDITIONAL REQUIREMENT stated in prose, declared optional, and enforced nowhere.
+ *
+ *   the field's own doc   "Required WHENEVER options are empty"
+ *   the field             `required: false`
+ *   `validateAsk`         reads it; checks no conditional
+ *   the card              renders the explanation ONLY when one arrived
+ *
+ * So an empty menu with no reason produced a free-text box and silence — the shrug the card's own
+ * comment says must never happen. The reader could not tell "too many to list" from "no provider
+ * registered" from "the producer forgot", and those have three different repairs.
+ *
+ * ⛔ THE GAP IS NAMED, NOT FILLED. This card does not invent a reason it was not given.
+ */
+describe("an empty menu with no reason is itself declared", () => {
+  const bare = (over: Record<string, unknown> = {}) => ({
+    archetype: "ELICITATION",
+    slot: "rate_vintage",
+    options: [],
+    ...over,
+  });
+
+  it("says the reason is MISSING when the producer sent none", () => {
+    render(<AskCard component={bare()} />);
+    const el = document.querySelector("[data-no-menu-unexplained]");
+    expect(el, "an unexplained empty menu rendered as a shrug").not.toBeNull();
+    expect(el!.textContent).toMatch(/no reason was given/i);
+  });
+
+  it("does NOT say it when the producer explained — the control", () => {
+    // Without this, a card that always claimed the reason was missing would pass the test above
+    // while contradicting every honest `free_text_reason` the producer does send.
+    render(<AskCard component={bare({ free_text_reason: "too_many" })} />);
+    expect(document.querySelector("[data-no-menu-unexplained]")).toBeNull();
+    expect(document.querySelector("[data-free-text-reason]")).not.toBeNull();
+  });
+
+  it("does NOT say it when there IS a menu — the second control", () => {
+    // An ask with options needs no explanation for their absence, and claiming one would put an
+    // amber line on every working menu in the system.
+    render(
+      <AskCard component={bare({ options: [{ value: "2022-02-01", label: "2022-02-01" }] })} />,
+    );
+    expect(document.querySelector("[data-no-menu-unexplained]")).toBeNull();
+  });
+
+  it("names the gap without INVENTING a reason for it", () => {
+    // The card has four reason words in its vocabulary and must not reach for one. Naming the
+    // omission is honest; guessing `too_many` would be manufacturing the producer's claim.
+    render(<AskCard component={bare()} />);
+    const text = document.querySelector("[data-no-menu-unexplained]")!.textContent!;
+    for (const invented of ["too many", "unsupported", "no provider", "not a name"]) {
+      expect(text.toLowerCase()).not.toContain(invented);
+    }
+  });
+});

@@ -280,6 +280,33 @@ export function AskCard({
         </p>
       )}
 
+      {/*
+        ⛔ THE SHRUG THE COMMENT ABOVE FORBIDS, AND THE CODE PERMITTED.
+
+        "Why there is no menu — one of four facts, never a shrug." But the block above renders
+        only when `noMenuLine` is non-empty, so a producer that sends an EMPTY menu and NO
+        `free_text_reason` gets exactly a shrug: a free-text box, no options, and nothing saying
+        why. The reader cannot tell "too many to list" from "no provider registered" from "the
+        producer forgot", and those have three different repairs.
+
+        THE CONTRACT ALREADY REQUIRES IT AND NOTHING ENFORCES IT — the field's own documentation
+        says "Required WHENEVER options are empty", the field is declared `required: false`, and
+        `validateAsk` reads it without checking the conditional. A requirement stated in prose
+        and enforced nowhere is R-075's shape inside our own contract.
+
+        So the gap is NAMED rather than filled. This card does not invent a reason it was not
+        given — it says the reason is missing, which is the honest fact and the one that makes
+        the producer's omission visible instead of absorbed.
+      */}
+      {ask.options.length === 0 && !noMenuLine && (
+        <p
+          className="mt-1.5 font-mono text-[9px] uppercase tracking-widest text-amber-500/70"
+          data-no-menu-unexplained
+        >
+          no menu, and no reason was given for its absence
+        </p>
+      )}
+
       {/* WHAT THIS CARD SENT, said back in the reader's own terms. The arrow appears ONLY for a
           pick, where the label and the id are both known and the second really is what the
           first stands for. Typed words get no arrow: the resolver has not run, so there is no
