@@ -29,6 +29,40 @@ import {
 
 afterEach(cleanup);
 
+function stripComments(src: string): string {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    if (src.startsWith("/*", i)) {
+      const end = src.indexOf("*/", i + 2);
+      i = end === -1 ? src.length : end + 2;
+      out += " ";
+    } else if (src.startsWith("//", i)) {
+      const end = src.indexOf("\n", i);
+      i = end === -1 ? src.length : end;
+      out += " ";
+    } else {
+      out += src[i];
+      i += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * The attributes a component actually RENDERS, with comments removed first.
+ *
+ * SCANNING SOURCE TEXT FOR data- MATCHES PROSE ABOUT ATTRIBUTES. This seal first reported
+ * data-share-absent on CompetingMeasures — from a COMMENT cross-referencing the ranking card,
+ * where the attribute genuinely lives. A search by name finds prose about the name, which is
+ * the law this repo cites elsewhere, reproduced inside the seal written to prevent drift.
+ */
+function renderedAttributes(file: string): string[] {
+  const src = stripComments(readFileSync(file, "utf8"));
+  return [...new Set([...src.matchAll(/data-[a-z-]+/g)].map((m) => m[0]))].sort();
+}
+
+
 describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
   it.each(CONTRIBUTION_RANKING_FIXTURES.map((f) => [f.name, f] as const))(
     "%s — declares exactly what it names",
@@ -76,9 +110,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
     // DERIVED, NOT RESTATED. A hand-kept list drifts from the component exactly as the
     // passthrough tuple table drifted from the archetypes — one fact in two places, and the copy
     // is the one that goes stale while continuing to pass.
-    const src = readFileSync(join(__dirname, "ContributionRanking.tsx"), "utf8");
-    const inCard = [...src.matchAll(/data-[a-z-]+/g)].map((m) => m[0]);
-    const unique = [...new Set(inCard)].sort();
+    const unique = renderedAttributes(join(__dirname, "ContributionRanking.tsx"));
     // `data-legend-unjudged` is the legend's rendering of `no-verdict` rather than a separate
     // claim — the same fact said twice on one card, which the fixture set covers through
     // `data-no-verdict`. Named here rather than silently excluded.
