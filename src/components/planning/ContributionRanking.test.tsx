@@ -384,3 +384,157 @@ describe("a share is not signed like a delta", () => {
     expect(document.body.textContent).toContain("+$");
   });
 });
+
+/**
+ * THE SIGN IS A DECLARED ABSENCE NOW, AND THESE ARE WHAT MAKE THAT LOAD-BEARING.
+ *
+ * ADR-0055 §2 requires a fixture to discriminate against the card's DECLARED ABSENCES — each
+ * flips at least one — and rules that a decision no attribute names may not be packaged. This
+ * card was the worked case: SIXTEEN branch points against FOUR attributes, with its sharpest
+ * decision living as one character of rendered text.
+ *
+ * ⛔ THE HOLE THAT RULING CLOSES: a replacement card that DROPPED the signed-set gating would
+ * have passed an attribute-level parity seal. Every declared absence still declared; the card
+ * printing a `+` on a set of pure shares, asserting a movement the payload never claimed; the
+ * seal green. `data-sign-withheld` is what makes that assertable, and the pairing below is what
+ * stops the attribute becoming decoration — a declared absence nobody asserts is the mechanism
+ * failing inside the contract written to require it.
+ */
+describe("the withheld sign is declared, and the declaration is checked", () => {
+  /** All positive: shares of one total, no second direction. */
+  const unsigned = () => [
+    { entity_id: "A", entity_name: "Labour", contribution: 4900000, share_of_total: 0.62 },
+    { entity_id: "B", entity_name: "Materials", contribution: 3000000, share_of_total: 0.38 },
+  ];
+
+  it("declares the withholding, and withholds — the PAIRING, not either half", () => {
+    // Either alone is satisfiable by a wrong card: an attribute with a `+` beside it is a lie,
+    // and a missing `+` with nothing declaring why is the invisible decision this closes.
+    render(<ContributionRanking rows={unsigned()} value_unit="USD" />);
+    const said = document.querySelector("[data-sign-withheld]");
+    expect(said, "the card withheld the sign and did not say so").not.toBeNull();
+    expect(said!.textContent).toMatch(/unsigned/i);
+    // And no figure carries a plus.
+    const figures = screen.getAllByRole("button").map((b) => b.textContent ?? "").join(" ");
+    expect(figures).not.toContain("+");
+  });
+
+  it("does NOT declare it on a signed set, and shows the sign — the control", () => {
+    // Without this, a card that always declared withholding would pass the test above while
+    // stripping the `+` from a variance decomposition, where the direction IS the finding.
+    const signed = [...unsigned(), { entity_id: "C", entity_name: "Rework", contribution: -800000 }];
+    render(<ContributionRanking rows={signed} value_unit="USD" />);
+    expect(document.querySelector("[data-sign-withheld]")).toBeNull();
+    const figures = screen.getAllByRole("button").map((b) => b.textContent ?? "").join(" ");
+    expect(figures).toContain("+");
+  });
+
+  it("is a DIFFERENT fact from `no-verdict`, though both say 'direction'", () => {
+    // `no-verdict` is the PRODUCER stating no judgement; this is the DATA carrying one direction.
+    // Both true at once, and they have different repairs — the first is answered by a producer
+    // emitting a verdict, the second never is, because a pure breakdown is not missing anything.
+    render(<ContributionRanking rows={unsigned()} value_unit="USD" />);
+    expect(document.querySelector("[data-sign-withheld]")).not.toBeNull();
+    expect(document.querySelector("[data-no-verdict]")).not.toBeNull();
+    expect(document.querySelector("[data-sign-withheld]")).not.toBe(
+      document.querySelector("[data-no-verdict]"),
+    );
+  });
+});
+
+/**
+ * THE POPULATION, NOT THE INSTANCE.
+ *
+ * `signedSet` was the branch I looked at hardest and declaring it alone would have fixed ONE of
+ * twelve unattributed decisions. Ruled 2026-09-18: derive which carry a SEMANTIC CLAIM — a
+ * decision a reader would act on — declare an absence for each, and write the presentational ones
+ * down as excluded, because an exclusion nobody recorded is indistinguishable from a branch
+ * nobody looked at.
+ *
+ * Two more carried claims. The rest are excluded with reasons, in the card.
+ */
+describe("the other decisions that carry a claim", () => {
+  it("declares a NULL SHARE as absent, not as zero", () => {
+    // The card already argued this — "the total was nought; 0% would read as contributes
+    // nothing" — and the whole of the claim was an em-dash. A replacement rendering 0% would
+    // have passed every seal, asserting that a contributor contributes nothing.
+    render(
+      <ContributionRanking
+        rows={[{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: null }]}
+        value_unit="USD"
+      />,
+    );
+    const said = document.querySelector("[data-share-absent]");
+    expect(said, "a null share was drawn with nothing naming it").not.toBeNull();
+    expect(document.body.textContent).not.toContain("0%");
+  });
+
+  it("does NOT declare it when a share is present — the control", () => {
+    render(
+      <ContributionRanking
+        rows={[{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 0.5 }]}
+        value_unit="USD"
+      />,
+    );
+    expect(document.querySelector("[data-share-absent]")).toBeNull();
+  });
+
+  it("names a field that ARRIVED and cannot be drawn here", () => {
+    // An object has no one-cell rendering, correctly. Dropping it silently shows a
+    // complete-looking row with a key missing from it — the same defect ExtraColumns exists to
+    // repair, one level down.
+    render(
+      <ContributionRanking
+        rows={[
+          {
+            entity_id: "a",
+            entity_name: "A",
+            contribution: 10,
+            share_of_total: 1,
+            breakdown: { labour: 4, materials: 6 },
+          },
+        ]}
+        value_unit="USD"
+      />,
+    );
+    const el = document.querySelector("[data-extras-dropped]")!;
+    expect(el).not.toBeNull();
+    expect(el.getAttribute("data-extras-dropped")).toBe("breakdown");
+  });
+
+  it("⛔ NAMES THE KEY AND NEVER THE VALUE", () => {
+    // Same rule as the HUD's unread-fields panel: a value this card has no treatment for has no
+    // units and no formatter, and may carry what the classification does not permit here.
+    render(
+      <ContributionRanking
+        rows={[
+          {
+            entity_id: "a",
+            entity_name: "A",
+            contribution: 10,
+            share_of_total: 1,
+            breakdown: { secret: "COMMERCIALLY-SENSITIVE-9912" },
+          },
+        ]}
+        value_unit="USD"
+      />,
+    );
+    expect(document.body.innerHTML).not.toContain("COMMERCIALLY-SENSITIVE-9912");
+    expect(document.querySelector("[data-extras-dropped]")!.textContent).toContain("breakdown");
+  });
+
+  it("does NOT name a key the producer left empty — absent is not undrawable", () => {
+    // THE DISTINCTION AN EXISTING SEAL CAUGHT ME ON. `null`, `undefined` and a blank string are
+    // the producer declining to fill the key: nothing was lost and naming it prints a hole.
+    // Only a value that ARRIVED and cannot be rendered is this card dropping something.
+    render(
+      <ContributionRanking
+        rows={[
+          { entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1, vintage: null, tag: "   " },
+        ]}
+        value_unit="USD"
+      />,
+    );
+    expect(document.querySelector("[data-extras-dropped]")).toBeNull();
+  });
+});

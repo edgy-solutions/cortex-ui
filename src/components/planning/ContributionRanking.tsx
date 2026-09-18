@@ -55,6 +55,50 @@ const CONSUMED_FIELDS = new Set([
   "direction",
 ]);
 
+/**
+ * ── THE BRANCH CENSUS, ADR-0055 §2 ────────────────────────────────────────────────────────
+ *
+ * This card was the worked case for the packaging gate: SIXTEEN branch points against FOUR
+ * machine-readable attributes, which is the ratio that found it. A decision no attribute names is
+ * a decision a replacement can silently drop, so before this card can be a package every branch
+ * is classified — and the presentational ones are WRITTEN DOWN, because an exclusion nobody
+ * recorded is indistinguishable from a branch nobody looked at.
+ *
+ * ⛔ THE FIRST PASS DECLARED ONLY `signedSet` — the branch I had looked at hardest — and that was
+ * corrected to the population before it landed. The error names an instance; the fix is owed to
+ * the population.
+ *
+ * CARRIES A CLAIM, AND IS NOW DECLARED:
+ *
+ *   data-no-verdict       the producer stated no favourable/adverse judgement
+ *   data-legend-partial   some rows were judged and some were not
+ *   data-sign-withheld    the DATA has one direction only, so a plus would assert a movement
+ *   data-share-absent     the total was nought — a null share is absent, and 0% would read as
+ *                         "contributes nothing"
+ *   data-extras-dropped   a value ARRIVED that has no one-cell rendering here
+ *   data-extra-columns    fields the payload carried beyond the ones this card consumes
+ *
+ * EXCLUDED AS PRESENTATIONAL, each with its reason:
+ *
+ *   CONSUMED_FIELDS skip      those fields ARE rendered, in the row and the inspector. Nothing is
+ *                             lost, so there is no absence to declare.
+ *   no extras at all          a row carrying only the consumed fields is complete. "No extras" is
+ *                             not an absence of anything claimed.
+ *   singular/plural           "contributor" vs "contributors". Grammar.
+ *   scope wording             which sentence the empty state uses; the refusal itself is already
+ *                             said by `DeliberateEmpty` with the validator's reason.
+ *   `value_label` absent      a caption. The UNIT travels separately in `value_unit` and is
+ *                             always applied, so an absent label costs a name and not a meaning.
+ *   `note` absent             the producer had nothing to add. Not a withheld thing.
+ *   inspector open/closed     reader state, not payload state.
+ *   bar width                 derived from the largest share present, for legibility. It asserts
+ *                             nothing the figures do not already say.
+ *   freshness stamp absent    `valid_as_of`/`state_version` absent means the payload carried no
+ *                             freshness facts. The card asserts nothing about freshness either
+ *                             way, so there is no claim to withhold. ⚠ IF THIS CARD EVER BECOMES
+ *                             A LIVE VIEW, that stops being true and this line is the one to
+ *                             revisit — a live view with no stamp IS a claim.
+ */
 /** A scalar worth showing beside a figure — a real number, or a non-empty string. */
 function displayableExtra(v: unknown): string | number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -84,13 +128,34 @@ function displayableExtra(v: unknown): string | number | null {
  */
 function ExtraColumns({ row }: { row: ContributionRow }) {
   const extras: [string, string | number][] = [];
+  // A FIELD THIS CARD CANNOT DRAW IS STILL A FIELD THAT ARRIVED. `displayableExtra` refuses an
+  // object, an array and a NaN — correctly, since none has a one-cell rendering — but dropping
+  // them silently is the defect this whole column exists to repair, one level down: the reader
+  // sees a complete row and a key is missing from it.
+  const dropped: string[] = [];
   for (const [k, v] of Object.entries(row as unknown as Record<string, unknown>)) {
     if (CONSUMED_FIELDS.has(k)) continue;
     const shown = displayableExtra(v);
-    if (shown === null) continue;
+    if (shown === null) {
+      // ⛔ "THE PRODUCER SENT NOTHING" AND "A VALUE EXISTS THAT THIS CARD CANNOT DRAW" ARE
+      // DIFFERENT FACTS, and only the second is this card dropping anything.
+      //
+      // `null`, `undefined` and a blank string are the producer declining to fill the key —
+      // there is nothing to lose and naming it would print a hole, which is what the column
+      // beside this one refuses. An OBJECT, an ARRAY or a non-finite number is a value that
+      // ARRIVED and has no one-cell rendering; dropping THAT silently shows a complete-looking
+      // row with a key missing from it.
+      //
+      // Collapsing the two was my first attempt and an existing seal caught it — it asserted
+      // that a null field prints no hole, and it was right.
+      const absent =
+        v === null || v === undefined || (typeof v === "string" && v.trim().length === 0);
+      if (!absent) dropped.push(k);
+      continue;
+    }
     extras.push([k, shown]);
   }
-  if (extras.length === 0) return null;
+  if (extras.length === 0 && dropped.length === 0) return null;
   return (
     <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5" data-extra-columns>
       {extras.map(([k, v]) => (
@@ -99,6 +164,20 @@ function ExtraColumns({ row }: { row: ContributionRow }) {
           {String(v)}
         </span>
       ))}
+      {/*
+        NAMES, NEVER VALUES — the same rule the HUD's unread-fields panel keeps, and for the same
+        two reasons: a value this card has no treatment for has no units and no formatter, and an
+        undeclared field may carry what the classification does not permit on this surface. The
+        reader is entitled to know a key arrived; what is in it is a different question.
+      */}
+      {dropped.length > 0 && (
+        <span
+          className="font-mono text-[10px] text-amber-500/70"
+          data-extras-dropped={dropped.join(",")}
+        >
+          {dropped.join(", ")} — not drawable here
+        </span>
+      )}
     </span>
   );
 }
@@ -211,6 +290,33 @@ export function ContributionRanking({
               · no direction stated
             </span>
           )}
+          {/*
+            THE SIGN WAS WITHHELD, AND SAYING SO IS WHAT MAKES IT CHECKABLE.
+
+            The decision above — whether these figures carry a `+` — was real and invisible. It
+            lived as one character of rendered text with nothing naming it, so A REPLACEMENT CARD
+            COULD SILENTLY DROP THE GATING AND PASS EVERY SEAL: each declared absence would still
+            be declared while the card printed a direction the data cannot carry. Measured on this
+            card as sixteen branches against four attributes, which is the worked case for
+            ADR-0055 §2 and the reason a decision no attribute names may not be packaged.
+
+            ⛔ NOT THE SAME FACT AS `no-verdict`, though both touch the word "direction", and
+            collapsing them would be this card's own defect turned on itself:
+
+              data-no-verdict      THE PRODUCER stated no favourable/adverse judgement
+              data-sign-withheld   THE DATA has no second direction — every row is positive, so a
+                                   plus would assert a movement where there are only shares
+
+            Both can be true at once and they have different repairs: the first is answered by the
+            producer emitting a verdict, the second never is, because a pure breakdown is not
+            missing anything.
+          */}
+          {!signedSet && (
+            <span className="text-slate-500" data-sign-withheld>
+              {" "}
+              · unsigned — no sign shown
+            </span>
+          )}
         </span>
       </div>
 
@@ -246,8 +352,14 @@ export function ContributionRanking({
                   </span>
                   <span className="font-mono text-[11px] text-slate-500 w-16 text-right tabular-nums">
                     {/* NULL SHARE IS ABSENT, NOT ZERO. The total was nought; there is no share
-                        of nothing, and 0% would read as "contributes nothing". */}
-                    {share === null ? "—" : `${showMeasure(share * 100)}%`}
+                        of nothing, and 0% would read as "contributes nothing".
+                        DECLARED, not just drawn: the em-dash was the whole of this claim and a
+                        replacement rendering 0% would have passed every seal. */}
+                    {share === null ? (
+                      <span data-share-absent>—</span>
+                    ) : (
+                      `${showMeasure(share * 100)}%`
+                    )}
                   </span>
                 </div>
                 <span className="mt-1.5 block h-1.5 w-full rounded-full bg-slate-100/[.07]">
