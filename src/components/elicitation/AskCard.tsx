@@ -130,9 +130,21 @@ export function AskCard({
     return (
       <p
         className="font-mono text-[11px] text-amber-400/80 px-1 py-2"
-        data-no-menu-unexplained={
-          result.reason === "an empty menu must say why" ? "" : undefined
-        }
+        /*
+         * THE REASON IS THE DISCRIMINANT, carried verbatim, and this replaced a boolean flag for
+         * one of the three.
+         *
+         * The boolean flag marked the unexplained-menu refusal and left the other two
+         * — "the ask names no slot" and "this is not an ask" — readable only as English. Those
+         * are different producer mistakes with different repairs, arriving as one, which is the
+         * distinction the three-way split on NamedHole exists to keep.
+         *
+         * ⛔ AND A BOOLEAN BESIDE THE STRING WOULD HAVE BEEN TWO DECLARATIONS OF ONE FACT. The
+         * flag was derivable from the reason; keeping both means the day someone edits the
+         * reason string, the flag and the string disagree and the flag is the one that goes on
+         * passing. One attribute, the producer's own words, no second copy.
+         */
+        data-ask-refused={result.reason}
       >
         {result.reason}
       </p>

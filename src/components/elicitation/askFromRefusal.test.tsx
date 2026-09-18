@@ -154,27 +154,35 @@ describe("an empty menu with no reason is itself declared", () => {
     // is invalid by its own contract, and answering a question whose premise nobody explained is
     // what this refuses.
     render(<AskCard component={bare()} />);
-    const el = document.querySelector("[data-no-menu-unexplained]");
+    const el = document.querySelector('[data-ask-refused="an empty menu must say why"]');
     expect(el, "an unexplained empty menu was not refused").not.toBeNull();
     expect(el!.textContent).toMatch(/must say why/i);
     // No input offered for a question that cannot state its own premise.
     expect(document.querySelector("form")).toBeNull();
   });
 
-  it("marks ONLY this refusal, not every refusal — the control", () => {
-    // The attribute is on the shared refusal element, so without this a card that stamped it on
-    // every refusal would pass the test above while claiming a slotless ask was an unexplained
-    // menu — two different producer mistakes reported as one.
+  it("carries the REASON, so all three refusals are told apart", () => {
+    // The attribute is on the SHARED refusal element. A boolean marking one reason left the
+    // other two — "the ask names no slot" and "this is not an ask" — readable only as English:
+    // different producer mistakes with different repairs, arriving as one.
     render(<AskCard component={{ archetype: "ELICITATION", options: [] }} />);
-    const el = document.querySelector("[data-no-menu-unexplained]");
-    expect(el).toBeNull();
+    expect(document.querySelector('[data-ask-refused="an empty menu must say why"]'), "a slotless ask reported as an unexplained menu").toBeNull();
+    expect(
+      document.querySelector('[data-ask-refused="the ask names no slot"]'),
+      "the slotless refusal is not machine-readable",
+    ).not.toBeNull();
+  });
+
+  it("tells a non-ask from a slotless ask — the third reason", () => {
+    render(<AskCard component={"not an object" as unknown as Record<string, unknown>} />);
+    expect(document.querySelector('[data-ask-refused="this is not an ask"]')).not.toBeNull();
   });
 
   it("does NOT say it when the producer explained — the control", () => {
     // Without this, a card that always claimed the reason was missing would pass the test above
     // while contradicting every honest `free_text_reason` the producer does send.
     render(<AskCard component={bare({ free_text_reason: "too_many" })} />);
-    expect(document.querySelector("[data-no-menu-unexplained]")).toBeNull();
+    expect(document.querySelector('[data-ask-refused="an empty menu must say why"]')).toBeNull();
     expect(document.querySelector("[data-free-text-reason]")).not.toBeNull();
   });
 
@@ -184,14 +192,14 @@ describe("an empty menu with no reason is itself declared", () => {
     render(
       <AskCard component={bare({ options: [{ value: "2022-02-01", label: "2022-02-01" }] })} />,
     );
-    expect(document.querySelector("[data-no-menu-unexplained]")).toBeNull();
+    expect(document.querySelector('[data-ask-refused="an empty menu must say why"]')).toBeNull();
   });
 
   it("names the gap without INVENTING a reason for it", () => {
     // The card has four reason words in its vocabulary and must not reach for one. Naming the
     // omission is honest; guessing `too_many` would be manufacturing the producer's claim.
     render(<AskCard component={bare()} />);
-    const text = document.querySelector("[data-no-menu-unexplained]")!.textContent!;
+    const text = document.querySelector('[data-ask-refused="an empty menu must say why"]')!.textContent!;
     for (const invented of ["too many", "unsupported", "no provider", "not a name"]) {
       expect(text.toLowerCase()).not.toContain(invented);
     }
