@@ -395,3 +395,51 @@ describe("the payload arrives under the key the projector registers", () => {
     expect("methods={comp.methods}").toMatch(/comp\.methods\b/);
   });
 });
+
+/**
+ * THE TWO DECISIONS NO ATTRIBUTE NAMED — ADR-0055 step 1, the derivation.
+ *
+ * This card went in at 8 branches / 8 attributes, and the ratio predicted fewer findings than
+ * `ContributionRanking`'s 16/4. It was right about FEWER and wrong about NONE: two decisions
+ * carried a claim with nothing naming them, and both are the same shape as the em-dash on the
+ * ranking card — the whole of a claim being the absence of characters.
+ */
+describe("the absences that were only punctuation", () => {
+  it("says WHY there is no range instead of printing a bare unit", () => {
+    // It rendered `value_unit` — "USD" in the slot where "$4.1M – $5.0M" belongs, or an EMPTY
+    // element when no unit came either. A reader saw the slot and no range, with nothing saying
+    // which of "the methods agree", "the figures were not sent" or "this card failed" was true.
+    const { lowest_value: _lo, highest_value: _hi, ...rest } = ENVELOPE;
+    render(<CompetingMeasures rows={SEED()} {...rest} />);
+    const el = document.querySelector("[data-range-absent]");
+    expect(el, "no range was drawn and nothing said so").not.toBeNull();
+    expect(el!.textContent).toMatch(/no range/i);
+  });
+
+  it("draws the range when the producer sent both bounds — the control", () => {
+    // Without this, a card that always declared the range absent would pass the test above while
+    // hiding the bounds on every complete comparison, which is the card's entire subject.
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
+    expect(document.querySelector("[data-range-absent]")).toBeNull();
+    expect(document.querySelector("[data-range]")!.textContent).toMatch(/–/);
+  });
+
+  it("names a SECONDARY value that is absent — the primary already said why", () => {
+    // The asymmetry inside one card: a missing primary figure renders `data-unavailable` WITH
+    // the producer's reason, and a missing secondary rendered a bare em-dash. Same kind of fact.
+    // The CONTRACT declares `secondary.value` as `number | null`; the literal below is typed
+    // narrower by inference only, which is why the annotation is here and not a widening.
+    const rows = SEED();
+    rows[0].secondary = [{ label: "VAC", value: null as number | null }] as typeof rows[0]["secondary"];
+    render(<CompetingMeasures rows={rows} {...ENVELOPE} />);
+    const el = document.querySelector("[data-secondary-absent]");
+    expect(el).not.toBeNull();
+    expect(el!.getAttribute("data-secondary-absent")).toBe("VAC");
+  });
+
+  it("does NOT name a secondary that has a value — the control", () => {
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
+    expect(document.querySelector("[data-secondary-absent]")).toBeNull();
+    expect(document.body.textContent).toContain("VAC");
+  });
+});

@@ -119,9 +119,19 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
           className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
           data-range
         >
-          {lo !== null && hi !== null
-            ? `${formatAmount(lo, value_unit)} – ${formatAmount(hi, value_unit)}`
-            : value_unit ?? ""}
+          {/*
+            A RANGE THAT COULD NOT BE COMPUTED WAS RENDERING AS A BARE UNIT — "USD" sitting in
+            the slot where "$4.1M – $5.0M" belongs, or an EMPTY element when no unit came either.
+            A reader sees the range slot and no range, with nothing saying which of "the methods
+            agree", "the figures were not sent" or "this card failed" is true. Same shape as the
+            em-dash below and as data-share-absent on the ranking card: the whole of the claim
+            was the absence of characters.
+          */}
+          {lo !== null && hi !== null ? (
+            `${formatAmount(lo, value_unit)} – ${formatAmount(hi, value_unit)}`
+          ) : (
+            <span data-range-absent>no range — fewer than two methods answered</span>
+          )}
         </span>
       </div>
 
@@ -195,7 +205,18 @@ function MethodRow({
         <div className="flex flex-wrap gap-x-4 gap-y-0.5">
           {row.secondary.map((s) => (
             <span key={s.label} className="font-mono text-[10px] text-slate-500 tabular-nums">
-              {s.label} {num(s.value) !== null ? formatAmount(s.value as number, unit) : "—"}
+              {/*
+                THE PRIMARY ABSENCE IS DECLARED WITH A REASON AND THE SECONDARY WAS AN EM-DASH —
+                an asymmetry inside one card. A missing secondary is the same KIND of fact as a
+                missing figure: the producer had no value, and a reader comparing methods needs to
+                know that rather than read past a dash.
+              */}
+              {s.label}{" "}
+              {num(s.value) !== null ? (
+                formatAmount(s.value as number, unit)
+              ) : (
+                <span data-secondary-absent={s.label}>—</span>
+              )}
             </span>
           ))}
         </div>
