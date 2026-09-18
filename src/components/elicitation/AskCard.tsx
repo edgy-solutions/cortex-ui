@@ -117,8 +117,25 @@ export function AskCard({
   if (result.kind === "empty") {
     // An ask that cannot say what it wants is not a question. Said plainly rather than drawn
     // as an empty prompt, which would invite an answer to nothing.
+    //
+    // ⛔ THE UNEXPLAINED-MENU REFUSAL IS NAMED ON THE ELEMENT, and it moved here for a reason
+    // worth recording. It was first written as a render branch further down — a card drawing an
+    // empty menu and saying the reason was missing. Then the conditional was encoded in
+    // validateAsk, where a conditional requirement belongs, and that made the render branch
+    // UNREACHABLE: this component is the only door and the validator refuses before it.
+    //
+    // A backstop that cannot fire is not a backstop. So the fact is asserted where it actually
+    // happens — on the refusal — and stays machine-readable rather than becoming a comment
+    // about a branch nothing can enter.
     return (
-      <p className="font-mono text-[11px] text-amber-400/80 px-1 py-2">{result.reason}</p>
+      <p
+        className="font-mono text-[11px] text-amber-400/80 px-1 py-2"
+        data-no-menu-unexplained={
+          result.reason === "an empty menu must say why" ? "" : undefined
+        }
+      >
+        {result.reason}
+      </p>
     );
   }
   const ask = result.ask;
@@ -277,33 +294,6 @@ export function AskCard({
               · {ask.total_count} exist
             </span>
           )}
-        </p>
-      )}
-
-      {/*
-        ⛔ THE SHRUG THE COMMENT ABOVE FORBIDS, AND THE CODE PERMITTED.
-
-        "Why there is no menu — one of four facts, never a shrug." But the block above renders
-        only when `noMenuLine` is non-empty, so a producer that sends an EMPTY menu and NO
-        `free_text_reason` gets exactly a shrug: a free-text box, no options, and nothing saying
-        why. The reader cannot tell "too many to list" from "no provider registered" from "the
-        producer forgot", and those have three different repairs.
-
-        THE CONTRACT ALREADY REQUIRES IT AND NOTHING ENFORCES IT — the field's own documentation
-        says "Required WHENEVER options are empty", the field is declared `required: false`, and
-        `validateAsk` reads it without checking the conditional. A requirement stated in prose
-        and enforced nowhere is R-075's shape inside our own contract.
-
-        So the gap is NAMED rather than filled. This card does not invent a reason it was not
-        given — it says the reason is missing, which is the honest fact and the one that makes
-        the producer's omission visible instead of absorbed.
-      */}
-      {ask.options.length === 0 && !noMenuLine && (
-        <p
-          className="mt-1.5 font-mono text-[9px] uppercase tracking-widest text-amber-500/70"
-          data-no-menu-unexplained
-        >
-          no menu, and no reason was given for its absence
         </p>
       )}
 

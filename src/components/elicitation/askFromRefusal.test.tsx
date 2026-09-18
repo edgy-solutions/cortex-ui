@@ -145,11 +145,29 @@ describe("an empty menu with no reason is itself declared", () => {
     ...over,
   });
 
-  it("says the reason is MISSING when the producer sent none", () => {
+  it("REFUSES an empty menu with no reason, and names the refusal", () => {
+    // The conditional moved into validateAsk, where a conditional requirement belongs, and that
+    // made the render-side branch unreachable — this component is the only door. So the fact is
+    // asserted where it actually happens: on the refusal.
+    //
+    // THE READER LOSES THE FREE-TEXT BOX and that is the trade, made deliberately: the payload
+    // is invalid by its own contract, and answering a question whose premise nobody explained is
+    // what this refuses.
     render(<AskCard component={bare()} />);
     const el = document.querySelector("[data-no-menu-unexplained]");
-    expect(el, "an unexplained empty menu rendered as a shrug").not.toBeNull();
-    expect(el!.textContent).toMatch(/no reason was given/i);
+    expect(el, "an unexplained empty menu was not refused").not.toBeNull();
+    expect(el!.textContent).toMatch(/must say why/i);
+    // No input offered for a question that cannot state its own premise.
+    expect(document.querySelector("form")).toBeNull();
+  });
+
+  it("marks ONLY this refusal, not every refusal — the control", () => {
+    // The attribute is on the shared refusal element, so without this a card that stamped it on
+    // every refusal would pass the test above while claiming a slotless ask was an unexplained
+    // menu — two different producer mistakes reported as one.
+    render(<AskCard component={{ archetype: "ELICITATION", options: [] }} />);
+    const el = document.querySelector("[data-no-menu-unexplained]");
+    expect(el).toBeNull();
   });
 
   it("does NOT say it when the producer explained — the control", () => {

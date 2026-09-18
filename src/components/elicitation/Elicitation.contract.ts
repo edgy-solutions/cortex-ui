@@ -88,6 +88,13 @@ export const STATUS_ABSTAIN = "slot_abstain";
 export const ELICITATION_REFUSAL_REASONS = [
   "the ask names no slot",
   "this is not an ask",
+  /**
+   * EMPTY OPTIONS WITH NO REASON — the conditional this contract stated in PROSE and declared
+   * nowhere. `free_text_reason`'s own documentation says "Required WHENEVER options are empty";
+   * the field is `required: false`; and until now nothing checked it. A requirement written in
+   * a sentence is a requirement enforced by whoever remembers it.
+   */
+  "an empty menu must say why",
 ] as const;
 export type ElicitationRefusal = (typeof ELICITATION_REFUSAL_REASONS)[number];
 
@@ -108,7 +115,14 @@ export const ELICITATION_CONTRACT = {
     options: { encoding: "array", parsesTo: "array-of-objects", required: false },
     /** Where the menu came from. Rendered distinguishably; see the component. */
     option_source: { type: "string", required: false },
-    /** Why there is no menu, from the closed set. Required WHENEVER options are empty. */
+    /**
+     * Why there is no menu, from the closed set.
+     *
+     * ⛔ CONDITIONALLY REQUIRED — mandatory whenever `options` is empty, optional otherwise, and
+     * `required: false` is the closest this field table can say. That gap is why the rule lived
+     * in prose and went unenforced: `validateAsk` now REFUSES an ask with an empty menu and no
+     * reason, which is where a conditional belongs.
+     */
     free_text_reason: { type: "string", required: false },
     /** What the reader said for this slot, when they said anything. */
     spoken: { type: "string", required: false },
@@ -221,6 +235,24 @@ export function validateAsk(
   if (!slot) return { kind: "empty", reason: "the ask names no slot" };
 
   const rawOptions = Array.isArray(comp.options) ? comp.options : [];
+
+  /**
+   * AN EMPTY MENU MUST SAY WHY, and this is the only place a CONDITIONAL requirement can live.
+   *
+   * The field table can say `required: true` or `required: false` and nothing in between, so
+   * "mandatory when options are empty" was written as prose above the field and enforced by
+   * nobody. An ask then reached the card with no options and no explanation and drew a free-text
+   * box in silence — the shrug `AskCard`'s own comment forbids, where a reader cannot tell "too
+   * many to list" from "no provider registered" from "the producer forgot".
+   *
+   * ⛔ REFUSED RATHER THAN RENDERED, AND THAT COSTS SOMETHING WORTH NAMING: the reader loses the
+   * free-text box they could previously have typed into. That is the right trade only because
+   * the payload is INVALID BY ITS OWN CONTRACT — answering a question whose premise nobody
+   * explained is the thing this refuses, and the same argument the no-slot check above makes.
+   */
+  if (rawOptions.length === 0 && !str(comp.free_text_reason)) {
+    return { kind: "empty", reason: "an empty menu must say why" };
+  }
   const options: AskOption[] = [];
   for (const o of rawOptions) {
     if (!isRecord(o)) continue;
