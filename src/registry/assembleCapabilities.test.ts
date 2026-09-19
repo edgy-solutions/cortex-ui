@@ -24,12 +24,22 @@ describe("assembleCapabilities", () => {
     expect(chart.expected_fields).toEqual(Object.keys(CHART_WIDGET_CONTRACT.fields));
   });
 
-  it("six output types share ONE MarkdownRenderer contract", () => {
-    // The shape the hand-authored table obscured: it looked like six independent
-    // capabilities and was six bindings to one component.
+  it("EVERY output type that renders as prose shares ONE MarkdownRenderer contract", () => {
+    // The shape the hand-authored table obscured: it looked like N independent capabilities and
+    // was N bindings to one component.
+    //
+    // ⛔ THE COUNT WAS SIX AND IS NOW A FLOOR, DELIBERATELY. This asserted `toHaveLength(6)`,
+    // and six was a HISTORICAL OBSERVATION rather than a constraint — adding a legitimate prose
+    // binding broke it, which makes the seal a thing you edit to land work rather than a thing
+    // that catches work. The CLAIM is the sharing, and it lives in the loop below.
+    //
+    // The floor stays because the loop is VACUOUS over an empty filter: a selector that matched
+    // nothing would satisfy every assertion in it. Six is the number that existed when the
+    // property was established, so falling below it means a binding was removed rather than
+    // that the filter broke — two different things this keeps apart.
     const docs = assembleDerivedCapabilities()
       .filter((c) => c.component === "MARKDOWN_PLACEHOLDER" || c.archetype === "KNOWLEDGE_DOCUMENT");
-    expect(docs).toHaveLength(6);
+    expect(docs.length, "fewer prose bindings than when this property was established").toBeGreaterThanOrEqual(6);
     for (const d of docs) {
       expect(d.contract).toBe(MARKDOWN_RENDERER_CONTRACT);
       expect(d.expected_fields).toEqual(Object.keys(MARKDOWN_RENDERER_CONTRACT.fields));
@@ -161,6 +171,69 @@ describe("assembleCapabilities", () => {
     for (const c of assembleDerivedCapabilities()) {
       const contract = c.contract as { fields: Record<string, unknown> };
       expect(c.expected_fields).toEqual(Object.keys(contract.fields));
+    }
+  });
+});
+
+/**
+ * ENGINE S'S THREE SUBJECTS, AND THE IRI AUTHORITY THAT MAKES THEM EASY TO GET WRONG.
+ *
+ * The producer advertised these and this side had none of them, so every safety answer fell
+ * through to KNOWLEDGE_DOCUMENT: registered, routable, drawable by nothing.
+ *
+ * ⛔ THE FAILURE MODE IS THE QUIET ONE. Safety lives at `internal/sustainment/safety#`, NOT at
+ * `invincible-agent/safety#` — a different authority AND path from its neighbours, because
+ * Engine S extends the SUSTAINMENT plane. A row written by pattern from the `cost#` rows above
+ * registers, reports accepted, never matches a payload, and the card falls through to
+ * KNOWLEDGE_DOCUMENT with "No content available" — INDISTINGUISHABLE FROM HAVING NO BINDING AT
+ * ALL, which is the state the safety walk already spent an afternoon inside.
+ *
+ * So the authority is asserted rather than trusted to the eye. A test that only checked the
+ * local name would pass the wrong IRI.
+ */
+describe("the safety bindings carry the right authority", () => {
+  const SAFETY = "http://internal/sustainment/safety#";
+  const SUBJECTS = ["OrphanedHazardSet", "DeferralRiskCard", "RiskAssessmentDraft"];
+
+  it("binds all three, at the SUSTAINMENT authority and not the agent one", () => {
+    const rows = assembleDerivedCapabilities();
+    for (const name of SUBJECTS) {
+      const found = rows.find((c) => c.subject_uri === `${SAFETY}${name}`);
+      expect(found, `${name} is not bound at ${SAFETY}`).toBeDefined();
+    }
+  });
+
+  it("⛔ NO safety subject is bound at the agent authority — the trap, asserted", () => {
+    // The control that matters: without it, a row written as
+    // `http://invincible-agent/safety#OrphanedHazardSet` would satisfy nothing above and fail
+    // nothing here, which is exactly how the quiet version of this defect survives.
+    const wrong = assembleDerivedCapabilities().filter((c) =>
+      c.subject_uri.includes("invincible-agent/safety"),
+    );
+    expect(wrong.map((c) => c.subject_uri), "a safety subject at the WRONG authority").toEqual([]);
+  });
+
+  it("the hazard ranking renders as a ranking; the two drafts render as prose", () => {
+    // By RULING, not by fit: no declared archetype carries a severity/probability pair with its
+    // citation, and prose beats a mis-binding because a mis-bound card renders something
+    // plausible and wrong — harder to notice than something plain and right.
+    const rows = assembleDerivedCapabilities();
+    const by = (n: string) => rows.find((c) => c.subject_uri === `${SAFETY}${n}`)!;
+    expect(by("OrphanedHazardSet").archetype).toBe("CONTRIBUTION_RANKING");
+    expect(by("DeferralRiskCard").archetype).toBe("KNOWLEDGE_DOCUMENT");
+    expect(by("RiskAssessmentDraft").archetype).toBe("KNOWLEDGE_DOCUMENT");
+  });
+
+  it("claims SUSTAINMENT and SAFETY_ENGINEER — both DERIVED from the engine", () => {
+    // Both come from safety_agent/main.py:108-109 — OWNER_PERSONA and DOMAINS — and are passed
+    // at the engine own registration sites. An earlier version asserted an EMPTY persona on the
+    // grounds that none was declared; that was reached by a grep ending in head -5 which never
+    // printed line 108. An empty persona_fit is NOT neutral: the selector reads it as fitting no
+    // persona, so the mistake would have shipped as a considered refusal.
+    for (const name of SUBJECTS) {
+      const row = assembleDerivedCapabilities().find((c) => c.subject_uri === `${SAFETY}${name}`)!;
+      expect(row.domain_fit, name).toEqual(["SUSTAINMENT"]);
+      expect(row.persona_fit, name).toEqual(["SAFETY_ENGINEER"]);
     }
   });
 });

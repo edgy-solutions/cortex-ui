@@ -549,6 +549,84 @@ const DERIVED_BINDINGS = [
     domain_fit: ["PRODUCTION_COST"],
     contract: DELTA_SET_CONTRACT,
   },
+  // ── ENGINE S, ADR-0051 — THE THREE SAFETY SUBJECTS ────────────────────────────────────
+  //
+  // The producer has advertised these and this side had none of them, so every safety answer
+  // fell through to KNOWLEDGE_DOCUMENT: registered, routable, and drawable by nothing.
+  //
+  // ⛔ THE IRI AUTHORITY IS THE TRAP AND IT IS NOT THE ONE ABOVE. Safety is
+  // `internal/sustainment/...`, NOT `invincible-agent/...`, because Engine S extends the
+  // SUSTAINMENT plane the domain ontologies already occupy:
+  //
+  //     fin:     http://invincible-agent/fin#
+  //     cost:    http://invincible-agent/cost#
+  //     safety:  http://internal/sustainment/safety#      <- different authority AND path
+  //
+  // Anyone adding these by pattern from the cost rows above writes the wrong IRI, and the
+  // failure is the quiet one: the row registers, reports accepted, never matches a payload, and
+  // the card falls through to KNOWLEDGE_DOCUMENT with "No content available" —
+  // INDISTINGUISHABLE FROM HAVING NO BINDING AT ALL, which is the state the safety walk already
+  // spent an afternoon inside. Read from the producer's prefix table, not inferred.
+  //
+  // BOTH FITS ARE DERIVED FROM THE ENGINE, not chosen — `safety_agent/main.py:108-109`:
+  //
+  //     OWNER_PERSONA = "SAFETY_ENGINEER"
+  //     DOMAINS       = ["SUSTAINMENT"]
+  //
+  // and both are passed at the engine's own registration sites, so this is the same authority
+  // in the same commit rather than a guess that happens to agree.
+  //
+  // ⛔ THE FIRST VERSION OF THIS COMMENT SAID PERSONA WAS EMPTY "as a refusal rather than an
+  // omission — no safety persona is declared anywhere". THAT WAS FALSE, and the way it was
+  // reached is the part worth keeping: the search that established it ended in `head -5`, five
+  // prose matches at the top of the file filled every slot, and line 108 was never printed. A
+  // truncated read, presented as a census.
+  //
+  // AN EMPTY `persona_fit` IS NOT NEUTRAL — the selector reads it as "this fits no persona".
+  // So the error would have shipped as a considered refusal rather than as a missing lookup,
+  // which is the more expensive shape: nobody re-checks a decision that reads as deliberate.
+  // Caught by Lane 1 mid-edit, from the engine rather than from the presentation table — that
+  // table carries `persona_fit: None` on all three rows and would have confirmed the mistake.
+  //
+  // (`OWNER_PERSONA` does not GATE: `auth.py` flattens entitlements to domains and the persona
+  // half never reaches a filter. It is the answering VOICE. That makes getting it right cheap
+  // to do and easy to leave wrong, which is the combination worth a seal.)
+  {
+    subject_uri: "http://internal/sustainment/safety#OrphanedHazardSet",
+    object_uri: "mesh:ContributionRanking",
+    // ORDER AND MAGNITUDE ARE DIFFERENT QUANTITIES here and the legend is what keeps it honest:
+    // rows rank severity-first then age, while the BAR is days open, so the bars are NOT
+    // monotonic with rank. `favourable` is deliberately absent upstream — an unattended hazard
+    // has no favourable direction — so this draws "no direction stated" rather than colouring
+    // rows against a claim nobody made. That is `data-no-verdict` doing its job on a live
+    // subject rather than in a fixture.
+    persona_fit: ["SAFETY_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  // ── THE TWO BELOW ARE KNOWLEDGE_DOCUMENT BY RULING, NOT BY FIT ────────────────────────
+  //
+  // Both are single-subject statements rather than rankings or series, and no declared
+  // archetype carries a severity/probability pair with its citation. Prose is the universal
+  // treatment and it beats a mis-binding: a mis-bound card renders something plausible and
+  // wrong, which is harder to notice than something plain and right.
+  {
+    subject_uri: "http://internal/sustainment/safety#DeferralRiskCard",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["SAFETY_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  {
+    // A DRAFTED severity and probability with the matrix cell that produced the level. Prose is
+    // the honest treatment for a draft that is explicitly NOT a decision: no archetype should
+    // make it look like one.
+    subject_uri: "http://internal/sustainment/safety#RiskAssessmentDraft",
+    object_uri: "mesh:KnowledgeDocument",
+    persona_fit: ["SAFETY_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
 ] as const;
 
 /**
