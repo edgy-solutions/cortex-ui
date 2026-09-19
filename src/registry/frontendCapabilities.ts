@@ -53,9 +53,32 @@ export interface FrontendCapability {
   layout: "full-width" | "grid-col-1" | "none";
   /** Field names this archetype expects to find in structured_data. */
   expected_fields: string[];
-  /** Persona affinities — used for ranking when multiple frontends compete. */
+  /**
+   * Persona affinities — used for ranking when multiple frontends compete.
+   *
+   * ⛔ EMPTY IS NOT NEUTRAL. The selector reads `[]` as "this fits NO persona", which is a
+   * claim, not the absence of one. So a row left empty because nobody looked up the persona is
+   * indistinguishable from a row left empty BECAUSE THE ROW GENUINELY SUITS EVERYONE — and the
+   * two have opposite repairs.
+   *
+   * The second is real and is written down where it applies: `mesh:SlotElicitation` and
+   * `mesh:WithheldPanel` carry empty fits deliberately, because an ask and a hole are not
+   * better suited to one reader than another and ranking them by audience would make some
+   * readers likelier to be asked or told.
+   *
+   * ⛔ WHICH IS EXACTLY WHY AN UNSOURCED EMPTY IS EXPENSIVE: it reads as one of those. The three
+   * Engine S safety rows were nearly shipped with `persona_fit: []` and a comment calling it
+   * "a refusal rather than an omission" — the persona WAS declared
+   * (`safety_agent/main.py:108`), and the search that concluded otherwise ended in `head -5`
+   * and never printed the line. A missing lookup dressed as a considered decision, and NOBODY
+   * RE-CHECKS A DECISION THAT READS AS DELIBERATE.
+   *
+   * So: if a row is empty, say where that was derived from. Absent-versus-empty, arriving at
+   * affinity.
+   */
   persona_fit: string[];
-  /** Domain affinities — used for ranking when multiple frontends compete. */
+  /** Domain affinities — used for ranking when multiple frontends compete. Same empty-is-a-claim
+   *  rule as `persona_fit` above. */
   domain_fit: string[];
 }
 
