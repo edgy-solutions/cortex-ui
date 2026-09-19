@@ -26,6 +26,7 @@ import {
   MessageCircleQuestion,
   Lock,
   Layers,
+  BookOpenCheck,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -95,6 +96,13 @@ export function glyphFor(t: AnswerArchetype): {
     case "STEP_LADDER":
       // Layers, because the answer is a build-up: each figure struck on the ones beneath it.
       return { Icon: Layers, color: "text-cyan-400/80" };
+    case "SOURCE_LEDGER":
+      // A checked book, because the claim is ACCOUNTING rather than analysis: every source has
+      // an entry whether or not it reported. Deliberately NOT a list glyph — a list says "here
+      // are some things" and this says "here are ALL of them, including the ones that said
+      // nothing", which is the whole distinction the archetype carries.
+      return { Icon: BookOpenCheck, color: "text-neon-green/80" };
+
     case "NAMED_HOLE":
       // A lock, because the reason is entitlement rather than failure. An error glyph would say
       // the board broke; the board is intact and the reader is not.

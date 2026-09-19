@@ -42,6 +42,7 @@ import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
+import { SOURCE_LEDGER_CONTRACT } from "../components/ledger/SourceLedger.contract";
 import { COMPETING_MEASURES_CONTRACT } from "../components/planning/CompetingMeasures.contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
@@ -626,6 +627,30 @@ const DERIVED_BINDINGS = [
     persona_fit: ["SAFETY_ENGINEER"],
     domain_fit: ["SUSTAINMENT"],
     contract: MARKDOWN_RENDERER_CONTRACT,
+  },
+  // ── SOURCE_LEDGER — TWO CONSUMERS ON DAY ONE, WHICH IS WHY THE NAME IS STRUCTURAL ────
+  //
+  // A program brief and a cost lot review both emit ledgers, so an archetype named BRIEF would
+  // already be carrying the wrong noun. The structure is: N sources, every one accounted for,
+  // each row a finding or a named absence, each linking its own evidence.
+  //
+  // THIS ROW WAS REFUSED WHILE THE CARD DID NOT EXIST, deliberately — a binding advertises that
+  // cortex can render the archetype, and one without a renderer is the registered-and-not-
+  // participating shape. The producer's mirror seal stayed RED in the meantime, which is a TRUE
+  // statement about an incomplete system; adding the row alone would have turned it GREEN over
+  // a card that could not draw, which is a false statement about a complete one.
+  //
+  // Both halves land together, which is what the packet requires.
+  {
+    subject_uri: "mesh:StatefulSupportResponse",
+    object_uri: "mesh:SourceLedger",
+    // No persona: a ledger is not better suited to one reader than another — the SOURCES are
+    // domain-specific and the accounting is not. Sourced, per the field's own note: neither
+    // producer declares a persona for the output class, and the two consumers sit in different
+    // domains, so any value here would rank one of them over the other.
+    persona_fit: [],
+    domain_fit: [],
+    contract: SOURCE_LEDGER_CONTRACT,
   },
 ] as const;
 

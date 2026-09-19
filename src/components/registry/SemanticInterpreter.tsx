@@ -15,6 +15,7 @@ import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
 import { NamedHole } from "./NamedHole";
+import { SourceLedger } from "../ledger/SourceLedger";
 import { StepLadder } from "../planning/StepLadder";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
@@ -630,6 +631,13 @@ const renderComponent = (
       // step's basis descends from the ones before it, so sorting would break the walk and
       // assert a magnitude order nobody stated.
       return <StepLadder component={comp} scope_label={comp.scope_label} />;
+
+    case "SOURCE_LEDGER":
+      // N sources, EVERY ONE ACCOUNTED FOR — a row per source whatever happened to it, so
+      // "three sources, one of which said nothing" is distinguishable from "two sources". The
+      // card keys on each row's own disposition and never on which dispositions are PRESENT:
+      // a `fail`-refusal producer cannot emit a hole at all, so a hole-free ledger is ordinary.
+      return <SourceLedger component={comp} />;
 
     case "NAMED_HOLE":
       // ADR-0050 §5. NOT an answer and NOT an empty card: a panel the template declared and

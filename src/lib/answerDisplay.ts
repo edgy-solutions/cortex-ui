@@ -24,6 +24,8 @@ import type { Artifact } from "@/api/types";
 /** The real answer-type vocabulary (BAML SemanticArchetype). Chart/table
  *  sub-variants collapse onto their family for the glyph. */
 export type AnswerArchetype =
+  // N sources, every one accounted for — a row per source whatever happened to it.
+  | "SOURCE_LEDGER"
   | "KNOWLEDGE_DOCUMENT"
   | "CHART_WIDGET"
   | "ASSET_STATE_METRIC"
@@ -73,6 +75,7 @@ export type AnswerArchetype =
  * may fall into it, which is the drift this list exists to catch.
  */
 export const DISPLAY_ARCHETYPES = [
+  "SOURCE_LEDGER",
   "KNOWLEDGE_DOCUMENT",
   "CHART_WIDGET",
   "ASSET_STATE_METRIC",
@@ -173,6 +176,10 @@ export function answerArchetype(a: Artifact): AnswerArchetype {
 /** Short human label for an archetype (for the TYPE-group header + a11y). */
 export function archetypeLabel(t: AnswerArchetype): string {
   switch (t) {
+    case "SOURCE_LEDGER":
+      // The noun is the claim: every entry accounted for. "Summary" or "Brief" would name one
+      // consumer's use of it, and there are already two.
+      return "Ledger";
     case "KNOWLEDGE_DOCUMENT":
       return "Knowledge Doc";
     case "CHART_WIDGET":
