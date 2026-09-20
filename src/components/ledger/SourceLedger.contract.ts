@@ -53,7 +53,21 @@ export const LEDGER_DISPOSITIONS = [
 ] as const;
 export type LedgerDisposition = (typeof LEDGER_DISPOSITIONS)[number];
 
-/** The two the producer's `holes_from` projects. Mirrors `rows.py`'s `HOLE_DISPOSITIONS`. */
+/**
+ * The two the producer's `holes_from` projects.
+ *
+ * Mirrors `HOLE_DISPOSITIONS` in **`iagent_mesh/rows.py` — the SDK**, not
+ * `agent_fleet/graph_host/rows.py` in the producer, where this vocabulary used to live.
+ *
+ * ⛔ THE FILE KEPT ITS NAME ACROSS THE MOVE, which is exactly what made the old pointer hard to
+ * notice: "rows.py" resolved to a real file in the obvious repo, and that file no longer holds
+ * these terms. Measured: `rows.py` is PRESENT in iagent_mesh 0.9.3 and ABSENT in 0.9.2, so the
+ * vocabulary entered the SDK one minor version ago.
+ *
+ * The practical consequence is on the PIN, not here: `PRODUCER_REF` no longer determines this
+ * vocabulary, so the bump procedure has to read the SDK rev too. See the third check in
+ * `.github/workflows/build.yml`.
+ */
 export const LEDGER_HOLE_DISPOSITIONS = ["unentitled", "unavailable"] as const;
 
 export interface LedgerRow {
