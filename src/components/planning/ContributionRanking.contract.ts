@@ -71,6 +71,24 @@ export const CONTRIBUTION_RANKING_CONTRACT = {
     value_label: { type: "string", required: false },
     value_unit: { type: "string", required: false },
     scope_label: { type: "string", required: false },
+    /**
+     * THE BOUND A VERDICT IS STRUCK AGAINST, and whether the caller chose it.
+     *
+     * DECLARED SO THE CARD MAY DRAW THEM, and so the HUD stops reporting them unread the moment
+     * the projector starts carrying them. Both OPTIONAL: most rankings have no bound, and a
+     * ranking with no bound is complete rather than incomplete.
+     *
+     * ⛔ `threshold` IS A STRING, and that is the producer's choice, not a mistake to correct
+     * here. The verb emits `str(Decimal(bound))` — "0.25" — because a Decimal bound that becomes
+     * a float acquires a value it never had. It is displayed verbatim and never reparsed.
+     *
+     * `suppliers_above_threshold` IS DELIBERATELY NOT DECLARED. The count is the producer's
+     * verdict; a card that recomputed it from the rows would be a second implementation of the
+     * comparison, disagreeing the first time the producer's `>` became `>=`. It stays unread
+     * and the HUD may keep saying so — an honest unread key beats a quietly duplicated one.
+     */
+    threshold: { type: "string", required: false },
+    threshold_defaulted: { type: "boolean", required: false },
   },
   rowRequirements: CONTRIBUTION_RANKING_ROW_REQUIREMENTS,
   refusalReasons: CONTRIBUTION_RANKING_REFUSAL_REASONS,

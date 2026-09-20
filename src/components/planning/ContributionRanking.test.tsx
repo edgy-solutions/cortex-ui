@@ -523,6 +523,92 @@ describe("the other decisions that carry a claim", () => {
     expect(document.querySelector("[data-extras-dropped]")!.textContent).toContain("breakdown");
   });
 
+  it("⛔ A DEFAULTED BOUND AND A CHOSEN ONE MUST RENDER DIFFERENTLY", () => {
+    // W4-2's seal, and a DISCRIMINATION test for the same reason W4-1's is: a card that printed
+    // `threshold` and dropped `threshold_defaulted` would draw these two payloads identically
+    // and would pass any assertion that merely checks the bound is on screen.
+    //
+    // THE TWO FACTS HAVE DIFFERENT CONSEQUENCES, which is why the producer went to the trouble of
+    // resolving its default inside the function instead of in the signature: a bound the caller
+    // never chose is an assumption, and a bound they named is a decision.
+    const rows = [{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1 }];
+    render(<ContributionRanking rows={rows} value_unit="USD" threshold="0.25" threshold_defaulted />);
+    const defaulted = document.querySelector("[data-card-extras]")!.textContent;
+    cleanup();
+    render(
+      <ContributionRanking rows={rows} value_unit="USD" threshold="0.25" threshold_defaulted={false} />,
+    );
+    const chosen = document.querySelector("[data-card-extras]")!.textContent;
+    expect(defaulted).not.toBe(chosen);
+    expect(defaulted).toContain("true");
+    expect(chosen).toContain("false");
+  });
+
+  it("shows the bound under the PRODUCER'S name, verbatim — 0.25 is not 25%", () => {
+    // The value is a STRING from the producer (`str(Decimal)`) and stays one. Reparsing it into a
+    // percentage would be this card doing arithmetic on a number whose units it was never told,
+    // and rescaling a bound is how a 0.25 becomes a 25 that later reads as 2500%.
+    render(
+      <ContributionRanking
+        rows={[{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1 }]}
+        value_unit="USD"
+        threshold="0.25"
+        threshold_defaulted
+      />,
+    );
+    const el = document.querySelector("[data-card-extras]")!;
+    expect(el.textContent).toContain("threshold");
+    expect(el.textContent).toContain("0.25");
+    expect(el.textContent).not.toContain("25%");
+    // NOT FORMATTED AS MONEY either — a share bound is not currency, and `value_unit` is USD here.
+    expect(el.textContent).not.toContain("$");
+  });
+
+  it("says NOTHING when no bound arrived — a ranking with no bound is complete", () => {
+    // THE CONTROL, and the half that keeps the two above honest. Without it a card that printed
+    // a bound unconditionally — "threshold undefined" — would satisfy every assertion that only
+    // ever looks at payloads carrying one.
+    render(
+      <ContributionRanking
+        rows={[{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1 }]}
+        value_unit="USD"
+      />,
+    );
+    expect(document.querySelector("[data-card-extras]")).toBeNull();
+    expect(document.body.textContent).not.toContain("threshold");
+    expect(document.body.textContent).not.toContain("undefined");
+  });
+
+  it("⛔ DOES NOT READ OR DERIVE suppliers_above_threshold", () => {
+    // RULED EXPLICITLY. The count is the producer's verdict. A card that recomputed it from the
+    // rows would be a second implementation of the comparison and would disagree the first time
+    // the producer's `>` became `>=` — the same reason this card refuses to re-sort a ranking
+    // or infer a verdict from a sign.
+    //
+    // Sealed by handing it a count that CONTRADICTS the rows: two rows sit above 0.25 and the
+    // envelope says 99. A card doing its own arithmetic prints 2; a card reading the field
+    // prints 99; THIS card prints neither, and that is what is asserted.
+    render(
+      <ContributionRanking
+        rows={[
+          { entity_id: "a", entity_name: "A", contribution: 41, share_of_total: 0.41 },
+          { entity_id: "b", entity_name: "B", contribution: 27, share_of_total: 0.27 },
+          { entity_id: "c", entity_name: "C", contribution: 19, share_of_total: 0.19 },
+        ]}
+        value_unit="USD"
+        threshold="0.25"
+        threshold_defaulted
+        {...({ suppliers_above_threshold: 99 } as Record<string, unknown>)}
+      />,
+    );
+    const el = document.querySelector("[data-card-extras]")!;
+    expect(el.textContent).not.toContain("99");
+    expect(el.textContent).not.toContain("suppliers_above_threshold");
+    // and it did not quietly count them itself
+    expect(el.textContent).not.toContain("2 above");
+    expect(el.textContent!.trim()).toBe("threshold 0.25threshold_defaulted true");
+  });
+
   it("⛔ TWO ROWS DIFFERING ONLY IN A BOOLEAN EXTRA MUST RENDER DIFFERENTLY", () => {
     // THE SEAL THE WALK EARNED, and it is a DISCRIMINATION test rather than a presence test on
     // purpose. Asserting only that "true" appears would pass against a card that printed the

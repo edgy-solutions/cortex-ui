@@ -67,7 +67,14 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
   it.each(CONTRIBUTION_RANKING_FIXTURES.map((f) => [f.name, f] as const))(
     "%s — declares exactly what it names",
     (_name, f) => {
-      render(<ContributionRanking rows={f.rows} value_unit={f.value_unit} />);
+      render(
+        <ContributionRanking
+          rows={f.rows}
+          value_unit={f.value_unit}
+          threshold={f.threshold}
+          threshold_defaulted={f.threshold_defaulted}
+        />,
+      );
       for (const absence of CONTRIBUTION_RANKING_ABSENCES) {
         const present = document.querySelector(`[${absence}]`) !== null;
         const expected = f.declares.includes(absence);
@@ -99,7 +106,14 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
     expect(quiet.length, "no fixture exercises a payload the card can draw completely").toBeGreaterThan(0);
     for (const f of quiet) {
       cleanup();
-      render(<ContributionRanking rows={f.rows} value_unit={f.value_unit} />);
+      render(
+        <ContributionRanking
+          rows={f.rows}
+          value_unit={f.value_unit}
+          threshold={f.threshold}
+          threshold_defaulted={f.threshold_defaulted}
+        />,
+      );
       for (const absence of CONTRIBUTION_RANKING_ABSENCES) {
         expect(document.querySelector(`[${absence}]`), `${f.name} declared ${absence}`).toBeNull();
       }

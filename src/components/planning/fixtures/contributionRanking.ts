@@ -24,6 +24,7 @@ export const CONTRIBUTION_RANKING_ABSENCES = [
   "data-share-absent",
   "data-extras-dropped",
   "data-extra-columns",
+  "data-card-extras",
 ] as const;
 
 export type ContributionRankingAbsence = (typeof CONTRIBUTION_RANKING_ABSENCES)[number];
@@ -33,6 +34,9 @@ export interface ContributionRankingFixture {
   name: string;
   rows: ContributionRow[];
   value_unit?: string;
+  /** Card-level, not row-level — the bound the producer stated and who chose it. */
+  threshold?: string | number;
+  threshold_defaulted?: boolean;
   /** The absences that MUST be declared for this payload. Everything else must NOT be. */
   declares: ContributionRankingAbsence[];
 }
@@ -130,6 +134,10 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
      * what arrived.
      */
     name: "supplier concentration — the producer's real row, boolean flag and all",
+    // THE PRODUCER'S REAL BOUND, from the same read: `str(DEFAULT_CONCENTRATION_THRESHOLD)` and
+    // `defaulted` true, because the walked call passed no threshold of its own.
+    threshold: "0.25",
+    threshold_defaulted: true,
     rows: [
       { entity_id: "Cobalt Components", entity_name: "Cobalt Components", contribution: 445161.6, share_of_total: 0.41, rank: 1, supplier: "Cobalt Components", amount: "445161.60", share_of_purchased: "0.4100", above_threshold: true, value_unit: "USD" },
       { entity_id: "Amber Fabrication", entity_name: "Amber Fabrication", contribution: 293155.2, share_of_total: 0.27, rank: 2, supplier: "Amber Fabrication", amount: "293155.20", share_of_purchased: "0.2700", above_threshold: true, value_unit: "USD" },
@@ -142,6 +150,30 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
     // which is the regression this entry is here to catch.
     // `no-verdict` and `sign-withheld` are both genuinely true of it: the verb states no
     // favourable/adverse judgement, and a concentration breakdown is all-positive shares.
-    declares: ["data-no-verdict", "data-sign-withheld", "data-extra-columns"],
+    declares: ["data-no-verdict", "data-sign-withheld", "data-extra-columns", "data-card-extras"],
+  },
+  {
+    /**
+     * THE BOUND THE CALLER CHOSE — the other side of `threshold_defaulted`, and the reason this
+     * is a fixture rather than a line in the one above.
+     *
+     * ⛔ A DEFAULTED BOUND AND A CHOSEN ONE ARE DIFFERENT FACTS, and the whole point of the
+     * producer resolving its default inside the function (rather than in the signature) is that
+     * it can tell them apart. A card that printed `threshold` and dropped `threshold_defaulted`
+     * would show this payload and the one above IDENTICALLY but for four characters — and would
+     * pass every seal that only checks the bound is present. So the set carries both, and the
+     * seal beside it asserts they RENDER DIFFERENTLY.
+     *
+     * `0.40` and `false` are the pair the producer's own seals use
+     * (`tests/cost/test_export_package_seals.py:1094`), not numbers I chose.
+     */
+    name: "a chosen bound — the caller named it, so it was not defaulted",
+    rows: COMPLETE,
+    value_unit: "USD",
+    threshold: "0.40",
+    threshold_defaulted: false,
+    // ONLY the card-level claim. The rows are the complete control set, so nothing else moves —
+    // which is what makes this fixture's single declaration attributable to the bound alone.
+    declares: ["data-card-extras"],
   },
 ];

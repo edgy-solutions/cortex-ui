@@ -77,6 +77,7 @@ const CONSUMED_FIELDS = new Set([
  *                         "contributes nothing"
  *   data-extras-dropped   a value ARRIVED that has no one-cell rendering here
  *   data-extra-columns    fields the payload carried beyond the ones this card consumes
+ *   data-card-extras      CARD-LEVEL fields the payload carried beyond the ones it consumes
  *
  * EXCLUDED AS PRESENTATIONAL, each with its reason:
  *
@@ -90,6 +91,11 @@ const CONSUMED_FIELDS = new Set([
  *   `value_label` absent      a caption. The UNIT travels separately in `value_unit` and is
  *                             always applied, so an absent label costs a name and not a meaning.
  *   `note` absent             the producer had nothing to add. Not a withheld thing.
+ *   bound absent              no `threshold` arrived. A RANKING WITH NO BOUND IS COMPLETE — it
+ *                             ranks contributions, and nothing about it waits on a bound. Same
+ *                             reading as `note`: the producer sent nothing, so there is no
+ *                             withheld thing to declare. ⚠ NOT the same fact as a bound that
+ *                             ARRIVED and was not drawn, which is the W4-2 defect itself.
  *   inspector open/closed     reader state, not payload state.
  *   bar width                 derived from the largest share present, for legibility. It asserts
  *                             nothing the figures do not already say.
@@ -231,6 +237,8 @@ export function ContributionRanking({
   value_label,
   value_unit,
   scope_label,
+  threshold,
+  threshold_defaulted,
   valid_as_of,
   state_version,
 }: {
@@ -238,6 +246,19 @@ export function ContributionRanking({
   value_label?: string;
   value_unit?: string;
   scope_label?: string;
+  /**
+   * THE BOUND THE PRODUCER STATED, and whether the caller chose it. Carried as the producer
+   * typed them — `threshold` arrives as a STRING ("0.25"), because the verb emits
+   * `str(Decimal)`, and it is not reparsed, rescaled or turned into a percentage here.
+   *
+   * ⛔ THE CARD STILL KNOWS NO DOMAIN. It does not compare any row against this number, does not
+   * tone a row by it, and does NOT read `suppliers_above_threshold` — a count this card derived
+   * itself would be a second implementation of the producer's own verdict, and the two would
+   * disagree the first time that comparison changed from `>` to `>=`. The bound is DISPLAYED,
+   * never APPLIED.
+   */
+  threshold?: string | number;
+  threshold_defaulted?: boolean;
   valid_as_of?: string;
   state_version?: number;
 }) {
@@ -296,6 +317,34 @@ export function ContributionRanking({
    */
   const signedSet = ranked.some((r) => r.contribution < 0);
 
+  /**
+   * THE BOUND, GIVEN THE SAME TREATMENT AS A ROW'S EXTRAS — and through the SAME function, not
+   * a second copy of its rules.
+   *
+   * W4-2: the producer stated `threshold` "0.25" and `threshold_defaulted` true and the bound
+   * was NOWHERE ON SCREEN, so the card showed a concentration ranking while silently withholding
+   * the number the whole verdict is struck against. Its own engine calls that the
+   * EAC-without-method ambiguity in another costume: the figures are unactionable without the
+   * assumption that produced them.
+   *
+   * ⛔ `displayableExtra` IS REUSED DELIBERATELY. Card-level scalars and row-level ones are the
+   * same question one level up, and writing the admission rule twice is how the two drift —
+   * `threshold_defaulted: false` renders here for exactly the reason a false row flag does, and
+   * it would take a second bug fixed twice to keep that true if this had its own copy.
+   *
+   * NAMES ARE THE PRODUCER'S AND VALUES ARE VERBATIM: "0.25" is not reparsed into 25%, and
+   * `threshold_defaulted` is not reworded into prose about who chose it. A ranking with no
+   * bound says nothing at all — see the census.
+   */
+  const cardExtras: [string, string | number | boolean][] = [];
+  for (const [k, v] of [
+    ["threshold", threshold],
+    ["threshold_defaulted", threshold_defaulted],
+  ] as const) {
+    const shown = displayableExtra(v);
+    if (shown !== null) cardExtras.push([k, shown]);
+  }
+
   return (
     <div className="glass-panel p-4">
       <div className="flex items-baseline gap-3 flex-wrap">
@@ -340,6 +389,20 @@ export function ContributionRanking({
             </span>
           )}
         </span>
+        {/* THE BOUND RIDES IN THE HEADER because it qualifies the WHOLE ranking, not any one
+            row — the same reason a row's caveat rides on its row. Rendered in the extras
+            vocabulary so a reader meets card-level and row-level producer fields in one
+            visual language. */}
+        {cardExtras.length > 0 && (
+          <span className="flex flex-wrap gap-x-3 gap-y-0.5" data-card-extras>
+            {cardExtras.map(([k, v]) => (
+              <span key={k} className="font-mono text-[10px] text-slate-500 tabular-nums">
+                <span className="text-slate-600">{k} </span>
+                {String(v)}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
 
       <ol className="mt-3 flex flex-col gap-1.5">

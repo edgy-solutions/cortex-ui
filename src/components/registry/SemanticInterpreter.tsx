@@ -712,12 +712,26 @@ const renderComponent = (
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
       // answer and `share_of_total` has no slot there — see the contract's axis test.
+      //
+      // W4-2 — `threshold`/`threshold_defaulted` ARE ENVELOPE FIELDS, which is why they were
+      // missing rather than wrong. Row fields ride inside `rows` and cross the producer's
+      // projector VERBATIM; a card-level scalar is carried ONLY if that projector's
+      // per-archetype tuple names it, and `_PROJECTED_ARCHETYPES["CONTRIBUTION_RANKING"]` names
+      // four fields which do not include these.
+      //
+      // ⛔ SO THIS HALF OF THE WIRE IS NECESSARY AND NOT YET SUFFICIENT. Until the projector
+      // carries them, both arrive `undefined` and the header stays silent — which is the
+      // correct rendering of a payload with no bound, not a bug hiding behind one. Wired now so
+      // that on the day the producer carries them, nothing on this side is the thing still
+      // missing.
       return (
         <ContributionRanking
           rows={comp.rows}
           value_label={comp.value_label}
           value_unit={comp.value_unit}
           scope_label={comp.scope_label}
+          threshold={comp.threshold}
+          threshold_defaulted={comp.threshold_defaulted}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
