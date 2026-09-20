@@ -99,9 +99,31 @@ const CONSUMED_FIELDS = new Set([
  *                             A LIVE VIEW, that stops being true and this line is the one to
  *                             revisit — a live view with no stamp IS a claim.
  */
-/** A scalar worth showing beside a figure — a real number, or a non-empty string. */
-function displayableExtra(v: unknown): string | number | null {
+/**
+ * A scalar worth showing beside a figure — a real number, a non-empty string, or a BOOLEAN.
+ *
+ * ⛔ A BOOLEAN IS A ONE-CELL VALUE, and refusing it made this card print the SAME SENTENCE
+ * for `true` and for `false`. Measured on the walk: the supplier-concentration payload carries
+ * `above_threshold` on every row, and every row rendered "above_threshold — not drawable here"
+ * — identical for the suppliers over the bound and the ones under it. A flag that arrived and
+ * says the opposite thing on two rows was collapsed into one indistinguishable string, which is
+ * worse than dropping it silently: it LOOKS like a reported field.
+ *
+ * SHOWN VERBATIM, UNDER THE PRODUCER'S OWN FIELD NAME — `true` / `false`, never a local
+ * synonym, a tick or a colour. THIS CARD KNOWS NO DOMAIN: nothing here is keyed on the word
+ * "threshold", and neither value is toned, because whether `true` is the good outcome is the
+ * producer's semantic call — the same guess-dressed-as-a-judgement this card refuses for
+ * `favourable`.
+ *
+ * Objects, arrays and non-finite numbers STAY undrawable. Having no one-cell form is a different
+ * fact from having one nobody had written down yet.
+ */
+function displayableExtra(v: unknown): string | number | boolean | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  // `false` IS A VALUE, not an absence — and the `shown === null` test below is strict for
+  // exactly this reason. A truthiness check there would drop every false flag and leave the rows
+  // UNDER the bound looking like rows the producer said nothing about.
+  if (typeof v === "boolean") return v;
   if (typeof v === "string") {
     const t = v.trim();
     return t.length > 0 ? t : null;
@@ -127,7 +149,7 @@ function displayableExtra(v: unknown): string | number | null {
  * money formatter would print them as dollars — a unit this card was never told they carry.
  */
 function ExtraColumns({ row }: { row: ContributionRow }) {
-  const extras: [string, string | number][] = [];
+  const extras: [string, string | number | boolean][] = [];
   // A FIELD THIS CARD CANNOT DRAW IS STILL A FIELD THAT ARRIVED. `displayableExtra` refuses an
   // object, an array and a NaN — correctly, since none has a one-cell rendering — but dropping
   // them silently is the defect this whole column exists to repair, one level down: the reader

@@ -523,6 +523,60 @@ describe("the other decisions that carry a claim", () => {
     expect(document.querySelector("[data-extras-dropped]")!.textContent).toContain("breakdown");
   });
 
+  it("⛔ TWO ROWS DIFFERING ONLY IN A BOOLEAN EXTRA MUST RENDER DIFFERENTLY", () => {
+    // THE SEAL THE WALK EARNED, and it is a DISCRIMINATION test rather than a presence test on
+    // purpose. Asserting only that "true" appears would pass against a card that printed the
+    // word unconditionally; asserting the two rows DIFFER cannot. The defect being sealed was
+    // precisely an indistinguishability — `above_threshold` rendered the same sentence,
+    // "above_threshold — not drawable here", for the suppliers over the bound and under it.
+    //
+    // The rows are identical in EVERY other field, so the flag is the only thing that can
+    // account for a difference. That is what makes this catchable: a bug hidden because two
+    // values render alike is only visible where they are forced to diverge.
+    render(
+      <ContributionRanking
+        rows={[
+          { entity_id: "a", entity_name: "Shared Name", contribution: 10, share_of_total: 0.5, above_threshold: true },
+          { entity_id: "b", entity_name: "Shared Name", contribution: 10, share_of_total: 0.5, above_threshold: false },
+        ]}
+        value_unit="USD"
+      />,
+    );
+    const [over, under] = screen.getAllByRole("button").map(
+      (b) => b.querySelector("[data-extra-columns]")!,
+    );
+    expect(over, "the row carrying a boolean drew no extras strip at all").not.toBeNull();
+    expect(under).not.toBeNull();
+    expect(over.textContent).not.toBe(under.textContent);
+
+    // AND THE DIFFERENCE IS THE PRODUCER'S OWN VOCABULARY, verbatim — not a tick, not "Yes",
+    // not a local synonym. The field name is unprettified for the same reason every other
+    // extra's is: a title-cased synonym is the translation layer ADR-0045 refused.
+    expect(over.textContent).toContain("above_threshold");
+    expect(over.textContent).toContain("true");
+    expect(under.textContent).toContain("above_threshold");
+    expect(under.textContent).toContain("false");
+
+    // A BOOLEAN IS NOT UNDRAWABLE. It has a one-cell form, so it must not be named as a value
+    // this card had to drop — which is the whole finding, stated in the negative.
+    expect(document.querySelector("[data-extras-dropped]")).toBeNull();
+  });
+
+  it("does not key any behaviour on the WORD 'threshold' — the card knows no domain", () => {
+    // The ruling was explicit: no highlight keyed on the field's name. A card that toned
+    // `above_threshold` would be making the producer's semantic call — whether true is the good
+    // outcome — which is the same guess-dressed-as-a-judgement it refuses for `favourable`.
+    // Sealed by RENAMING the field: a card that special-cased the word would render the two
+    // differently, and a card that treats it as an ordinary boolean renders them alike.
+    const base = { entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1 };
+    render(<ContributionRanking rows={[{ ...base, above_threshold: true }]} value_unit="USD" />);
+    const named = document.querySelector("[data-extra-columns]")!.textContent!.replace("above_threshold", "FIELD");
+    cleanup();
+    render(<ContributionRanking rows={[{ ...base, ordinary_flag: true }]} value_unit="USD" />);
+    const plain = document.querySelector("[data-extra-columns]")!.textContent!.replace("ordinary_flag", "FIELD");
+    expect(named).toBe(plain);
+  });
+
   it("does NOT name a key the producer left empty — absent is not undrawable", () => {
     // THE DISTINCTION AN EXISTING SEAL CAUGHT ME ON. `null`, `undefined` and a blank string are
     // the producer declining to fill the key: nothing was lost and naming it prints a hole.

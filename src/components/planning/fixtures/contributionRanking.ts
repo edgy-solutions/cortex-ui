@@ -106,4 +106,42 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
     value_unit: "USD",
     declares: ["data-extra-columns"],
   },
+  {
+    /**
+     * ── THE WALKED PAYLOAD, TRANSCRIBED FROM THE PRODUCER ─────────────────────────────────
+     *
+     * NOT HAND-TYPED. Every field name, type and value below is read from
+     * `cost_agent/measures.py::cost_supplier_concentration` at producer `c0005142`, against
+     * the seeded lot 3: `_SUPPLIER_SHARES` (.41/.27/.19/.13) struck on that lot's material
+     * value of 1,085,760.00, and `DEFAULT_CONCENTRATION_THRESHOLD` = 0.25. The shares sum to
+     * 1.0000 and exactly TWO rows sit above the bound, which is what the producer's own
+     * `suppliers_above_threshold` reports for this payload.
+     *
+     * ⛔ THE BOOLEAN IS THE POINT. `above_threshold` rendered "not drawable here" on all four
+     * rows — the same sentence for the two suppliers over the bound and the two under it. A
+     * hand-typed fixture would have carried whatever shape I imagined; this one carries the
+     * shape that actually failed on screen, INCLUDING the two `false` rows, which are the ones
+     * a truthiness test would silently have dropped.
+     *
+     * IT ALSO RECORDS A PRODUCER DUPLICATION rather than hiding it: `supplier`/`entity_name`,
+     * `amount`/`contribution` and `share_of_purchased`/`share_of_total` are the same three
+     * facts under two vocabularies, because the verb aliases its own fields into cortex's names
+     * and leaves the originals in the row. That is the producer's to rule on. This card shows
+     * what arrived.
+     */
+    name: "supplier concentration — the producer's real row, boolean flag and all",
+    rows: [
+      { entity_id: "Cobalt Components", entity_name: "Cobalt Components", contribution: 445161.6, share_of_total: 0.41, rank: 1, supplier: "Cobalt Components", amount: "445161.60", share_of_purchased: "0.4100", above_threshold: true, value_unit: "USD" },
+      { entity_id: "Amber Fabrication", entity_name: "Amber Fabrication", contribution: 293155.2, share_of_total: 0.27, rank: 2, supplier: "Amber Fabrication", amount: "293155.20", share_of_purchased: "0.2700", above_threshold: true, value_unit: "USD" },
+      { entity_id: "Sable Castings", entity_name: "Sable Castings", contribution: 206294.4, share_of_total: 0.19, rank: 3, supplier: "Sable Castings", amount: "206294.40", share_of_purchased: "0.1900", above_threshold: false, value_unit: "USD" },
+      { entity_id: "Verdigris Electronics", entity_name: "Verdigris Electronics", contribution: 141148.8, share_of_total: 0.13, rank: 4, supplier: "Verdigris Electronics", amount: "141148.80", share_of_purchased: "0.1300", above_threshold: false, value_unit: "USD" },
+    ] as unknown as ContributionRow[],
+    value_unit: "USD",
+    // NO `data-extras-dropped`: with the boolean admitted, every extra this payload carries has
+    // a one-cell rendering. Before the fix this fixture would have declared it four times over —
+    // which is the regression this entry is here to catch.
+    // `no-verdict` and `sign-withheld` are both genuinely true of it: the verb states no
+    // favourable/adverse judgement, and a concentration breakdown is all-positive shares.
+    declares: ["data-no-verdict", "data-sign-withheld", "data-extra-columns"],
+  },
 ];
