@@ -1,6 +1,23 @@
 /**
  * THE PARITY SEAL — cortex's interim REGISTRY against the declarations the gateway composes.
  *
+ * ── ⚠ RUN THIS FILE WITH `npm run test`, NEVER WITH BARE `npx vitest run` ────────────────
+ *
+ *   npm run test -- src/lib/taskKindParity.test.tsx   ->  PASSES, 21/21
+ *   npx vitest run src/lib/taskKindParity.test.tsx    ->  FAILS TO COLLECT, 0 tests run
+ *       "Cannot read properties of undefined (reading 'config')"
+ *
+ * THE SECOND IS A FALSE RED AND THE CODE IS FINE. Under vitest 4 the bare invocation loads
+ * none of this project's config, so `describe.skipIf` below evaluates against an undefined
+ * config and the FILE never collects — which surfaces as a failure of the seal rather than as
+ * a failure to run it. Nothing here is broken when you see it.
+ *
+ * It is written at the top of the seal because this is where the next reader meets it: someone
+ * narrowing to one file reaches for `npx` first. A false red is expensive out of proportion to
+ * its cause — it is what teaches a person to retry a TRUE red away, and this seal exists to be
+ * believed when it goes red. Recorded a second time in `.github/workflows/build.yml` beside
+ * the PRODUCER_REF pin, for the reader who arrives from the bump procedure instead.
+ *
  * M3.3 retires two hardcoded per-kind tables together: `taskKindRegistry` here and
  * `_VERBS_BY_KIND` in `human_tasks.py`. Between now and that cutover the two must not drift,
  * and the only way to know is to read the PRODUCER'S OWN declarations rather than assert
