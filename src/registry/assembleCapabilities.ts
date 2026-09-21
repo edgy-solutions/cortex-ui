@@ -652,6 +652,36 @@ const DERIVED_BINDINGS = [
     domain_fit: [],
     contract: SOURCE_LEDGER_CONTRACT,
   },
+  // THE SECOND CONSUMER, and the row that turns the producer's mirror seal green. Lane 32 held
+  // `test_the_two_MIRRORS_agree_FLEET_WIDE` RED on exactly this pair rather than excusing it —
+  // the backend advertised `cost:LotCostingReview -> mesh:SourceLedger` and this side bound
+  // nothing for the subject. Both mirrors go green in the same step, which is the point.
+  //
+  // THE SUBJECT IS READ, NOT CHOSEN: `policy/graphs/cost_lot_costing_review.yaml:34` declares
+  // `output_uri: http://invincible-agent/cost#LotCostingReview`. Canonical full IRI per the
+  // registrar's form (see the engine-cost block above) — a CURIE resolves identically at
+  // runtime and is flagged in CI, which is the worst of both.
+  //
+  // ONE ARCHETYPE, ONE CONTRACT, TWO PRODUCERS — the same claim `capabilities.py` states from
+  // the other side. Binding this subject to a different card would mean two archetypes sharing
+  // a name, so the contract identity is sealed rather than left to reading.
+  {
+    subject_uri: "http://invincible-agent/cost#LotCostingReview",
+    object_uri: "mesh:SourceLedger",
+    // AFFINITY IS THE PRODUCER'S, cited from that same graph row (`owner_persona: COST_ANALYST`,
+    // `domains: [PRODUCTION_COST]`) — the cells the engine-cost seven already use.
+    //
+    // ⚠ AND IT DIFFERS FROM ITS SIBLING ABOVE ON PURPOSE. That row's empty affinity was
+    // reasoned from ONE row serving BOTH consumers: any value would have ranked one of them
+    // over the other. This is a PER-SUBJECT row, so that hazard is gone, and the subject's own
+    // graph policy declares both cells where the brief's output class declares neither.
+    // Affinity RANKS and never filters, so a wrong value here cannot make a card unrenderable —
+    // but an EMPTY one is not neutral either: the selector reads it as fitting no persona, the
+    // mistake the safety rows shipped once and their seal now pins. Declared beats defaulted.
+    persona_fit: ["COST_ANALYST"],
+    domain_fit: ["PRODUCTION_COST"],
+    contract: SOURCE_LEDGER_CONTRACT,
+  },
 ] as const;
 
 /**

@@ -237,3 +237,68 @@ describe("the safety bindings carry the right authority", () => {
     }
   });
 });
+
+/**
+ * SOURCE_LEDGER HAS TWO PRODUCERS, AND THIS SIDE IS HALF OF A CROSS-REPO MIRROR.
+ *
+ * The producer's `test_the_two_MIRRORS_agree_FLEET_WIDE` compares its `PRESENTATION_CAPABILITIES`
+ * against this table pair by pair. Lane 32 held that seal RED on
+ * `cost#LotCostingReview -> mesh#SourceLedger` rather than excusing it into the ratification
+ * register — a red seal is a true statement about an incomplete system, and a green one over a
+ * card that cannot draw is a false statement about a complete one.
+ *
+ * ⛔ SO THE ROW IS LOAD-BEARING IN A REPO THIS SUITE CANNOT SEE. Deleting it here reddens a test
+ * in `invincible-agent` and nothing here, which is the whole reason these assertions exist: the
+ * consequence lands somewhere the person making the change is not looking.
+ */
+describe("SOURCE_LEDGER's two consumers", () => {
+  const LEDGER = "mesh:SourceLedger";
+
+  it("binds BOTH producers, and EXACTLY those two", () => {
+    // An EXACT SET, not a containment. `toContain` is blind in both directions — it cannot see
+    // a consumer that went missing, and it cannot see a third subject bound by pattern to a card
+    // whose contract was never checked against that producer's fields.
+    const subjects = assembleDerivedCapabilities()
+      .filter((c) => c.object_uri === LEDGER)
+      .map((c) => c.subject_uri)
+      .sort();
+    expect(subjects).toEqual([
+      "http://invincible-agent/cost#LotCostingReview",
+      "mesh:StatefulSupportResponse",
+    ]);
+  });
+
+  it("ONE ARCHETYPE, ONE CONTRACT — two rows cannot mean two cards sharing a name", () => {
+    // The substantive half. Binding the cost subject to a different contract would satisfy the
+    // producer's pair check (which reads subject and object, not fields) and still render the
+    // wrong card. `expected_fields` is computed from the contract, so equal fields here IS the
+    // claim that one archetype serves both.
+    const rows = assembleDerivedCapabilities().filter((c) => c.object_uri === LEDGER);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].contract).toBe(rows[1].contract);
+    expect(rows[0].archetype).toBe(rows[1].archetype);
+    expect(rows[0].expected_fields).toEqual(rows[1].expected_fields);
+  });
+
+  it("the cost subject carries the CANONICAL IRI, not the CURIE the producer writes", () => {
+    // The producer's table spells it `cost:LotCostingReview`; its mirror folds both to one token,
+    // so a CURIE here would pass that seal and be flagged by this repo's CI instead — the worst
+    // of both, per the registrar's form. Asserted rather than left to the eye, because the two
+    // spellings are indistinguishable at a glance and identical at runtime.
+    const rows = assembleDerivedCapabilities().filter((c) => c.object_uri === LEDGER);
+    expect(rows.map((c) => c.subject_uri).filter((u) => u === "cost:LotCostingReview")).toEqual([]);
+  });
+
+  it("the cost row's affinity is the graph policy's, not a default", () => {
+    // `policy/graphs/cost_lot_costing_review.yaml` — `owner_persona: COST_ANALYST`,
+    // `domains: [PRODUCTION_COST]`. Its sibling declares neither, deliberately, and this pins
+    // that the difference is a decision rather than one row having been filled in by habit.
+    const rows = assembleDerivedCapabilities().filter((c) => c.object_uri === LEDGER);
+    const cost = rows.find((c) => c.subject_uri.endsWith("#LotCostingReview"))!;
+    const brief = rows.find((c) => c.subject_uri === "mesh:StatefulSupportResponse")!;
+    expect(cost.persona_fit).toEqual(["COST_ANALYST"]);
+    expect(cost.domain_fit).toEqual(["PRODUCTION_COST"]);
+    expect(brief.persona_fit).toEqual([]);
+    expect(brief.domain_fit).toEqual([]);
+  });
+});
