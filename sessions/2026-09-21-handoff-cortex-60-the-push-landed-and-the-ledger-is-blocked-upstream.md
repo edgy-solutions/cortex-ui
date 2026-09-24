@@ -100,11 +100,17 @@ by name.
     GET https://ghcr.io/v2/edgy-solutions/cortex-ui/frontend/manifests/<tag>
     -> docker-content-digest        (anonymous pull token; no `gh` needed)
 
-The build log hands back QEMU's helper image. Prove the instrument every time with the known tag
-`8a13dd6 -> sha256:c8d6553f142ebb70…` (Lane 1 read that same digest off the pod), and confirm the
+**⚠ THE TAG IS THE FULL 40-CHARACTER SHA. A SHORT SHA 404s.** This handoff first wrote the
+control as `8a13dd6` and that form returns 404 — which looks exactly like "not built yet" and
+sent the next run of this procedure (2026-09-23) chasing a build that was in fact fine. Corrected
+here rather than left as a trap.
+
+The build log hands back QEMU's helper image. Prove the instrument every time with a known
+answer — `ea060f37e6078ef666f35db72956afa3e75971ba -> sha256:38cda6c84b3ce6a2…` — and confirm the
 answer is the **manifest list** — `application/vnd.oci.image.index.v1+json`, amd64 + arm64 — not
-one arch. A 404 is ambiguous between "not built yet" and "no anonymous access"; the control
-disambiguates it.
+one arch. **A 404 is ambiguous three ways**: not built yet, no anonymous access, or a tag spelled
+short. The control separates the first from the other two; only the full-sha rule separates the
+third.
 
 ### 3.7 CLAUDE.md AND .mcp.json CANNOT REACH THE IMAGE
 
