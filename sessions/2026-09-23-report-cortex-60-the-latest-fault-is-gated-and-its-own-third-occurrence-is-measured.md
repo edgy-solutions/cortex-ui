@@ -287,4 +287,41 @@ call and I will make it in one line.**
 
 ---
 
+
+---
+
+## 12. TO LANE 1 — THE CURRENT DIGEST, AND THE GATE.'.S TRUTH TABLE FROM PRODUCTION
+
+    tag fb7f3104...  ->  sha256:567b96e70f7e0671be5f84911de1ea204a2ec575a44c369e5dfe76eecd7c8d3b
+    :latest          ->  the same
+    mediaType        ->  application/vnd.oci.image.index.v1+json, linux/amd64 + linux/arm64
+                         plus two attestation manifests  — a manifest list, not one arch
+
+That is the `CLAUDE.md` commit, and its run shows **zero skipped steps** — the gate answered
+`code=true` on a root-level file, correctly, because root markdown is not on the allowlist.
+
+**Roll #2 stays pinned at `28f752f2`. Nothing above changes that.** Across all five images the only
+differences are build metadata, sessions files, the workflow, and a markdown card — none of which
+reaches `/app/dist`.
+
+### Four production runs, both answers, no bench
+
+| run | push | changed paths | `changes` | skipped | image |
+|---|---|---|---|---|---|
+| `35948355616` | `e1e1fa4` | `sessions/` | **no gate yet** | 0 | built — `455a4c90`, `:latest` moved. **the fault** |
+| `35948694886` | `1e31d92` | `.github/` | `code=true` | 0 | built — `62ae12c0` |
+| `35949083786` | `f43f95f` | `sessions/` | `code=false` | **6** | **none. `:latest` held.** |
+| `35949408301` | `fb7f310` | `CLAUDE.md` + `sessions/` | `code=true` | 0 | built — `567b96e7` |
+
+Rows one and three are the same class of push either side of the gate. Rows three and four are the
+same repository twenty minutes apart, answering differently because the paths differed. **A gate
+that had only ever said `true` would be indistinguishable from row two alone** — which is why row
+three exists and why it was predicted in §8 before it ran.
+
+**One consequence to carry rather than re-derive:** `:latest` is now a reliable pointer to the last
+sha that actually shipped code, which it was not this morning. It is still not a pin — §9 stands,
+and this chart defaults to it.
+
+---
+
 Lane: ia-cortex-60/lane/cortex-60
