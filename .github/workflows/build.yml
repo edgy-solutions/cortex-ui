@@ -31,9 +31,164 @@ permissions:
   packages: write
 
 jobs:
+  # ── Does this diff need an image at all? ──────────────────────────────
+  #
+  # WHY THIS JOB EXISTS, MEASURED, AND AT ITS SECOND OCCURRENCE: a
+  # sessions-only push builds a full multi-arch image and RETAGS `:latest`
+  # onto it. That is not merely wasted wall clock — it silently moves
+  # `:latest` off a digest a human has already accepted. It happened at
+  # `8a13dd6` (reported in `4c0375b`), and it happened again on
+  # 2026-09-23 when `ea060f3..a6950b2` moved `:latest` off `38cda6c8`
+  # while roll #2 was carrying that digest. Twice is a property of the
+  # pipeline, not an accident, so it gets a gate rather than another
+  # report. Modelled on doc-tools PR #7 (`f89720e`).
+  #
+  # GitHub Actions has no job-level `paths-ignore` — it exists only on the
+  # workflow `on:` trigger, and putting it there would skip the transport
+  # guard, the test suite and the parity seal as well, which are worth
+  # their minutes on ANY diff. So the verdict is computed here by hand
+  # with a plain `git diff` and consumed by `if:` on the image-build STEPS
+  # below. Deliberately not dorny/paths-filter: the point is a single
+  # auditable `git diff` this file's reader can verify by eye.
+  #
+  # ⛔ WHERE THE GATE LANDS, AND WHY IT IS NOT ON THE JOB. cortex-ui has
+  # ONE job, not doc-tools' three, so a job-level `if:` would skip the
+  # seals along with the build. This file already documents what that
+  # costs: read the `frontend` job's header — the parity seal "had NEVER
+  # run in CI", silently skipping 28 assertions while every build appeared
+  # green. A gate that quietly stops a seal from running is the same
+  # incident wearing a different hat. So `changes` decides ONLY whether an
+  # image gets built; check:transport, the suite, and tsc run on every
+  # push including a sessions-only one. A skipped build shows in the log
+  # as skipped rather than absent.
+  #
+  # ⛔ THE ALLOWLIST IS `^sessions/` AND `^docs/`, AND `helm/` MUST NEVER
+  # JOIN IT. Read this before adding anything. The list is an ALLOWLIST of
+  # paths that PROVABLY cannot reach the image — not a denylist of things
+  # that feel unlike code. The proof for these two, measured on 2026-09-23
+  # rather than assumed: nothing under `src/`, `tests/` or `scripts/`
+  # imports, reads or fetches a path under `docs/` or `sessions/` — every
+  # single reference is a prose citation inside a comment — and the
+  # Dockerfile's final stage copies only `/app/dist`, `nginx.conf` and
+  # `docker-entrypoint.sh`, naming neither directory. `helm/` fails that
+  # test outright and is the exact analogue of the `charts/` warning in
+  # doc-tools PR #7: a values file is not code, it is what DEPLOYS, and it
+  # carries the image pin. A helm-only diff is the one that most needs the
+  # image it references to exist.
+  #
+  # FAILS OPEN, ALWAYS. The only acceptable failure mode is "code=true,
+  # build anyway" — a wasted build. The unacceptable one is a real change
+  # reaching master with no image, which reads as shipped while existing
+  # nowhere. So every branch that cannot POSITIVELY PROVE "every changed
+  # path matches ^sessions/ or ^docs/" falls through to the code=true this
+  # step starts with: a non-push/pull_request event, a tag push, an
+  # all-zeros `before` sha (new branch or force-push rewrite), a base or
+  # head commit this checkout cannot find, a failed `git diff`, or an
+  # EMPTY diff — zero changed paths is proof the computation should be
+  # distrusted, not proof nothing needs building. None of those gets its
+  # own escape hatch; they collapse into one default, so there is exactly
+  # one way to reach code=false and no way for a new edge case to invent a
+  #
+  # ⛔ REDPROOF — THIS GATE WAS PROVEN ABLE TO RETURN BOTH ANSWERS. A guard
+  # that can only ever say "build" is not a guard, it is a comment. Run the
+  # decide step directly against real shas in this repo:
+  #
+  #     npx -y js-yaml .github/workflows/build.yml > wf.json
+  #     node -e 'const d=require("./wf.json");require("fs").writeFileSync(
+  #       "decide.sh", d.jobs.changes.steps.find(x=>x.id==="decide").run)'
+  #     EVENT_NAME=push IS_TAG=false BASE_SHA=197609git rev-parse <A>) 
+  #       HEAD_SHA=197609git rev-parse <B>) GITHUB_OUTPUT=out.txt bash decide.sh
+  #
+  # Measured 2026-09-23, ten cases, all as predicted:
+  #
+  #     a6950b2..e1e1fa4   sessions-only            code=FALSE   <- the point
+  #     7b3afbd            one sessions/ commit     code=FALSE
+  #     ea060f3..a6950b2   range containing src/    code=true
+  #     091b26c            one src/ commit          code=true
+  #     a6950b2..e1e1fa4   as a TAG push            code=true
+  #     all-zeros base                              code=true
+  #     base sha not in checkout                    code=true
+  #     empty diff (head == base)                   code=true
+  #     workflow_dispatch, same sessions-only diff  code=true
+  #     empty base sha                              code=true
+  #
+  # THE FIRST ROW IS THE MEASUREMENT, NOT THE DESIGN: `a6950b2..e1e1fa4` is
+  # the exact push that moved `:latest` off the accepted `38cda6c8`. Had this
+  # gate existed that morning, it would not have. Re-run this table if you
+  # touch the decide step; a green that only ever came back `true` would look
+  # identical to this one in the checks list.
+  changes:
+    name: Does this diff need an image?
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.decide.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether this diff can skip the image build
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # Deliberately NOT `set -e`: a git failure below must fall through to
+          # the CODE=true default already set, not abort the step before that
+          # default is written to GITHUB_OUTPUT.
+          set -uo pipefail
+
+          CODE=true
+
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
+            echo "event is '$EVENT_NAME', no diff range applies -> code=true"
+          elif [ "$IS_TAG" = "true" ]; then
+            echo "tag push -> code=true unconditionally, a release build is never worth a heuristic"
+          elif [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "no usable base sha (new branch / force-push rewrite) -> code=true"
+          elif ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "base sha $BASE_SHA not found in this checkout -> code=true"
+          elif ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            echo "head sha $HEAD_SHA not found in this checkout -> code=true"
+          else
+            # THREE dots, not two. `git diff A B` compares the two trees
+            # directly, so if master moved ahead after a PR was cut, every
+            # commit master gained shows up as a REVERSE change attributed to
+            # this diff. `A...B` diffs against the merge base, which is the
+            # question actually being asked. The two-dot form fails safe — the
+            # spurious paths read as "not sessions/docs" and the build runs —
+            # but it makes the skip fire almost never, which is the feature
+            # silently not working.
+            CHANGED=$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")
+            STATUS=$?
+            if [ $STATUS -ne 0 ]; then
+              echo "git diff exited $STATUS -> code=true"
+            elif [ -z "$CHANGED" ]; then
+              echo "diff came back empty -> code=true (not proof of docs-only, just proof to distrust)"
+            elif echo "$CHANGED" | grep -qvE '^(sessions|docs)/'; then
+              echo "at least one changed path is outside sessions/ and docs/ -> code=true"
+              echo "$CHANGED"
+            else
+              CODE=false
+              echo "every changed path matches ^sessions/ or ^docs/ -> code=false, no image, :latest stays put"
+              echo "$CHANGED"
+            fi
+          fi
+
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
   # ── Frontend ──────────────────────────────────────────────
   frontend:
     name: Build Frontend
+    # `needs` is required here purely so the steps below can READ
+    # `needs.changes.outputs.code` — another job's outputs are only visible to a
+    # job that lists it. It is NOT a correctness gate: `changes` never fails on
+    # purpose. Note there is deliberately no job-level `if:` — see the `changes`
+    # job header for why the seals in this job must run on every diff.
+    needs: changes
     runs-on: ubuntu-latest
 
     steps:
@@ -279,6 +434,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Set up pack CLI
+        if: needs.changes.outputs.code == 'true'
         uses: buildpacks/github-actions/setup-pack@v5.7.4
 
       # ── Multi-arch enablement ──
@@ -289,13 +445,15 @@ jobs:
       # are already multi-arch on Docker Hub so the build itself "just
       # works" once buildx is told to produce both.
       - name: Set up QEMU
+        if: needs.changes.outputs.code == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: needs.changes.outputs.code == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -303,6 +461,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine image tags
+        if: needs.changes.outputs.code == 'true'
         id: tag
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
@@ -325,6 +484,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push frontend image (multi-arch)
+        if: needs.changes.outputs.code == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
