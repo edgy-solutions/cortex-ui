@@ -207,4 +207,84 @@ chart will not stop anyone.
 
 ---
 
+
+---
+
+## 10. ✅ THE LIVE TEST PASSED — ALL THREE LEGS, AGAINST TWO LIVE CONTROLS
+
+`f43f95f` — this report, sessions-only, pushed onto `1e31d92` so the gate judging it is the one
+just landed. Run `35949083786`, **completed / success**:
+
+    JOB: Does this diff need an image?    success
+         success   Decide whether this diff can skip the image build
+
+    JOB: Build Frontend                   success
+         success   Checkout
+         success   Check out the producer beside cortex-ui
+         success   Put the producer where the seal looks for it
+         success   Set up Node
+         success   Install dependencies
+         success   Transport declaration check      <- RAN
+         success   Test suite, with the producer present   <- RAN
+         success   Typecheck                        <- RAN
+         skipped   Set up pack CLI
+         skipped   Set up QEMU
+         skipped   Set up Docker Buildx
+         skipped   Log in to GHCR
+         skipped   Determine image tags
+         skipped   Build and push frontend image (multi-arch)
+
+Against the three predictions in §8, in order:
+
+    no `:<sha>` tag for this commit     f43f95f0... -> http=404, and the run is COMPLETE, so final
+    :latest unmoved                     sha256:62ae12c0... , exactly where 1e31d92 left it
+    the checks all RAN                  8 success, and only the 6 image steps skipped
+
+**The 404 is only worth anything because two controls resolved beside it**, and both did:
+
+    ea060f37e6...  -> 200   the instrument works at all
+    1e31d925...    -> 200   built SIX MINUTES EARLIER — builds are landing right now
+
+Without the second, "no image" and "GHCR is not answering me" are the same reading. And the step
+list is the stronger instrument than either: **an absent tag cannot tell a skip from a run that
+never started**, while `skipped` next to `success` says which. Cost, incidentally: **113s against
+219s.**
+
+### The before/after, same instrument, same class of diff
+
+| push | diff | workflow | `changes` | image steps | result |
+|---|---|---|---|---|---|
+| `e1e1fa4` | sessions-only | **old** | absent | all 6 ran | image built, `:latest` moved — **the fault** |
+| `1e31d92` | `.github/` | new | `code=true` | all 6 ran | image built — correct |
+| `f43f95f` | sessions-only | new | `code=false` | **all 6 skipped** | **no image, `:latest` held** |
+
+Row one and row three are the same kind of push twenty minutes apart. **That pair is the
+measurement.** doc-tools noted its own PR #7 had exercised `code=true` only and that the skip
+branch had never run; cortex's skip branch has now run in Actions, not just on a bench.
+
+**`:latest` is no longer a hazard for sessions-only work in this seat.** The standing rule that
+held reports unpushed so they would not build a second image is **retired** — that is what this
+report's own push just demonstrated.
+
+---
+
+## 11. WHAT WENT INTO `CLAUDE.md`, AND THE ONE THING I WOULD NOT DO UNASKED
+
+The consequence rule is now in the lean-session card as its own section, because it is the kind of
+thing a fresh session must not have to rediscover: **not every sha on master has an image, so pin
+to the last sha whose build actually PUSHED**, confirmed from GHCR or the run and never from the
+commit log. It carries the cortex-specific sharpening from §9 — that this chart has no `required`
+guard and defaults to `tag: latest`, so it will not stop anyone — and the `helm/`-must-never-join
+warning.
+
+⚠ **That `CLAUDE.md` commit is at the repo root, outside the `^sessions/|^docs/` allowlist, so it
+builds an image and moves `:latest` once more.** That is the allowlist doing exactly what it was
+told. **I did not widen it to cover root-level markdown, even though `CLAUDE.md` provably cannot
+reach the image** — the handoff measured that in §3.7 — because the allowlist you specified is
+`^sessions/` and `^docs/`, and quietly growing a list whose entire value is that every entry was
+proven is how it stops being an allowlist. **If root-level `*.md` should be on it, that is your
+call and I will make it in one line.**
+
+---
+
 Lane: ia-cortex-60/lane/cortex-60
