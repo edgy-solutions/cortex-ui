@@ -13,6 +13,41 @@ session ref: `sessions/2026-09-19-inventory-cortex-60-every-hand-kept-archetype-
 
 ---
 
+## ⛔ READ THIS BEFORE YOU RUN STEP 2 — EVERY COUNT BELOW IS A LOWER BOUND
+
+**Placed at the top on the architect's order, 2026-09-23, because it is the thing that will bite
+whoever extracts an archetype and it is buried in §0 where a person starts reading at §3.**
+
+A search for an archetype id finds it in the shapes a grep *thinks* of — an `archetype:` field, an
+`archetype ===`, a `case` in a dispatch. **It does not find the id where it is a bare member of a
+type or a list**, and this repo has exactly that, twice, in one file:
+
+    answerDisplay.ts:28    | "SOURCE_LEDGER"          ← a bare member of a TS UNION TYPE
+    answerDisplay.ts:78      "SOURCE_LEDGER",         ← a bare member of a STRING ARRAY
+
+Both are load-bearing. Both were **missed by the derivation that this inventory was built to be
+more careful than**, and they were recovered only because the architect had four sites already
+filed and two of them were not on my list. The inventory's numbers were then rebuilt as *every
+occurrence of the 28 known ids*, which is complete **for site kinds that name the id** — and says
+nothing about a site kind nobody has thought of yet.
+
+> **WHAT THIS MEANS FOR AN EXTRACTION.** Move an archetype's rendering and leave one of these
+> behind and nothing goes red: a union member that still lists the id keeps type-checking, an
+> array member that still lists it keeps the old branch reachable, and the card renders from the
+> new home while a stale list quietly still claims the name. The failure is *silent* and it
+> surfaces as a card that draws from the wrong place under one caller.
+
+**So before declaring any extraction complete, grep the id with NO syntactic anchor at all** —
+the bare quoted string, comment-stripped, across both repos — and account for every hit by hand.
+That is more hits than you want to read, and it is the only sweep that has not been wrong yet.
+
+The two corrections that produced this warning are written up in full in §0 (ERROR 1, the
+undercount; ERROR 2, the comment that counted as a site). **COMPETING_MEASURES goes first**, per
+§4 — and note that `CONTRIBUTION_RANKING` is a *worse* first candidate for having been changed
+recently, which is the opposite of the intuition that a fresh file is the safe one to move.
+
+---
+
 ## 0. HOW THE LIST WAS DERIVED, AND THE TWO TIMES THE DERIVATION WAS WRONG
 
 You asked me not to start from the runbook's six sites or the ADR's list. I did not. The universe
