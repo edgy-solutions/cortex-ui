@@ -137,4 +137,74 @@ I will say either way.
   COMPETING_MEASURES first when it opens, and the undercount banner is at the head of the
   inventory for whoever runs it.
 
+
+---
+
+## 7. THE GATE COMMIT BUILT, AND `:latest` HAS NOW MOVED FOUR TIMES
+
+    tag 1e31d925...  ->  sha256:62ae12c042be1cad15fa692ceca7a3e46a800d0ff135105ea4d6405f0c65aabd
+    :latest          ->  sha256:62ae12c042be1cad15... , the same, and a manifest list
+
+**That the image exists at all is the finding.** A workflow file that `js-yaml` parses can still be
+rejected by Actions; this one was not. The gate answered `code=true` on its own `.github/` diff and
+built, which is it working rather than a hole in it.
+
+So the full chain, and the architect's note updated by one:
+
+    38cda6c8   accepted for roll #2
+     -> 28f752f2   a6950b2  — accepted, then displaced
+     -> 455a4c90   e1e1fa4  — SESSIONS-ONLY, the fault, the last free one
+     -> 62ae12c0   1e31d92  — the gate itself; a real change, a legitimate move
+
+**Roll #2 is pinned by digest at `28f752f2` and has not moved.** Lane 1 should re-arm with
+`28f752f2` as ordered. Nothing behavioural differs across the four: build metadata, two sessions
+files, and the workflow change — none of which reaches `/app/dist`.
+
+---
+
+## 8. THE LIVE TEST, PREDICTED BEFORE IT RAN
+
+This report is the test. It is sessions-only and it is pushed on top of `1e31d92`, so the gate that
+judges it is the one just landed. **Stated in advance:**
+
+    EXPECT   no `:<sha>` tag in GHCR for this report's commit — a 404 that MEANS something
+    EXPECT   :latest still sha256:62ae12c0... , unmoved
+    EXPECT   check:transport, 1599 tests and tsc all RAN
+
+**If an image appears, the gate failed open** — the safe direction, and the finding goes here
+rather than being read as a non-event. doc-tools recorded that its own PR #7 exercised `code=true`
+only and that the skip branch had never run; cortex is ahead of that by one step, because the
+bench redproof in §4 drove `code=false` on real shas before anything was pushed. **What is still
+untested is the branch running in Actions, not the branch existing.**
+
+⚠ And the 404 that confirms a pass is the same 404 that means "not built yet." **The control
+separates them**, and it must be read in the same breath: `ea060f37e60... -> sha256:38cda6c8...`
+resolving proves the instrument, and `1e31d925... -> 62ae12c0` resolving proves builds are landing
+right now. Only then is an absent tag evidence of a skip.
+
+---
+
+## 9. AN UNORDERED FINDING, BECAUSE IT IS THE OTHER HALF OF THE SAME HAZARD
+
+doc-tools carries the consequence rule: once the gate is in, **not every sha on the default branch
+has an image**, so every runbook sentence of the form "pin the chart to the merge sha" becomes
+**pin to the last sha whose build actually pushed.** Their failure mode is that `values.yaml` uses
+`required` — which refuses an ABSENT tag but renders a never-built one perfectly, then fails at the
+kubelet with `ImagePullBackOff` minutes after Helm reports success.
+
+**Cortex is worse off than that, measured just now:**
+
+    helm/cortex-ui/values.yaml:20        tag: latest
+    grep -rn "required" helm/            (no hits — no guard of any kind)
+
+So cortex has neither the `required` refusal nor a sha default: **the chart's own default tracks
+the floating tag**, which is the exact hazard the registry-side gate just closed. The rule goes into
+cortex's `CLAUDE.md` as ordered, and it has to say *pin at all*, not just *pin carefully* — the
+chart will not stop anyone.
+
+**I am not changing the chart default.** That is a deploy-affecting edit, no order covers it, and
+`helm/` is deliberately outside the build allowlist precisely because values are what deploy.
+
+---
+
 Lane: ia-cortex-60/lane/cortex-60
