@@ -23,20 +23,39 @@
  *   force the producer to rename money to `level`/`target_level` — a borrowed name in the
  *   other direction — and would drop `secured` and `at_risk`.
  *
- * ── WHY `secured` AND `at_risk` ARE NOT DROPPABLE, even though they look droppable ──────────
+ * ── WHY `secured` AND `at_risk` ARE NOT DROPPABLE — THE PREDICTION LANDED ───────────────────
  *
- * MEASURED on the current seed: `committed == secured` on every row, and `at_risk == gap`
- * wherever it is non-zero. So today they carry no independent information, and an archetype
- * that discarded them would lose nothing OBSERVABLE.
+ * This block used to argue from a coincidence. It now argues from a measurement, and the two
+ * readings are kept side by side because the CHANGE is the evidence.
  *
- * They stay because `FundingCommitment.status` models `pending | committed | approved`. The
- * degeneracy is a property of THIS SEED, not of the model — one pending commitment and
- * `committed` diverges from `secured`, at which point the card must be able to say "this party
- * has pledged enough, but not all of it is firm." That is a different sentence from "this party
- * is short", and a room deciding who to chase needs the difference.
+ * WAS, on the seed this contract was written against: `committed == secured` on every row and
+ * `at_risk == gap` wherever it was non-zero. So the two fields carried no independent
+ * information, an archetype that discarded them would have lost nothing OBSERVABLE, and the
+ * case for keeping them was a prediction about `FundingCommitment.status` (`pending |
+ * committed | approved`) rather than anything anyone could see.
+ *
+ * IS, measured on the fleet's own post-projector output — ia-91's `fin_funding_status` capture
+ * at fleet c0005142, 18 rows, in `sessions/2026-09-19-payload-finance-funding-status.json`:
+ *
+ *     committed == secured   1 / 18      (was: every row)
+ *     at_risk   == gap       1 / 18      (was: wherever non-zero)
+ *
+ * THE DEGENERACY WAS A PROPERTY OF THAT SEED, exactly as predicted, and real data broke it.
+ * A row now reads `committed 1,000,000 / secured 0` — "this party has pledged enough, but none
+ * of it is firm", which is a different sentence from "this party is short", and the card can
+ * say it only because the fields survived.
+ *
+ * ⚠ KEEP READING THE NEW NUMBERS THE SAME WAY. The same capture has FOUR pairs that are equal
+ * on all 18 rows — `committed == obligated`, `secured == expended`, `authorized == required`,
+ * `shortfall == gap` — and cortex reads the first of each pair and none of the seconds. That is
+ * this block's original situation repeating on different fields: today they carry no
+ * independent information, and no test on either side can tell which name the producer MEANS.
+ * The payload that would decide it has been asked for
+ * (`sessions/2026-09-23-ask-to-91-the-payload-that-makes-the-funding-synonyms-falsifiable.md`).
  *
  * Dropping a field because today's data makes it redundant is the evacuated-population error:
- * the check passes over a population that happens to be uniform.
+ * the check passes over a population that happens to be uniform. That error was avoided here
+ * once by argument; it is now avoided by evidence.
  */
 
 /** What a cell's verdict can be. Structural — no money words, no domain vocabulary. */
