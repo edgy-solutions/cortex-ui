@@ -245,6 +245,18 @@ Against the three predictions in §8, in order:
     ea060f37e6...  -> 200   the instrument works at all
     1e31d925...    -> 200   built SIX MINUTES EARLIER — builds are landing right now
 
+**And the 404 held for 780 seconds, not for one sample.** A separate watcher polled `f43f95f`
+every 30s for thirteen minutes: `appeared=no`, `http=404` throughout, with both controls still
+resolving at the end. A single miss and a sustained absence are different claims, and the build
+that did land took 210s — so the window covered three of them.
+
+> Read the watcher's last line carefully: it reports `:latest` as `sha256:567b96e7...`, NOT the
+> `62ae12c0` of §10. **That is not a contradiction of §10 and not a late failure of the gate.** The
+> watcher was still running when `fb7f310` — the `CLAUDE.md` commit, root-level, off-allowlist —
+> built and legitimately moved the tag (§12). §10's reading was true when taken; §12 records the
+> move. Stated here because a reader meeting the two numbers cold would be right to suspect one of
+> them.
+
 Without the second, "no image" and "GHCR is not answering me" are the same reading. And the step
 list is the stronger instrument than either: **an absent tag cannot tell a skip from a run that
 never started**, while `skipped` next to `success` says which. Cost, incidentally: **113s against
