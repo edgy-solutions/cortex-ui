@@ -49,6 +49,41 @@ node tests/hop3/<file>.mts        # hop3 proofs, by hand
 ```
 CI: `.github/workflows/build.yml`, `helm-release.yml`.
 
+## ⛔ Pinning the image — NOT every sha on master has one
+
+Since `1e31d92` (2026-09-23) a **sessions-only or docs-only push builds no image.** A `changes`
+job diffs the push three-dot against its base and, if every changed path matches `^sessions/` or
+`^docs/`, the six image-build steps skip. **The checks still run** — `check:transport`, the full
+suite and `tsc` are deliberately outside the gate, because this repo has already paid once for a
+seal that silently stopped running in CI.
+
+So the rule doc-tools wrote applies here too, and it is the consequence, not the feature:
+
+> **Pin to the last sha whose build actually PUSHED — not to whatever landed most recently.**
+> Confirm it from GHCR or the run, never from the commit log.
+
+**Cortex is more exposed to this than doc-tools is, measured 2026-09-23.** doc-tools guards
+`values.yaml` with `required`, which refuses an ABSENT tag. This repo has **no such guard** —
+`grep -rn required helm/` is empty — and `helm/cortex-ui/values.yaml:20` defaults to
+**`tag: latest`**. So the chart will not stop anyone: a never-built tag renders perfectly and
+fails minutes later at the kubelet with `ImagePullBackOff`, on a release Helm already called a
+success. Here it is worse still, since the default silently tracks the floating tag.
+
+**`helm/` must never be added to the allowlist.** A values file is not code, it is what *deploys*,
+and it carries the image pin. Same reason doc-tools keeps `charts/` off its list.
+
+Checking whether a sha has an image (the repo is public, so no `gh` is needed):
+
+```
+# did the run even build?  6 skipped image steps == gated, not broken
+curl -s "https://api.github.com/repos/edgy-solutions/cortex-ui/actions/runs?head_sha=<FULL_SHA>"
+curl -s ".../actions/runs/<RUN_ID>/jobs"
+```
+
+⚠ **A 404 from GHCR now has a FOURTH meaning: deliberately skipped.** It reads identically to
+"not built yet", "no anonymous access", and "tag spelled short". Only a control that resolves —
+plus the run's step list — separates them.
+
 ## NEVER READ whole — context hazards
 
 | File / dir | Why | Cheap inspection |
