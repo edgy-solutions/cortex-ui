@@ -1,0 +1,444 @@
+{
+  "_what_this_is": "The REAL post-projector payload for one finance walk-sheet prompt, captured through the census runner's own fire path (same frontend_id, persona and domains the browser sends). Read `projected` first: that is what the screen was handed.",
+  "prompt": "show me CPI and SPI for NP-MERIDIAN",
+  "row_id": "finance-performance-indices",
+  "asked_as": {
+    "user": "alice",
+    "persona": "PROGRAM_FINANCE_ANALYST",
+    "domains": [
+      "PROGRAM_FINANCE"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "c0005142",
+  "repo_sha": "5e0534c",
+  "census_verdict": "FAIL",
+  "census_why": [
+    "disposition 'slot_required', row accepts ['drawn']",
+    "verb ['UNKNOWN', 'unknown'] lacks 'fin_performance_indices'",
+    "archetype ['ELICITATION'] lacks 'MULTI_SERIES'",
+    "fell back: no_verb_classified"
+  ],
+  "routing": {
+    "route_status": "no_match",
+    "fallback": true,
+    "fallback_reason": "no_verb_classified",
+    "action": {
+      "label": "General search",
+      "iri": "UNKNOWN",
+      "confidence": 0.65,
+      "classify_called": true,
+      "candidate_count": 8,
+      "owner_persona": null
+    },
+    "handled_by": {
+      "engine_name": "Engine A (generalist fallback)",
+      "provider": "engine_a_fallback",
+      "endpoint_url": null
+    }
+  },
+  "projected": [
+    {
+      "archetype": "ELICITATION",
+      "row_counts": {
+        "options": 7
+      },
+      "payload": {
+        "archetype": "ELICITATION",
+        "message": "No registered capability confidently fit that question. These were considered: mesh:finPerformanceIndices, mesh:finEacComparison, mesh:finBurnRate, mesh:finProgramBrief, mesh:finFundingStatus, mesh:finEacCalculation, mesh:finVarianceDrivers. Naming one, or rephrasing toward it, will route.",
+        "option_source": "candidates",
+        "options": [
+          {
+            "label": "mesh:finPerformanceIndices",
+            "value": "mesh:finPerformanceIndices"
+          },
+          {
+            "label": "mesh:finEacComparison",
+            "value": "mesh:finEacComparison"
+          },
+          {
+            "label": "mesh:finBurnRate",
+            "value": "mesh:finBurnRate"
+          },
+          {
+            "label": "mesh:finProgramBrief",
+            "value": "mesh:finProgramBrief"
+          },
+          {
+            "label": "mesh:finFundingStatus",
+            "value": "mesh:finFundingStatus"
+          },
+          {
+            "label": "mesh:finEacCalculation",
+            "value": "mesh:finEacCalculation"
+          },
+          {
+            "label": "mesh:finVarianceDrivers",
+            "value": "mesh:finVarianceDrivers"
+          }
+        ],
+        "reason": "no_verb_classified",
+        "slot": "verb",
+        "source_persona": "PROGRAM_FINANCE_ANALYST"
+      }
+    }
+  ],
+  "presentation_provenance": null,
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "NP-MERIDIAN",
+          "CPI",
+          "SPI"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Program",
+          "uri": "http://invincible-agent/fin#Program",
+          "confidence": 0.97,
+          "instance_resolved": true,
+          "instance_identifier": "NP-MERIDIAN",
+          "instance_label": "Notional Program Meridian"
+        },
+        "action": {
+          "label": "General search",
+          "iri": "UNKNOWN",
+          "confidence": 0.65,
+          "classify_called": true,
+          "candidate_count": 8,
+          "owner_persona": null
+        },
+        "handled_by": {
+          "engine_name": "Engine A (generalist fallback)",
+          "provider": "engine_a_fallback",
+          "endpoint_url": null
+        },
+        "route_status": "no_match",
+        "fallback": true,
+        "acting": {
+          "persona": "PROGRAM_FINANCE_ANALYST",
+          "domains": [
+            "PROGRAM_FINANCE"
+          ]
+        },
+        "fallback_reason": "no_verb_classified",
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#ControlAccount",
+            "label": "Control Account",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingLine",
+            "label": "Funding Line",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceMeasurementBaseline",
+            "label": "Performance Measurement Baseline",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "description": ""
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "description": ""
+          }
+        ],
+        "excluded": [
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#EarnedValueTechnique",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#OBSElement",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WBSElement",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WorkPackage",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "output_class",
+            "via_verb": "mesh:finBurnRate"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finBurnRate",
+            "hops": 0,
+            "score": 0.3881469964981079
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finPerformanceIndices",
+            "hops": 0,
+            "score": 0.8194018006324768
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacComparison",
+            "hops": 0,
+            "score": 0.3992922902107239
+          },
+          {
+            "uri": "http://invincible-agent/mesh#StatefulSupportResponse",
+            "label": "Stateful Support Response",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finProgramBrief",
+            "hops": 0,
+            "score": 0.35605403780937195
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finFundingStatus",
+            "hops": 0,
+            "score": 0.34693077206611633
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceDrivers",
+            "hops": 0,
+            "score": 0.18803861737251282
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacCalculation",
+            "hops": 0,
+            "score": 0.2734517753124237
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceAnalysis",
+            "hops": 0
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "archetype": "ELICITATION",
+            "message": "No registered capability confidently fit that question. These were considered: mesh:finPerformanceIndices, mesh:finEacComparison, mesh:finBurnRate, mesh:finProgramBrief, mesh:finFundingStatus, mesh:finEacCalculation, mesh:finVarianceDrivers. Naming one, or rephrasing toward it, will route.",
+            "option_source": "candidates",
+            "options": [
+              {
+                "label": "mesh:finPerformanceIndices",
+                "value": "mesh:finPerformanceIndices"
+              },
+              {
+                "label": "mesh:finEacComparison",
+                "value": "mesh:finEacComparison"
+              },
+              {
+                "label": "mesh:finBurnRate",
+                "value": "mesh:finBurnRate"
+              },
+              {
+                "label": "mesh:finProgramBrief",
+                "value": "mesh:finProgramBrief"
+              },
+              {
+                "label": "mesh:finFundingStatus",
+                "value": "mesh:finFundingStatus"
+              },
+              {
+                "label": "mesh:finEacCalculation",
+                "value": "mesh:finEacCalculation"
+              },
+              {
+                "label": "mesh:finVarianceDrivers",
+                "value": "mesh:finVarianceDrivers"
+              }
+            ],
+            "reason": "no_verb_classified",
+            "slot": "verb",
+            "source_persona": "PROGRAM_FINANCE_ANALYST"
+          }
+        ]
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}

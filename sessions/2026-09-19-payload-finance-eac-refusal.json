@@ -1,0 +1,387 @@
+{
+  "_what_this_is": "The REAL post-projector payload for one finance walk-sheet prompt, captured through the census runner's own fire path (same frontend_id, persona and domains the browser sends). Read `projected` first: that is what the screen was handed.",
+  "prompt": "what is the estimate at completion for NP-MERIDIAN",
+  "row_id": "finance-eac-refusal",
+  "asked_as": {
+    "user": "alice",
+    "persona": "PROGRAM_FINANCE_ANALYST",
+    "domains": [
+      "PROGRAM_FINANCE"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "c0005142",
+  "repo_sha": "5e0534c",
+  "census_verdict": "PASS",
+  "census_why": [],
+  "routing": {
+    "route_status": "matched",
+    "fallback": false,
+    "fallback_reason": null,
+    "action": {
+      "label": "fin Eac Calculation",
+      "iri": "mesh:finEacCalculation",
+      "confidence": 0.93,
+      "classify_called": true,
+      "candidate_count": 8,
+      "owner_persona": "PROGRAM_FINANCE_ANALYST"
+    },
+    "handled_by": {
+      "engine_name": "iagent-engine-fin",
+      "provider": "iagent-engine-fin",
+      "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_eac_calculation"
+    }
+  },
+  "projected": [
+    {
+      "archetype": "ELICITATION",
+      "row_counts": {
+        "options": 3
+      },
+      "payload": {
+        "accepted_slots": {
+          "program_id": "NP-MERIDIAN"
+        },
+        "archetype": "ELICITATION",
+        "disposition": "ask",
+        "found": "",
+        "free_text_reason": null,
+        "message": "Which method did you mean? Options: CPI, CPI_SPI, REMAINING_AT_BUDGET.",
+        "option_source": "declaration",
+        "options": [
+          {
+            "label": "CPI",
+            "value": "CPI"
+          },
+          {
+            "label": "CPI_SPI",
+            "value": "CPI_SPI"
+          },
+          {
+            "label": "REMAINING_AT_BUDGET",
+            "value": "REMAINING_AT_BUDGET"
+          }
+        ],
+        "reason": "slot-unfilled",
+        "slot": "method",
+        "source_persona": "PROGRAM_FINANCE_ANALYST",
+        "spoken": "",
+        "sub_query": "what is the estimate at completion for NP-MERIDIAN",
+        "total_count": 0,
+        "truncated_from": 0,
+        "verb_iri": "mesh:finEacCalculation"
+      }
+    }
+  ],
+  "presentation_provenance": {
+    "archetype": "ELICITATION",
+    "candidates_considered": 1,
+    "candidates_satisfied": 1,
+    "frontend_id": "cortex-ui-desktop",
+    "presentation_source": "registered",
+    "refusals": [],
+    "registration_version": "graph",
+    "selection_basis": "output_uri+payload"
+  },
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "NP-MERIDIAN",
+          "Estimate at Completion (EAC)"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Program",
+          "uri": "http://invincible-agent/fin#Program",
+          "confidence": 0.95,
+          "instance_resolved": true,
+          "instance_identifier": "NP-MERIDIAN",
+          "instance_label": "Notional Program Meridian"
+        },
+        "action": {
+          "label": "fin Eac Calculation",
+          "iri": "mesh:finEacCalculation",
+          "confidence": 0.93,
+          "classify_called": true,
+          "candidate_count": 8,
+          "owner_persona": "PROGRAM_FINANCE_ANALYST"
+        },
+        "handled_by": {
+          "engine_name": "iagent-engine-fin",
+          "provider": "iagent-engine-fin",
+          "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_eac_calculation"
+        },
+        "route_status": "matched",
+        "fallback": false,
+        "acting": {
+          "persona": "PROGRAM_FINANCE_ANALYST",
+          "domains": [
+            "PROGRAM_FINANCE"
+          ]
+        },
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "description": "The whole scope of effort under one contract or one authorization, measured as a single performance whole. Questions asking how the effort as a whole is performing, how much of the authorized money remains, what the total forecast at completion is, or where the effort stands against its time-phased plan target this class. It is the widest finance subject: an answer scoped to it rolls up everything reported beneath it.",
+            "score": 0.30000001192092896
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingLine",
+            "label": "Funding Line",
+            "description": "An appropriation of money with its own authorization ceiling, the portion of it placed under obligation, and the portion actually expended. Questions about how much money is left to obligate, whether authorization covers what has been committed, or where the effort will run out of money before it runs out of work target this class. Its three quantities are a LADDER - each is a subset of the one above it - which is what distinguishes it from a requirement compared against a supply.",
+            "score": 0.1956513673067093
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceMeasurementBaseline",
+            "label": "Performance Measurement Baseline",
+            "description": "The time-phased plan against which performance is measured: budgeted cost for work scheduled spread over periods, together with the claimed and actual figures reported against it period by period. IT CARRIES THE ACTUAL COST INCURRED IN EACH PERIOD, so the rate at which cost is being incurred - how fast money is going out, and whether that is faster or slower than the plan phased for it - is a property of this class. Questions about the planned spread of budget over time, about how much was planned versus claimed versus paid in a period, about the pace of expenditure against plan, or about how the phasing has shifted target this class. What is measured here is COST INCURRED AGAINST A PHASED PLAN, which is a different thing from the headroom remaining in an appropriation: this compares spending to a schedule, not a drawn amount to an authorized ceiling. It is the SERIES, not a single figure - anything asked over time or by month means this.",
+            "score": 0.0
+          }
+        ],
+        "excluded": [
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WBSElement",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#EarnedValueTechnique",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "role": "output_class",
+            "via_verb": "mesh:finEacCalculation"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finBurnRate",
+            "hops": 0,
+            "score": 0.624204158782959
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finPerformanceIndices",
+            "hops": 0,
+            "score": 0.4248353838920593
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacComparison",
+            "hops": 0,
+            "score": 0.6001970171928406
+          },
+          {
+            "uri": "http://invincible-agent/mesh#StatefulSupportResponse",
+            "label": "Stateful Support Response",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finProgramBrief",
+            "hops": 0,
+            "score": 0.33409491181373596
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finFundingStatus",
+            "hops": 0,
+            "score": 0.44274306297302246
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceDrivers",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceAnalysis",
+            "hops": 0,
+            "score": 0.33594897389411926
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "accepted_slots": {
+              "program_id": "NP-MERIDIAN"
+            },
+            "archetype": "ELICITATION",
+            "disposition": "ask",
+            "found": "",
+            "free_text_reason": null,
+            "message": "Which method did you mean? Options: CPI, CPI_SPI, REMAINING_AT_BUDGET.",
+            "option_source": "declaration",
+            "options": [
+              {
+                "label": "CPI",
+                "value": "CPI"
+              },
+              {
+                "label": "CPI_SPI",
+                "value": "CPI_SPI"
+              },
+              {
+                "label": "REMAINING_AT_BUDGET",
+                "value": "REMAINING_AT_BUDGET"
+              }
+            ],
+            "reason": "slot-unfilled",
+            "slot": "method",
+            "source_persona": "PROGRAM_FINANCE_ANALYST",
+            "spoken": "",
+            "sub_query": "what is the estimate at completion for NP-MERIDIAN",
+            "total_count": 0,
+            "truncated_from": 0,
+            "verb_iri": "mesh:finEacCalculation"
+          }
+        ],
+        "presentation_provenance": {
+          "archetype": "ELICITATION",
+          "candidates_considered": 1,
+          "candidates_satisfied": 1,
+          "frontend_id": "cortex-ui-desktop",
+          "presentation_source": "registered",
+          "refusals": [],
+          "registration_version": "graph",
+          "selection_basis": "output_uri+payload"
+        }
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}

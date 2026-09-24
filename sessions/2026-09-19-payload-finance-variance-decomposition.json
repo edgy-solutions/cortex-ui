@@ -1,0 +1,659 @@
+{
+  "_what_this_is": "The REAL post-projector payload for one finance walk-sheet prompt, captured through the census runner's own fire path (same frontend_id, persona and domains the browser sends). Read `projected` first: that is what the screen was handed.",
+  "prompt": "why are we over on NP-MERIDIAN",
+  "row_id": "finance-variance-decomposition",
+  "asked_as": {
+    "user": "alice",
+    "persona": "PROGRAM_FINANCE_ANALYST",
+    "domains": [
+      "PROGRAM_FINANCE"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "c0005142",
+  "repo_sha": "5e0534c",
+  "census_verdict": "FAIL",
+  "census_why": [
+    "0 row(s) under None, floor is 1"
+  ],
+  "routing": {
+    "route_status": "matched",
+    "fallback": false,
+    "fallback_reason": null,
+    "action": {
+      "label": "fin Variance Analysis",
+      "iri": "mesh:finVarianceAnalysis",
+      "confidence": 0.92,
+      "classify_called": true,
+      "candidate_count": 8,
+      "owner_persona": "PROGRAM_FINANCE_ANALYST"
+    },
+    "handled_by": {
+      "engine_name": "iagent-engine-fin",
+      "provider": "iagent-engine-fin",
+      "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_variance_analysis"
+    }
+  },
+  "projected": [
+    {
+      "archetype": "VARIANCE_TREE",
+      "row_counts": {
+        "rows": 1
+      },
+      "payload": {
+        "archetype": "VARIANCE_TREE",
+        "rows": [
+          {
+            "acwp": 7430000.0,
+            "acwp_exact": "7430000.00",
+            "bac": 12000000,
+            "bcwp": 6300000.0,
+            "bcwp_exact": "6300000.00",
+            "bcws": 6900000.0,
+            "bcws_exact": "6900000.00",
+            "contributors": [
+              {
+                "acwp": 1080000.0,
+                "acwp_exact": "1080000.00",
+                "bac": 2000000,
+                "bcwp": 1200000.0,
+                "bcwp_exact": "1200000.00",
+                "bcws": 1200000.0,
+                "bcws_exact": "1200000.00",
+                "contributors": [
+                  {
+                    "acwp": 480000.0,
+                    "acwp_exact": "480000.00",
+                    "bac": 800000,
+                    "bcwp": 600000.0,
+                    "bcwp_exact": "600000.00",
+                    "bcws": 600000.0,
+                    "bcws_exact": "600000.00",
+                    "entity_id": "WP-1102",
+                    "entity_name": "Architecture Definition",
+                    "favourable": true,
+                    "level": "work_package",
+                    "period_count": 12,
+                    "share_of_root": -0.10619469026548672,
+                    "share_of_root_exact": "-0.1061946902654867256637168142",
+                    "stop_reason": "leaf",
+                    "technique": "PERCENT_COMPLETE",
+                    "value_unit": "USD",
+                    "variance": 120000.0,
+                    "variance_exact": "120000.00",
+                    "variance_kind": "cost"
+                  }
+                ],
+                "entity_id": "1.1",
+                "entity_name": "Systems Engineering",
+                "favourable": true,
+                "level": "control_account",
+                "obs_id": "OBS-ENG",
+                "period_count": 12,
+                "share_of_root": -0.10619469026548672,
+                "share_of_root_exact": "-0.1061946902654867256637168142",
+                "stop_reason": "decomposed",
+                "value_unit": "USD",
+                "variance": 120000.0,
+                "variance_exact": "120000.00",
+                "variance_kind": "cost",
+                "wbs_id": "1"
+              },
+              {
+                "acwp": 2600000.0,
+                "acwp_exact": "2600000.00",
+                "bac": 3000000,
+                "bcwp": 1500000.0,
+                "bcwp_exact": "1500000.00",
+                "bcws": 1800000.0,
+                "bcws_exact": "1800000.00",
+                "contributors": [
+                  {
+                    "acwp": 2300000.0,
+                    "acwp_exact": "2300000.00",
+                    "bac": 1800000,
+                    "bcwp": 1200000.0,
+                    "bcwp_exact": "1200000.00",
+                    "bcws": 1200000.0,
+                    "bcws_exact": "1200000.00",
+                    "entity_id": "WP-3101",
+                    "entity_name": "Integration Lab Standup",
+                    "favourable": false,
+                    "level": "work_package",
+                    "period_count": 12,
+                    "share_of_root": 0.9734513274336283,
+                    "share_of_root_exact": "0.9734513274336283185840707965",
+                    "stop_reason": "leaf",
+                    "technique": "MILESTONE",
+                    "value_unit": "USD",
+                    "variance": -1100000.0,
+                    "variance_exact": "-1100000.00",
+                    "variance_kind": "cost"
+                  }
+                ],
+                "entity_id": "3.1",
+                "entity_name": "Integration and Test",
+                "favourable": false,
+                "level": "control_account",
+                "obs_id": "OBS-TEST",
+                "period_count": 12,
+                "share_of_root": 0.9734513274336283,
+                "share_of_root_exact": "0.9734513274336283185840707965",
+                "stop_reason": "decomposed",
+                "value_unit": "USD",
+                "variance": -1100000.0,
+                "variance_exact": "-1100000.00",
+                "variance_kind": "cost",
+                "wbs_id": "3"
+              },
+              {
+                "acwp": 900000.0,
+                "acwp_exact": "900000.00",
+                "bac": 1500000,
+                "bcwp": 750000.0,
+                "bcwp_exact": "750000.00",
+                "bcws": 750000.0,
+                "bcws_exact": "750000.00",
+                "contributors": [
+                  {
+                    "acwp": 600000.0,
+                    "acwp_exact": "600000.00",
+                    "bac": 900000,
+                    "bcwp": 450000.0,
+                    "bcwp_exact": "450000.00",
+                    "bcws": 450000.0,
+                    "bcws_exact": "450000.00",
+                    "entity_id": "WP-5101",
+                    "entity_name": "Spares Provisioning",
+                    "favourable": false,
+                    "level": "work_package",
+                    "period_count": 12,
+                    "share_of_root": 0.13274336283185842,
+                    "share_of_root_exact": "0.1327433628318584070796460177",
+                    "stop_reason": "leaf",
+                    "technique": "APPORTIONED",
+                    "value_unit": "USD",
+                    "variance": -150000.0,
+                    "variance_exact": "-150000.00",
+                    "variance_kind": "cost"
+                  }
+                ],
+                "entity_id": "5.1",
+                "entity_name": "Logistics Support",
+                "favourable": false,
+                "level": "control_account",
+                "obs_id": "OBS-LOG",
+                "period_count": 12,
+                "share_of_root": 0.13274336283185842,
+                "share_of_root_exact": "0.1327433628318584070796460177",
+                "stop_reason": "decomposed",
+                "value_unit": "USD",
+                "variance": -150000.0,
+                "variance_exact": "-150000.00",
+                "variance_kind": "cost",
+                "wbs_id": "5"
+              }
+            ],
+            "entity_id": "NP-MERIDIAN",
+            "entity_name": "Notional Program Meridian",
+            "favourable": false,
+            "level": "program",
+            "period_count": 12,
+            "share_of_root": 1.0,
+            "share_of_root_exact": "1",
+            "stop_reason": "decomposed",
+            "value_unit": "USD",
+            "variance": -1130000.0,
+            "variance_exact": "-1130000.00",
+            "variance_kind": "cost"
+          }
+        ],
+        "source_persona": "PROGRAM_FINANCE_ANALYST",
+        "subject_concept": null,
+        "value_label": "Variance",
+        "value_unit": "USD",
+        "verdict": "Integration and Test accounts for 97% of the variance"
+      }
+    }
+  ],
+  "presentation_provenance": {
+    "archetype": "VARIANCE_TREE",
+    "candidates_considered": 1,
+    "candidates_satisfied": 1,
+    "frontend_id": "cortex-ui-desktop",
+    "presentation_source": "registered",
+    "refusals": [],
+    "registration_version": "graph",
+    "selection_basis": "output_uri+payload"
+  },
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "NP-MERIDIAN"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Program",
+          "uri": "http://invincible-agent/fin#Program",
+          "confidence": 0.96,
+          "instance_resolved": true,
+          "instance_identifier": "NP-MERIDIAN",
+          "instance_label": "Notional Program Meridian"
+        },
+        "action": {
+          "label": "fin Variance Analysis",
+          "iri": "mesh:finVarianceAnalysis",
+          "confidence": 0.92,
+          "classify_called": true,
+          "candidate_count": 8,
+          "owner_persona": "PROGRAM_FINANCE_ANALYST"
+        },
+        "handled_by": {
+          "engine_name": "iagent-engine-fin",
+          "provider": "iagent-engine-fin",
+          "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_variance_analysis"
+        },
+        "route_status": "matched",
+        "fallback": false,
+        "acting": {
+          "persona": "PROGRAM_FINANCE_ANALYST",
+          "domains": [
+            "PROGRAM_FINANCE"
+          ]
+        },
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/fin#PerformanceMeasurementBaseline",
+            "label": "Performance Measurement Baseline",
+            "description": "The time-phased plan against which performance is measured: budgeted cost for work scheduled spread over periods, together with the claimed and actual figures reported against it period by period. IT CARRIES THE ACTUAL COST INCURRED IN EACH PERIOD, so the rate at which cost is being incurred - how fast money is going out, and whether that is faster or slower than the plan phased for it - is a property of this class. Questions about the planned spread of budget over time, about how much was planned versus claimed versus paid in a period, about the pace of expenditure against plan, or about how the phasing has shifted target this class. What is measured here is COST INCURRED AGAINST A PHASED PLAN, which is a different thing from the headroom remaining in an appropriation: this compares spending to a schedule, not a drawn amount to an authorized ceiling. It is the SERIES, not a single figure - anything asked over time or by month means this.",
+            "score": 0.30000001192092896
+          }
+        ],
+        "excluded": [
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WorkPackage",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#EarnedValueTechnique",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "role": "output_class",
+            "via_verb": "mesh:finVarianceAnalysis"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finBurnRate",
+            "hops": 0,
+            "score": 0.7463263869285583
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finPerformanceIndices",
+            "hops": 0,
+            "score": 0.6451783180236816
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacComparison",
+            "hops": 0,
+            "score": 0.7212901711463928
+          },
+          {
+            "uri": "http://invincible-agent/mesh#StatefulSupportResponse",
+            "label": "Stateful Support Response",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finProgramBrief",
+            "hops": 0,
+            "score": 0.4758012294769287
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finFundingStatus",
+            "hops": 0,
+            "score": 0.7849156856536865
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceDrivers",
+            "hops": 0,
+            "score": 0.55314701795578
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacCalculation",
+            "hops": 0,
+            "score": 0.7050387859344482
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "archetype": "VARIANCE_TREE",
+            "rows": [
+              {
+                "acwp": 7430000.0,
+                "acwp_exact": "7430000.00",
+                "bac": 12000000,
+                "bcwp": 6300000.0,
+                "bcwp_exact": "6300000.00",
+                "bcws": 6900000.0,
+                "bcws_exact": "6900000.00",
+                "contributors": [
+                  {
+                    "acwp": 1080000.0,
+                    "acwp_exact": "1080000.00",
+                    "bac": 2000000,
+                    "bcwp": 1200000.0,
+                    "bcwp_exact": "1200000.00",
+                    "bcws": 1200000.0,
+                    "bcws_exact": "1200000.00",
+                    "contributors": [
+                      {
+                        "acwp": 480000.0,
+                        "acwp_exact": "480000.00",
+                        "bac": 800000,
+                        "bcwp": 600000.0,
+                        "bcwp_exact": "600000.00",
+                        "bcws": 600000.0,
+                        "bcws_exact": "600000.00",
+                        "entity_id": "WP-1102",
+                        "entity_name": "Architecture Definition",
+                        "favourable": true,
+                        "level": "work_package",
+                        "period_count": 12,
+                        "share_of_root": -0.10619469026548672,
+                        "share_of_root_exact": "-0.1061946902654867256637168142",
+                        "stop_reason": "leaf",
+                        "technique": "PERCENT_COMPLETE",
+                        "value_unit": "USD",
+                        "variance": 120000.0,
+                        "variance_exact": "120000.00",
+                        "variance_kind": "cost"
+                      }
+                    ],
+                    "entity_id": "1.1",
+                    "entity_name": "Systems Engineering",
+                    "favourable": true,
+                    "level": "control_account",
+                    "obs_id": "OBS-ENG",
+                    "period_count": 12,
+                    "share_of_root": -0.10619469026548672,
+                    "share_of_root_exact": "-0.1061946902654867256637168142",
+                    "stop_reason": "decomposed",
+                    "value_unit": "USD",
+                    "variance": 120000.0,
+                    "variance_exact": "120000.00",
+                    "variance_kind": "cost",
+                    "wbs_id": "1"
+                  },
+                  {
+                    "acwp": 2600000.0,
+                    "acwp_exact": "2600000.00",
+                    "bac": 3000000,
+                    "bcwp": 1500000.0,
+                    "bcwp_exact": "1500000.00",
+                    "bcws": 1800000.0,
+                    "bcws_exact": "1800000.00",
+                    "contributors": [
+                      {
+                        "acwp": 2300000.0,
+                        "acwp_exact": "2300000.00",
+                        "bac": 1800000,
+                        "bcwp": 1200000.0,
+                        "bcwp_exact": "1200000.00",
+                        "bcws": 1200000.0,
+                        "bcws_exact": "1200000.00",
+                        "entity_id": "WP-3101",
+                        "entity_name": "Integration Lab Standup",
+                        "favourable": false,
+                        "level": "work_package",
+                        "period_count": 12,
+                        "share_of_root": 0.9734513274336283,
+                        "share_of_root_exact": "0.9734513274336283185840707965",
+                        "stop_reason": "leaf",
+                        "technique": "MILESTONE",
+                        "value_unit": "USD",
+                        "variance": -1100000.0,
+                        "variance_exact": "-1100000.00",
+                        "variance_kind": "cost"
+                      }
+                    ],
+                    "entity_id": "3.1",
+                    "entity_name": "Integration and Test",
+                    "favourable": false,
+                    "level": "control_account",
+                    "obs_id": "OBS-TEST",
+                    "period_count": 12,
+                    "share_of_root": 0.9734513274336283,
+                    "share_of_root_exact": "0.9734513274336283185840707965",
+                    "stop_reason": "decomposed",
+                    "value_unit": "USD",
+                    "variance": -1100000.0,
+                    "variance_exact": "-1100000.00",
+                    "variance_kind": "cost",
+                    "wbs_id": "3"
+                  },
+                  {
+                    "acwp": 900000.0,
+                    "acwp_exact": "900000.00",
+                    "bac": 1500000,
+                    "bcwp": 750000.0,
+                    "bcwp_exact": "750000.00",
+                    "bcws": 750000.0,
+                    "bcws_exact": "750000.00",
+                    "contributors": [
+                      {
+                        "acwp": 600000.0,
+                        "acwp_exact": "600000.00",
+                        "bac": 900000,
+                        "bcwp": 450000.0,
+                        "bcwp_exact": "450000.00",
+                        "bcws": 450000.0,
+                        "bcws_exact": "450000.00",
+                        "entity_id": "WP-5101",
+                        "entity_name": "Spares Provisioning",
+                        "favourable": false,
+                        "level": "work_package",
+                        "period_count": 12,
+                        "share_of_root": 0.13274336283185842,
+                        "share_of_root_exact": "0.1327433628318584070796460177",
+                        "stop_reason": "leaf",
+                        "technique": "APPORTIONED",
+                        "value_unit": "USD",
+                        "variance": -150000.0,
+                        "variance_exact": "-150000.00",
+                        "variance_kind": "cost"
+                      }
+                    ],
+                    "entity_id": "5.1",
+                    "entity_name": "Logistics Support",
+                    "favourable": false,
+                    "level": "control_account",
+                    "obs_id": "OBS-LOG",
+                    "period_count": 12,
+                    "share_of_root": 0.13274336283185842,
+                    "share_of_root_exact": "0.1327433628318584070796460177",
+                    "stop_reason": "decomposed",
+                    "value_unit": "USD",
+                    "variance": -150000.0,
+                    "variance_exact": "-150000.00",
+                    "variance_kind": "cost",
+                    "wbs_id": "5"
+                  }
+                ],
+                "entity_id": "NP-MERIDIAN",
+                "entity_name": "Notional Program Meridian",
+                "favourable": false,
+                "level": "program",
+                "period_count": 12,
+                "share_of_root": 1.0,
+                "share_of_root_exact": "1",
+                "stop_reason": "decomposed",
+                "value_unit": "USD",
+                "variance": -1130000.0,
+                "variance_exact": "-1130000.00",
+                "variance_kind": "cost"
+              }
+            ],
+            "source_persona": "PROGRAM_FINANCE_ANALYST",
+            "subject_concept": null,
+            "value_label": "Variance",
+            "value_unit": "USD",
+            "verdict": "Integration and Test accounts for 97% of the variance"
+          }
+        ],
+        "presentation_provenance": {
+          "archetype": "VARIANCE_TREE",
+          "candidates_considered": 1,
+          "candidates_satisfied": 1,
+          "frontend_id": "cortex-ui-desktop",
+          "presentation_source": "registered",
+          "refusals": [],
+          "registration_version": "graph",
+          "selection_basis": "output_uri+payload"
+        }
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}

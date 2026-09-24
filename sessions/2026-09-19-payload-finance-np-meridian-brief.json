@@ -1,0 +1,778 @@
+{
+  "_what_this_is": "The REAL post-projector payload for one finance walk-sheet prompt, captured through the census runner's own fire path (same frontend_id, persona and domains the browser sends). Read `projected` first: that is what the screen was handed.",
+  "prompt": "give me the program brief for NP-MERIDIAN",
+  "row_id": "finance-np-meridian-brief",
+  "asked_as": {
+    "user": "alice",
+    "persona": "PROGRAM_FINANCE_ANALYST",
+    "domains": [
+      "PROGRAM_FINANCE"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "c0005142",
+  "repo_sha": "5e0534c",
+  "census_verdict": "PASS",
+  "census_why": [],
+  "routing": {
+    "route_status": "matched",
+    "fallback": false,
+    "fallback_reason": null,
+    "action": {
+      "label": "fin Program Brief",
+      "iri": "mesh:finProgramBrief",
+      "confidence": 0.96,
+      "classify_called": true,
+      "candidate_count": 8,
+      "owner_persona": "PROGRAM_FINANCE_ANALYST"
+    },
+    "handled_by": {
+      "engine_name": "iagent-engine-lg",
+      "provider": "iagent-engine-lg",
+      "endpoint_url": "http://iagent-engine-lg:8098/graphs/fin_program_brief"
+    }
+  },
+  "projected": [
+    {
+      "archetype": "KNOWLEDGE_DOCUMENT",
+      "row_counts": {},
+      "payload": {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "markdown_content": "Program NP-MERIDIAN:\n  - cost and schedule variance: Integration and Test accounts for 97% of the variance  [fin_variance_analysis]\n  - cash burn against the phased plan: Spend above plan since FY26-04  [fin_burn_rate]\n  - funding position: 11 of 18 funding lines short, totalling 28,500,000 USD  [fin_funding_status]",
+        "source_persona": "PROGRAM_FINANCE_ANALYST",
+        "subject_concept": "http://invincible-agent/mesh#StatefulSupportResponse"
+      }
+    }
+  ],
+  "presentation_provenance": {
+    "frontend_id": "cortex-ui-desktop",
+    "presentation_source": "unrenderable",
+    "reason": "no registered capability's contract is satisfied by this payload",
+    "refusals": [
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "PERIOD_SERIES",
+        "reason": "no typed contract for PERIOD_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "GROUPED_REVIEW",
+        "reason": "no typed contract for GROUPED_REVIEW; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CHART_WIDGET",
+        "reason": "no rows",
+        "verdict": "refused"
+      },
+      {
+        "archetype": "MULTI_SERIES",
+        "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "SHORTFALL_GRID",
+        "reason": "no typed contract for SHORTFALL_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "ASSET_STATE_METRIC",
+        "reason": "no typed contract for ASSET_STATE_METRIC; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "HAZARD_DECLARATION",
+        "reason": "no typed contract for HAZARD_DECLARATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "INTERVAL_TIMELINE",
+        "reason": "no typed contract for INTERVAL_TIMELINE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "VARIANCE_TREE",
+        "reason": "no typed contract for VARIANCE_TREE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CANVAS_SEED",
+        "reason": "no typed contract for CANVAS_SEED; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "APPROVAL_TASK",
+        "reason": "no typed contract for APPROVAL_TASK; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "INSTANCES_BY_PROPERTY",
+        "reason": "no typed contract for INSTANCES_BY_PROPERTY; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "DELTA_SET",
+        "reason": "no typed contract for DELTA_SET; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "DELTA_SET",
+        "reason": "no typed contract for DELTA_SET; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "NAMED_HOLE",
+        "reason": "no typed contract for NAMED_HOLE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "COMPETING_MEASURES",
+        "reason": "no typed contract for COMPETING_MEASURES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "THRESHOLD_GRID",
+        "reason": "no typed contract for THRESHOLD_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "FORECAST_MEASURE",
+        "reason": "no typed contract for FORECAST_MEASURE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "WORKFLOW_OBSERVATION",
+        "reason": "no typed contract for WORKFLOW_OBSERVATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "SHORTFALL_GRID",
+        "reason": "no typed contract for SHORTFALL_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "MULTI_SERIES",
+        "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "CONTRIBUTION_RANKING",
+        "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "INTERVAL_TIMELINE",
+        "reason": "no typed contract for INTERVAL_TIMELINE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "DECISION_RECORD",
+        "reason": "no typed contract for DECISION_RECORD; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "ELICITATION",
+        "reason": "no typed contract for ELICITATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "MULTI_SERIES",
+        "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "KNOWLEDGE_DOCUMENT",
+        "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "MULTI_SERIES",
+        "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "STEP_LADDER",
+        "reason": "no typed contract for STEP_LADDER; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "MATRIX_GRID",
+        "reason": "no typed contract for MATRIX_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      },
+      {
+        "archetype": "PROCESS_TOPOLOGY",
+        "reason": "no typed contract for PROCESS_TOPOLOGY; and output_uri matched no capability, so nothing declared this archetype for this answer",
+        "verdict": "not_evaluated"
+      }
+    ],
+    "registration_version": "graph",
+    "selection_basis": "payload-only (output_uri matched no capability)"
+  },
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "NP-MERIDAN"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Program",
+          "uri": "http://invincible-agent/fin#Program",
+          "confidence": 0.99,
+          "instance_resolved": true,
+          "instance_identifier": "NP-MERIDIAN",
+          "instance_label": "Notional Program Meridian"
+        },
+        "action": {
+          "label": "fin Program Brief",
+          "iri": "mesh:finProgramBrief",
+          "confidence": 0.96,
+          "classify_called": true,
+          "candidate_count": 8,
+          "owner_persona": "PROGRAM_FINANCE_ANALYST"
+        },
+        "handled_by": {
+          "engine_name": "iagent-engine-lg",
+          "provider": "iagent-engine-lg",
+          "endpoint_url": "http://iagent-engine-lg:8098/graphs/fin_program_brief"
+        },
+        "route_status": "matched",
+        "fallback": false,
+        "acting": {
+          "persona": "PROGRAM_FINANCE_ANALYST",
+          "domains": [
+            "PROGRAM_FINANCE"
+          ]
+        },
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/fin#FundingLine",
+            "label": "Funding Line",
+            "description": "An appropriation of money with its own authorization ceiling, the portion of it placed under obligation, and the portion actually expended. Questions about how much money is left to obligate, whether authorization covers what has been committed, or where the effort will run out of money before it runs out of work target this class. Its three quantities are a LADDER - each is a subset of the one above it - which is what distinguishes it from a requirement compared against a supply.",
+            "score": 0.30000001192092896
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceMeasurementBaseline",
+            "label": "Performance Measurement Baseline",
+            "description": "The time-phased plan against which performance is measured: budgeted cost for work scheduled spread over periods, together with the claimed and actual figures reported against it period by period. IT CARRIES THE ACTUAL COST INCURRED IN EACH PERIOD, so the rate at which cost is being incurred - how fast money is going out, and whether that is faster or slower than the plan phased for it - is a property of this class. Questions about the planned spread of budget over time, about how much was planned versus claimed versus paid in a period, about the pace of expenditure against plan, or about how the phasing has shifted target this class. What is measured here is COST INCURRED AGAINST A PHASED PLAN, which is a different thing from the headroom remaining in an appropriation: this compares spending to a schedule, not a drawn amount to an authorized ceiling. It is the SERIES, not a single figure - anything asked over time or by month means this.",
+            "score": 0.30000001192092896
+          },
+          {
+            "uri": "http://invincible-agent/fin#ControlAccount",
+            "label": "Control Account",
+            "description": "The management point where scope, schedule and budget meet a single accountable manager, and the level at which performance is formally measured and reported. Questions naming an account identifier and asking how it is performing, who owns the number, or where a reported variance was incurred target this class. It is the lowest level at which a manager is answerable for a number.",
+            "score": 0.30000001192092896
+          },
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "description": "The whole scope of effort under one contract or one authorization, measured as a single performance whole. Questions asking how the effort as a whole is performing, how much of the authorized money remains, what the total forecast at completion is, or where the effort stands against its time-phased plan target this class. It is the widest finance subject: an answer scoped to it rolls up everything reported beneath it.",
+            "score": 0.0
+          }
+        ],
+        "excluded": [
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#OBSElement",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WBSElement",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#WorkPackage",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/fin#EarnedValueTechnique",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/mesh#StatefulSupportResponse",
+            "label": "Stateful Support Response",
+            "role": "output_class",
+            "via_verb": "mesh:finProgramBrief"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finBurnRate",
+            "hops": 0,
+            "score": 0.4666280150413513
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finPerformanceIndices",
+            "hops": 0,
+            "score": 0.43308311700820923
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacComparison",
+            "hops": 0,
+            "score": 0.32699623703956604
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finFundingStatus",
+            "hops": 0,
+            "score": 0.4093606472015381
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceDrivers",
+            "hops": 0,
+            "score": 0.302112877368927
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacCalculation",
+            "hops": 0,
+            "score": 0.29370710253715515
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceAnalysis",
+            "hops": 0
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "archetype": "KNOWLEDGE_DOCUMENT",
+            "markdown_content": "Program NP-MERIDIAN:\n  - cost and schedule variance: Integration and Test accounts for 97% of the variance  [fin_variance_analysis]\n  - cash burn against the phased plan: Spend above plan since FY26-04  [fin_burn_rate]\n  - funding position: 11 of 18 funding lines short, totalling 28,500,000 USD  [fin_funding_status]",
+            "source_persona": "PROGRAM_FINANCE_ANALYST",
+            "subject_concept": "http://invincible-agent/mesh#StatefulSupportResponse"
+          }
+        ],
+        "presentation_provenance": {
+          "frontend_id": "cortex-ui-desktop",
+          "presentation_source": "unrenderable",
+          "reason": "no registered capability's contract is satisfied by this payload",
+          "refusals": [
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "PERIOD_SERIES",
+              "reason": "no typed contract for PERIOD_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "GROUPED_REVIEW",
+              "reason": "no typed contract for GROUPED_REVIEW; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CHART_WIDGET",
+              "reason": "no rows",
+              "verdict": "refused"
+            },
+            {
+              "archetype": "MULTI_SERIES",
+              "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "SHORTFALL_GRID",
+              "reason": "no typed contract for SHORTFALL_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "ASSET_STATE_METRIC",
+              "reason": "no typed contract for ASSET_STATE_METRIC; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "HAZARD_DECLARATION",
+              "reason": "no typed contract for HAZARD_DECLARATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "INTERVAL_TIMELINE",
+              "reason": "no typed contract for INTERVAL_TIMELINE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "VARIANCE_TREE",
+              "reason": "no typed contract for VARIANCE_TREE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CANVAS_SEED",
+              "reason": "no typed contract for CANVAS_SEED; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "APPROVAL_TASK",
+              "reason": "no typed contract for APPROVAL_TASK; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "INSTANCES_BY_PROPERTY",
+              "reason": "no typed contract for INSTANCES_BY_PROPERTY; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "DELTA_SET",
+              "reason": "no typed contract for DELTA_SET; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "DELTA_SET",
+              "reason": "no typed contract for DELTA_SET; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "NAMED_HOLE",
+              "reason": "no typed contract for NAMED_HOLE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "COMPETING_MEASURES",
+              "reason": "no typed contract for COMPETING_MEASURES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "THRESHOLD_GRID",
+              "reason": "no typed contract for THRESHOLD_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "FORECAST_MEASURE",
+              "reason": "no typed contract for FORECAST_MEASURE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "WORKFLOW_OBSERVATION",
+              "reason": "no typed contract for WORKFLOW_OBSERVATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "SHORTFALL_GRID",
+              "reason": "no typed contract for SHORTFALL_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "MULTI_SERIES",
+              "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "CONTRIBUTION_RANKING",
+              "reason": "no typed contract for CONTRIBUTION_RANKING; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "INTERVAL_TIMELINE",
+              "reason": "no typed contract for INTERVAL_TIMELINE; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "DECISION_RECORD",
+              "reason": "no typed contract for DECISION_RECORD; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "ELICITATION",
+              "reason": "no typed contract for ELICITATION; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "MULTI_SERIES",
+              "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "KNOWLEDGE_DOCUMENT",
+              "reason": "no typed contract for KNOWLEDGE_DOCUMENT; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "MULTI_SERIES",
+              "reason": "no typed contract for MULTI_SERIES; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "STEP_LADDER",
+              "reason": "no typed contract for STEP_LADDER; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "MATRIX_GRID",
+              "reason": "no typed contract for MATRIX_GRID; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            },
+            {
+              "archetype": "PROCESS_TOPOLOGY",
+              "reason": "no typed contract for PROCESS_TOPOLOGY; and output_uri matched no capability, so nothing declared this archetype for this answer",
+              "verdict": "not_evaluated"
+            }
+          ],
+          "registration_version": "graph",
+          "selection_basis": "payload-only (output_uri matched no capability)"
+        }
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}

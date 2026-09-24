@@ -1,0 +1,486 @@
+{
+  "_what_this_is": "The REAL post-projector payload for one finance walk-sheet prompt, captured through the census runner's own fire path (same frontend_id, persona and domains the browser sends). Read `projected` first: that is what the screen was handed.",
+  "prompt": "compare the estimate at completion methods for NP-MERIDIAN",
+  "row_id": "finance-eac-comparison",
+  "asked_as": {
+    "user": "alice",
+    "persona": "PROGRAM_FINANCE_ANALYST",
+    "domains": [
+      "PROGRAM_FINANCE"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "c0005142",
+  "repo_sha": "5e0534c",
+  "census_verdict": "FAIL",
+  "census_why": [
+    "0 row(s) under None, floor is 3"
+  ],
+  "routing": {
+    "route_status": "matched",
+    "fallback": false,
+    "fallback_reason": null,
+    "action": {
+      "label": "fin Eac Comparison",
+      "iri": "mesh:finEacComparison",
+      "confidence": 0.96,
+      "classify_called": true,
+      "candidate_count": 8,
+      "owner_persona": "PROGRAM_FINANCE_ANALYST"
+    },
+    "handled_by": {
+      "engine_name": "iagent-engine-fin",
+      "provider": "iagent-engine-fin",
+      "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_eac_comparison"
+    }
+  },
+  "projected": [
+    {
+      "archetype": "COMPETING_MEASURES",
+      "row_counts": {
+        "rows": 3
+      },
+      "payload": {
+        "all_methods_answered": true,
+        "archetype": "COMPETING_MEASURES",
+        "highest_eac": 14792607.71,
+        "highest_value": 14792607.71,
+        "lowest_eac": 13130000.0,
+        "lowest_value": 13130000.0,
+        "methods_answered": 3,
+        "methods_compared": 3,
+        "reference_value": 12000000.0,
+        "rows": [
+          {
+            "acwp": 7430000.0,
+            "as_of_period": "FY26-12",
+            "bac": 12000000,
+            "bcwp": 6300000.0,
+            "bcws": 6900000,
+            "cpi": 0.847913862718708,
+            "eac": 14152380.95,
+            "eac_exact": "14152380.95",
+            "etc": 6722380.95,
+            "etc_exact": "6722380.95",
+            "formula": "EAC = BAC / CPI",
+            "method": "CPI",
+            "percent_complete": 0.525,
+            "program_id": "NP-MERIDIAN",
+            "program_name": "Notional Program Meridian",
+            "reported_periods": 6,
+            "scope_label": "Notional Program Meridian",
+            "spi": 0.9130434782608695,
+            "unavailable_reason": null,
+            "vac": -2152380.95,
+            "vac_exact": "-2152380.95",
+            "value": 14152380.95,
+            "value_unit": "USD"
+          },
+          {
+            "acwp": 7430000.0,
+            "as_of_period": "FY26-12",
+            "bac": 12000000,
+            "bcwp": 6300000.0,
+            "bcws": 6900000,
+            "cpi": 0.847913862718708,
+            "eac": 14792607.71,
+            "eac_exact": "14792607.71",
+            "etc": 7362607.71,
+            "etc_exact": "7362607.71",
+            "formula": "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
+            "method": "CPI_SPI",
+            "percent_complete": 0.525,
+            "program_id": "NP-MERIDIAN",
+            "program_name": "Notional Program Meridian",
+            "reported_periods": 6,
+            "scope_label": "Notional Program Meridian",
+            "spi": 0.9130434782608695,
+            "unavailable_reason": null,
+            "vac": -2792607.71,
+            "vac_exact": "-2792607.71",
+            "value": 14792607.71,
+            "value_unit": "USD"
+          },
+          {
+            "acwp": 7430000.0,
+            "as_of_period": "FY26-12",
+            "bac": 12000000,
+            "bcwp": 6300000.0,
+            "bcws": 6900000,
+            "cpi": 0.847913862718708,
+            "eac": 13130000.0,
+            "eac_exact": "13130000.00",
+            "etc": 5700000.0,
+            "etc_exact": "5700000.00",
+            "formula": "EAC = ACWP + (BAC - BCWP)",
+            "method": "REMAINING_AT_BUDGET",
+            "percent_complete": 0.525,
+            "program_id": "NP-MERIDIAN",
+            "program_name": "Notional Program Meridian",
+            "reported_periods": 6,
+            "scope_label": "Notional Program Meridian",
+            "spi": 0.9130434782608695,
+            "unavailable_reason": null,
+            "vac": -1130000.0,
+            "vac_exact": "-1130000.00",
+            "value": 13130000.0,
+            "value_unit": "USD"
+          }
+        ],
+        "scope_label": "Notional Program Meridian",
+        "source_persona": "PROGRAM_FINANCE_ANALYST",
+        "spread": 1662607.71,
+        "spread_percent_of_bac": 0.1385506425,
+        "subject_concept": null,
+        "value_unit": "USD",
+        "verdict": "3 methods span 1,662,608 USD"
+      }
+    }
+  ],
+  "presentation_provenance": {
+    "archetype": "COMPETING_MEASURES",
+    "candidates_considered": 1,
+    "candidates_satisfied": 1,
+    "frontend_id": "cortex-ui-desktop",
+    "presentation_source": "registered",
+    "refusals": [],
+    "registration_version": "graph",
+    "selection_basis": "output_uri+payload"
+  },
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "NP-MERIDIAN",
+          "Estimate At Completion (EAC) methods"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Program",
+          "uri": "http://invincible-agent/fin#Program",
+          "confidence": 0.96,
+          "instance_resolved": true,
+          "instance_identifier": "NP-MERIDIAN",
+          "instance_label": "Notional Program Meridian"
+        },
+        "action": {
+          "label": "fin Eac Comparison",
+          "iri": "mesh:finEacComparison",
+          "confidence": 0.96,
+          "classify_called": true,
+          "candidate_count": 8,
+          "owner_persona": "PROGRAM_FINANCE_ANALYST"
+        },
+        "handled_by": {
+          "engine_name": "iagent-engine-fin",
+          "provider": "iagent-engine-fin",
+          "endpoint_url": "http://iagent-engine-fin.sandbox.svc.cluster.local:8096/measure/fin_eac_comparison"
+        },
+        "route_status": "matched",
+        "fallback": false,
+        "acting": {
+          "persona": "PROGRAM_FINANCE_ANALYST",
+          "domains": [
+            "PROGRAM_FINANCE"
+          ]
+        },
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "description": "The whole scope of effort under one contract or one authorization, measured as a single performance whole. Questions asking how the effort as a whole is performing, how much of the authorized money remains, what the total forecast at completion is, or where the effort stands against its time-phased plan target this class. It is the widest finance subject: an answer scoped to it rolls up everything reported beneath it.",
+            "score": 0.30000001192092896
+          }
+        ],
+        "excluded": [],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/fin#Program",
+            "label": "Program",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletionComparison",
+            "label": "Estimate At Completion Comparison",
+            "role": "output_class",
+            "via_verb": "mesh:finEacComparison"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/fin#BurnRateSeries",
+            "label": "Burn Rate Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finBurnRate",
+            "hops": 0,
+            "score": 0.5651158690452576
+          },
+          {
+            "uri": "http://invincible-agent/fin#PerformanceIndexSeries",
+            "label": "Performance Index Series",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finPerformanceIndices",
+            "hops": 0,
+            "score": 0.46618619561195374
+          },
+          {
+            "uri": "http://invincible-agent/mesh#StatefulSupportResponse",
+            "label": "Stateful Support Response",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finProgramBrief",
+            "hops": 0,
+            "score": 0.38897380232810974
+          },
+          {
+            "uri": "http://invincible-agent/fin#FundingStatusGrid",
+            "label": "Funding Status Grid",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finFundingStatus",
+            "hops": 0,
+            "score": 0.37551137804985046
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDriverRanking",
+            "label": "Variance Driver Ranking",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceDrivers",
+            "hops": 0,
+            "score": 0.2322327196598053
+          },
+          {
+            "uri": "http://invincible-agent/fin#EstimateAtCompletion",
+            "label": "Estimate At Completion",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finEacCalculation",
+            "hops": 0,
+            "score": 0.7949219346046448
+          },
+          {
+            "uri": "http://invincible-agent/fin#VarianceDecomposition",
+            "label": "Variance Decomposition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:finVarianceAnalysis",
+            "hops": 0
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "all_methods_answered": true,
+            "archetype": "COMPETING_MEASURES",
+            "highest_eac": 14792607.71,
+            "highest_value": 14792607.71,
+            "lowest_eac": 13130000.0,
+            "lowest_value": 13130000.0,
+            "methods_answered": 3,
+            "methods_compared": 3,
+            "reference_value": 12000000.0,
+            "rows": [
+              {
+                "acwp": 7430000.0,
+                "as_of_period": "FY26-12",
+                "bac": 12000000,
+                "bcwp": 6300000.0,
+                "bcws": 6900000,
+                "cpi": 0.847913862718708,
+                "eac": 14152380.95,
+                "eac_exact": "14152380.95",
+                "etc": 6722380.95,
+                "etc_exact": "6722380.95",
+                "formula": "EAC = BAC / CPI",
+                "method": "CPI",
+                "percent_complete": 0.525,
+                "program_id": "NP-MERIDIAN",
+                "program_name": "Notional Program Meridian",
+                "reported_periods": 6,
+                "scope_label": "Notional Program Meridian",
+                "spi": 0.9130434782608695,
+                "unavailable_reason": null,
+                "vac": -2152380.95,
+                "vac_exact": "-2152380.95",
+                "value": 14152380.95,
+                "value_unit": "USD"
+              },
+              {
+                "acwp": 7430000.0,
+                "as_of_period": "FY26-12",
+                "bac": 12000000,
+                "bcwp": 6300000.0,
+                "bcws": 6900000,
+                "cpi": 0.847913862718708,
+                "eac": 14792607.71,
+                "eac_exact": "14792607.71",
+                "etc": 7362607.71,
+                "etc_exact": "7362607.71",
+                "formula": "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
+                "method": "CPI_SPI",
+                "percent_complete": 0.525,
+                "program_id": "NP-MERIDIAN",
+                "program_name": "Notional Program Meridian",
+                "reported_periods": 6,
+                "scope_label": "Notional Program Meridian",
+                "spi": 0.9130434782608695,
+                "unavailable_reason": null,
+                "vac": -2792607.71,
+                "vac_exact": "-2792607.71",
+                "value": 14792607.71,
+                "value_unit": "USD"
+              },
+              {
+                "acwp": 7430000.0,
+                "as_of_period": "FY26-12",
+                "bac": 12000000,
+                "bcwp": 6300000.0,
+                "bcws": 6900000,
+                "cpi": 0.847913862718708,
+                "eac": 13130000.0,
+                "eac_exact": "13130000.00",
+                "etc": 5700000.0,
+                "etc_exact": "5700000.00",
+                "formula": "EAC = ACWP + (BAC - BCWP)",
+                "method": "REMAINING_AT_BUDGET",
+                "percent_complete": 0.525,
+                "program_id": "NP-MERIDIAN",
+                "program_name": "Notional Program Meridian",
+                "reported_periods": 6,
+                "scope_label": "Notional Program Meridian",
+                "spi": 0.9130434782608695,
+                "unavailable_reason": null,
+                "vac": -1130000.0,
+                "vac_exact": "-1130000.00",
+                "value": 13130000.0,
+                "value_unit": "USD"
+              }
+            ],
+            "scope_label": "Notional Program Meridian",
+            "source_persona": "PROGRAM_FINANCE_ANALYST",
+            "spread": 1662607.71,
+            "spread_percent_of_bac": 0.1385506425,
+            "subject_concept": null,
+            "value_unit": "USD",
+            "verdict": "3 methods span 1,662,608 USD"
+          }
+        ],
+        "presentation_provenance": {
+          "archetype": "COMPETING_MEASURES",
+          "candidates_considered": 1,
+          "candidates_satisfied": 1,
+          "frontend_id": "cortex-ui-desktop",
+          "presentation_source": "registered",
+          "refusals": [],
+          "registration_version": "graph",
+          "selection_basis": "output_uri+payload"
+        }
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}
