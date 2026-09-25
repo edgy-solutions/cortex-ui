@@ -308,3 +308,32 @@ correctly say "not supplied" about a field the producer genuinely sent, and **th
 mode to watch for, because it is the one that looks like success.
 
 Classify the level before assigning the bug: row-level arrives, envelope-level gets dropped.
+
+---
+
+## 11. Appendix — the build gate's positive case, measured on this push
+
+Two of the three commits touch `src/`, so this push is the **complement** of the case measured on
+2026-09-23. That one proved a sessions-only push **skips** the six image steps. This one proves a
+src-touching push does **not**. Read from run `36094192643` at head `896ccf8`, step status:
+
+```
+Does this diff need an image?           success   (gate job ran, decided)
+Build Frontend                          in_progress
+  Transport declaration check           pending
+  Test suite, with the producer present  pending
+  Typecheck                             pending
+  Set up pack CLI                       pending   ← not skipped
+  Set up QEMU                           pending   ← not skipped
+  Set up Docker Buildx                  pending   ← not skipped
+  Log in to GHCR                        pending   ← not skipped
+  Determine image tags                  pending   ← not skipped
+  Build and push frontend image         pending   ← not skipped
+```
+
+`pending` and `skipped` are different words, and that difference is the whole gate. The truth table
+now has both rows measured from production runs rather than one row measured and one assumed.
+
+**⛔ NOTHING IS PINNABLE TO `896ccf8` YET.** The run was in progress when this was written, so no
+digest exists. Anyone pinning must resolve it from GHCR after the run completes — a 404 against
+this sha right now means "not built yet", which is one of the four meanings that read identically.
