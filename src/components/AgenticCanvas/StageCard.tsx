@@ -6,6 +6,7 @@ import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { FitBox } from "./FitBox";
 import { AnsweredChip } from "./AnsweredChip";
+import { CardExportButton } from "./CardExportButton";
 import { useFlipState } from "./useFlipState";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
@@ -182,6 +183,15 @@ export function StageCard({
    * drag initiation; the ref is belt-and-braces for browsers that start the drag anyway.
    */
   const gesturing = useRef(false);
+
+  /**
+   * The answer face's body element — what the Export action captures as "the card as rendered".
+   *
+   * The BODY and not the whole card: the header carries the export button itself, the grip and the
+   * remove control, and an export that contained its own button would be a picture of the app
+   * rather than of the answer.
+   */
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const beginGesture =
     (handler?: (e: React.PointerEvent) => void) => (e: React.PointerEvent) => {
@@ -396,6 +406,14 @@ export function StageCard({
               <GripVertical className="w-3.5 h-3.5" />
             </button>
           )}
+          {/* EXPORT. Present on every DRAWN card, not only the custom-canvas ones: carrying an
+              answer out of the app with its payload and provenance intact has nothing to do with
+              whether the card can be moved or removed. Gated on `hasRendered` because an answer
+              still in flight has no payload to export, and a button that writes an empty file is
+              worse than one that is not there yet. Placed before remove so the destructive
+              action stays last. This is the ANSWER face; the provenance face behind it has its
+              own header and no export, because what it draws is not the card. */}
+          {hasRendered && <CardExportButton artifact={artifact} bodyRef={bodyRef} />}
           {onRemove && (
             <button
               // The header is a move handle now, so a press on this button must not also start a
@@ -419,7 +437,7 @@ export function StageCard({
   
         {/* Body: the answer. The turn happens one level up, on the card as a whole — see
             the faces in the render root. */}
-        <div className="flex-1 min-h-0 overflow-hidden relative">
+        <div ref={bodyRef} className="flex-1 min-h-0 overflow-hidden relative">
           {hasRendered && sized ? (
             // PANEL. The card was given room; the content uses it. No scaling, so a chart fills
             // the width it was allotted instead of being letterboxed inside it. Overflow scrolls
