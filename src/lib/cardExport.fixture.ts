@@ -12,7 +12,9 @@
  *
  *   2. NO CAPTURED PAYLOAD EVER PROJECTED TO CONTRIBUTION_RANKING. The nine finance captures in
  *      `sessions/` projected to KNOWLEDGE_DOCUMENT, VARIANCE_TREE ×2, SHORTFALL_GRID,
- *      MULTI_SERIES, ELICITATION ×2, COMPETING_MEASURES — and one with an empty `projected`.
+ *      MULTI_SERIES, ELICITATION ×2, COMPETING_MEASURES — and one with NO `projected` key at all
+ *      (`from-32-np-meridian-brief.json`, which is not a captured answer; see the census test in
+ *      `cardExportFinance.test.ts`). Not an empty projection — a different kind of document.
  *
  *   3. THE ONE CAPTURE THAT CONSIDERED THIS ARCHETYPE REFUSED IT, and said why. In
  *      `2026-09-19-payload-finance-np-meridian-brief.json`, at

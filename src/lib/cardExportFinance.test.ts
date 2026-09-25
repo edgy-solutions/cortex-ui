@@ -10,7 +10,7 @@
  *
  * "Same shape" is not asserted by inspection here — it is asserted by there being NO
  * per-archetype code to inspect. The export reads `rendered_output.components` and walks whatever
- * it finds, so these tests run the identical builder over seven different archetypes. If any of
+ * it finds, so these tests run the identical builder over six distinct archetypes. If any of
  * them needed special handling, one of these would fail rather than a reviewer needing to notice.
  *
  * ── WHY THIS IS A SEPARATE FILE FROM `cardExport.test.tsx` ─────────────────────────────────
@@ -163,7 +163,7 @@ describe("the nine real finance captures export through the same builder", () =>
     for (const cell of cells) expect(cell.textContent?.trim()).not.toBe("");
   });
 
-  it("covers seven distinct archetypes, so 'same shape' is measured and not assumed", () => {
+  it("covers six distinct archetypes, so 'same shape' is measured and not assumed", () => {
     const seen = new Set(
       CAPTURES.map((n) => load(n).projected?.[0]?.archetype).filter(Boolean) as string[],
     );
