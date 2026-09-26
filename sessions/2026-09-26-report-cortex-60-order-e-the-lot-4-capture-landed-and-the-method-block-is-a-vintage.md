@@ -386,3 +386,57 @@ timed out at 120s — the same hazard this lane already wrote down and walked in
 **Suite after this addendum:** 114 files / **1723** tests green; `check:transport` ✓, `tsc --noEmit` ✓
 (one real type error caught and fixed: a blank row built by spreading `SEED()[1]` infers
 `value: number` and will not take a null).
+
+---
+
+## Fourth addendum, same day — gaps 1 and 2 are unreachable today, and that is the argument FOR the fix
+
+The engine lane reported that gaps 1 and 2 have **no reachable producer-side half**, and it verifies:
+
+- `finance_agent/measures.py:84` — `if not exact: return None`, for the **whole** summary envelope,
+  when no method produced an exact figure. That is precisely the payload that would hand this card an
+  absent `asked`. It cannot be built.
+- `tests/finance/test_eac_comparison.py:106`, `test_THE_PANEL_CAN_NEVER_COME_BACK_EMPTY` — that return
+  is itself unreachable: `REMAINING_AT_BUDGET` is ACWP + (BAC − BCWP), arithmetic over figures that
+  always exist, projecting **no index**, so it answers whenever the program does.
+
+**And I checked the thing I actually suspected, which was wrong.** I went looking for a third filtered
+population — a second engine emitting COMPETING_MEASURES outside that guard's reach. There isn't one:
+`capabilities.py:402` binds the archetype to `fin:EstimateAtCompletionComparison` and nothing else in
+`agent_fleet/` emits it. One producer, one guard, argument holds. Saying so plainly because the last
+two rounds went the other way and a third would have been the easy assumption.
+
+⚠ **The implication strengthens the consumer fix rather than retiring it, and the peer put it exactly
+right.** `asked` is safe *only* because of one method's index-freeness in one engine, recorded in a
+finance test docstring. Nothing at `contract.ts`, nothing in the projector's allowlist, and nothing on
+this card knows that. Add an EAC archetype whose methods all project indices, change `_totals`, or
+reuse CompetingMeasures for another comparison, and the absent-`asked` path goes live **with every
+layer green**. "Reconcile against `rows.length` rather than falling back to it" stops being a
+tidiness argument at that point.
+
+### The measurable form of that fragility, on this side
+
+**Not one of the six fixtures can reach the dangerous branch.** All six spread a single `ENVELOPE`, so
+the pair is never absent; and the only `data-incomplete` fixture reaches the banner through the
+producer's explicit `all_methods_answered: false`, never through the card's own `replied === asked`
+derivation. The branch that would carry the failure is covered by the ⛔ seals of the third addendum
+and by **nothing else in this repo**. A corpus whose every member states a field cannot report what
+happens when it is absent. Sealed, with the banner fixture as the control so the claim is about the
+*route* and not about missing coverage.
+
+⚠ **A mutant survived that seal and the seal was wrong, not the mutation.** The first version asserted
+`Object.keys(envelope)` contained the two names. A fixture written `methods_compared: undefined` keeps
+the key, satisfies that, and still sends the card down `num(undefined) ?? rows.length` — so the seal
+was blind to the exact state it claimed to exclude. Re-pointed at the **value** (`typeof === "number"`,
+`typeof === "boolean"`), the same mutation now fires and names the offending fixture. *Presence of a
+key is not availability of a figure* — the containment-versus-cardinality lesson one level in.
+
+### A polarity the enumerated kinds did not have
+
+The peer's `measures.py:84` is worth recording as its own kind: **a guard that cannot fire, whose
+firing would CAUSE the downstream failure rather than prevent it.** Every other unreachable guard this
+programme has found was either dead weight or a missing check. Deleting it is not the fix (`min()` over
+an empty list is the alternative); whether the producer should instead emit the envelope with
+`all_methods_answered: false` is the producer half of the ruling. Both halves stay Chris's.
+
+**Suite after this addendum:** 114 files / **1724** tests green; `check:transport` ✓, `tsc --noEmit` ✓.

@@ -35,6 +35,7 @@ import {
   validateCompetingMeasures,
   COMPETING_MEASURES_CONTRACT,
 } from "./CompetingMeasures.contract";
+import { COMPETING_MEASURES_FIXTURES } from "./fixtures/competingMeasures";
 
 afterEach(cleanup);
 
@@ -553,5 +554,60 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     // And the fallback that fills their absence, read off the component.
     const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
     expect(component).toContain("const asked = num(methods_compared) ?? rows.length;");
+  });
+
+  /**
+   * ⛔ AND THE FIXTURE CORPUS CANNOT REACH THE DANGEROUS BRANCH — every fixture states the pair.
+   *
+   * Added 2026-09-26 after the engine lane showed that gaps 1 and 2 above have NO REACHABLE
+   * PRODUCER-SIDE HALF TODAY, and the reason is narrower than either lane liked:
+   * `finance_agent/measures.py:84` early-returns `None` for the WHOLE summary envelope when no
+   * method produced an exact figure — so the absent-pair payload cannot be built — and
+   * `tests/finance/test_eac_comparison.py:106`
+   * (`test_THE_PANEL_CAN_NEVER_COME_BACK_EMPTY`) establishes why that return is itself
+   * unreachable: `REMAINING_AT_BUDGET` is ACWP + (BAC - BCWP), arithmetic over figures that
+   * always exist, projecting no index, so it answers whenever the program does.
+   *
+   * Verified here, and the archetype has exactly ONE producer — `capabilities.py:402` binds it to
+   * `fin:EstimateAtCompletionComparison` and nothing else in `agent_fleet/` emits it. So this is
+   * NOT the engine-scoped claim I went looking for; the reachability argument holds today.
+   *
+   * ⚠ WHICH IS THE ARGUMENT FOR THE FIX, NOT AGAINST IT. `asked` is safe only because of one
+   * method's index-freeness in one engine, recorded in a finance test docstring. Nothing at
+   * `contract.ts`, nothing in the projector's allowlist and nothing on this card knows that.
+   * Add an EAC archetype whose methods all project indices, change `_totals`, or reuse this card
+   * for another comparison, and the absent-`asked` path goes live with every layer green.
+   *
+   * THIS SEAL IS THE MEASURABLE FORM OF THAT. All six fixtures spread one `ENVELOPE`, so not one
+   * of them omits the pair, and the single `data-incomplete` fixture reaches the banner through
+   * the producer's explicit `all_methods_answered: false` — never through the card's own
+   * `replied === asked` derivation. The branch that would carry the failure is covered by the ⛔
+   * seals above and by nothing else in this repo. A corpus whose every member states a field
+   * cannot report what happens when it is absent.
+   */
+  it("⛔ no fixture omits the completeness pair, and the only banner route is producer-stated", () => {
+    expect(COMPETING_MEASURES_FIXTURES.length).toBeGreaterThan(4);
+
+    for (const f of COMPETING_MEASURES_FIXTURES) {
+      // Every fixture, not merely most: the absence must be unreachable from the corpus rather
+      // than rare in it.
+      //
+      // ⚠ ON THE VALUE, NOT THE KEY, and the first version of this seal got that wrong. It
+      // asserted `Object.keys(envelope)` contained the names, which a fixture written
+      // `methods_compared: undefined` satisfies — while the card reads `num(undefined) ?? rows.length`
+      // and takes the fallback. The seal was blind to the exact state it claimed to exclude, and
+      // the mutation that set a fixture's value to `undefined` SURVIVED it. Presence of a key is
+      // not availability of a figure.
+      expect(typeof f.envelope.methods_compared, f.name).toBe("number");
+      expect(typeof f.envelope.all_methods_answered, f.name).toBe("boolean");
+    }
+
+    const incomplete = COMPETING_MEASURES_FIXTURES.filter((f) =>
+      f.declares.includes("data-incomplete"),
+    );
+    // The control: the corpus DOES exercise the banner, so this seal is about the ROUTE and not
+    // about an absence of coverage.
+    expect(incomplete).toHaveLength(1);
+    expect(incomplete[0].envelope.all_methods_answered).toBe(false);
   });
 });
