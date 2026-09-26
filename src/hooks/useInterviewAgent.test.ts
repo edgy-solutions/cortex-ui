@@ -21,7 +21,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { StreamEvent } from "@/api/types";
+import type { Artifact, StreamEvent } from "@/api/types";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCanvasStore, ELECTRIC_COVERED_FIELDS } from "@/store/useCanvasStore";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -773,5 +773,121 @@ describe("what an answered ask actually posts", () => {
     );
     expect(JSON.stringify(transport.request)).not.toContain("Inventory Visibility");
     expect(transport.request!.bound_slots).toEqual({ capability_id: "C4" });
+  });
+});
+
+/**
+ * ── WHAT A COMPOSER TURN POSTS, WHICH UNTIL NOW WAS NO LINEAGE AT ALL ──────────────────────
+ *
+ * The block above covers the ask-card paths, which pass the claim explicitly. `InputBar` calls
+ * `sendMessage(value.trim())` with four arguments missing, and that is the surface a free-text
+ * question goes through — a safety follow-up, and `draft a risk assessment for HAZ-1003`. Every
+ * such turn entered the graph parentless.
+ *
+ * These seals are on the BODY rather than on the predicate, because the predicate cannot be
+ * wrong in the way that matters here: the hazard is WHEN the drawn card is read, not which card
+ * qualifies.
+ */
+describe("what a composer turn posts — the defaulted lineage claim", () => {
+  const drawn = (o: Partial<Artifact> = {}): Artifact => ({
+    id: "prev-answer",
+    created_at: 1_000,
+    updated_at: 1_000,
+    valid_as_of: 1_000,
+    valid_until: null,
+    question_text: "what is the burn rate?",
+    summary: "",
+    resolved_intent: {},
+    message_id: "msg-prev",
+    status: "complete",
+    rendered_output: null,
+    produced_by: { actor_type: "agent", actor_id: "engine_a" },
+    produced_for: { user_id: "bob", is_authenticated: true, entitlement_source: "none" },
+    routing: null,
+    sources: [],
+    graph_trace: [],
+    graph_trace_alternates: [],
+    derived_from_artifact_id: null,
+    durability_status: "durable",
+    watermark: 1,
+    ...o,
+  });
+
+  /** Put a card on the canvas and foreground it, exactly as a finished turn leaves things. */
+  const foreground = (a: Artifact) => {
+    useCanvasStore.setState({ artifacts: [a], currentArtifactId: a.id });
+  };
+
+  const composerTurn = async (r: ReturnType<typeof mount>) => {
+    // FOUR ARGUMENTS SHORT, like InputBar. If this grew a fifth argument the seal would be
+    // testing the ask-card path instead and would pass for the wrong reason.
+    await act(async () => {
+      r.result.current.sendMessage(QUERY);
+      await flush();
+    });
+  };
+
+  it("claims the drawn answer as the parent, with no argument from the caller", async () => {
+    foreground(drawn());
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request!.answering_artifact_id).toBe("prev-answer");
+  });
+
+  it("⛔ NEVER THE TURN'S OWN ARTIFACT — the drawn card is read before the pending row lands", async () => {
+    // THE ORDERING SEAL, and the one bug this whole change could plausibly have shipped.
+    // `createPendingArtifact` foregrounds the new row a few dozen lines after the read; taken
+    // afterwards, the claim equals `artifact_id` and the turn is its own parent — which MERGE
+    // accepts silently. Asserted as a relationship rather than a literal so it survives the id
+    // being generated.
+    foreground(drawn());
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request!.answering_artifact_id).not.toBe(transport.request!.artifact_id);
+    // The control: both fields really are present, so `not.toBe` is not comparing two undefineds.
+    expect(transport.request!.artifact_id).toBeTruthy();
+    expect(transport.request!.answering_artifact_id).toBeTruthy();
+  });
+
+  it("AN EXPLICIT CLAIM WINS — the ask card's id is not overridden by whatever is drawn", async () => {
+    // The ask card names the artifact its question was asked ON, deliberately not the drawn one.
+    // A default that won here would silently re-point every answered ask.
+    foreground(drawn());
+    const r = mount();
+    await act(async () => {
+      r.result.current.sendMessage(QUERY, { capability_id: "C4" }, undefined, undefined, "ask-1");
+      await flush();
+    });
+    expect(transport.request!.answering_artifact_id).toBe("ask-1");
+  });
+
+  it("a drawn TASK card claims nothing — a task id names no AnswerArtifact", async () => {
+    foreground(drawn({ id: "task:row-9" }));
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request).not.toHaveProperty("answering_artifact_id");
+    expect(transport.request!.message).toBe(QUERY);
+  });
+
+  it("a drawn card that never reached the substrate claims nothing", async () => {
+    // Read on screen, absent from the graph of record. The honest state the type keeps separate
+    // from `status` for exactly this kind of decision.
+    foreground(drawn({ status: "complete", durability_status: "persistence_failed" }));
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request).not.toHaveProperty("answering_artifact_id");
+  });
+
+  it("a drawn ASK claims nothing, so typing past a question does not fold it", async () => {
+    foreground(
+      drawn({
+        rendered_output: {
+          components: [{ archetype: "ELICITATION" }],
+        } as Artifact["rendered_output"],
+      }),
+    );
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request).not.toHaveProperty("answering_artifact_id");
   });
 });

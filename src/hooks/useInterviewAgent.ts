@@ -1,5 +1,6 @@
 import { boundSlotsBody } from "@/api/boundSlots";
 import { answeringArtifactBody } from "@/api/answeringArtifact";
+import { drawnLineageClaim } from "@/lib/drawnLineage";
 import { spokenAnswerBody, type SpokenAnswer } from "@/api/spokenAnswer";
 import type { AnsweredWith } from "@/api/types";
 import { useCallback, useRef, useState } from "react";
@@ -501,6 +502,30 @@ export function useInterviewAgent() {
   // Main mutation that handles the streaming request
   const mutation = useMutation({
     mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId }: SendPayload) => {
+      // ⛔ READ THE DRAWN CARD FIRST — BEFORE ANYTHING IN THIS FUNCTION TOUCHES THE STORE.
+      // `createPendingArtifact` below foregrounds THIS turn's own pending row, so the same read
+      // taken a few lines later returns the artifact being created rather than the one the
+      // reader was looking at, and the turn claims itself as its own parent. The ordering is the
+      // whole correctness of the default, so it is sealed on the body: the claim can never equal
+      // `artifact_id`.
+      //
+      // WHY THE DEFAULT EXISTS: `answeringArtifactId` arrives only from the two ask-card paths.
+      // A turn typed into the composer — which is how a safety question is asked, and how
+      // `draft a risk assessment for HAZ-1003` was asked — carried no lineage at all, so a
+      // follow-up entered the graph as a conversation's first word. The claim is defaulted HERE,
+      // in the one place every send path funnels through, and not in the composer: wiring it at
+      // the site one happens to be reading lands it on a subset of the branches that ship.
+      const drawnAtTurnStart = (() => {
+        const s = useCanvasStore.getState();
+        return s.currentArtifactId
+          ? (s.artifacts.find((a) => a.id === s.currentArtifactId) ?? null)
+          : null;
+      })();
+      // AN EXPLICIT CLAIM ALWAYS WINS. The ask card names the artifact its question was asked
+      // ON, which is deliberately not the drawn one; a default that overrode it would silently
+      // re-point every answered ask at whatever happened to be foregrounded.
+      const lineageClaim = answeringArtifactId ?? drawnLineageClaim(drawnAtTurnStart);
+
       // Cancel any existing stream
       abortController.current?.abort();
       abortController.current = new AbortController();
@@ -618,8 +643,10 @@ export function useInterviewAgent() {
         // because a typed answer is not a pick: `validate_bound_slots` refuses a no-menu slot
         // by design, so routing words through that path would 422 or default silently.
         ...spokenAnswerBody(spoken),
-        // WHICH ask this answers. A claim the server checks, not an instruction it follows.
-        ...answeringArtifactBody(answeringArtifactId),
+        // WHICH ask this answers. A claim the server checks, not an instruction it follows. Resolved
+        // above: explicit from an ask card, else defaulted from the drawn card when that card is a
+        // real, durable answer. `answeringArtifactBody` still decides absent-vs-empty.
+        ...answeringArtifactBody(lineageClaim),
         session_id: sessionId,
         current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,

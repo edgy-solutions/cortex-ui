@@ -135,9 +135,19 @@ describe("the fold and the claim are actually wired", () => {
 
   it("the send posts the lineage claim from the constant's own function", () => {
     const HOOK = read("../hooks/useInterviewAgent.ts");
-    expect(HOOK).toContain("...answeringArtifactBody(answeringArtifactId)");
+    // ⛔ THE SPREAD, NOT THE ARGUMENT'S NAME. This asserted the whole expression
+    // `...answeringArtifactBody(answeringArtifactId)` and went red on 2026-09-26 when the claim
+    // became `answeringArtifactId ?? drawnLineageClaim(drawn)` and the argument was renamed —
+    // a correct change, indicted by a source-text guard for spelling. `answeringArtifact.ts`
+    // already records that this guard was the weaker form chosen for a false reason; this is
+    // that weakness arriving. What the check is FOR survives the rename: the wire name comes
+    // from the function that owns the constant, and never from a hand-written key.
+    expect(HOOK).toContain("...answeringArtifactBody(");
     // Never a literal: the name is the whole risk, exactly as with `bound_slots`.
     expect(HOOK).not.toMatch(/["']answering_artifact_id["']\s*:/);
+    // AND THE STRONGER FORM IS WHERE IT BELONGS — on the outgoing body, in
+    // `useInterviewAgent.test.ts` (`what an answered ask actually posts` / `what a composer turn
+    // posts`). This one stays only for the no-literal half, which no body assertion can make.
   });
 
   it("the ask card is handed the artifact it is ON, threaded not fetched", () => {
