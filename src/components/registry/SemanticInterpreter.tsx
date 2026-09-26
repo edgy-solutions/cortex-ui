@@ -716,14 +716,30 @@ const renderComponent = (
       // W4-2 — `threshold`/`threshold_defaulted` ARE ENVELOPE FIELDS, which is why they were
       // missing rather than wrong. Row fields ride inside `rows` and cross the producer's
       // projector VERBATIM; a card-level scalar is carried ONLY if that projector's
-      // per-archetype tuple names it, and `_PROJECTED_ARCHETYPES["CONTRIBUTION_RANKING"]` names
-      // four fields which do not include these.
+      // per-archetype tuple names it.
       //
-      // ⛔ SO THIS HALF OF THE WIRE IS NECESSARY AND NOT YET SUFFICIENT. Until the projector
-      // carries them, both arrive `undefined` and the header stays silent — which is the
-      // correct rendering of a payload with no bound, not a bug hiding behind one. Wired now so
-      // that on the day the producer carries them, nothing on this side is the thing still
-      // missing.
+      // ⛔ CORRECTED 2026-09-25 — THE PROJECTOR NOW NAMES THEM. The sentence that used to sit
+      // here said the tuple "names four fields which do not include these", and it was pointing
+      // every reader at the wrong repo. Read fresh from the producer at
+      // `agent_fleet/presentation_agent/main.py:752`:
+      //
+      //     "CONTRIBUTION_RANKING": ("rows",
+      //                             ("value_label", "value_unit", "scope_label", "verdict",
+      //                              "threshold", "threshold_defaulted")),
+      //
+      // SIX fields, and both of these are among them. The producer added them after the original
+      // note was written and nothing re-read the note — a comment is not checked by anything.
+      //
+      // ⛔ SO THIS HALF OF THE WIRE IS NECESSARY *AND SUFFICIENT*, and what remains is a THIRD
+      // state, distinct from both "not wired" and "arriving": DECLARED AND NEVER OBSERVED. No
+      // capture under `sessions/` carries either key — zero hits, measured against a control that
+      // finds `verdict` in those same files. Both still arrive `undefined` and the header stays
+      // silent, which remains the correct rendering of a payload with no bound.
+      //
+      // What the correction CHANGES is who owes work: a silent header is no longer evidence that
+      // the producer still has something to carry. It is evidence that no ANSWER has yet declared
+      // a bound — a verb-level fact, not a projector-level one. Do not read the quiet header here
+      // as an upstream debt.
       return (
         <ContributionRanking
           rows={comp.rows}
