@@ -1,0 +1,175 @@
+# Report — cortex-60, Order E: the lot 4 capture landed, and the absent `method` is a vintage
+
+**Date:** 2026-09-26 · **Branch:** master · **Commits:** `89cd37d` (first half), `741d88d` (second half)
+**Suite:** 114 files / 1715 tests green (baseline at `89cd37d`: 113 / 1688). `check:transport` ✓, `tsc --noEmit` ✓.
+
+## The order
+
+> to: cortex-ui/master
+> `answering_artifact_id` is a caller claim. Read whether the desktop sends it on a safety turn and
+> on the HAZ-1003 question; if not, add it from the drawn answer's artifact id, sealed. Bob's task
+> dispatch is unreachable until it does. Then the lot 4 capture once Lane 1 names the path.
+
+The first clause landed in `89cd37d`. This report covers the second — "the lot 4 capture" — which is
+governed by **Order D item 1**:
+
+> When Lane 1 places the real lot 4 capture: rebuild the export fixture from it, label the shape-only
+> rows retired, and render the `method` block from the real wire. Report what arrived vs what the
+> projector declares (threshold, threshold_defaulted).
+
+## 1. What arrived vs what the projector declares
+
+The projector's tuple for `CONTRIBUTION_RANKING`, read live from
+`agent_fleet/presentation_agent/main.py`, names **seven** envelope fields. The capture carries five
+of them, and two fields nobody declared.
+
+| field | declared | on the wire | note |
+|---|---|---|---|
+| `value_label` | ✓ | `"Purchased value"` | |
+| `value_unit` | ✓ | `"USD"` | also per row |
+| `scope_label` | ✓ | `"Lot 4"` | |
+| `threshold` | ✓ | `"0.25"` — **a STRING** | the engine sends `str(bound)`; a consumer comparing it numerically must coerce |
+| `threshold_defaulted` | ✓ | `true` | **the engine's default, not a caller's choice** |
+| `verdict` | ✓ | — | declared for the archetype; this measure does not emit one |
+| `method` | ✓ | — | see §2 — declared AND emitted upstream, absent here |
+| `source_persona` | — | `"COST_ANALYST"` | arrived undeclared |
+| `subject_concept` | — | `null` | arrived undeclared; renders as the text `null` |
+
+**On the pair the order asked about.** `threshold_defaulted: true` means `DEFAULT_CONCENTRATION_THRESHOLD`
+— the caller named no bound. So this capture exercises exactly one arm of the pair, and the seal is
+written to say *which* arm rather than to claim the pair works. ⚠ **One capture cannot distinguish an
+engine default from a caller-supplied bound**, and nothing in these bytes says a caller-chosen bound
+would arrive at all. A second capture with an explicit threshold is the only thing that closes that.
+
+Row level: each row carries `above_threshold, amount, contribution, entity_id, entity_name, rank,
+share_of_purchased, share_of_total, supplier, value_unit`. Four of those are undeclared by our
+`ContributionRow` contract, and six declared fields (`acwp, bcwp, bcws, favourable, note,
+variance_kind`) never arrive — both directions now asserted in `cardExport.test.tsx`.
+
+⚠ Two quantities arrive twice in two spellings: `amount: "604963.20"` beside `contribution: 604963.2`,
+and `share_of_purchased: "0.4100"` beside `share_of_total: 0.41`. That duplication is now the
+no-formatter witness, and it is a **stronger** one than the signed integer it replaced: any formatter
+collapses one spelling onto the other, so the pair failing to differ *is* the formatter — no guess
+about formatted output is needed. (The real capture contains no negative number at all, so the old
+witness has no referent.)
+
+## 2. The `method` block: declared, emitted, and still absent — a vintage, not a gap
+
+The order said "render the `method` block from the real wire". The real wire has none. That is **not**
+the simple absence the fixture header first recorded:
+
+- **DECLARED** — the projector's tuple names `method`. The parity seal's exact count went from SIX to
+  SEVEN on this run, which is precisely why it was written `toHaveLength(6)` and not `>= 6`.
+- **EMITTED** — `cost_supplier_concentration` builds one: a formula, five named inputs, a float
+  `bound` and `bound_defaulted`. Added upstream in **`546e6bee`** (2026-09-24, *"every cost ranking
+  states its own method, and the projector carries it"*). Asserted against that function's own body,
+  not against a name found anywhere in a 1000-line module.
+- **ABSENT** — no `method` key anywhere in Lane 1's bytes, proven by a key sweep with a control.
+
+Both halves of the upstream contract are in place and the payload still arrived without one, so the
+difference is an **image vintage**, not a missing feature. ⛔ **It cannot be resolved from the
+capture:** those bytes carry no producer sha, no `fleet_sha` and no `code_hash` — asserted in
+`cardExport.fixture.test.ts`. **Ask Lane 1 to capture the fleet sha beside the next fire**, or the
+next absence reads exactly like this one.
+
+**And the absence costs more than a formula.** The projector's allowlist strips the producer's `lot`,
+`fiscal_year`, `purchased_value`, `largest_share` and `suppliers_above_threshold`. Three of those are
+stated *among the method's inputs* — so **the method block is the only route by which they reach a
+reader**. `fiscal_year` appears nowhere in the capture at all, not even in an event. A reader who
+wants to recompute `share_of_purchased` from the card has the shares and no total.
+
+Nothing was invented to satisfy the render clause. `LOT4_PRODUCER_METHOD_RAW` is the **pre-reader
+shape**, transcribed from `_method`'s own `return`, and its header sorts every value into grounded
+(from the capture's `threshold`, `scope_label`, `rows.length`), derived (the total, **recomputed** in a
+seal rather than trusted), and ⛔ not-in-the-capture (`fiscal_year`, `producer_sha` — whose values say
+so in words). The existing `LOT4_METHOD_PRESENT` stays a constructed example: being already in
+`MethodBlock` shape, it cannot exercise the reading.
+
+## 3. Three cortex-side gaps — REPORTED, NOT PATCHED
+
+`readMethod` drops three things the producer sends:
+
+| dropped | what it costs |
+|---|---|
+| `bound_defaulted` | the page states a bound and cannot say whose it is. The envelope pair survives by a different route, which is why this is a gap and not data loss |
+| `producer_sha` | the method block cannot name the code that produced it — the same question §2 could not answer |
+| each input's `unit` | `total purchased value: 1475520.00` renders with no USD beside it |
+
+The producer's own docstring names the first and calls it *"a cortex-side gap, reported and not patched
+from here."* That sentence is evidence about the producer's intent, **not** about this reader — a
+docstring in another tree cannot know what this code does — so the drop is asserted here against
+`readMethod` itself, and redproofed: a reader that keeps `bound_defaulted` turns it red.
+
+**Not patched, deliberately.** No order covers widening `MethodBlock`, and the export renders what the
+type carries, so a wider reader with no renderer would be a silent half-fix. **This needs a ruling.**
+
+## 4. The filter failure — why a GREEN seal was already false
+
+Lane 1 delivered the capture as `.md`. Every instrument in this repo that looks for producer payloads
+globs `sessions/*payload*.json`. So on the day the bound pair was first observed on a wire, the seal
+asserting it had **never** been observed stayed green — and would have stayed green indefinitely.
+
+Fixed at the root: the fenced block is extracted to
+`sessions/2026-09-26-payload-lot4-contribution-ranking.json`, inside the glob's reach, and
+`cardExport.fixture.test.ts` asserts the two copies agree (EOL-normalised text **and** parsed) — which
+retroactively seals the hand transcription too. Nothing checked that transcription before: every
+export seal compares the document to the fixture, so a mistyped digit would have made them agree
+about the wrong number. The parity seal now names the file, with the note **TWO FILES, ONE
+OBSERVATION**, so counting files cannot overstate the evidence.
+
+⚠ The loose name-search arm is instructive: `includes("threshold_defaulted")` over `sessions/` hits
+**six** files, **four of them this lane's own reports discussing the field's absence**, all dated
+before any capture carried it. A name search finds the prose about the name. A JSON-shaped matcher
+(`"key"\s*:`) isolates the one real observation.
+
+Scrub check on the committed payload: no JWT, bearer or key-shaped hit. The only `eyJ` hits in the
+repo remain the bare three letters in prose describing this check, run down one by one rather than
+counted; the pattern was proven to fire on a synthetic secret. `endpoint_url` arrives already redacted
+by Lane 1; the `http://invincible-agent/cost#…` strings are ontology IRIs, not endpoints.
+
+## 5. The two absence-assertions that reported their own end
+
+Both were written as assertions so they could not quietly stop being true. Both fired:
+
+- `expect(seen).not.toContain("CONTRIBUTION_RANKING")` in `cardExportFinance.test.ts` — the finding
+  that sent the fixture question back to the architect, now flipped to `toContain`.
+- `expect(fields).toHaveLength(6)` on the projector's envelope tuple — now SEVEN, which is how
+  `546e6bee` was discovered at all. A `>=` bound would have let it through in silence.
+
+## 6. Also done
+
+- **The shape-only rows are retired, not deleted** — read literally. `RETIRED_SHAPE_ONLY_ROWS` stays,
+  with a seal proving they are the **only witness left** for the absence branches (`favourable`,
+  `note`, `variance_kind`) that the real capture cannot reach, and that they are foreign to this wire.
+- **The corpus meets two envelope shapes.** The browser's `{final, events}` beside the producer's
+  `{prompt, asked_as, fleet_sha, routing, projected}`, read by `projectionsOf` / `routingOf` rather
+  than by rewriting the seals. Ten captures, nine projections, exactly one asserted both by count and
+  by name — because an unrecognised third shape would otherwise read as a harmless absence.
+- **The persona's source split in two.** The nine producer captures state it in `asked_as`; the
+  browser capture only inside `route_decision`. Written as an explicit either/or with an assertion
+  that the two sources are mutually exclusive — not as `readExportProvenance`'s own fallback chain,
+  since an expectation computed by the code under test cannot indict it.
+- **`question_asked` is not on the wire.** It comes from Lane 1's prose around the capture, not from
+  any event, and the fixture now says so in a ⛔ note with a seal over the event stream.
+- **A prediction corrected.** The 2026-09-25 report said the eight `method not supplied` assertions
+  "WILL GO RED, by design" once a real capture landed. They stay green, because the producer sends no
+  method for this archetype. A prediction about a test is owed the same suspicion as the test.
+- **Redproofs:** a reader keeping `bound_defaulted` (1 red), a numeric-string normaliser inside
+  `formatLeaf` (2 red — and the pairwise seal stays **green**, which is exactly why the hand-written
+  48-cell leaf oracle exists: an oracle that routes through the walker cannot indict the walker), a
+  one-cent doctored export, a tidied trailing zero (4 red), a mistyped total (2 red). One earlier
+  attempt was **hollow** — `perl -0pi` stripped the backslashes out of `/^\d+\.\d+$/`, leaving a
+  regex that never fired, and its EXIT 0 measured nothing. Re-applied with a printed sanity check on
+  the regex itself.
+
+## Open, and not covered by any order
+
+1. **The `readMethod` widening** (§3) — needs a ruling. Reader and renderer must move together.
+2. **A second lot 4 capture with a caller-supplied threshold**, to reach the other arm of the pair.
+3. **The fleet sha beside the next capture** (§2) — without it, every absence is indistinguishable
+   from every other.
+4. `helm/cortex-ui/values.yaml:20` defaults to `tag: latest` and there is no `required` guard, so a
+   never-built tag renders perfectly and fails minutes later at the kubelet on a release Helm already
+   called a success.
+5. **Held by explicit order:** ADR-0055 step 2, and the transport-guard blind spot at
+   `src/api/client.ts:58` (a live undeclared `axios.get<Entitlements>` the guard's regex cannot see).
