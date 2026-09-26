@@ -511,3 +511,61 @@ addendum as its specification. Their seal's docstring still claims a population 
 (three of eight tables), named and left open there.
 
 **Suite after this addendum:** 114 files / **1725** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
+
+---
+
+## Sixth addendum, same day — a derived population cannot see a subject that never arrived
+
+The engine lane closed their side at `ba56986a` and handed over the finding rather than the fix:
+**a population derived from its consumer cannot see its subject REMOVED from that consumer.** Their
+measurement: a corrupted value in a wired table reds the derived arm; an UNWIRED table leaves it
+GREEN, because the table simply leaves the population and the arm iterates a smaller set. They asked
+whether any of our 1725 derive a population the same way. **One does, and the mutation lands.**
+
+### Measured here, not accepted — `src/lib/sessionIsolation.test.ts`
+
+That file's whole purpose is that the purge list stays complete as stores are added; its docblock
+says it "DERIVES the population — every `use*Store.ts` on disk". Two mutations on `useStageStore`
+(localStorage-persisted under `cortex-stage`, and *not* one of the three stores pinned by name):
+
+| | mutation | result |
+|---|---|---|
+| M1 | its persisted key corrupted to `cortex-stage-v2` | **EXIT 1** — the key seal names it. The arm is live. |
+| M2 | a new `src/store/stageDraftStore.ts`, persisting to localStorage under `cortex-stage-draft`, purged nowhere | ⛔ **EXIT 0. All 13 green.** |
+
+M2 *is* the leak the file exists to prevent — user-scoped state surviving an account switch —
+shipping with the guard green. Invisible because it never enters the population: no `use` prefix, so
+the regex skips it, so it is absent from `storeModules`, absent from `persistedStores`, and absent
+from `undecided`. **The gap detector cannot report a gap it is not looking at.**
+
+⚠ **And the floor could not cover for it.** `storeModules.length >= 7` was written when there were 7;
+there are **11**, so four modules could leave before that control notices, and one that never arrived
+costs nothing. Three of eleven are pinned by name. A floor is a ratchet against *shrinkage*; this is
+non-arrival.
+
+**Sealed:** two arms asserting the derivation's *reach* rather than its contents — every non-test
+module in `src/store` must match the convention (so it faces every seal above) or be named a
+non-store, and the directory must stay flat (a nested `use*Store.ts` escapes the same way).
+`.tsx` deliberately in scope, since nothing makes a store `.ts`. Redproof: M2 replayed → EXIT 1 on
+the first arm; a nested store → EXIT 1 on the second; each on its own seal, zero ENOENT.
+
+### The criterion, and the three sites it CLEARS
+
+What made this one real is not that the population is derived — it is that **production's reach is
+wider than the test's.** Vite imports any filename; the seal matched one. Applying that criterion to
+the rest of the class, and reporting the negatives because a sweep that only finds hits is a sweep
+nobody can check:
+
+- `taskKindParity` filters `.yaml` — but nothing on this side loads yaml at runtime (the only hit in
+  `src/` is a comment). A `.yml` is not a shipping subject here. **No gap.**
+- `assembleCapabilities` walks `src/lib` for `.ts` only, and `src/lib/meshPersonaConfig.tsx` exists —
+  but the assertion is `exported.has(c.consumer)).toBe(true)`, so a missed export produces a **false
+  RED**, not a false green. **Fails safe**, which is the opposite failure and an acceptable one.
+- `projectedTupleParity`'s ledger and payload globs have floors *and* exact `toEqual` membership on
+  what they find. Membership, not cardinality, is what makes them immune. **Already the strong form.**
+
+**So the lesson is narrower and more useful than "ratchet your populations":** a derived population
+needs a reach assertion exactly where the production loader accepts more than the test's filter does.
+Where a miss reds, or where membership is pinned by name, the derivation is already honest. Both lanes
+had ratchets against shrinkage and neither had one against non-arrival — found on their tree, fixed on
+both.

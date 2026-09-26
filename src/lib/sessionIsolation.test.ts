@@ -196,3 +196,76 @@ describe("sessionIsolation — the purge list stays complete", () => {
     expect(useCanvasStore.getState().artifacts).toHaveLength(1);
   });
 });
+
+/**
+ * ⛔ THE DERIVATION'S REACH — the one mutation every seal above survives.
+ *
+ * This file's docblock says it "DERIVES the population — every `use*Store.ts` on disk". That is
+ * true and it is the gap: **a population derived from a filter cannot see a subject the filter
+ * misses.** Every assertion above is about the 11 modules that matched. None is about whether 11
+ * is all of them.
+ *
+ * MEASURED 2026-09-26, two mutations, both on `useStageStore` (localStorage-persisted under
+ * `cortex-stage`, and NOT one of the three stores pinned by name at the positive control):
+ *
+ *   M1  its persisted key corrupted to `cortex-stage-v2`  → EXIT 1, the key seal names it. Live.
+ *   M2  a NEW store added at `src/store/stageDraftStore.ts`, persisting to localStorage under
+ *       `cortex-stage-draft`, purged nowhere                → **EXIT 0. All 13 green.**
+ *
+ * M2 is the leak this file exists to prevent, shipping, with the guard green. It is invisible
+ * because it never enters the population: no `use` prefix, so the regex skips it, so it is absent
+ * from `storeModules`, absent from `persistedStores`, and absent from `undecided` — the gap
+ * detector cannot report a gap it is not looking at.
+ *
+ * ⚠ AND THE FLOOR CANNOT COVER FOR IT. `storeModules.length >= 7` was written when there were 7;
+ * there are now 11, so **four modules can leave the population before that control notices**, and
+ * a module that never joined costs nothing at all. Three stores are pinned by name out of eleven.
+ * A floor is a ratchet against SHRINKAGE; this is a subject that never arrived.
+ *
+ * So the invariant below is about the filter, not the stores: every non-test module in the store
+ * directory must either match the convention — and thereby face every seal above — or be named
+ * here as a known non-store. A lane adding `stageDraftStore.ts` now gets a red that says so.
+ *
+ * Found by the invincible-agent lane, on their own tree, in the same shape: a population derived
+ * from the envelope builder went green when a table was UNWIRED from it, while a corrupted value
+ * in a wired table reded. Both sides had ratchets against shrinkage and neither had one against
+ * non-arrival. Related: this repo's own lesson that a NULL from a filtered grep is a claim about
+ * the filter, not the population.
+ */
+describe("the store enumeration's REACH, not just its contents", () => {
+  /** Non-store modules legitimately living in src/store. Empty today — and that is the point:
+   *  a new name here is a deliberate statement that the file holds no user-scoped state. */
+  const NON_STORE_MODULES: string[] = [];
+
+  it("⛔ every non-test module in src/store matches the store convention — or is named a non-store", () => {
+    const all = readdirSync(STORE_DIR).filter(
+      (f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f),
+    );
+    // POSITIVE CONTROL, in the idiom of every other enumeration in this file: a filter that
+    // stopped matching would make the assertion below pass over an empty list.
+    expect(all, "the store directory enumeration found nothing").toContain("useStageStore.ts");
+    expect(all.length).toBeGreaterThanOrEqual(storeModules.length);
+
+    // `.tsx` DELIBERATELY IN SCOPE. A store is not required to be `.ts`, and the population regex
+    // above demands it — so a `useFooStore.tsx` would escape the purge seals exactly as M2 did.
+    const unmatched = all.filter((f) => !/^use[A-Za-z]+Store\.ts$/.test(f));
+    expect(
+      unmatched,
+      "a module in src/store that no purge seal above can see — rename it to use*Store.ts so it " +
+        "faces them, or add it to NON_STORE_MODULES to state it holds no user-scoped state",
+    ).toEqual(NON_STORE_MODULES);
+  });
+
+  it("⛔ and src/store is FLAT — a nested store would leave the population the same way", () => {
+    // The flat readdirSync is the whole reach. A store at src/store/stage/useDraftStore.ts matches
+    // the convention and is still invisible, so the directory shape is part of the invariant.
+    const nested = readdirSync(STORE_DIR, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+    expect(
+      nested,
+      "src/store has subdirectories — the enumeration above is no longer complete, so it must " +
+        "walk recursively before this seal is removed",
+    ).toEqual([]);
+  });
+});
