@@ -569,3 +569,61 @@ needs a reach assertion exactly where the production loader accepts more than th
 Where a miss reds, or where membership is pinned by name, the derivation is already honest. Both lanes
 had ratchets against shrinkage and neither had one against non-arrival — found on their tree, fixed on
 both.
+
+---
+
+## Seventh addendum, same day — my own fix was walkable, and partitioning the forced spelling found two unregistered keys
+
+The engine lane's objection to the sixth addendum's fix was correct, and firing it beat arguing it:
+
+> A convention arm makes the next store conform; it does not make an unconventional one visible.
+> Ask what the shipping code is FORCED to spell and partition that.
+
+**M3** — a persisted localStorage store at `src/components/planning/useDraftStore.ts`, purged nowhere
+→ **EXIT 0, all 15 green.** One directory over and the file was blind again. The sixth addendum moved
+the boundary from *filename* to *directory + filename*; it did not remove one.
+
+### What is actually forced
+
+Not the filename (Vite imports any), not the directory, not even the `persist()` config — **state
+cannot outlive a reload without a `localStorage.setItem` call.** That is total over naming, location
+and store-vs-hook, and partitioning it surfaced two keys no arm in this file could reach:
+
+| key | site | why it escaped |
+|---|---|---|
+| `cortex-grounding-display-mode` | `useInterviewStore.ts:387` | The store IS in `storeModules` and IS named in `sessionIsolation.ts`, so `undecided` calls it decided — but it has **no `persist()`**, so it never enters `persistedStores` and the key seal never sees its key. ⛔ **Decided at store granularity, undecided at key granularity.** The register's own comment says "Persisted-store localStorage keys" — that scope *is* the gap. |
+| `cortex-mock-grounding` | `mockGroundingEmitter.ts:80` | A lib module outside the store population altogether. No arm here could ever have reached it. |
+
+Both are now classified **device-scoped, not user-scoped** — and that classification is *derived, not
+deferred*: a display mode and a mock-mode toggle, neither holding interview content. Stated as a
+derivation in the register so a human can contradict it in one line. ⚠ Recorded because the lane
+opposite just paid for the other choice: they deferred a classification as "a judgment I am not making
+unilaterally in a shared tree", and it was one grep from the envelope builder. **A stated reason for
+not deciding reads as diligence and stops re-examination as effectively as a wrong answer does, and no
+check suite can fire on a deferral — there is nothing to run.**
+
+### Sealed, and why both instruments stay
+
+A `DURABLE_WRITERS` register over every non-test module in `src/` that writes durable localStorage —
+seven today — each entry carrying the argument for purging or not purging, reason length reviewed, and
+**checked in both directions** so an entry whose module stopped writing cannot leave a stale argument
+standing as live coverage. (That second direction is what caught the lane opposite: their checked
+excuse list indicted its own author when a pattern consumed its anchor.)
+
+The convention arms from the sixth addendum stay, because the two have **opposite blind spots** — the
+engine lane's structural finding, and the reason neither alone is enough. The convention arms red on
+naming drift inside `src/store` and are blind to a writer outside it; the register arm reds on any new
+writer anywhere and is blind to naming drift inside the convention. They compose because they fail in
+opposite directions.
+
+**Redproof, three mutations, each on its own arm, zero ENOENT:** M3 replayed → EXIT 1; a hand-rolled
+`setItem` in a brand-new module in a different directory, no zustand → EXIT 1; a registered writer made
+to stop writing → EXIT 1 on the both-directions arm.
+
+**Residual limits, stated rather than implied:** an indirect write through a wrapper, and a dependency
+writing localStorage on our behalf, are invisible to a source grep. Cookies and IndexedDB are out of
+scope and always were. `useComposerDraft` writes a **computed** key (`cortex-composer-draft:<owner>`),
+which is why the partition had to be the *call site* and not the literal — a literal-key arm would have
+missed a module that was already there.
+
+**Suite:** 114 files / **1730** tests green; `check:transport` ✓, `tsc --noEmit` ✓.

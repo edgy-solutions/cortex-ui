@@ -269,3 +269,111 @@ describe("the store enumeration's REACH, not just its contents", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * ⛔ THE FORCED SPELLING — because the arms above can still be walked around, and were.
+ *
+ * The reach arms added earlier assert a CONVENTION over `src/store`. The engine lane's objection to
+ * that was correct and I fired it rather than argued it: **a convention arm makes the next store
+ * conform; it does not make an unconventional one visible.**
+ *
+ *   M3  a persisted localStorage store at `src/components/planning/useDraftStore.ts`, purged nowhere
+ *       → **EXIT 0. All 15 green.** One directory over and the whole file is blind again.
+ *
+ * So this arm takes their better question — *what is the shipping code FORCED to spell?* — and it is
+ * none of the things asserted above. Not the filename (Vite imports any), not the directory, not even
+ * the `persist()` config: **you cannot keep state across a reload without a `localStorage.setItem`
+ * call.** That is the partition, and it is total over naming, location and store-vs-hook.
+ *
+ * ⚠ PARTITIONING IT SURFACED TWO KEYS THAT WERE IN NO REGISTER, and they are not hypothetical:
+ *
+ *   `cortex-grounding-display-mode` — `useInterviewStore.ts:387`. The store IS in `storeModules` and
+ *     IS named in sessionIsolation.ts, so `undecided` calls it decided — but it has no `persist()`,
+ *     so it never enters `persistedStores`, so the key seal never sees its key. **Decided at store
+ *     granularity, undecided at key granularity**, which is the file's own forbidden third state one
+ *     level down. The register's comment says "Persisted-store localStorage keys" — that scope is
+ *     exactly the gap.
+ *   `cortex-mock-grounding` — `mockGroundingEmitter.ts:80`, a lib module outside the store population
+ *     altogether. No arm in this file could ever have reached it.
+ *
+ * Both are classified below as device-scoped rather than user-scoped, and I am NOT deferring that as
+ * a judgment: it is derivable from the modules' own naming and purpose — a display mode and a mock
+ * toggle, neither holding interview content. Stated as a derivation so it can be contradicted in one
+ * line if a human reads them differently. (The lane opposite deferred a classification as "not mine
+ * to make unilaterally" and it turned out to be one grep away; a stated reason for not deciding reads
+ * as diligence and stops re-examination just as effectively as a wrong answer.)
+ *
+ * The two arms are complements with OPPOSITE blind spots, which is the engine lane's structural point
+ * and the reason both stay: the convention arms red when a store in `src/store` breaks the naming and
+ * are blind to a writer outside it; this arm reds on any new writer anywhere and is blind to naming
+ * drift inside the convention. Residual limits, stated rather than implied: an indirect write through
+ * a wrapper, and a dependency writing localStorage on our behalf, are both invisible to a source
+ * grep. Cookies and IndexedDB are out of scope here and always were.
+ */
+describe("every module that can outlive a reload is in a register", () => {
+  /** Every non-test module under src/ that writes durable localStorage, with the argument for its
+   *  treatment. A new writer MUST appear here — that is the point — and the reason is reviewed. */
+  const DURABLE_WRITERS: Record<string, string> = {
+    "store/useAnswerPanelStore.ts":
+      "user-scoped answers; persisted under cortex-answers-panel-v1, which IS in USER_SCOPED_STORAGE_KEYS and is purged",
+    "store/useStageStore.ts":
+      "user-scoped stage position; persisted under cortex-stage, which IS in USER_SCOPED_STORAGE_KEYS and is purged",
+    "store/usePersonaStore.ts":
+      "sessionStorage-backed, not localStorage — dies with the tab, so the localStorage list's remit does not reach it",
+    "store/useInterviewStore.ts":
+      "writes cortex-grounding-display-mode directly, with no persist() wrapper. DEVICE-scoped by derivation: a display mode for how grounding is rendered, holding no interview content, so a switch of user need not reset it",
+    "lib/mockGroundingEmitter.ts":
+      "writes cortex-mock-grounding, the mock-mode toggle. DEVICE-scoped by derivation: it selects whether the backend is faked at all, which is a property of the machine and not of who is signed in",
+    "hooks/useComposerDraft.ts":
+      "keys are COMPUTED per owner (cortex-composer-draft:<owner>), so A's draft is unreachable from B's session by construction; deliberately unpurged, per the seal above about same-user re-login",
+    "lib/sessionIsolation.ts":
+      "writes the owner stamp itself; purging it would make every reconcile look like a first observation and the purge would fire forever",
+  };
+
+  /** Recursive, because the point of this arm is that location does not matter. */
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return walk(full);
+      if (!/\.tsx?$/.test(e.name) || /\.test\.tsx?$/.test(e.name)) return [];
+      return [full];
+    });
+
+  const SRC = path.join(__dirname, "..");
+  const writers = walk(SRC)
+    .filter((f) => /localStorage\.setItem|persist\(/.test(readFileSync(f, "utf8")))
+    .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
+    .sort();
+
+  it("the write-site enumeration finds the known writers — positive control", () => {
+    // Without this, a walk that returned nothing would make the arm below assert over an empty
+    // set, which is the failure this whole file is a monument to.
+    expect(writers).toContain("store/useStageStore.ts");
+    expect(writers).toContain("hooks/useComposerDraft.ts");
+    expect(writers.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("⛔ every durable-localStorage writer in src/ is registered with a reason", () => {
+    const unregistered = writers.filter((f) => !(f in DURABLE_WRITERS));
+    expect(
+      unregistered,
+      "this module can outlive a reload and no isolation decision covers it — add it to " +
+        "DURABLE_WRITERS with the argument for purging or not purging its key",
+    ).toEqual([]);
+    for (const [f, why] of Object.entries(DURABLE_WRITERS)) {
+      expect(why.length, `${f}: reason too thin to review`).toBeGreaterThan(40);
+    }
+  });
+
+  it("⛔ and the register has not lost its subject — both directions", () => {
+    // The complement, and the one that caught the lane opposite: an entry whose module no longer
+    // writes anything is a stale argument that reads as live coverage. A register checked in one
+    // direction only decays silently.
+    const stale = Object.keys(DURABLE_WRITERS).filter((f) => !writers.includes(f));
+    expect(
+      stale,
+      "registered as a durable writer but writes nothing now — delete the entry, do not leave the " +
+        "argument standing for code that no longer makes it",
+    ).toEqual([]);
+  });
+});
