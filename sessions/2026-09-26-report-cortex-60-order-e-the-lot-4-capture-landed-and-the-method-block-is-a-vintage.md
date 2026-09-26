@@ -866,3 +866,75 @@ Nothing went quiet.
 Gates: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0, **114 files / 1733 tests** green. Both
 CompetingMeasures halves remain **reported, not patched**, and the ninth addendum's residual paragraph
 is corrected in place rather than rewritten.
+
+## Eleventh addendum, same day — the peer's B1 found four quiet branches, and my own docstring was a mutant nobody had run
+
+The peer's seventh message made two strikes. Both landed, and the second one landed on a sentence I
+wrote myself one commit after learning the lesson it breaks.
+
+**B1 — a branch whose obvious mutation is a no-op reads as covered.** Where a two-branch rule returns
+the same allowed value either way, dropping one branch changes nothing, so its quiet is not evidence
+of cover. Their property, fired on my `isStorageValue`:
+
+| mutant | edit | before fix7/fix8 | after |
+|---|---|---|---|
+| N1 | conditional: drop `whenFalse` | **QUIET** | RED (doctored-sources arm) |
+| N1b | conditional: drop `whenTrue` | — | RED |
+| N2 | `??`/`||`: drop `left` | **QUIET** | RED |
+| N2b | `??`/`||`: drop `right` | RED | RED |
+| N4 | disable paren/`as`/non-null unwrapping | **QUIET** | RED |
+| N5 | reason threshold `> 40` → `> 0` | **QUIET** | RED (handoff/reason arm) |
+| N6 | `> 40` on `.length`, not `.trim().length` | — | RED |
+| N7 | `isStorageRef` → `false` | — | RED |
+
+Four holes, all of the same shape: **the case that runs THROUGH a branch is not the case that
+distinguishes it.** Every refused case I had written took the far side, so the near side was decoration.
+The fix is one case per branch, near side included, plus `as Storage` and `(window.localStorage)!`. N5
+was a dead threshold — `> 40` where every real reason is 300–418 characters, so the number was inert on
+the whole population; extracting `reasonIsReviewable` gave it something to be driven by.
+
+**B2 — the floor's repair invitation.** Their strike: a count equal to the population invites a
+two-part diff, delete the store and lower the number, whose second part is the repair the first
+demands. Measured, and it was green. Two things came out of measuring it rather than conceding it:
+
+- The "plain store" row of my own table was a claim about a subset whose size I had never counted.
+  All eleven stores were dropped one at a time: **sole cover for exactly four** — useCanvasStore,
+  useEvidenceStore, useHumanTaskStore, useInterviewStore — and doubled for the other seven. The
+  property is general: **deletion is self-evidencing exactly when the subject is named twice.** A
+  persisted key and an exemption entry live where the removing diff need not go, so they go stale and
+  red; a purged store's name lives only in the purge body, which the same diff deletes.
+- No stronger assertion exists for those four, so the improvement is the evidence a failure leaves.
+  The population is now asserted BY NAME, both directions. Re-fired with both parts applied on the two
+  plain unpinned stores, it reds on "a store named here is gone" — a third edit is required, and that
+  edit is the record.
+
+**And my own docstring was a mutant I never ran.** The export arm's comment said passing storage as an
+argument "is deliberately not forbidden, because it is not silent", and that what remained unreachable
+was "a callee holding the key while the caller holds the register entry; the entry's reason is where
+that has to be said". Fired as the two-file pair that sentence specifies — `lib/writerCore.ts` writing
+through a `Storage` parameter, `lib/callSite.ts` registered and passing `window.localStorage` —
+**21/21 GREEN**, a new durable key shipping from a module no arm can see. "The entry's reason is where
+that has to be said" is a hope about human discipline wearing a check's clothes. Struck in place;
+`storagePassedToOurCode` now forbids the handoff to our own code and keeps the dependency case allowed
+for a stated reason rather than by omission — measured first: all five real pass-sites in `src/` hand
+storage to package imports, so the arm starts at zero false positives. Re-fired, X1 reds, and reds by
+**only** that arm, because `writerCore.ts` writes through a parameter and the subject-keyed census
+cannot see it.
+
+*A prediction written into a docstring is a mutant nobody has run yet* — and this one carried my own
+name, one commit after the peer taught me the same lesson about a one-file mutant against a two-file
+arm.
+
+**Two wrong-reason exits caught on the way, both silent.** A `sed` retarget of a mutant script whose
+pattern did not match, so the re-fire measured the previous mutant; and a replay whose anchor regex
+returned `null`, killing the patch process while `run.sh` printed EXIT 0 — a green that measured
+nothing, invisible to my wrong-reason grep because the error was in a *different* process than the
+vitest log. Mutant scripts now count their anchor and exit 9 on 0 or >1 matches. Third instance in two
+days of the same class: **my wrong-reason detector only sees the log it greps.** And once more at the
+end: the first B2 re-fire went red on the pinned-name assertion three lines above the new one, which
+would have credited the new arm with cover it had not shown — caught by reading the failing
+assertion's MESSAGE, not the exit code.
+
+Seal: 18 → **23 arms**. Gates: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0, **114 files / 1735
+tests** green. `tsc` again caught what no test could — a point-free `.filter(touchesStorage)` would
+have been handed the array index as its source argument.

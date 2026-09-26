@@ -75,6 +75,18 @@ const purgedIn = (src: string): Set<string> => {
 /** The real subject. Kept separate from `purgedIn` so a control can drive it with a doctored source. */
 const purgedInBody = purgedIn(ISOLATION_SRC);
 
+/**
+ * Whether a stated reason can actually be reviewed.
+ *
+ * ⚠ Extracted because the threshold it replaces was DEAD. Both registers carried an inline length
+ * check — `> 40` here, `> 30` for the exemptions — and every real reason in this file is between 300
+ * and 418 characters, so on 2026-09-26 relaxing `> 40` to `> 0` was QUIET. A threshold no case
+ * approaches is not a check; it is a number that reads like one, and an entry with a one-character
+ * reason would have passed a suite that claims reasons must be reviewable. One threshold now, with
+ * both directions asserted below, and `.trim()` because sixty spaces is a length and not a reason.
+ */
+const reasonIsReviewable = (reason: string): boolean => reason.trim().length > 40;
+
 /** The keys sessionIsolation declares it will remove. Read from source: the list is a
  *  private const, and exporting it purely to be asserted on would be the test reshaping
  *  the module to suit itself. */
@@ -125,11 +137,57 @@ describe("sessionIsolation — the purge list stays complete", () => {
     //   an exempted store REMOVED              → the exemption arm reds ("no longer exists")
     //   a plain store DELETED outright         → ⛔ NOTHING ELSE REDS. This count is sole cover.
     //
-    // So it stays, and the honest statement of what it buys is bookkeeping, not leak-catching: a
-    // deliberate deletion is not a defect, and what this forces is that the number be re-stated by
-    // whoever did it. If a future re-run finds even that case covered elsewhere, delete this —
-    // a control that covers nothing is what goes stale and then reads as coverage.
+    // ⛔ AND THE "PLAIN" ROW WAS THEN COUNTED, because a row of a table is a claim about a subset and
+    // I had not said how big it is. All eleven stores were dropped from the population one at a time
+    // (2026-09-26, `del-<store>.log`): **sole cover for exactly four** — useCanvasStore,
+    // useEvidenceStore, useHumanTaskStore, useInterviewStore — and doubled for the other seven. The
+    // property that makes the difference is worth stating, because it is the general rule and not a
+    // fact about these files: a persisted KEY and an exemption ENTRY name the store somewhere the
+    // same diff does not have to touch, so removing the store leaves a stale mention that reds. A
+    // purged store's name lives ONLY in the purge body, which the removing diff deletes in the same
+    // breath — nothing is left behind to go stale. **Deletion is self-evidencing exactly when the
+    // subject is named twice.** No assertion can be built for the four; a count is genuinely all
+    // there is, which is why this stays and why the peer's B2 strike lands on it.
+    //
+    // ⚠ THE INVITATION WAS REAL, AND MEASURING IT IS WHAT CLOSED IT. Fired as mutant B2 asks — drop
+    // a store from the population AND lower the literal to match — the suite was GREEN for those
+    // four, because part 2 is precisely the repair part 1 demands and a number cannot refuse its own
+    // re-statement. So the improvement is not a stronger check; it is the EVIDENCE the failure leaves
+    // in the diff. `11` → `10` says a store left; a removed NAME says which one, in the same shape
+    // `DURABLE_WRITERS` already uses two describes below. With the population asserted by name, the
+    // two-part repair no longer suffices: re-fired on useEvidenceStore and on useHumanTaskStore (the
+    // two plain stores not pinned above), both parts applied, it reds on "a store named here is
+    // gone" — a third edit is now required and that edit is the record. **Confirmed by the failing
+    // assertion's own message, not by the exit code**: the first re-fire used useCanvasStore, went
+    // red, and was red for the PIN three lines up, which would have credited the new arm with cover
+    // it had not shown. The count is kept because it reds first with the shortest message. Neither
+    // half is leak-catching; both are bookkeeping that cannot go quiet.
     expect(storeModules.length).toBeGreaterThanOrEqual(11);
+    // Both directions on purpose: `toEqual` on a sorted array would say the same thing, but the two
+    // failures answer different questions and a reader of the red should not have to diff by eye.
+    const KNOWN_STORES = [
+      "useAnswerPanelStore",
+      "useCanvasStore",
+      "useEvidenceStore",
+      "useHumanTaskStore",
+      "useInterviewStore",
+      "usePersonaStore",
+      "usePresentationStore",
+      "useRegistrationStore",
+      "useStageStore",
+      "useTaskKindStore",
+      "useTemplateStore",
+    ];
+    expect(
+      KNOWN_STORES.filter((s) => !storeModules.includes(s)),
+      "a store named here is gone from src/store — if that was deliberate, remove the name in the " +
+        "SAME diff, so the record says which store left rather than that the number got smaller",
+    ).toEqual([]);
+    expect(
+      storeModules.filter((s) => !KNOWN_STORES.includes(s)),
+      "a NEW store joined the population — add it here, and check it is purged or exempted with a " +
+        "reason; the convention arm below only proves it could be seen, not that anyone looked",
+    ).toEqual([]);
   });
 
   it("the persisted-key derivation actually finds persisted stores — positive control", () => {
@@ -181,7 +239,10 @@ describe("sessionIsolation — the purge list stays complete", () => {
   it("every exemption states WHY — an exemption without a reason is an oversight in costume", () => {
     for (const [store, reason] of Object.entries(PURGE_EXEMPT_STORES)) {
       expect(storeModules, `${store} is exempted but no longer exists`).toContain(store);
-      expect(reason.length, `${store}'s exemption reason is too thin to review`).toBeGreaterThan(30);
+      expect(
+        reasonIsReviewable(reason),
+        `${store}'s exemption reason is too thin to review`,
+      ).toBe(true);
     }
   });
 
@@ -539,7 +600,7 @@ describe("every module that can outlive a reload is in a register", () => {
         "DURABLE_WRITERS with the argument for purging or not purging its key",
     ).toEqual([]);
     for (const [f, why] of Object.entries(DURABLE_WRITERS)) {
-      expect(why.length, `${f}: reason too thin to review`).toBeGreaterThan(40);
+      expect(reasonIsReviewable(why), `${f}: reason too thin to review`).toBe(true);
     }
   });
 
@@ -554,6 +615,38 @@ describe("every module that can outlive a reload is in a register", () => {
         "argument standing for code that no longer makes it",
     ).toEqual([]);
   });
+
+  /**
+   * Whether an expression IS the storage object, rather than merely containing a reference to one
+   * somewhere inside. The first version asked the latter and flagged two store hooks whose bodies
+   * write storage — exporting a store that persists is the normal case this whole register exists
+   * to describe, not a leak. Conditionals and `??`/`||` are judged branch by branch, because a
+   * rule that reads a two-branch expression as one whole excuses the branch it did not look at.
+   */
+  const isStorageValue = (e: ts.Node): boolean => {
+    if (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)) {
+      return isStorageValue(e.expression);
+    }
+    if (ts.isConditionalExpression(e)) {
+      return isStorageValue(e.whenTrue) || isStorageValue(e.whenFalse);
+    }
+    if (
+      ts.isBinaryExpression(e) &&
+      (e.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+        e.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+    ) {
+      return isStorageValue(e.left) || isStorageValue(e.right);
+    }
+    if (
+      ts.isElementAccessExpression(e) &&
+      e.argumentExpression &&
+      ts.isStringLiteral(e.argumentExpression) &&
+      /^(localStorage|sessionStorage)$/.test(e.argumentExpression.text)
+    ) {
+      return true;
+    }
+    return isStorageRef(e);
+  };
 
   /**
    * A storage object may not LEAVE its module.
@@ -578,10 +671,18 @@ describe("every module that can outlive a reload is in a register", () => {
    * the handle across modules would need a fixpoint in a unit test. It is also the fail-safe
    * direction: a module that wants durable state writes it here, under a register entry.
    *
-   * ⚠ Passing storage as an ARGUMENT is deliberately not forbidden, because it is not silent: the
+   * ⚠ ~~Passing storage as an ARGUMENT is deliberately not forbidden, because it is not silent: the
    * call site names storage and so is itself in the register — `auth/AuthProvider.tsx` is exactly
    * that shape. What remains unreachable is a callee holding the key while the caller holds the
-   * register entry; the entry's reason is where that has to be said, and AuthProvider's says it.
+   * register entry; the entry's reason is where that has to be said, and AuthProvider's says it.~~
+   *
+   * **Struck 2026-09-26.** The last sentence named a live hole and then excused it. "The entry's
+   * reason is where that has to be said" is a hope about what a human will write, not a check, and
+   * the case it describes measured 21/21 GREEN when finally fired as the two-file pair it specifies.
+   * A prediction written into a docstring is a mutant nobody has run yet — and this one had my own
+   * name on it, one commit after I learned the same lesson from the peer. See
+   * `storagePassedToOurCode` below, which forbids the handoff to OUR code and keeps the dependency
+   * case allowed for a stated reason rather than by omission.
    */
   const exportsStorage = (file: string, src = readFileSync(file, "utf8")): string[] => {
     const sf = ts.createSourceFile(
@@ -591,37 +692,6 @@ describe("every module that can outlive a reload is in a register", () => {
       true,
       file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     );
-    /**
-     * Whether an expression IS the storage object, rather than merely containing a reference to one
-     * somewhere inside. The first version asked the latter and flagged two store hooks whose bodies
-     * write storage — exporting a store that persists is the normal case this whole register exists
-     * to describe, not a leak. Conditionals and `??`/`||` are judged branch by branch, because a
-     * rule that reads a two-branch expression as one whole excuses the branch it did not look at.
-     */
-    const isStorageValue = (e: ts.Node): boolean => {
-      if (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)) {
-        return isStorageValue(e.expression);
-      }
-      if (ts.isConditionalExpression(e)) {
-        return isStorageValue(e.whenTrue) || isStorageValue(e.whenFalse);
-      }
-      if (
-        ts.isBinaryExpression(e) &&
-        (e.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
-          e.operatorToken.kind === ts.SyntaxKind.BarBarToken)
-      ) {
-        return isStorageValue(e.left) || isStorageValue(e.right);
-      }
-      if (
-        ts.isElementAccessExpression(e) &&
-        e.argumentExpression &&
-        ts.isStringLiteral(e.argumentExpression) &&
-        /^(localStorage|sessionStorage)$/.test(e.argumentExpression.text)
-      ) {
-        return true;
-      }
-      return isStorageRef(e);
-    };
     const boundToStorage = new Set<string>();
     const exported: string[] = [];
     const visit = (n: ts.Node): void => {
@@ -660,6 +730,124 @@ describe("every module that can outlive a reload is in a register", () => {
   });
 
   /**
+   * A storage object may not be handed to OUR OWN code either.
+   *
+   * ⚠ This arm exists because a docstring of mine predicted the case and no mutant of mine ever ran
+   * it. The export arm's comment said passing storage as an argument "is deliberately not forbidden,
+   * because it is not silent: the call site names storage and so is itself in the register", and that
+   * what remained unreachable was "a callee holding the key while the caller holds the register
+   * entry". Fired on 2026-09-26 as the two-file pair the sentence describes:
+   *
+   *     lib/writerCore.ts  export const put = (s: Storage, v: string) => s.setItem("cortex-crossmod", v);
+   *     lib/callSite.ts    import { put } from "./writerCore";  put(window.localStorage, v);   (REGISTERED)
+   *
+   * 21/21 GREEN, key in an unregistered module. The sentence was right about the mechanism and wrong
+   * that it was covered: "the entry's reason is where that has to be said" is a claim about human
+   * discipline, not a check. A prediction written into a docstring is a mutant nobody has run yet.
+   *
+   * A DEPENDENCY is a different case and stays allowed, for a reason rather than by omission: it
+   * cannot carry a register entry, the boundary is where our reach ends, and the call site that names
+   * storage is registered and must explain itself — `auth/AuthProvider.tsx` handing sessionStorage to
+   * oidc-client-ts is exactly that. Measured the same day: all five real pass-sites in src/ hand
+   * storage to package imports, so this arm starts with zero false positives rather than a waiver.
+   */
+  const storagePassedToOurCode = (file: string, src = readFileSync(file, "utf8")): string[] => {
+    const sf = ts.createSourceFile(
+      file,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    /** Imported from our own source: a relative path, or the `@/` alias. */
+    const ours = new Map<string, string>();
+    /**
+     * Storage reached through LITERALS only — the value itself, or a property/element of an object or
+     * array literal argument. Deliberately not "anywhere in the argument's subtree": that reading
+     * flagged `create(() => { localStorage.setItem(...) })`, which is a store body and not a handoff.
+     */
+    const handedOver = (a: ts.Node): boolean => {
+      if (isStorageValue(a)) return true;
+      if (ts.isObjectLiteralExpression(a)) {
+        return a.properties.some((p) => ts.isPropertyAssignment(p) && handedOver(p.initializer));
+      }
+      if (ts.isArrayLiteralExpression(a)) return a.elements.some(handedOver);
+      return false;
+    };
+    const hits: string[] = [];
+    const visit = (n: ts.Node): void => {
+      if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) {
+        const spec = n.moduleSpecifier.text;
+        if (spec.startsWith(".") || spec.startsWith("@/")) {
+          const b = n.importClause?.namedBindings;
+          if (b && ts.isNamedImports(b)) for (const el of b.elements) ours.set(el.name.text, spec);
+          if (n.importClause?.name) ours.set(n.importClause.name.text, spec);
+        }
+      }
+      if (ts.isCallExpression(n) || ts.isNewExpression(n)) {
+        let root: ts.Node = n.expression;
+        while (ts.isPropertyAccessExpression(root)) root = root.expression;
+        const callee = ts.isIdentifier(root) ? root.text : null;
+        if (callee && ours.has(callee) && (n.arguments ?? []).some(handedOver)) hits.push(callee);
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return hits;
+  };
+
+  it("⛔ no storage object is handed to another module of ours — the callee would hold the key", () => {
+    const sites = walk(SRC)
+      .map((f) => [path.relative(SRC, f).split(path.sep).join("/"), storagePassedToOurCode(f)] as const)
+      .filter(([, names]) => names.length > 0)
+      .map(([f, names]) => `${f} hands storage to ${names.join(", ")}`);
+    expect(
+      sites,
+      "the callee owns the key while the caller owns the register entry, so the module that decides " +
+        "what outlives a reload is invisible to every arm here — write it in a registered module",
+    ).toEqual([]);
+  });
+
+  it("⛔ the handoff and reason rules are driven directly — both directions", () => {
+    const D = "doctored.ts";
+    // Refused: our own code, named and default imports, bare and nested one literal deep.
+    expect(
+      storagePassedToOurCode(D, 'import { put } from "./writerCore";\nput(window.localStorage, v);'),
+    ).toEqual(["put"]);
+    expect(
+      storagePassedToOurCode(D, 'import { put } from "@/lib/x";\nput({ store: window.localStorage });'),
+    ).toEqual(["put"]);
+    expect(
+      storagePassedToOurCode(D, 'import mod from "./m";\nmod.wrap([window.sessionStorage]);'),
+    ).toEqual(["mod"]);
+    // Accepted, each for its own reason and not by omission.
+    expect(
+      storagePassedToOurCode(
+        D,
+        'import { WebStorageStateStore } from "oidc-client-ts";\nnew WebStorageStateStore({ store: window.sessionStorage });',
+      ),
+      "a dependency cannot carry a register entry; the call site names storage and is registered",
+    ).toEqual([]);
+    expect(
+      storagePassedToOurCode(D, 'const put = (s) => s.setItem("k", "v");\nput(window.localStorage);'),
+      "a local callee keeps the key in this module, which is the module already in the register",
+    ).toEqual([]);
+    expect(
+      storagePassedToOurCode(
+        D,
+        'import { create } from "zustand";\ncreate(() => { localStorage.setItem("k", "v"); });',
+      ),
+      "a store body is not a handoff — reading storage anywhere in an argument subtree is the wrong rule",
+    ).toEqual([]);
+
+    // The reason threshold, which was dead until it was extracted.
+    expect(reasonIsReviewable("x")).toBe(false);
+    expect(reasonIsReviewable("")).toBe(false);
+    expect(reasonIsReviewable(" ".repeat(80)), "padding is a length, not a reason").toBe(false);
+    expect(reasonIsReviewable(DURABLE_WRITERS["api/client.ts"])).toBe(true);
+  });
+
+  /**
    * ⛔ The derivations examined, not merely consumed.
    *
    * Every arm above USES a derivation and none of them looks at what one returns, which is how a
@@ -686,6 +874,19 @@ describe("every module that can outlive a reload is in a register", () => {
     // whichever branch it did not look at.
     expect(exportsStorage(D, "export const h = fake ?? window.localStorage;")).toEqual(["h"]);
     expect(exportsStorage(D, "export const h = cond ? window.localStorage : fake;")).toEqual(["h"]);
+    // ⚠ ONE CASE PER BRANCH, and the near side is the one that was missing. The peer session's B1
+    // names the property that hid it: where a two-branch rule reads the same allowed value either
+    // way, dropping one branch is a genuine no-op on the tree as it stands, so its quiet reads as
+    // "no cover needed". Measured on 2026-09-26: dropping `whenFalse` and dropping `left` were both
+    // QUIET, because every case I had written put the storage object on the side that survived. The
+    // case that runs THROUGH a branch is not the case that distinguishes it.
+    expect(exportsStorage(D, "export const h = cond ? fake : window.localStorage;")).toEqual(["h"]);
+    expect(exportsStorage(D, "export const h = window.localStorage ?? fake;")).toEqual(["h"]);
+    expect(exportsStorage(D, "export const h = fake || window.localStorage;")).toEqual(["h"]);
+    // And the unwrapping branch, which until now no case exercised at all — a cast or a paren is how
+    // this actually gets written in TypeScript.
+    expect(exportsStorage(D, "export const h = window.localStorage as Storage;")).toEqual(["h"]);
+    expect(exportsStorage(D, "export const h = (window.localStorage)!;")).toEqual(["h"]);
 
     // ── accepted: exporting something whose BODY writes storage is the normal, registered case ──
     expect(
