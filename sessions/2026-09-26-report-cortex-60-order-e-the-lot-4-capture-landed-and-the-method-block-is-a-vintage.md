@@ -648,7 +648,7 @@ access included, and any `persist` call tracked by its **original import name**,
 `api/client.ts`, which writes `cortex-session-id` to sessionStorage — and it **over-matches on
 purpose**: over-matching costs a register entry with a stated reason, under-matching costs a leak.
 
-**Redproof, each on its own arm, zero wrong-reason exits:** M4 replayed → EXIT 1; `persist` imported
+**Redproof, each on its own arm, zero wrong-reason exits:** ~~M4 replayed → EXIT 1~~ **Corrected in the ninth addendum: the replay used a string-literal member, which this predicate handles by design. The same idea with the member in a VARIABLE was GREEN — the mutant logged here was the easy variant of the defect it stood for.**; `persist` imported
 under an alias → EXIT 1; a registered writer made to stop touching storage → EXIT 1 on the
 both-directions arm.
 
@@ -679,3 +679,115 @@ be re-stated by whoever did it. The instruction to delete it survives, condition
 finding even that case covered.
 
 **Suite:** 114 files / **1730** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
+
+## Ninth addendum, same day — I recorded the mutant as RED, and it was the easy variant of it
+
+The peer asked two questions about the eighth addendum's evidence. Both were worth asking, and the
+first one broke it.
+
+**Their question 1 — "if any of your M4 arms' evidence is *this mutant used to red and now doesn't*,
+that is not evidence yet."** Mine is the other direction (quiet before, red after), which is the
+sound one. But re-firing the repertoire against the shipped instrument found something worse than a
+direction error. My recorded `R6 EXIT 1` used `S["setItem"](v)` — a **string-literal** member my AST
+predicate handles by design. Firing the same idea with the member in a **variable**:
+
+```ts
+const S = window.localStorage;
+const verb = "setItem";
+export const stash = (v: string): void => { S[verb]("cortex-quiet", v); };
+```
+
+→ **18/18 GREEN.** The mutant I logged as proof was the easy variant of the defect it stood for, and
+so it inflated exactly the number it was measuring. That is my own recorded lesson, arriving from the
+inside: *a mutation easier to detect than the defect it stands for inflates every number measured with
+it.* Worse, the comment directly above the predicate had already written this case down as "⚠ THE
+IRREDUCIBLE TAIL … total over SPELLING, not over indirection". It was not irreducible. A limit stated
+in prose reads as diligence and stops the re-examination as effectively as a wrong answer.
+
+**What actually fixes it is a change of subject, not a stricter rule.** The predicate enumerated the
+dangerous verbs, so it could only ever be total over their spelling. Enumerating the SAFE ones
+(`getItem`, `key`) and keying on the storage **object** makes every other form count by default — a
+variable member resolves to no known read, so it counts. Fired after the change: variable member
+**RED**, a storage object handed to a constructor **RED**, `export const S = window.localStorage`
+with no call at all **RED**, and a pure `getItem` reader **GREEN** (which is the control that the
+read allow-list is live rather than dead code).
+
+**And the new predicate found a ninth durable writer that no verb-keyed rule could ever have seen.**
+`src/auth/AuthProvider.tsx:10` hands `window.sessionStorage` to `oidc-client-ts`:
+
+```ts
+userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+```
+
+There is no `setItem` in our source. The OIDC user record — the authenticated session itself — is
+written durably by the **dependency**, from a storage object we pass as a value. Registered, with the
+reason that it is deliberately not purged: this store is the owner signal `reconcileSessionOwner`
+reads, so wiping it during an owner change would erase the evidence of the change being reacted to
+and log the arriving user straight back out. Register: 8 → 9.
+
+**I also planned an arm for the re-export residual and deleted it, because the measurement said it
+had no cover of its own.** `export const S = window.localStorage` already reds the arrival arm — the
+binding site names storage, so the holding module is already in the population. The residual paragraph
+now states what is actually left (`globalThis["local" + "Storage"]`, or a dependency reaching `window`
+with nothing passed from here) instead of a case that is covered.
+
+**Their question 2 — "not *did the arm red* but *did it red through the arrival path or the departure
+path*."** Re-run as an outright deletion rather than the `void 0` I had used: add a writer, register
+it, confirm green, then delete the file. It reds through **"the register has not lost its subject —
+both directions"**, with the arrival arm staying green because nothing arrived. That branch
+attribution holds, and the `void 0` flag can be closed.
+
+**Their D2 is live in this file, and it cost more than theirs did.** Their lesson — an excuse keyed on
+a substring excuses whatever else shares it — applies verbatim to the completeness arm, which asked
+`ISOLATION_SRC.includes(m)`: whether a store's name appeared **anywhere** in the file. A store that is
+never purged and never exempted, named only in a **comment above the purge**, passed:
+
+```
+D2-mention-only   EXIT 0   18/18 GREEN
+```
+
+The module's own docstring says a store must "purge or be named in PURGE_EXEMPT_STORES with a reason.
+There is no third option" — and the check granted a third, with a reason required of nobody. Now keyed
+on identifiers inside `purgeUserScopedState`'s body: a comment is not a node, and `useStageStoreV2` is
+a different identifier rather than a superstring. Measured before installing it: the 11 stores
+partition exactly 6-purged / 5-exempt, so the tightening costs **zero** false REDs. Replayed: **RED.**
+
+**Then the control I wrote for that fix failed its own redproof.** I asserted the derivation is
+body-scoped via `useTemplateStore` — named in the file, not purged. Dropping the function NAME from
+the derivation so it grabs **every** function body left all 19 arms **GREEN**, because
+`useTemplateStore` sits in an object literal outside any function and the wider scan misses it too. A
+control that passes under the drift it is named for is not a control. `OWNER_KEY` is the instrument
+that separates them — named in `reconcileSessionOwner`'s body, absent from the purge's — and with it
+the widening mutant reds. **Twice this beat a check of mine was hollow in a way only firing showed,
+and the second one was the check written to protect the first.**
+
+Added the partition assertion while there: a store both purged **and** exempted is two decisions with
+one of them stale, which no arm above could see. Zero today.
+
+Full mutant table, this beat, all on the shipped instrument:
+
+| mutant | pre-fix | post-fix | arm it reds through |
+|---|---|---|---|
+| non-conventional module in `src/store` | RED | RED | convention |
+| persisting store one directory over | RED | RED | arrival |
+| `S[verb](v)` — member in a variable | **GREEN** | RED | arrival |
+| storage object passed to a constructor | not run | RED | arrival |
+| `export const S = window.localStorage`, no call | not run | RED | arrival |
+| pure `getItem` reader | GREEN | GREEN (control) | — |
+| registered writer deleted outright | — | RED | **departure**, arrival green |
+| store named only in a comment | **GREEN** | RED | completeness |
+| derivation widened past the named function | **GREEN** | RED | the control |
+
+Gates: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0, **114 files / 1731 tests** green.
+
+**One honest note on the wrong-reason check itself, since this beat is about detectors missing
+variants.** My harness greps each log for `ENOENT|Cannot find|SyntaxError` and reported **zero across
+all 23 logs** — and that number is true and useless, because one run this beat *did* fail for the
+wrong reason and the pattern could not see it. Mis-splicing the new derivation split a method chain,
+and esbuild says `ERROR: Unexpected "."` — none of the three words. I caught it by reading the log.
+The measurements in the table above were each confirmed by the **name of the failing arm**, not by the
+exit code, which is the only reading that survives a detector this porous. The pattern is now known to
+be incomplete; recorded rather than widened, because widening it to match today's phrasing would be
+the same mistake one level along.
+
+Both CompetingMeasures halves remain **reported, not patched**.

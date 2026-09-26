@@ -36,6 +36,42 @@ const storeModules = readdirSync(STORE_DIR)
   .filter((f) => /^use[A-Za-z]+Store\.ts$/.test(f))
   .map((f) => f.replace(/\.ts$/, ""));
 
+/**
+ * The stores the purge FUNCTION BODY names — by syntax, not by text search.
+ *
+ * ⚠ The version before this asked `ISOLATION_SRC.includes(m)`: whether the module's name appeared
+ * ANYWHERE in the file. An audit on 2026-09-26 fired a store that was never purged and never
+ * exempted, named only in a COMMENT above the purge, and the completeness arm below stayed GREEN.
+ * The module's own docstring says a store must "purge or be named in PURGE_EXEMPT_STORES with a
+ * reason. There is no third option" — and the check granted a third: mentioned in prose, reason
+ * required of nobody. An excuse keyed on a substring excuses whatever else shares the string; here
+ * that included prose, and would include a longer name containing a shorter one. Identifiers inside
+ * `purgeUserScopedState` are neither: a comment is not a node, and `useStageStoreV2` is a different
+ * identifier from `useStageStore` rather than a superstring of it.
+ */
+const purgedInBody = (() => {
+  const sf = ts.createSourceFile(
+    "sessionIsolation.ts",
+    ISOLATION_SRC,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const names = new Set<string>();
+  const visit = (n: ts.Node): void => {
+    if (ts.isFunctionDeclaration(n) && n.name?.text === "purgeUserScopedState" && n.body) {
+      const grab = (x: ts.Node): void => {
+        if (ts.isIdentifier(x)) names.add(x.text);
+        ts.forEachChild(x, grab);
+      };
+      grab(n.body);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return names;
+})();
+
 /** The keys sessionIsolation declares it will remove. Read from source: the list is a
  *  private const, and exporting it purely to be asserted on would be the test reshaping
  *  the module to suit itself. */
@@ -112,9 +148,31 @@ describe("sessionIsolation — the purge list stays complete", () => {
     // The one that matters. A store that is neither purged nor knowingly exempt is a store
     // whose isolation nobody decided, which is exactly how A's data reaches B.
     const undecided = storeModules.filter(
-      (m) => !ISOLATION_SRC.includes(m) && !(m in PURGE_EXEMPT_STORES),
+      (m) => !purgedInBody.has(m) && !(m in PURGE_EXEMPT_STORES),
     );
     expect(undecided).toEqual([]);
+  });
+
+  it("the purge-body derivation is scoped to the BODY, not the file — control", () => {
+    // Without this, `purgedInBody` could quietly widen back to a file-wide scan and every arm above
+    // would stay green while meaning less. useTemplateStore is the instrument, and it is a real one
+    // rather than a fixture: it IS named in this file, in the exemption register with a paragraph of
+    // reasoning, and it is NOT purged. A derivation that counts it has stopped reading the body.
+    expect(purgedInBody.has("useStageStore")).toBe(true);
+    expect(purgedInBody.has("useTemplateStore")).toBe(false);
+    expect(ISOLATION_SRC).toContain("useTemplateStore");
+    // ⚠ The line above is NOT enough, and that was measured, not reasoned: dropping the function's
+    // NAME from the derivation so it grabs every function body in the file left all 19 arms GREEN on
+    // 2026-09-26, because useTemplateStore lives in an object literal outside any function and so is
+    // missed by the wider scan too. A control that passes under the drift it is named for is not a
+    // control. OWNER_KEY is the instrument that separates the two: it is named in
+    // reconcileSessionOwner's body and nowhere in the purge's, so it appears the moment this
+    // derivation stops being anchored to one named function.
+    expect(purgedInBody.has("OWNER_KEY")).toBe(false);
+    // And the two registers partition the population rather than merely covering it: a store that is
+    // both purged and exempted is two decisions with one of them stale, which no arm above can see.
+    const both = storeModules.filter((m) => purgedInBody.has(m) && m in PURGE_EXEMPT_STORES);
+    expect(both, "purged AND exempted — one of the two decisions is stale").toEqual([]);
   });
 
   it("every exemption states WHY — an exemption without a reason is an oversight in costume", () => {
@@ -332,6 +390,13 @@ describe("every module that can outlive a reload is in a register", () => {
   /** Every non-test module under src/ that writes durable localStorage, with the argument for its
    *  treatment. A new writer MUST appear here — that is the point — and the reason is reviewed. */
   const DURABLE_WRITERS: Record<string, string> = {
+    "auth/AuthProvider.tsx":
+      "Hands `window.sessionStorage` to oidc-client-ts's WebStorageStateStore, so the OIDC user " +
+      "record — the authenticated session itself — is written durably by the DEPENDENCY, with no " +
+      "setItem anywhere in our source. Deliberately NOT purged: this store is the owner signal " +
+      "reconcileSessionOwner reads, and wiping it during an owner change would erase the evidence " +
+      "of the change being reacted to, logging the arriving user straight back out. Found by the " +
+      "subject-keyed predicate on 2026-09-26; no verb-keyed rule could have seen it.",
     "store/useAnswerPanelStore.ts":
       "user-scoped answers; persisted under cortex-answers-panel-v1, which IS in USER_SCOPED_STORAGE_KEYS and is purged",
     "store/useStageStore.ts":
@@ -361,26 +426,53 @@ describe("every module that can outlive a reload is in a register", () => {
 
   const SRC = path.join(__dirname, "..");
   /**
-   * ⛔ PARSED, NOT GREPPED — and the text version of this predicate was live for exactly one commit.
+   * Which files can leave something behind across a reload.
    *
-   * It was /localStorage\.setItem|persist\(/ over the source text. M4 walked straight through it: a
-   * module doing `const ls = window.localStorage` and `window["localStorage"]`, then writing two
-   * durable keys, was INVISIBLE — all 18 green. A text pattern for a call cannot see that call under
-   * another name, which is the same defect the platform lane hit in the other language: a pattern for
-   * a quoted key cannot see an f-string. Same bug, two repos, two syntaxes, found a day apart.
+   * ⚠ THIS PREDICATE KEYS ON THE SUBJECT, NOT THE VERB — and the difference is a measurement, not
+   * a preference. The version before it enumerated the dangerous verbs (`setItem`, `removeItem`) and
+   * so was total over their SPELLING only: it saw `ls["setItem"](v)` and missed `ls[verb](v)`, which
+   * an audit on 2026-09-26 fired and found GREEN. The comment above it had already written that case
+   * down as "the irreducible tail" — and a limit stated in prose reads as diligence and stops the
+   * re-examination as effectively as a wrong answer would. It was not irreducible. Enumerating what
+   * is SAFE instead (the two read verbs) makes every other form, known or not, count by default:
+   * a variable verb resolves to no known read, so it counts.
    *
-   * So the predicate reads the SYNTAX. Any `.setItem`/`.removeItem` call however the object was
-   * spelled, bracket access included, and any call to persist tracked by its ORIGINAL import name,
-   * so that `import { persist as p }` cannot dodge it either.
+   * It also catches the form that has no verb here at all. `auth/AuthProvider.tsx:10` hands
+   * `window.sessionStorage` to `oidc-client-ts` as a VALUE; the writes happen inside the dependency.
+   * No verb-keyed rule of any strictness could have seen it, and it was in no register until this
+   * predicate found it.
    *
-   * IT OVER-MATCHES ON PURPOSE. `sessionStorage.setItem` lands here too, and so does a module that
-   * only REMOVES. Over-matching costs one register entry with a stated reason; under-matching costs a
-   * leak. That asymmetry is the entire argument for erring in this direction.
+   * IT OVER-MATCHES ON PURPOSE. `sessionStorage` lands here too, and so does a module that only
+   * removes, and so does one that merely passes the object along. Over-matching costs one register
+   * entry with a stated reason; under-matching costs a leak. That asymmetry is the whole argument
+   * for erring in this direction.
    *
-   * ⚠ THE IRREDUCIBLE TAIL, stated rather than implied: a member name held in a variable
-   * (`const m = "setItem"; ls[m](v)`) is invisible to this too, as is a dependency writing storage on
-   * our behalf. The partition is total over SPELLING, not over indirection.
+   * ⚠ THE RESIDUAL, measured rather than guessed. Re-export is NOT it: `export const S =
+   * window.localStorage` was fired on 2026-09-26 and RED, because the binding site names storage
+   * and so the holding module is already in this population — an arm for it would have had no
+   * cover of its own. What remains is a module that obtains storage without ever naming it:
+   * `globalThis["local" + "Storage"]`, or a dependency that reaches `window` by itself with
+   * nothing passed from here. Neither is defeated by any rule that reads this repo's syntax.
    */
+  const READ_VERBS = new Set(["getItem", "key"]);
+
+  /** The member being accessed, or null when it is not statically knowable — which counts as a write. */
+  const verbOf = (acc: ts.Node): string | null => {
+    if (ts.isPropertyAccessExpression(acc)) return acc.name.text;
+    if (ts.isElementAccessExpression(acc)) {
+      const a = acc.argumentExpression;
+      return a && ts.isStringLiteral(a) ? a.text : null;
+    }
+    return null;
+  };
+
+  /** A reference to the storage object itself — bare, or as `window.localStorage`. */
+  const isStorageRef = (n: ts.Node): boolean =>
+    (ts.isIdentifier(n) &&
+      /^(localStorage|sessionStorage)$/.test(n.text) &&
+      !(n.parent && ts.isPropertyAccessExpression(n.parent) && n.parent.name === n)) ||
+    (ts.isPropertyAccessExpression(n) && /^(localStorage|sessionStorage)$/.test(n.name.text));
+
   const touchesStorage = (file: string): boolean => {
     const sf = ts.createSourceFile(
       file,
@@ -404,20 +496,17 @@ describe("every module that can outlive a reload is in a register", () => {
           }
         }
       }
-      if (ts.isCallExpression(n)) {
-        const e = n.expression;
-        if (ts.isPropertyAccessExpression(e) && /^(setItem|removeItem)$/.test(e.name.text)) {
-          found = true;
-        }
-        if (
-          ts.isElementAccessExpression(e) &&
-          e.argumentExpression &&
-          ts.isStringLiteral(e.argumentExpression) &&
-          /^(setItem|removeItem)$/.test(e.argumentExpression.text)
-        ) {
-          found = true;
-        }
-        if (ts.isIdentifier(e) && persistAliases.has(e.text)) found = true;
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && persistAliases.has(n.expression.text)) {
+        found = true;
+      }
+      if (isStorageRef(n)) {
+        const p = n.parent;
+        const pureRead =
+          !!p &&
+          (ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) &&
+          p.expression === n &&
+          READ_VERBS.has(verbOf(p) ?? "");
+        if (!pureRead) found = true;
       }
       ts.forEachChild(n, visit);
     };
