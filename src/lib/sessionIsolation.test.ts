@@ -1186,6 +1186,19 @@ describe("the seal's own registers are source text, not derivations", () => {
     // judges, so the allowance can also empty it. The arm now states which registers it is FOR.
     // What this floor does NOT catch is a register deleted from the file along with its name here;
     // that hazard is the positive control's, which spells the same four out independently.
+    //
+    // ⚠ AND IT COVERS EXACTLY THESE FOUR — measured, not reasoned. A fifth register added to this
+    // file passes every arm (correctly: the shape rule is a per-member predicate), and then DELETING
+    // it again also passes every arm. So a new register arrives unguarded against removal, because
+    // both places that name registers by name name these four. The floor is not a completeness
+    // claim and cannot be made into one here: this population also holds `PLUMBING`, `WHY` and two
+    // `D`s, so an exact equality would be a list of test locals, and the convention regex cannot
+    // tell them apart (see the `registers` docstring).
+    //
+    // So the check travels with the next register instead of being guessed now: ADD ITS NAME HERE,
+    // THEN DELETE THE REGISTER AND CONFIRM SOMETHING REDS BY NAME. If nothing does, it is a register
+    // nobody would miss. Borrowed from the peer's round 13, where three ratchet arms all turned out
+    // to be about one specific member of an allowance rather than about membership.
     expect(
       judged.map((r) => r.name),
       "the shape arm is no longer looking at the registers it exists for — its population is " +

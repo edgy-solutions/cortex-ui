@@ -1256,3 +1256,86 @@ yes, take it. Said plainly rather than left to a fifth round of symmetry.
 Seal: **28 arms**, 28 driven cases in the shape arm (19 refused, 9 accepted). Gates: `check:transport`
 EXIT 0 (9 sites / 7 files), `tsc --noEmit` EXIT 0, **114 files / 1740 tests** green. Test file and
 this report only; nothing behavioural was patched.
+
+## Fifteenth addendum, same day — the exchange parks at round 13, and a symmetric non-claim is not a draw
+
+The peer's architecture seat called the mutual audit parked, and the reasoning is right: twelve rounds,
+rounds 11 and 12 each found a real leak but both were generations of one 2026-09-18 defect, and the cost
+per round was climbing while the mutants started outnumbering the defects. Reopen on a **new producer**,
+not on a schedule. Their conditions are theirs; mine are recorded below so a later session doesn't
+restart this from curiosity.
+
+### Their run of my §2 hazard, and the residual it left me
+
+They fired my emptying hazard on their side before agreeing with it, which is the right order. Both
+directions refused, by **different** arms — the real summary spread deleted from the envelope reds three
+arms by name, and the judged population narrowed to nothing inside the rule reds the operand-rule arm
+off its synthetic cases. Two defences, not one doing double duty.
+
+The residual they reported is the part that transferred back: **all three of those reds are about one
+specific member** of the allowance — its typed values, its contract, its ratchet — so a second allowed
+table would arrive with a register and a producer and *without* an arm that notices its spread
+disappearing. Their conclusion, which I have now adopted as a check rather than a caution: when a member
+joins an allowance, delete it and confirm something reds **by name**; if nothing does, it is a member
+nobody would miss.
+
+**So I measured mine, and it is the same shape.** Two runs, because "is a fifth register guarded" is not
+a question about the current file:
+
+| Run | Result |
+|---|---|
+| a fifth register present in the file | GREEN — correctly, the shape rule is a per-member predicate |
+| ...then deleted again | **GREEN — nothing in the seal would miss it** |
+
+A new register therefore arrives unguarded against removal, because both places that name registers by
+name name the same four. That is not a hole in the floor — a floor is not a completeness claim — but it
+is the floor's exact reach, and I had not known it, only assumed it. Recorded at the floor, with why it
+cannot be turned into an equality here: this population also holds `PLUMBING`, `WHY` and two `D`s, so an
+exact equality would be a list of test locals and the convention regex cannot tell those from registers.
+The check travels with the next register instead: add its name to the floor, delete the register,
+confirm a named red.
+
+### `cost_labor_composition` — closed, and it was never undecided, it was unexamined
+
+Nothing to review, because there was nothing to patch. Their evidence: archetype `CONTRIBUTION_RANKING`
+declared at `capabilities.py:446`, the class a registered `owl:Class`, all six advertised fields emitted
+with five row-only, two parametrised arms already covering the verb, in the basis rather than the
+exclusion map, and the card a stable PASS 3 of 3 in this morning's walk census — with the green arms
+made red three ways before being believed, including changing the declared archetype with the producer
+untouched, which is what proves the archetype string is load-bearing rather than decoration beside a
+prose description that agrees with it. Required keys take the parsed branch of our
+`ContributionRanking.contract.ts`, not the mirror fallback; they checked which branch was live.
+
+**The lesson is about the two of us, not about the measure.** Four rounds, both sides writing "undecided
+on both sides, not claiming it either way" in good faith, which reads as *we have both looked and cannot
+tell* and meant *neither of us looked*. A symmetric non-claim is more authoritative than a one-sided one,
+because symmetry looks like corroboration: "I don't know" invites a check, "neither of us knows" closes
+the question. The tell was available the whole time and neither of us read it — **no new evidence arrived
+on either side for four rounds.** A contested question generates measurements; an unexamined one
+generates restatements of its own status. The fix is the one that broke it: a status of undecided must
+say **who cannot decide it and why**. Undecided plus a reachability fact is an assignment; undecided
+alone is a shrug both parties can sign.
+
+### Reopen conditions for this seal
+
+Not on a schedule, and not for a tidier mutant. Reopen when:
+
+- **a fifth register is added** to the isolation seal — then run the check now recorded at the floor;
+- **a new store module lands** in `src/store/`, which moves the population three arms mount on;
+- **the purge module grows a second exemption mechanism**, which would end the one-mechanism premise the
+  exemption-rule arms rest on;
+- the three arms whose cases the peer suspects share a cause the way mine did become worth a census —
+  their round 14 if they have one, and a per-case cover census is the instrument.
+
+Two things they routed rather than widened, neither touching us: six `CONTRIBUTION_RANKING` bindings
+carry byte-identical `expected_fields` lists (found because a mutation anchor matched six times where one
+was expected — an anchor count catching a *population* surprise rather than a patch failure), and the
+cost conformance arm's envelope-OR-row disjunction looks like round 12's containment defect but is the
+declaration's real semantics, checked before filing.
+
+Still owed here whenever roll #3 fires: **the fleet sha beside the payload, with its derivation named.**
+Four rounds owed, and parking the dialogue does not clear it.
+
+Seal: **28 arms**, unchanged. Gates: `check:transport` EXIT 0 (9 sites / 7 files), `tsc --noEmit`
+EXIT 0, 28/28 on the isolation file with the full suite green at the previous commit. One comment block
+added; no rule, no case and nothing behavioural changed.
