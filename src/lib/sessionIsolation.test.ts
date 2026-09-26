@@ -992,24 +992,57 @@ describe("the seal's own registers are source text, not derivations", () => {
       "above — the one thing no assertion about their contents can reach.",
   };
 
-  /** A call to `readFileSync`, `readdirSync` or `path.join` anywhere in the subtree. */
-  const readsTheDisk = (node: ts.Node): boolean => {
-    let found = false;
-    const visit = (n: ts.Node): void => {
-      if (found) return;
-      if (ts.isCallExpression(n)) {
-        const e = n.expression;
-        const name = ts.isPropertyAccessExpression(e)
-          ? e.name.text
-          : ts.isIdentifier(e)
-            ? e.text
-            : "";
-        if (/^(readFileSync|readdirSync|join|resolve|relative)$/.test(name)) found = true;
-      }
-      ts.forEachChild(n, visit);
-    };
-    visit(node);
-    return found;
+  /**
+   * The identifiers this file actually BOUND to `node:fs` and `node:path` — derived from its own
+   * import declarations, never spelled out here. A rename of the import moves the rule with it.
+   */
+  const diskBindings = (sf: ts.SourceFile): { fns: Set<string>; objs: Set<string> } => {
+    const fns = new Set<string>();
+    const objs = new Set<string>();
+    for (const st of sf.statements) {
+      if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+      if (!/^node:(fs|path)$/.test(st.moduleSpecifier.text)) continue;
+      const clause = st.importClause;
+      if (!clause) continue;
+      if (clause.name) objs.add(clause.name.text);
+      const nb = clause.namedBindings;
+      if (nb && ts.isNamespaceImport(nb)) objs.add(nb.name.text);
+      if (nb && ts.isNamedImports(nb)) for (const el of nb.elements) fns.add(el.name.text);
+    }
+    return { fns, objs };
+  };
+
+  /**
+   * The initializer IS a disk read or a path build — not merely one somewhere inside it.
+   *
+   * ⚠ THREE TIGHTENINGS, EACH ONE A MUTANT THAT CAME BACK QUIET, and the order matters because each
+   * fix exposed the next:
+   *
+   * 1. Keyed on the VERB first: the name `readFileSync|readdirSync|join|resolve|relative` anywhere in
+   *    the subtree. `storeModules.join(",")` read as a path build, so a derived register excused as
+   *    plumbing passed with every arm green (J1, QUIET). `Array.join` and `Promise.resolve` are
+   *    ordinary spellings — two of those five verbs were free for the taking.
+   * 2. Keyed on the SUBJECT next: a function bound from `node:fs`, or a method on the object bound
+   *    from `node:path`, both derived from this file's own import declarations so a rename moves the
+   *    rule with it. That closed J1 and J2. But the search was still over the SUBTREE, and
+   *    `readdirSync(STORE_DIR).map((f) => f.replace(".ts", ""))` contains a disk read — so a derived
+   *    MEMBER LIST bought the excuse (J5, QUIET), because reading the disk is exactly what a derived
+   *    register does. The excuse could not tell a path from a population.
+   * 3. So: CONTAINMENT IS NOT SHAPE. The initializer must itself be the call. All four real entries
+   *    already are — `readFileSync(path.join(...))`, `path.join(...)` — so this cost nothing on the
+   *    real tree, which is the measurement that made it safe to install rather than a hope.
+   *
+   * Every one of those was a hole in a FIX for the previous hole. The excuse hatch is the piece of
+   * this describe that nobody would think to mutate, and it took three rounds to stop being wrong.
+   */
+  const isDiskCall = (node: ts.Node, bound: { fns: Set<string>; objs: Set<string> }): boolean => {
+    if (!ts.isCallExpression(node)) return false;
+    const e = node.expression;
+    if (ts.isIdentifier(e)) return bound.fns.has(e.text);
+    if (!ts.isPropertyAccessExpression(e)) return false;
+    let cur: ts.Expression = e;
+    while (ts.isPropertyAccessExpression(cur)) cur = cur.expression;
+    return ts.isIdentifier(cur) && bound.objs.has(cur.text);
   };
 
   /**
@@ -1097,6 +1130,24 @@ describe("the seal's own registers are source text, not derivations", () => {
     return out;
   };
 
+  /**
+   * One parse, both halves: the registers a source declares and the disk bindings it imports. They
+   * come from the same `SourceFile` on purpose — two parses of one string are two places for the
+   * halves to disagree about what file they are describing.
+   */
+  const parse = (src: string): { named: { name: string; init: ts.Node }[]; bound: { fns: Set<string>; objs: Set<string> } } => {
+    const sf = ts.createSourceFile("self.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const named: { name: string; init: ts.Node }[] = [];
+    const visit = (n: ts.Node): void => {
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+        if (/^[A-Z][A-Z0-9_]*$/.test(n.name.text)) named.push({ name: n.name.text, init: n.initializer });
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return { named, bound: diskBindings(sf) };
+  };
+
   it("the register enumeration actually finds the registers — positive control", () => {
     const names = registers(SELF).map((r) => r.name);
     // Pinned: the two registers the mutants above defeated, and the one deliberately empty.
@@ -1156,15 +1207,16 @@ describe("the seal's own registers are source text, not derivations", () => {
    */
   const plumbingComplaints = (
     allowance: Record<string, string>,
-    named: { name: string; init: ts.Node }[],
+    parsed: { named: { name: string; init: ts.Node }[]; bound: { fns: Set<string>; objs: Set<string> } },
   ): string[] => {
+    const { named, bound } = parsed;
     const out: string[] = [];
     for (const k of Object.keys(allowance)) {
       if (!named.some((r) => r.name === k)) out.push(`${k}: named as plumbing, but no such const`);
     }
     for (const r of named) {
-      if (r.name in allowance && !readsTheDisk(r.init)) {
-        out.push(`${r.name}: excused as plumbing, but reads no file and builds no path`);
+      if (r.name in allowance && !isDiskCall(r.init, bound)) {
+        out.push(`${r.name}: excused as plumbing, but its initializer is not itself a file read or a path build`);
       }
     }
     for (const [k, why] of Object.entries(allowance)) {
@@ -1175,25 +1227,25 @@ describe("the seal's own registers are source text, not derivations", () => {
 
   it("⛔ and the plumbing allowance cannot be claimed by a register — both directions", () => {
     expect(
-      plumbingComplaints(PLUMBING, registers(SELF)),
+      plumbingComplaints(PLUMBING, parse(SELF)),
       "an entry is excused from the literal rule without earning it — see the complaint; the " +
         "allowance is the escape hatch from every other arm in this describe, so it pays rent",
     ).toEqual([]);
   });
 
   it("⛔ the plumbing complaints are driven with doctored allowances — one case per category", () => {
-    const named = registers(SELF);
+    const self = parse(SELF);
     const WHY = "a reason long enough to clear the reviewability threshold, stated so a reviewer has something to disagree with";
     // Each case asserts ITS OWN complaint, not "some complaint": the peer's correction from their
     // round 17 — dropping one category makes a combined assertion fire on the first one instead, so
     // the measurement credits the wrong check and the fragment you predicted never appears.
-    expect(plumbingComplaints({ NO_SUCH_CONST: WHY }, named).join(" | ")).toContain(
+    expect(plumbingComplaints({ NO_SUCH_CONST: WHY }, self).join(" | ")).toContain(
       "NO_SUCH_CONST: named as plumbing, but no such const",
     );
-    expect(plumbingComplaints({ DURABLE_WRITERS: WHY }, named).join(" | ")).toContain(
-      "DURABLE_WRITERS: excused as plumbing, but reads no file and builds no path",
+    expect(plumbingComplaints({ DURABLE_WRITERS: WHY }, self).join(" | ")).toContain(
+      "DURABLE_WRITERS: excused as plumbing, but its initializer is not itself a file read or a path build",
     );
-    expect(plumbingComplaints({ SELF: "plumbing" }, named).join(" | ")).toContain(
+    expect(plumbingComplaints({ SELF: "plumbing" }, self).join(" | ")).toContain(
       "SELF: no reviewable reason",
     );
     // ⚠ And the same rule driven against a doctored SOURCE, not only a doctored allowance. Mutant S9
@@ -1206,17 +1258,71 @@ describe("the seal's own registers are source text, not derivations", () => {
     // a register, so it caught these three the first time round when they were named COMPUTED, READ
     // and BUILT. That is the population doing its job — the convention IS the signal — and the fix
     // is the name, not an entry in the allowance.
-    const doctoredComputed = registers('const COMPUTED = Object.fromEntries(xs.map((f) => [f, "w"]));');
-    const doctoredRead = registers('const READ = readFileSync(p, "utf8");');
-    const doctoredBuilt = registers('const BUILT = path.join(d, "x.ts");');
+    // ⚠ EACH DOCTORED SOURCE NOW CARRIES ITS OWN IMPORTS, because the rule is keyed on the binding
+    // rather than on the verb (see `readsTheDisk`) — and that is not incidental to these cases, it is
+    // the half of them that does the work. The two rename cases below would pass under any
+    // spelling-keyed rule and fail under a rule that hardcodes the identifier `path`.
+    const FS = 'import { readFileSync } from "node:fs";\n';
+    const FS2 = 'import { readdirSync } from "node:fs";\n';
+    const PATH = 'import path from "node:path";\n';
+    const doctoredComputed = parse(`${FS}const COMPUTED = Object.fromEntries(xs.map((f) => [f, "w"]));`);
+    const doctoredRead = parse(`${FS}const READ = readFileSync(p, "utf8");`);
+    const doctoredBuilt = parse(`${PATH}const BUILT = path.join(d, "x.ts");`);
+    // The mutant this pair exists for. J1: `storeModules.join(",")` bought the plumbing excuse under
+    // the verb rule and a derived register passed with every arm green. Its control J0 — the same
+    // register unexcused — reds on the shape arm, which is what makes J1 a hole rather than a
+    // register the seal was happy with. `Array.join` is not a path build at any spelling.
+    const doctoredArrayJoin = parse(`${PATH}const JOINED = xs.join(",").split(",");`);
+    const doctoredPromise = parse(`${FS}const SETTLED = [...xs, String(Promise.resolve("x"))];`);
+    // And the binding is FOLLOWED, not assumed: renamed at the import, the same calls still read as
+    // disk. A rule that hardcoded `readFileSync` or `path` would go quiet here while looking correct,
+    // which is the lazy way to pay for an equality — the peer's finding, borrowed.
+    const doctoredRenamedFn = parse('import { readFileSync as rf } from "node:fs";\nconst READ = rf(p, "utf8");');
+    const doctoredRenamedObj = parse('import p2 from "node:path";\nconst BUILT = p2.join(d, "x.ts");');
     expect(plumbingComplaints({ COMPUTED: WHY }, doctoredComputed).join(" | ")).toContain(
-      "COMPUTED: excused as plumbing, but reads no file and builds no path",
+      "COMPUTED: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    expect(plumbingComplaints({ JOINED: WHY }, doctoredArrayJoin).join(" | ")).toContain(
+      "JOINED: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    expect(plumbingComplaints({ SETTLED: WHY }, doctoredPromise).join(" | ")).toContain(
+      "SETTLED: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    // ⚠ WHERE THE BINDING CAME FROM, not just that there is one. Mutant K2 — drop the
+    // `node:(fs|path)` filter so any module's named imports count as disk — was QUIET, because every
+    // doctored source above imports from node: and nothing distinguished the provenance check from
+    // no check at all. Two cases, because the filter has two ways to be loosened and they are not the
+    // same edit: a foreign module entirely, and a sibling inside the `node:` namespace. The names are
+    // deliberately the real disk verbs — the point is that the SPELLING is not what earns the excuse.
+    const doctoredForeignFs = parse('import { readFileSync } from "fake-fs";\nconst READ = readFileSync(p, "utf8");');
+    const doctoredNodeSibling = parse('import os from "node:os";\nconst BUILT = os.join(d, "x.ts");');
+    expect(plumbingComplaints({ READ: WHY }, doctoredForeignFs).join(" | ")).toContain(
+      "READ: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    expect(plumbingComplaints({ BUILT: WHY }, doctoredNodeSibling).join(" | ")).toContain(
+      "BUILT: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    // ⚠ AND THE LAUNDERING CASES, which are the reason `isDiskCall` tests the initializer itself
+    // rather than searching it. Both of these DO read the disk — that is the point. A derived member
+    // list reads the disk in exactly the way a path does, so a subtree search cannot tell them apart,
+    // and under one (J5) a derived register passed with every arm green. Its control, the same
+    // register unexcused, reds on the shape arm — different arm, which is what proves the excuse was
+    // installed. Two spellings because the two disk verbs reach members by different routes.
+    const doctoredLaunderedDir = parse(`${FS2}const LAUNDERED = readdirSync(d).map((f) => f.replace(".ts", ""));`);
+    const doctoredLaunderedFile = parse(`${FS}const LAUNDERED = readFileSync(p, "utf8").split("|");`);
+    expect(plumbingComplaints({ LAUNDERED: WHY }, doctoredLaunderedDir).join(" | ")).toContain(
+      "LAUNDERED: excused as plumbing, but its initializer is not itself a file read or a path build",
+    );
+    expect(plumbingComplaints({ LAUNDERED: WHY }, doctoredLaunderedFile).join(" | ")).toContain(
+      "LAUNDERED: excused as plumbing, but its initializer is not itself a file read or a path build",
     );
     // And the accepting half in both plumbing shapes, or a rule that complains about everything
     // would look identical here. (The real allowance is asserted by the arm above; mutant S10 showed
     // that repeating it here distinguishes nothing, so these doctored consts stand in its place.)
     expect(plumbingComplaints({ READ: WHY }, doctoredRead), "a real file read").toEqual([]);
     expect(plumbingComplaints({ BUILT: WHY }, doctoredBuilt), "a real path build").toEqual([]);
-    expect(plumbingComplaints({ ISOLATION_SRC: WHY }, named)).toEqual([]);
+    expect(plumbingComplaints({ READ: WHY }, doctoredRenamedFn), "a renamed fs import").toEqual([]);
+    expect(plumbingComplaints({ BUILT: WHY }, doctoredRenamedObj), "a renamed path import").toEqual([]);
+    expect(plumbingComplaints({ ISOLATION_SRC: WHY }, self)).toEqual([]);
   });
 });

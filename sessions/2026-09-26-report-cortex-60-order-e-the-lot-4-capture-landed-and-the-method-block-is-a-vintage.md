@@ -1059,3 +1059,79 @@ my struck phrasing would have found nothing; grepping *storage as an argument* f
 Seal: 23 → **28 arms**. Gates on the final state: `check:transport` EXIT 0 (9 sites / 7 files),
 `tsc --noEmit` EXIT 0, **114 files / 1740 tests** green. Every behavioural finding in this addendum
 is **REPORTED, NOT PATCHED** — only test files and this report changed.
+
+## Thirteenth addendum, same day — my S2 fix had a hole, its fix had a hole, and the third one cost nothing
+
+The peer fired my S2 finding at their own side and reported back something I had not done: they swept
+the mutant across **every name the allow-list could hold**, not just the one they tried first. One of
+their two lists turned out to be defended at exactly one name, and only because a control fixture
+happened to mention that name. So I swept mine.
+
+**The sweep on existing names passed.** Excusing each real register in turn — `KNOWN_STORES`,
+`NON_STORE_MODULES`, `DURABLE_WRITERS`, `READ_VERBS` — reds every time, on the right arm, with the
+right message. Defended at the class, for that class.
+
+But their framing carries further than the sweep: **an allow-list's population is not the names in it,
+it is every name that could be ADDED.** The addable name is a register that does not exist yet, and
+what mattered was not its name at all but whether its initializer could buy the excuse. Three mutants,
+each a hole in the fix for the previous one:
+
+| # | Mutant | Result |
+|---|---|---|
+| J1 | derived register whose initializer holds `storeModules.join(",")`, excused as plumbing | **QUIET** — the hole |
+| J1c | control: the same register, NOT excused | RED on the shape arm |
+| J2 | `Promise.resolve` inside the initializer, excused | QUIET, then RED after fix 2 |
+| J5 | `readdirSync(STORE_DIR).map(...)` — a derived MEMBER LIST, excused | **QUIET** after fix 2 |
+| J6 | `readFileSync(...).split("|")` — the same laundering, other verb | QUIET after fix 2 |
+| J4 | a real `path.join(...)`, excused | QUIET — and that is the CORRECT answer |
+| J7 | a path built inside an ARRAY literal, excused | RED — refused, conservatively |
+
+1. **Keyed on the verb.** `readsTheDisk` matched the name `readFileSync|readdirSync|join|resolve|relative`
+   anywhere in the subtree. `Array.prototype.join` and `Promise.resolve` are ordinary spellings, so two
+   of those five verbs were free for the taking, and a derived register excused as plumbing passed with
+   every arm green. This is the *enumerate the safe set, not the dangerous one* lesson arriving inside
+   the fix I wrote for a different instance of it that morning.
+2. **Keyed on the subject.** A call is disk only if its callee is a function bound from `node:fs` or a
+   method on the object bound from `node:path` — with both binding sets **derived from this file's own
+   import declarations**, never spelled out, so a rename at the import moves the rule with it. That is
+   the peer's "derive the second half's name" point: mutants K6 and K7 hardcode one binding each and
+   red on exactly the two rename cases added for them. An unknown `fs` verb now counts as disk by
+   default, which is the right direction for plumbing.
+3. **Containment is not shape.** The subject-keyed rule still searched the *subtree*, and
+   `readdirSync(STORE_DIR).map((f) => f.replace(".ts", ""))` contains a disk read — so a derived member
+   list bought the excuse. **Reading the disk is exactly what a derived register does**; the criterion
+   could not tell a path from a population. The initializer must now itself BE the call. All four real
+   entries already were — `readFileSync(path.join(...))`, `path.join(...)` — so the tightening cost
+   nothing on the real tree, and measuring that is what made it safe to install rather than a hope.
+
+**Nine mutants against the final predicate, all RED**, each on its own assertion rather than on the
+first arm that happens to break: bindings emptied, provenance filter dropped, provenance widened to
+all of `node:`, each arm of the call test dropped, each binding hardcoded, the excuse made declarative
+again, and containment restored. That last one, K10, reds on exactly the laundering case, which is the
+only thing that makes case and rule a matched pair rather than two hopeful edits.
+
+The provenance filter was its own quiet: **K2 — accept named imports from any module at all — was
+QUIET**, because every doctored source imported from `node:`. Two cases, not one, because the filter
+has two independent ways to be loosened and they are not the same edit: a foreign module entirely, and
+a sibling inside the `node:` namespace. K2 and K9 now red on their own case each.
+
+### And a wrong-reason red inside my own driver, caught only by its control
+
+J5's first run reported RED and I was one line from writing "laundering refused" into this file. Its
+control — the same register **unexcused** — reported the **identical arm and the identical message**.
+An excused and an unexcused register cannot fail the same way, so the excuse had never been installed:
+my driver hardcoded the excused key as `DERIVED_NAMES` while the declaration under test was called
+`LAUNDERED`, so it excused a const that did not exist and the register went on being judged by the
+shape arm. The driver now derives the key from the declaration it inserts — the same defect the peer
+found in their equality, in the instrument rather than the seal. **Two mutants that differ only in the
+thing under test must not produce identical failures; if they do, the difference was never installed.**
+
+Two more mutants were **INVALID and are not counted**: J6 twice, first `readFileSync(SELF)` where
+`SELF` is a file's *contents* rather than its path, then `readFileSync(STORE_DIR)` where `STORE_DIR` is
+a directory. Both failed at collection with no named arm, which the driver reports as INVALID rather
+than as a red. Re-fired against a real file, J6 reds.
+
+Seal: **28 arms**, unchanged in count — this round added cases and tightened a predicate rather than
+growing the surface. Gates: `check:transport` EXIT 0 (9 sites / 7 files), `tsc --noEmit` EXIT 0,
+**114 files / 1740 tests** green. Test files and this report only; the excuse hatch is test-side
+machinery throughout, and no behavioural finding was patched.
