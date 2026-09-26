@@ -38,6 +38,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { readMethod } from "@/lib/cardExport";
 import { LOT4_CONTRIBUTION_RANKING_PAYLOAD } from "@/lib/cardExport.fixture";
 
 /** Both names the producer checkout goes by — see the disposition parity seal for why two. */
@@ -62,13 +63,28 @@ function resolveProducer(relative: string): string[] {
 const FOUND = resolveProducer(PRESENTATION);
 const MEASURES = resolveProducer(COST_MEASURES);
 
+/** This repo's own ledger: four levels up from src/components/registry is the repo root. */
+const SESSIONS = path.join(__dirname, "../../../sessions");
+
 /** The tuple's second element — the card-level scalars the projector carries for this archetype. */
-function declaredEnvelopeFields(src: string): string[] {
-  // One occurrence in the file, verified 2026-09-25, so the match needs no disambiguation. The
-  // tuple is `("rows", ( ...names... ))` and spans lines, hence the `[\s\S]`.
-  const m = src.match(/"CONTRIBUTION_RANKING":\s*\(\s*"rows"\s*,\s*\(([\s\S]*?)\)\s*\)/);
-  expect(m, "no _PROJECTED_ARCHETYPES entry for CONTRIBUTION_RANKING found in main.py").toBeTruthy();
+function declaredFieldsFor(src: string, archetype: string): string[] {
+  // One occurrence per archetype in the file, verified 2026-09-25, so the match needs no
+  // disambiguation. The tuple is (`"rows"`, ( ...names... )) and spans lines,
+  // hence the character-class pair that also matches newlines.
+  const re = new RegExp(
+    '"' + archetype + '":\\s*\\(\\s*"rows"\\s*,\\s*\\(([\\s\\S]*?)\\)\\s*\\)',
+  );
+  const m = src.match(re);
+  expect(m, `no _PROJECTED_ARCHETYPES entry for ${archetype} found in main.py`).toBeTruthy();
   return Array.from(m![1].matchAll(/"([a-z_]+)"/g)).map((x) => x[1]);
+}
+
+/**
+ * The archetype this file is named for. Kept as its own function because most seals below are
+ * about it, and because every existing call site reads better without a repeated string literal.
+ */
+function declaredEnvelopeFields(src: string): string[] {
+  return declaredFieldsFor(src, "CONTRIBUTION_RANKING");
 }
 
 describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it", () => {
@@ -330,5 +346,129 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     // Without this, "observed" lives in a session file that no code reads.
     expect(LOT4_CONTRIBUTION_RANKING_PAYLOAD.threshold).toBe("0.25");
     expect(LOT4_CONTRIBUTION_RANKING_PAYLOAD.threshold_defaulted).toBe(true);
+  });
+});
+
+/**
+ * ⛔ THE WITHHELD-COUNT RULE WAS ALREADY CONTRADICTED — BY THE ALLOWLIST, A WEEK BEFORE `method`.
+ *
+ * The finding above says the `method` block restates two facts the rows carry, breaching the rule
+ * stated at `main.py:748` that a count the card can derive must not also travel on the wire. The
+ * invincible-agent lane then enumerated the class through `_inp` and found three `len(rows)`
+ * restatements and four row-sum totals, all in `cost_agent/measures.py`.
+ *
+ * ⚠ THAT CENSUS WAS FILTERED, and the filter is the interesting part. `_inp` is ONE engine's
+ * helper. `finance_agent` emits no method block at all — its `"method"` is a row-level STRING
+ * naming the EAC method, beside a row-level `"formula"` — so nothing built through `_inp` could
+ * ever see what it does at the envelope level. A census through a helper is a claim about the
+ * helper. (Same shape as this repo's own lesson: a NULL from a filtered grep is a claim about the
+ * filter, not the population.)
+ *
+ * WHAT THE UNFILTERED LOOK FOUND, and it is stronger than the method-block finding in three ways:
+ *
+ *   `methods_compared`, `methods_answered`, `all_methods_answered` are EXPLICITLY NAMED in the
+ *   COMPETING_MEASURES tuple — deliberately carried, not leaked — and `methods_compared` is
+ *   `len(rows)` at `finance_agent/measures.py:89`.
+ *
+ *   1. It is the ALLOWLIST doing it, not a block that slipped through one. The rule at :748 and the
+ *      entry at :680 are ~70 lines apart in the same file.
+ *   2. It is OBSERVED ON A REAL WIRE, not read from source: the 2026-09-19 EAC capture in this
+ *      repo's own corpus carries `methods_compared: 3` beside `rows` of length 3, post-projector.
+ *   3. It PREDATES the method block by a week, so "the added field broke the rule" is at best half
+ *      the story. The rule was already false for a different archetype when it was written down.
+ *
+ * SO THE RULING QUESTION WIDENS AGAIN. Not "may a method block restate a fact the rows carry" but
+ * "may the WIRE restate one, and who reconciles the two sources" — the method block is one instance
+ * of a pattern the projector already blesses by name elsewhere.
+ *
+ * RECORDED, NOT PATCHED, and not ours to pick: "the producer should stop restating" and "the
+ * consumer should reconcile" are opposite fixes. Rulings originate in invincible-agent.
+ */
+describe("the withheld-count rule against the rest of the allowlist", () => {
+  it.skipIf(FOUND.length === 0)(
+    "⛔ COMPETING_MEASURES carries three derivable counts BY NAME — the rule's own file contradicts it",
+    () => {
+      const projector = readFileSync(FOUND[0], "utf8");
+      // The rule, in its own words, so this seal loses its subject if someone retracts it.
+      expect(projector).toContain("two sources of the same fact on the wire");
+
+      const competing = declaredFieldsFor(projector, "COMPETING_MEASURES");
+      // The control first: the extractor must have found a real tuple. An empty list would make
+      // every assertion below vacuous, and this is the exact failure this file was written after.
+      expect(competing.length).toBeGreaterThan(5);
+      expect(competing).toContain("verdict"); // a field nobody disputes, read by the same regex
+
+      expect(competing).toContain("methods_compared");
+      expect(competing).toContain("methods_answered");
+      expect(competing).toContain("all_methods_answered");
+
+      // And the contrast that makes it a contradiction rather than an inconsistency of taste:
+      // the SAME file withholds `suppliers_above_threshold` from CONTRIBUTION_RANKING for being
+      // exactly this kind of count.
+      expect(declaredEnvelopeFields(projector)).not.toContain("suppliers_above_threshold");
+    },
+  );
+
+  it("⛔ and it is on a REAL wire, post-projector, a week before the method block existed", () => {
+    // Source says the projector carries it; this says the card got it. The 2026-09-19 capture is
+    // nine days older than the lot 4 one and seven older than 546e6bee, so no method block is
+    // involved anywhere in this observation.
+    const capture = JSON.parse(
+      readFileSync(path.join(SESSIONS, "2026-09-19-payload-finance-eac-comparison.json"), "utf8"),
+    ) as {
+      projected?: { archetype?: string; payload?: Record<string, unknown> }[];
+    };
+    const comp = capture.projected?.find((p) => p.archetype === "COMPETING_MEASURES")?.payload;
+    expect(comp, "the EAC capture no longer projects a COMPETING_MEASURES component").toBeTruthy();
+
+    const rows = comp!.rows as Record<string, unknown>[];
+    expect(rows).toHaveLength(3);
+    // THE RESTATEMENT, MEASURED: the count equals the length of the rows sitting beside it. That
+    // equality is what makes it derivable — and, per this repo's own lesson about coincidence
+    // defects, it is also why a consumer that filters rows would not be caught by any check that
+    // compares the two only on unfiltered data.
+    expect(comp!.methods_compared).toBe(rows.length);
+    expect(comp!.methods_answered).toBe(rows.filter((r) => r.eac_exact !== null).length);
+
+    // No method block anywhere near this: the field is absent from the component, and the `method`
+    // that IS here is a row-level string naming the EAC method.
+    expect("method" in comp!).toBe(false);
+    expect(typeof rows[0].method).toBe("string");
+  });
+
+  it("⛔ a finance ROW reads as a valid method block — so the guard is the call site, not the reader", () => {
+    // WHY THIS IS SEALED, and it is not what I first assumed. Two engines now use the key `method`
+    // for different things: cost sends an envelope-level BLOCK, finance a row-level STRING naming
+    // the EAC method, beside a row-level `formula`. A reader chasing "why is method not rendering"
+    // could reasonably point `readMethod` at the rows.
+    //
+    // ⚠ MEASURED: THAT WOULD NOT FAIL SAFELY. The bare string is dropped, as a non-record must be.
+    // But a finance ROW PASSES, because it has a `formula`, and a non-empty `formula` is the only
+    // thing `readMethod` requires. What comes back is a plausible block carrying the row's formula
+    // with no inputs and no bound — rendered under a heading that tells the reader the PRODUCER
+    // accounted for its own arithmetic. That is fabricated provenance, not a blank: the shape this
+    // repo keeps finding, where the honest output would have been a stated absence.
+    expect(readMethod("CPI")).toBeNull();
+
+    const asIfRowWereBlock = readMethod({
+      method: "CPI",
+      formula: "EAC = BAC / CPI",
+      eac: 4200000,
+    });
+    expect(asIfRowWereBlock).not.toBeNull();
+    expect(asIfRowWereBlock?.formula).toBe("EAC = BAC / CPI");
+    // And it would say nothing about where the figure came from, which is the whole point of the
+    // block. A reader cannot tell this from a producer that sent a formula and omitted the rest.
+    expect(asIfRowWereBlock?.inputs).toEqual([]);
+    expect(asIfRowWereBlock?.bound).toBeNull();
+
+    // SO THE GUARD HAS TO BE THE CALL SITE, and it is asserted where it actually lives: the export
+    // reads `method` off the component and off the envelope, never off a row. Widening `readMethod`
+    // to reject row-shaped input is the other candidate fix and is NOT taken here — a row could
+    // legitimately grow a field a block also has, and then the reader would be guessing.
+    const exportButton = readFileSync(EXPORT_BUTTON, "utf8");
+    expect(exportButton).toContain("readMethod(componentLevel?.method)");
+    expect(exportButton).toContain("readMethod(envelopeLevel?.method)");
+    expect(exportButton).not.toMatch(/readMethod\([^)]*row/);
   });
 });

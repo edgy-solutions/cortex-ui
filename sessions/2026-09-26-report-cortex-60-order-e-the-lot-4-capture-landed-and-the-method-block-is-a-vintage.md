@@ -222,3 +222,73 @@ pushed cortex-ui master: it is **ahead 4**, which voids the condition Chris gave
 the next fire, and stating how it was derived rather than only a timestamp.
 
 **Suite after the addendum:** 114 files / 1716 tests green; `check:transport` ✓, `tsc --noEmit` ✓.
+
+---
+
+## Second addendum, same day — the rule was already contradicted, by the allowlist, a week earlier
+
+The addendum above accepted the *frame* of the finding while correcting its field: the `method`
+block, added later, restates two facts the rows carry, and so walks through the rule at
+`main.py:748` that a count the card can derive must not also travel on the wire.
+
+The invincible-agent lane then enumerated the class through `_inp` and reported three `len(rows)`
+restatements and four row-sum totals, all in `cost_agent/measures.py`, and asked whether widening
+the allowlist was the fix.
+
+**That census was filtered, and the filter is the finding.** `_inp` is *one engine's* helper.
+`finance_agent` builds no method block at all — its `"method"` is a row-level STRING naming the EAC
+method, beside a row-level `"formula"` — so nothing reached through `_inp` could ever see what that
+engine does at the envelope level. A census through a helper is a claim about the helper. It is the
+same shape as this lane's own §4 failure one level up: a NULL from a filtered instrument is a claim
+about the filter, not the population.
+
+**What the unfiltered look found, stronger than the method-block finding in three ways:**
+
+`methods_compared`, `methods_answered` and `all_methods_answered` are **explicitly named** in the
+COMPETING_MEASURES tuple at `main.py:680-685`, and `methods_compared` is `len(rows)` at
+`finance_agent/measures.py:89`.
+
+| | the method-block finding | this one |
+|---|---|---|
+| who does it | a block that slipped past the allowlist | **the allowlist itself**, ~70 lines from the rule, same file |
+| evidence | read from producer source | **observed on a real wire**: the 2026-09-19 EAC capture in this repo's corpus carries `methods_compared: 3` beside 3 rows, post-projector |
+| when | `546e6bee`, 2026-09-26 | **a week earlier** — the rule was already false for another archetype when it was written down |
+
+So "the added field broke the rule" is at best half the story, and **widening the allowlist fixes
+nothing** — the allowlist is where the breach already lives.
+
+**The ruling question widens again.** Not "may a method block restate a fact the rows carry" but
+"may the WIRE restate one, and who reconciles the two sources". The method block is one instance of
+a pattern the projector already blesses by name elsewhere. Still recorded, not patched: *the producer
+should stop restating* and *the consumer should reconcile* are opposite fixes, and neither lane picks
+one on a peer exchange.
+
+**One thing measured that I expected to go the other way.** The third new seal was written to assert
+that a row-level `method` string cannot be mistaken for a method block. Half of that is true — a bare
+string is dropped. But a finance **row** passes `readMethod`, because it carries a `formula` and a
+non-empty `formula` is the only thing the reader requires. What comes back is a plausible block with
+the row's formula, no inputs and no bound, rendered under a heading that tells the reader the
+*producer* accounted for its own arithmetic. That is fabricated provenance where the honest output
+was a stated absence. **The guard therefore has to be the call site, not the reader** —
+`CardExportButton.tsx:61` reads `method` off the component and the envelope and never off a row —
+and that is what the seal now asserts. Narrowing `readMethod` to reject row-shaped input is the other
+candidate and is deliberately not taken: a row could legitimately grow a field a block also has, and
+then the reader would be guessing. The failing draft is left described here because the assertion I
+first wrote would have passed for the wrong reason had `readMethod` been one line stricter.
+
+**Redproof of the new describe — four mutations, each fires on the intended assertion and only it:**
+
+| mutation | result |
+|---|---|
+| producer tuple loses `"methods_compared"` | 1 red — `expected [ 'spread', …(12) ] to include 'methods_compared'`; the vacuity controls (`length > 5`, `verdict`) still green, so the extractor read a real tuple |
+| capture's `methods_compared` 3 → 4 | 1 red — `expected 4 to be 3` |
+| `readMethod` additionally requires `inputs` | 1 red — `expected null not to be null` |
+| call site pointed at `componentLevel?.rows` | 2 red — the new seal **and** the older props seal, two independent witnesses on that line |
+
+⚠ **The first attempt at the first two measured nothing** and is recorded because it will recur: the
+mutant paths were written bash-style (`/c/Users/...`), node resolved them as `C:\c\Users\...`, and
+both runs exited 1 on `ENOENT` rather than on any assertion. An EXIT 1 for the wrong reason is the
+same empty instrument as an EXIT 0 that cannot fail.
+
+**Suite after this addendum:** 114 files / **1719** tests green; `check:transport` ✓ (9 sites, 7
+files), `tsc --noEmit` ✓.
