@@ -725,7 +725,7 @@ reason that it is deliberately not purged: this store is the owner signal `recon
 reads, so wiping it during an owner change would erase the evidence of the change being reacted to
 and log the arriving user straight back out. Register: 8 → 9.
 
-**I also planned an arm for the re-export residual and deleted it, because the measurement said it
+~~**I also planned an arm for the re-export residual and deleted it, because the measurement said it~~ **Corrected in the tenth addendum: the measurement was a ONE-FILE mutant and the arm is a two-file arm. With the binding site registered, a consumer importing the handle ships a durable key green — the arm is restored and is sole cover. What follows was true about the binding site and irrelevant to the consumer.** **The deleted claim, kept verbatim: it
 had no cover of its own.** `export const S = window.localStorage` already reds the arrival arm — the
 binding site names storage, so the holding module is already in the population. The residual paragraph
 now states what is actually left (`globalThis["local" + "Storage"]`, or a dependency reaching `window`
@@ -791,3 +791,78 @@ be incomplete; recorded rather than widened, because widening it to match today'
 the same mistake one level along.
 
 Both CompetingMeasures halves remain **reported, not patched**.
+
+## Tenth addendum, same day — the peer asked what identifies the object, and my closed residual was open
+
+The peer's closing question was the one I had answered too early: *"your enumeration keys on the
+storage OBJECT, so it inherits whatever identifies that object. If the object is ever obtained rather
+than imported — handed in, destructured, re-exported — the safe-form enumeration is total over the
+accessors and silent about the object."* Fired, and it is right.
+
+```
+lib/storageHandle.ts    export const handle = window.localStorage;     (REGISTERED)
+lib/quietConsumer.ts    import { handle } from "./storageHandle";
+                        handle.setItem("cortex-quiet-2", v);            <- names no storage
+```
+
+**19/19 GREEN**, with a new durable key shipping from an unregistered module. The consumer owns the
+key and is invisible, because no rule keyed on the object can see a module that never names it.
+
+**And the arm that would have prevented it is the one I deleted in 62ad56e, one commit ago.** I
+deleted it because `export const S = window.localStorage` already reds the arrival arm — which is
+true, and irrelevant: the binding site being caught says nothing about the consumer. I measured a
+two-file arm's cover with a **one-file mutant**, concluded "no cover of its own", and wrote that
+conclusion into the ninth addendum as measured. The lesson is not "keep the arm" but **an arm's cover
+has to be searched with the mutant that matters, not the nearest mutant to hand** — and the nearest
+one is exactly the mutant already in your hand when you are about to delete something.
+
+Restored, and stronger than planned: **forbidding the export** closes the hole at any number of hops,
+where taint-tracking a handle across modules would need a fixpoint inside a unit test. Passing storage
+as an *argument* stays allowed on purpose, because it is not silent — the call site names storage and
+so is itself in the register, which is precisely `auth/AuthProvider.tsx`.
+
+The first version of the arm **reddened on the real tree**, flagging `useInterviewStore` and
+`usePersonaStore`: I had asked whether the initializer's subtree *contains* a storage reference, when
+the rule I meant is whether the value *is* the storage object. Exporting a store that persists is the
+normal case this register exists to describe. Narrowed, and the false positives became the control's
+accepting half — see below.
+
+**The peer's W3–W9 result turned back on my own file, and one branch was dead weight.** Their finding:
+five of seven derivation-widenings QUIET, including one that reverted the fix the suite was written
+for, with two structural causes — the derivations were untestable by construction (they read the real
+source through a module-level constant) and nothing anywhere asserted a derivation's **output**. Both
+were true here. So:
+
+- `purgedInBody` became `purgedIn(src)` with the real source applied at the call site; `touchesStorage`
+  and `exportsStorage` took an optional source defaulting to the real file. (`.filter(touchesStorage)`
+  had to stop being point-free — `Array#filter` would have handed the new parameter the index, which
+  `tsc` caught rather than any test.)
+- A new arm drives all three against **doctored sources, in both directions**. Their §14 is the reason
+  for the second half: a rule that refuses everything is exactly as useless as one that refuses
+  nothing, and only the accepting half tells them apart.
+- **Their W9 shape was live in my predicate.** Deleting the element-access branch of `verbOf` — which
+  exists solely to excuse a bracket-form *read* — was QUIET: no arm exercised a bracket read, so the
+  branch changed no result and was dead weight described as a check. It is now load-bearing, asserted
+  by the accepting half. Their tell for the 15th kind (a guard whose subject was replaced by a better
+  subject in the same change) fits a variation of mine: a branch whose *accepting* side nothing ever
+  exercises, manufactured by tightening the refusing side.
+
+Six widenings fired at the new control, each an edit to the seal, each read by the **name** of the
+failing arm:
+
+| widening | result | caught by |
+|---|---|---|
+| `isStorageValue` reverted to subtree-containment | RED | the arm **and** the control |
+| conditional-branch handling dropped | RED | the control alone |
+| `verbOf` element-access branch dropped | RED | the control alone |
+| `isStorageRef`'s `window.X` half dropped | RED | positive control, departure arm, the control |
+| `export { h }` handling dropped | RED | the control alone |
+| destructured alias (`const { localStorage: ls } = window`) | RED | arrival arm — already covered |
+
+Three have the control as **sole** cover. Regression of the earlier repertoire against the new
+instrument: variable-verb RED, comment-mention RED, purge-derivation widening RED, pure-reader GREEN.
+Nothing went quiet.
+
+Gates: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0, **114 files / 1733 tests** green. Both
+CompetingMeasures halves remain **reported, not patched**, and the ninth addendum's residual paragraph
+is corrected in place rather than rewritten.

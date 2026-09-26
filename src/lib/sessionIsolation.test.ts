@@ -49,10 +49,10 @@ const storeModules = readdirSync(STORE_DIR)
  * `purgeUserScopedState` are neither: a comment is not a node, and `useStageStoreV2` is a different
  * identifier from `useStageStore` rather than a superstring of it.
  */
-const purgedInBody = (() => {
+const purgedIn = (src: string): Set<string> => {
   const sf = ts.createSourceFile(
     "sessionIsolation.ts",
-    ISOLATION_SRC,
+    src,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,
@@ -70,7 +70,10 @@ const purgedInBody = (() => {
   };
   visit(sf);
   return names;
-})();
+};
+
+/** The real subject. Kept separate from `purgedIn` so a control can drive it with a doctored source. */
+const purgedInBody = purgedIn(ISOLATION_SRC);
 
 /** The keys sessionIsolation declares it will remove. Read from source: the list is a
  *  private const, and exporting it purely to be asserted on would be the test reshaping
@@ -447,12 +450,13 @@ describe("every module that can outlive a reload is in a register", () => {
    * entry with a stated reason; under-matching costs a leak. That asymmetry is the whole argument
    * for erring in this direction.
    *
-   * ⚠ THE RESIDUAL, measured rather than guessed. Re-export is NOT it: `export const S =
-   * window.localStorage` was fired on 2026-09-26 and RED, because the binding site names storage
-   * and so the holding module is already in this population — an arm for it would have had no
-   * cover of its own. What remains is a module that obtains storage without ever naming it:
-   * `globalThis["local" + "Storage"]`, or a dependency that reaches `window` by itself with
-   * nothing passed from here. Neither is defeated by any rule that reads this repo's syntax.
+   * ⚠ THE RESIDUAL, corrected once already, so stated with what closes it rather than as a boundary.
+   * Re-export is NOT the residual and it is NOT harmless: the binding site reds here, but a module
+   * that merely IMPORTS the handle writes durably while naming no storage, and that was GREEN on
+   * 2026-09-26 with the binding site registered. It is closed structurally by the export arm below,
+   * not by this predicate — no rule keyed on the object can see a module that never names it.
+   * What is left: a module that obtains storage without any site naming it — `globalThis["local" +
+   * "Storage"]`, or a dependency reaching `window` with nothing passed from here.
    */
   const READ_VERBS = new Set(["getItem", "key"]);
 
@@ -473,10 +477,10 @@ describe("every module that can outlive a reload is in a register", () => {
       !(n.parent && ts.isPropertyAccessExpression(n.parent) && n.parent.name === n)) ||
     (ts.isPropertyAccessExpression(n) && /^(localStorage|sessionStorage)$/.test(n.name.text));
 
-  const touchesStorage = (file: string): boolean => {
+  const touchesStorage = (file: string, src = readFileSync(file, "utf8")): boolean => {
     const sf = ts.createSourceFile(
       file,
-      readFileSync(file, "utf8"),
+      src,
       ts.ScriptTarget.Latest,
       true,
       file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
@@ -515,7 +519,7 @@ describe("every module that can outlive a reload is in a register", () => {
   };
 
   const writers = walk(SRC)
-    .filter(touchesStorage)
+    .filter((f) => touchesStorage(f)) // NOT point-free: the second parameter is a source, and Array#filter would hand it the index
     .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
     .sort();
 
@@ -549,5 +553,158 @@ describe("every module that can outlive a reload is in a register", () => {
       "registered as a durable writer but writes nothing now — delete the entry, do not leave the " +
         "argument standing for code that no longer makes it",
     ).toEqual([]);
+  });
+
+  /**
+   * A storage object may not LEAVE its module.
+   *
+   * ⚠ I deleted this arm one commit ago, in 62ad56e, for a reason that was true and irrelevant:
+   * `export const S = window.localStorage` already reds the arrival arm, because the binding site
+   * names storage. It does. But the peer asked the question I had not — the predicate keys on the
+   * OBJECT, so what happens when the object is obtained rather than named? — and the two-file form
+   * was GREEN:
+   *
+   *     lib/storageHandle.ts   export const handle = window.localStorage;   (registered)
+   *     lib/quietConsumer.ts   import { handle } from "./storageHandle";
+   *                            handle.setItem("cortex-quiet-2", v);          <- names no storage
+   *
+   * 19/19 green with a new durable key shipping from an unregistered module. The consumer is the
+   * site that owns the key and it is invisible, because no rule keyed on the object can see a module
+   * that never names it. **I measured this arm's cover with a one-file mutant and it needed a
+   * two-file one** — an arm's cover has to be searched with the mutant that matters, not the nearest
+   * mutant to hand.
+   *
+   * Forbidding the export closes it at one stroke and at any number of hops, where taint-tracking
+   * the handle across modules would need a fixpoint in a unit test. It is also the fail-safe
+   * direction: a module that wants durable state writes it here, under a register entry.
+   *
+   * ⚠ Passing storage as an ARGUMENT is deliberately not forbidden, because it is not silent: the
+   * call site names storage and so is itself in the register — `auth/AuthProvider.tsx` is exactly
+   * that shape. What remains unreachable is a callee holding the key while the caller holds the
+   * register entry; the entry's reason is where that has to be said, and AuthProvider's says it.
+   */
+  const exportsStorage = (file: string, src = readFileSync(file, "utf8")): string[] => {
+    const sf = ts.createSourceFile(
+      file,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    /**
+     * Whether an expression IS the storage object, rather than merely containing a reference to one
+     * somewhere inside. The first version asked the latter and flagged two store hooks whose bodies
+     * write storage — exporting a store that persists is the normal case this whole register exists
+     * to describe, not a leak. Conditionals and `??`/`||` are judged branch by branch, because a
+     * rule that reads a two-branch expression as one whole excuses the branch it did not look at.
+     */
+    const isStorageValue = (e: ts.Node): boolean => {
+      if (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)) {
+        return isStorageValue(e.expression);
+      }
+      if (ts.isConditionalExpression(e)) {
+        return isStorageValue(e.whenTrue) || isStorageValue(e.whenFalse);
+      }
+      if (
+        ts.isBinaryExpression(e) &&
+        (e.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+          e.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+      ) {
+        return isStorageValue(e.left) || isStorageValue(e.right);
+      }
+      if (
+        ts.isElementAccessExpression(e) &&
+        e.argumentExpression &&
+        ts.isStringLiteral(e.argumentExpression) &&
+        /^(localStorage|sessionStorage)$/.test(e.argumentExpression.text)
+      ) {
+        return true;
+      }
+      return isStorageRef(e);
+    };
+    const boundToStorage = new Set<string>();
+    const exported: string[] = [];
+    const visit = (n: ts.Node): void => {
+      if (ts.isVariableStatement(n)) {
+        const isExported = !!n.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+        for (const d of n.declarationList.declarations) {
+          if (d.initializer && isStorageValue(d.initializer) && ts.isIdentifier(d.name)) {
+            boundToStorage.add(d.name.text);
+            if (isExported) exported.push(d.name.text);
+          }
+        }
+      }
+      if (ts.isExportDeclaration(n) && n.exportClause && ts.isNamedExports(n.exportClause)) {
+        for (const el of n.exportClause.elements) {
+          const local = (el.propertyName ?? el.name).text;
+          if (boundToStorage.has(local)) exported.push(local);
+        }
+      }
+      if (ts.isExportAssignment(n) && isStorageValue(n.expression)) exported.push("default");
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return exported;
+  };
+
+  it("⛔ no module exports a storage object — the capability may not travel unnamed", () => {
+    const leaks = walk(SRC)
+      .map((f) => [path.relative(SRC, f).split(path.sep).join("/"), exportsStorage(f)] as const)
+      .filter(([, names]) => names.length > 0)
+      .map(([f, names]) => `${f} exports ${names.join(", ")}`);
+    expect(
+      leaks,
+      "an exported storage handle lets an importing module write durably while naming no storage, " +
+        "so it is invisible to every arm above — write through a registered module instead",
+    ).toEqual([]);
+  });
+
+  /**
+   * ⛔ The derivations examined, not merely consumed.
+   *
+   * Every arm above USES a derivation and none of them looks at what one returns, which is how a
+   * widened derivation stays green: the peer session measured that on its own tree and found five of
+   * seven widenings silent, including one that reverted the fix the suite was written for. Both
+   * derivations here read a real file, so until this commit no test could drive them with a doctored
+   * source either — untestable by construction, which is the same defect one level down.
+   *
+   * ⚠ BOTH DIRECTIONS ON PURPOSE. A rule that refuses everything is exactly as useless as one that
+   * refuses nothing, and only the ACCEPTING half tells them apart. The accepting cases here are not
+   * hypothetical: narrowing `exportsStorage` from "the subtree contains a storage reference" to "the
+   * value IS the storage object" was forced by two real store hooks it wrongly flagged, and that is
+   * the mutation this control exists to catch on the way back.
+   */
+  it("⛔ the storage derivations are driven against doctored sources — both directions", () => {
+    const D = "doctored.ts";
+
+    // ── refused: the capability leaving the module, in each shape the rule claims to cover ──
+    expect(exportsStorage(D, "export const h = window.localStorage;")).toEqual(["h"]);
+    expect(exportsStorage(D, "const h = localStorage;\nexport { h };")).toEqual(["h"]);
+    expect(exportsStorage(D, "export default window.sessionStorage;")).toEqual(["default"]);
+    expect(exportsStorage(D, 'export const h = window["localStorage"];')).toEqual(["h"]);
+    // A two-branch expression is judged branch by branch: a rule that reads it whole excuses
+    // whichever branch it did not look at.
+    expect(exportsStorage(D, "export const h = fake ?? window.localStorage;")).toEqual(["h"]);
+    expect(exportsStorage(D, "export const h = cond ? window.localStorage : fake;")).toEqual(["h"]);
+
+    // ── accepted: exporting something whose BODY writes storage is the normal, registered case ──
+    expect(
+      exportsStorage(D, 'export const useX = create(() => { localStorage.setItem("k", "v"); });'),
+      "flagging a store hook that persists would make the arm refuse the entire population it exists to describe",
+    ).toEqual([]);
+    expect(exportsStorage(D, 'export const read = () => localStorage.getItem("k");')).toEqual([]);
+
+    // ── the write predicate, both directions, including the bracket-form READ ──
+    expect(touchesStorage(D, 'x.setItem("k", "v");')).toBe(false); // not storage at all
+    expect(touchesStorage(D, 'localStorage.setItem("k", "v");')).toBe(true);
+    expect(touchesStorage(D, "const s = window.localStorage;")).toBe(true); // binding alone
+    expect(touchesStorage(D, 'const m = "setItem";\nls.localStorage[m]("k", "v");')).toBe(true);
+    expect(touchesStorage(D, 'sink(window.sessionStorage);')).toBe(true); // handed to a dependency
+    // ⚠ These two are the ACCEPTING half of the read allow-list, and the bracket one earns its place:
+    // deleting the element-access branch of `verbOf` — which exists only to excuse a bracket-form
+    // read — left all 19 arms green on 2026-09-26. A branch whose removal changes no result is dead
+    // weight described as a check, so the dead weight is now load-bearing.
+    expect(touchesStorage(D, 'const v = localStorage.getItem("k");')).toBe(false);
+    expect(touchesStorage(D, 'const v = localStorage["getItem"]("k");')).toBe(false);
   });
 });
