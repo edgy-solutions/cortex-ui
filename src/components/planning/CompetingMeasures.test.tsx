@@ -35,7 +35,10 @@ import {
   validateCompetingMeasures,
   COMPETING_MEASURES_CONTRACT,
 } from "./CompetingMeasures.contract";
-import { COMPETING_MEASURES_FIXTURES } from "./fixtures/competingMeasures";
+import {
+  COMPETING_MEASURES_FIXTURES,
+  COMPETING_MEASURES_ABSENCES,
+} from "./fixtures/competingMeasures";
 
 afterEach(cleanup);
 
@@ -609,5 +612,67 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     // about an absence of coverage.
     expect(incomplete).toHaveLength(1);
     expect(incomplete[0].envelope.all_methods_answered).toBe(false);
+  });
+
+  /**
+   * ⛔ THE CARD STATES THE RULE 31 LINES ABOVE THE LINE THAT BREAKS IT — so this is not a policy
+   * question, it is an internal contradiction in one component.
+   *
+   * The engine lane's closing point, verified here: the rule the consumer half needs already
+   * exists, twice, ratified nowhere. `finance_agent/measures.py:124-127` states it outright —
+   * "DECLARED, NEVER INFERRED … a verb absent from a table below emits no such key, and the
+   * renderer keeps showing a bare number rather than guessing a currency this payload never
+   * sent". `docs/rulings/README.md:64` in that repo applies the same principle to the lens:
+   * cortex reads it "from the board record, never inferred".
+   *
+   * ⚠ AND THIS COMPONENT ALREADY PRACTISES IT FOR EVERY OTHER ABSENT ENVELOPE FIGURE:
+   *
+   *   `spread` absent            → `data-spread-unreported`, and the comment at :108 says why in
+   *                                the words that decide this: "THE PRODUCER DID NOT REPORT IT,
+   *                                AND THIS CARD MAY NOT COMPUTE IT. Said rather than omitted."
+   *   `lowest_value`/`highest_value` absent → `data-range-absent`, "no range".
+   *   `methods_compared` absent  → ⛔ SILENTLY COMPUTED from `rows.length`, at :77.
+   *
+   * Five absences said, one inferred, in one file, thirty-one lines apart. `?? rows.length` is the
+   * exact inverse of the doctrine the same card cites when it refuses to subtract two figures it
+   * can see. So `complete` requiring `asked === rows.length` FOLLOWS FROM THE CARD'S OWN RULE
+   * rather than proposing a new one, and the ask of the ruling shrinks to ratifying
+   * absent-means-silent generally.
+   *
+   * ⚠ THE HINGE, which corrects what the fourth addendum of the Order E report claimed. I wrote
+   * that the absent-pair payload "cannot be built". Wrong link: `finance_agent/main.py:651` is
+   * `measures.SUMMARY[fn](rows) or {}`, so a `None` summary becomes an EMPTY DICT and the keys go
+   * ABSENT — not null, which is the one state this card invents a value for. The payload is
+   * exactly what that expression produces. What holds it off is only that `if not exact:` never
+   * fires. It is never built; it is not unbuildable. Every link read, none inferred:
+   * `measures.py:83` returns None → `or {}` drops the keys → `contract.ts:164-166` accepts their
+   * absence → `asked ?? rows.length` → `complete` derived from the fallback → banner silent.
+   *
+   * STILL REPORTED, NOT PATCHED — the fix changes what the card renders, and no order covers it.
+   * But it is reclassified: not an open design question, a violation of a stated rule.
+   */
+  it("⛔ says every other absent envelope figure and infers only this one — its own rule, 31 lines up", () => {
+    const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
+
+    // THE RULE, IN THE CARD'S OWN WORDS. If someone deletes this comment the finding loses its
+    // subject, and that is the right outcome — the contradiction is between two live claims.
+    expect(component).toContain("THE PRODUCER DID NOT REPORT IT, and this card may not compute it");
+    expect(component).toContain("Said rather");
+
+    // The practice: two absences the card STATES rather than computing.
+    expect(component).toContain("data-spread-unreported");
+    expect(component).toContain("data-range-absent");
+
+    // ⛔ And the one it computes instead, in the same file.
+    expect(component).toContain("const asked = num(methods_compared) ?? rows.length;");
+
+    // The absence has no marker to be said WITH, which is the structural form of the same point:
+    // six declared absences and not one of them means "how many were asked was not stated".
+    expect(COMPETING_MEASURES_ABSENCES).toHaveLength(6);
+    expect(COMPETING_MEASURES_ABSENCES).not.toContain("data-asked-absent");
+    // `data-incomplete` is the only count-bearing marker and it is NOT that: it is gated on
+    // `!complete`, which the fallback renders false. The control on the claim.
+    expect(COMPETING_MEASURES_ABSENCES).toContain("data-incomplete");
+    expect(component).toContain("{!complete && (");
   });
 });

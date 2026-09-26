@@ -395,7 +395,8 @@ The engine lane reported that gaps 1 and 2 have **no reachable producer-side hal
 
 - `finance_agent/measures.py:84` — `if not exact: return None`, for the **whole** summary envelope,
   when no method produced an exact figure. That is precisely the payload that would hand this card an
-  absent `asked`. It cannot be built.
+  absent `asked`. ~~It cannot be built.~~ **Corrected in the fifth addendum: it is never built, which
+  is not the same claim — `main.py:651` turns that `None` into `{}` and the keys go absent.**
 - `tests/finance/test_eac_comparison.py:106`, `test_THE_PANEL_CAN_NEVER_COME_BACK_EMPTY` — that return
   is itself unreachable: `REMAINING_AT_BUDGET` is ACWP + (BAC − BCWP), arithmetic over figures that
   always exist, projecting **no index**, so it answers whenever the program does.
@@ -440,3 +441,73 @@ an empty list is the alternative); whether the producer should instead emit the 
 `all_methods_answered: false` is the producer half of the ruling. Both halves stay Chris's.
 
 **Suite after this addendum:** 114 files / **1724** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
+
+---
+
+## Fifth addendum, same day — the hinge, and the rule the fix needs already exists in the card
+
+### One sentence of the fourth addendum was wrong, and the wrong link matters
+
+I wrote that the absent-pair payload "cannot be built". The engine lane supplied the link I had not
+read: **`finance_agent/main.py:651` is `measures.SUMMARY[fn](rows) or {}`.** A `None` summary becomes an
+**empty dict**, so the keys go **absent** — not null, which is the one state this card invents a value
+for. The payload is exactly what that expression produces. What holds it off is *only* that
+`if not exact:` never fires.
+
+**It is never built; it is not unbuildable.** Every link now read rather than inferred:
+
+```
+measures.py:83  returns None
+  → main.py:651  `or {}`         drops the keys
+  → contract.ts:164-166          accepts their absence (required: false)
+  → CompetingMeasures.tsx:77     asked = num(methods_compared) ?? rows.length
+  → :81                          complete derived from the fallback
+  → :144                         banner gated on !complete — silent
+```
+
+Six links, two repos, and `SUMMARY` has exactly one entry — so the whole chain is held off by one
+arithmetic coincidence in one method of one engine. I had claimed to have read this path and had
+inferred its second link.
+
+### The rule the consumer half needs is already in this card, 31 lines above the line that breaks it
+
+The lane's closing point, verified: the doctrine exists, twice, ratified nowhere.
+`finance_agent/measures.py:124-127` — *"DECLARED, NEVER INFERRED … a verb absent from a table below
+emits no such key, and the renderer keeps showing a bare number rather than guessing a currency this
+payload never sent."* And `docs/rulings/README.md:64` there has cortex reading the lens "from the board
+record, never inferred". ⚠ **That line is not in this repo's mirror** — noted, not numbered; rulings
+originate there.
+
+**And this component already practises it for every other absent envelope figure:**
+
+| absent field | what the card does |
+|---|---|
+| `spread` | `data-spread-unreported` — and :108 says why, in the words that decide this: *"THE PRODUCER DID NOT REPORT IT, **and this card may not compute it**. Said rather than omitted."* |
+| `lowest_value` / `highest_value` | `data-range-absent` — "no range" |
+| `methods_compared` | ⛔ **silently computed from `rows.length`**, at :77 |
+
+Five absences said, one inferred, **31 lines apart in one file.** `?? rows.length` is the exact inverse
+of the doctrine the same card cites when it refuses to subtract two figures it can already see. And
+structurally: six declared absence markers and not one means "how many were asked was not stated" —
+`data-incomplete` is the only count-bearing marker and it is gated on `!complete`, which the fallback
+renders false.
+
+**So this is reclassified, and the ruling shrinks.** Not an open design question between two candidate
+policies — a violation of a rule the card states itself. `complete` requiring `asked === rows.length`
+*follows from* the card's own doctrine rather than competing with the producer half, and the ask of the
+ruling is to **ratify absent-means-silent generally**, not to invent a policy. Still reported, not
+patched: the fix changes what the card renders and no order covers it.
+
+**Redproof, two mutations:** the card's own rule reworded → the seal reds, losing its subject, which is
+correct since the contradiction is between two live claims; a seventh absence marker added → the
+cardinality control reds.
+
+**Also recorded from that lane, on their measurement not mine:** their wire seal iterated three of the
+eight declaration tables and `SUMMARY` — the table producing these counts — was not among them, so the
+field whose whole job is to survive to the consumer was verified before it travelled and nowhere after.
+My fixtures begin after the wire and their suite stopped before it; the join belonged to neither side.
+Closed there at `7b886e61`, asserted **on the value**, with the surviving mutant from the fourth
+addendum as its specification. Their seal's docstring still claims a population it does not cover
+(three of eight tables), named and left open there.
+
+**Suite after this addendum:** 114 files / **1725** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
