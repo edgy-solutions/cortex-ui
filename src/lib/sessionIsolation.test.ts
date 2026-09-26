@@ -249,6 +249,13 @@ describe("sessionIsolation — the purge list stays complete", () => {
   it("every localStorage-persisted store's key is in USER_SCOPED_STORAGE_KEYS", () => {
     // In-memory reset is not enough for a persisted store: the cache would rehydrate the
     // previous user's state on the very next mount, re-creating the leak the purge just closed.
+    // ONE DIRECTION ON PURPOSE, and measured before saying so. A temporary probe put both sides
+    // side by side on 2026-09-26: |local persisted keys| = 2, |USER_SCOPED_STORAGE_KEYS| = 2,
+    // intersection 2 — so the reverse term would be empty today too, and adding it would read as
+    // cover it does not carry. The reverse case is a DECLARED key no store owns, which is a purge
+    // removing a key nobody writes: harmless. The case that is not harmless — a store renaming its
+    // persist key — arrives through THIS direction as a new undeclared key, so it reds here. Stated
+    // so the asymmetry is a decision on record and not the next reader's open question.
     const missing = persistedStores
       .filter((p) => p.storage === "local")
       .map((p) => p.key)
@@ -826,7 +833,11 @@ describe("every module that can outlive a reload is in a register", () => {
         D,
         'import { WebStorageStateStore } from "oidc-client-ts";\nnew WebStorageStateStore({ store: window.sessionStorage });',
       ),
-      "a dependency cannot carry a register entry; the call site names storage and is registered",
+      // The discriminator is the IMPORT KIND, not the callee's shape: a bare-package specifier is
+      // outside the register's reach, while the relative-import case three lines above is refused. Said
+      // here because "a callee was handed storage" is the wrong summary of this arm, and the wrong
+      // summary is the one that gets lifted back onto our own modules.
+      "a DEPENDENCY cannot carry a register entry; the call site names storage and is registered",
     ).toEqual([]);
     expect(
       storagePassedToOurCode(D, 'const put = (s) => s.setItem("k", "v");\nput(window.localStorage);'),
@@ -907,5 +918,305 @@ describe("every module that can outlive a reload is in a register", () => {
     // weight described as a check, so the dead weight is now load-bearing.
     expect(touchesStorage(D, 'const v = localStorage.getItem("k");')).toBe(false);
     expect(touchesStorage(D, 'const v = localStorage["getItem"]("k");')).toBe(false);
+  });
+});
+
+/**
+ * ⛔ THE REGISTERS STAY SPELLED OUT — the one mutation every arm above, including the ones added
+ * today, agrees with by construction.
+ *
+ * From the invincible-agent lane, 2026-09-26, as the piece they sent back: **no mutant of a
+ * register's CONTENT can object to a derived register, because a derived register agrees with the
+ * producer by construction.** The guard against the tidy-up has to live in the source TEXT, not in
+ * the values. Fired here the same hour, on the register I had installed an hour earlier:
+ *
+ *   T1     `const KNOWN_STORES = [...storeModules];`                         → 23/23 GREEN
+ *   T1+B2  the same, plus drop a store and lower the floor                   → 23/23 GREEN
+ *   T2     `DURABLE_WRITERS = Object.fromEntries(writers.map(...))`           → 23/23 GREEN
+ *
+ * T1+B2 is the whole of this morning's B2 fix undone by one edit that reads as simplification. T2 is
+ * worse: that register is what catches a durable writer nobody declared — `auth/AuthProvider.tsx`
+ * was found by it — and derived, it auto-registers every future writer with a boilerplate reason
+ * long enough to clear the reviewability threshold without a human having read anything. Both
+ * mutants are a single line, and both look like tidying up after a pedant.
+ *
+ * ⚠ The population here is DERIVED ON PURPOSE, and this is the one place where that is the safe
+ * direction: it is every UPPER_SNAKE const in this file, minus a named allow-list of the ones that
+ * legitimately hold a file read or a path. A list of guarded register NAMES would go stale the
+ * moment someone adds a twelfth register — the non-arrival failure this file already carries a whole
+ * describe about. Derived, a new register is guarded by default, and a new source-reading const has
+ * to be named in PLUMBING, which is an explicit one-line statement rather than a silence.
+ *
+ * ⚠ Enumerate the SAFE set, not the dangerous one — and this arm is the second time that rule paid
+ * today. The first version asked "array and object literals must contain only literals", which reads
+ * as the same thing and is not: `Object.fromEntries(...)` is a CALL, not a collection literal, so T2
+ * dropped out of its own population and the arm passed vacuously on the mutant it was written for.
+ * Keyed the other way — everything not named as plumbing must be wholly literal — T2 is in by
+ * default. Measured both ways before this landed.
+ *
+ * ⚠ AND THE HONEST BOUND, in the peer's words because they put it better than I did: the register
+ * makes a widening visible in a DIFF, it does not make it impossible. Someone widening the producer
+ * can re-type the register's literals in the same commit and this arm is satisfied. A name refuses
+ * its own re-statement only in the sense that re-stating it is an explicit edit a failing message
+ * demands a reason for. That is the whole of the defence, and it is worth having because the quiet
+ * version of the same change is one character of spread syntax.
+ */
+describe("the seal's own registers are source text, not derivations", () => {
+  const SELF = readFileSync(path.join(__dirname, "sessionIsolation.test.ts"), "utf8");
+
+  /**
+   * Consts that hold a file read or a path rather than a register.
+   *
+   * ⚠ This was a bare `Set` of names for about ten minutes, and mutant S2 — append
+   * `"DURABLE_WRITERS"` to it — was GREEN. An allow-list keyed on a NAME excuses whatever is given
+   * that name, which is the excuse-by-name defect the exemption rule three describes up exists to
+   * refuse; I wrote the escape hatch without applying my own file's doctrine to it. So an entry now
+   * costs two things: a stated reason, held to the same reviewability threshold as a purge
+   * exemption, and — the half that actually does the work — the const's initializer must REALLY
+   * read a file or build a path. A register cannot be excused by being called plumbing, because
+   * `Object.fromEntries(writers.map(...))` contains no `readFileSync`, `readdirSync` or
+   * `path.join` and so cannot satisfy the excuse at all. The reason documents; the shape decides.
+   */
+  const PLUMBING: Record<string, string> = {
+    ISOLATION_SRC:
+      "The purge module's own source, read once so the AST derivations below can be driven " +
+      "against the real file rather than against a fixture that agrees with them.",
+    STORE_DIR:
+      "The store directory's path, from which the population of stores is read — a path, not a " +
+      "list of members, so there is nothing here for anyone to state by hand.",
+    SRC:
+      "The src/ root, walked to census durable writers. Same reason: the members are the files " +
+      "found on disk and the point of the walk is that nobody enumerates them.",
+    SELF:
+      "This test file's own source, read so the arms below can assert the SHAPE of the registers " +
+      "above — the one thing no assertion about their contents can reach.",
+  };
+
+  /** A call to `readFileSync`, `readdirSync` or `path.join` anywhere in the subtree. */
+  const readsTheDisk = (node: ts.Node): boolean => {
+    let found = false;
+    const visit = (n: ts.Node): void => {
+      if (found) return;
+      if (ts.isCallExpression(n)) {
+        const e = n.expression;
+        const name = ts.isPropertyAccessExpression(e)
+          ? e.name.text
+          : ts.isIdentifier(e)
+            ? e.text
+            : "";
+        if (/^(readFileSync|readdirSync|join|resolve|relative)$/.test(name)) found = true;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(node);
+    return found;
+  };
+
+  /**
+   * Wholly literal: strings, arrays, objects, `new Set([...])`, and `+` chains of those. Anything
+   * that could consult the producer — an identifier, a call, a spread, a computed key, a template
+   * with a substitution — is refused. The identifier rejection is the load-bearing one: every
+   * derivation has to name its source, so a subtree containing no identifier cannot be reading one.
+   */
+  const isWhollyLiteral = (node: ts.Node): boolean => {
+    let ok = true;
+    const visit = (n: ts.Node): void => {
+      if (!ok) return;
+      if (ts.isNewExpression(n) || ts.isCallExpression(n)) {
+        // `new Set([...])` with one literal argument is the single construction allowed, because
+        // three of this file's registers are Sets and a Set of literals states its members.
+        const isSet =
+          ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "Set";
+        const args = n.arguments ?? ts.factory.createNodeArray<ts.Expression>([]);
+        if (!isSet || args.length !== 1) {
+          ok = false;
+          return;
+        }
+        visit(args[0]);
+        return;
+      }
+      if (ts.isPropertyAssignment(n)) {
+        // A property NAME is not a producer reference. `{ KEY: "why" }` states a member; the thing
+        // that could consult a producer is the VALUE, so only the initializer is visited. Measured:
+        // the rule that rejected every identifier reded on this file's own PLUMBING record, whose
+        // keys are unquoted — a false red carrying the message "consults something" about a const
+        // that consults nothing, which would have taught the next reader the wrong rule.
+        if (ts.isComputedPropertyName(n.name)) { ok = false; return; }
+        visit(n.initializer);
+        return;
+      }
+      if (
+        // (A shorthand `{ PRODUCER }` needs no line of its own: mutant S6 removed one and
+        // stayed green, because forEachChild reaches the shorthand`s identifier child and that is
+        // already refused. A branch that cannot change an outcome is not cover, it is furniture —
+        // the control case below still pins the behaviour.)
+        ts.isIdentifier(n) ||
+        ts.isSpreadElement(n) ||
+        ts.isSpreadAssignment(n) ||
+        ts.isComputedPropertyName(n) ||
+        ts.isTemplateExpression(n) ||
+        ts.isPropertyAccessExpression(n) ||
+        ts.isElementAccessExpression(n)
+      ) {
+        ok = false;
+        return;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(node);
+    return ok;
+  };
+
+  /**
+   * Every UPPER_SNAKE const in this file, at any depth, with its initializer.
+   *
+   * ⚠ WHAT THIS POPULATION ACTUALLY HOLDS, counted 2026-09-26 rather than assumed: 12 names, of
+   * which only FOUR are registers the arms below are for — KNOWN_STORES, NON_STORE_MODULES,
+   * DURABLE_WRITERS, READ_VERBS. The rest are PLUMBING itself, a `WHY` reason string, and `D`
+   * twice, a doctored-filename local in two different arms. The convention regex cannot tell a
+   * register from a test local that happens to be shouted, and single letters match it.
+   *
+   * That is fine for the shape rule, which is a per-member predicate: the extras are string
+   * literals and pass trivially. It is NOT fine for a count — a floor of twelve over this
+   * population would be eleven parts decoration, and the same naming collision already reded
+   * these arms once, when three doctored locals were called COMPUTED/READ/BUILT. Mount on the
+   * four, not on the twelve.
+   */
+  const registers = (src: string): { name: string; init: ts.Node }[] => {
+    const sf = ts.createSourceFile("self.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const out: { name: string; init: ts.Node }[] = [];
+    const visit = (n: ts.Node): void => {
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+        if (/^[A-Z][A-Z0-9_]*$/.test(n.name.text)) {
+          out.push({ name: n.name.text, init: n.initializer });
+        }
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return out;
+  };
+
+  it("the register enumeration actually finds the registers — positive control", () => {
+    const names = registers(SELF).map((r) => r.name);
+    // Pinned: the two registers the mutants above defeated, and the one deliberately empty.
+    expect(names).toContain("KNOWN_STORES");
+    expect(names).toContain("DURABLE_WRITERS");
+    expect(names).toContain("NON_STORE_MODULES");
+    expect(names.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("⛔ no register in this file is computed — a derived register agrees with the producer", () => {
+    const computed = registers(SELF)
+      .filter((r) => !(r.name in PLUMBING))
+      .filter((r) => !isWhollyLiteral(r.init))
+      .map((r) => r.name);
+    expect(
+      computed,
+      "this register consults something instead of stating it, so every arm that compares the " +
+        "population to it now agrees with that population by construction and can no longer object " +
+        "to a widening — spell the members out, or name the const in PLUMBING and say why",
+    ).toEqual([]);
+  });
+
+  it("⛔ the literal-shape rule is driven directly — both directions", () => {
+    const one = (src: string): boolean => isWhollyLiteral(registers(src)[0].init);
+    // Refused: every shape a tidy-up reaches for, one case per rejection so none is decoration.
+    expect(one("const R = [...storeModules];"), "spread").toBe(false);
+    expect(one("const R = storeModules;"), "bare identifier").toBe(false);
+    expect(one('const R = Object.fromEntries(xs.map((f) => [f, "why"]));'), "call").toBe(false);
+    expect(one('const R = { ...BASE, "a.ts": "why" };'), "object spread").toBe(false);
+    expect(one('const R = { [k]: "why" };'), "computed key").toBe(false);
+    expect(one("const R = [`use${n}Store`];"), "template substitution").toBe(false);
+    expect(one("const R = new Set(xs);"), "Set over a producer").toBe(false);
+    expect(one("const R = xs.filter((f) => true);"), "method call").toBe(false);
+    expect(one("const R = ONE.concat(TWO);"), "two registers joined").toBe(false);
+    expect(one('const R = { KEY: PRODUCER };'), "identifier as a VALUE").toBe(false);
+    expect(one("const R = { PRODUCER };"), "shorthand property").toBe(false);
+    // Accepted, each a shape a real register in this file uses today.
+    expect(one('const R = ["useCanvasStore", "useEvidenceStore"];'), "array of strings").toBe(true);
+    expect(one('const R = { "a.ts": "why" };'), "object of strings").toBe(true);
+    expect(one('const R = { "a.ts": "why, " + "at length" };'), "concatenated reason").toBe(true);
+    expect(one('const R = new Set(["getItem", "key"]);'), "Set of literals").toBe(true);
+    expect(one("const R: string[] = [];"), "deliberately empty").toBe(true);
+    expect(one('const R = "doctored.ts";'), "a plain string const").toBe(true);
+    expect(one('const R = { KEY: "why, at length" };'), "unquoted KEY, literal value").toBe(true);
+  });
+
+  /**
+   * Every complaint the plumbing allowance can make, as data — so the arm below asserts on the real
+   * allowance and the arm after it drives the same function with doctored ones.
+   *
+   * ⚠ Written as three inline `expect`s first, and two of the three were QUIET under mutation:
+   * deleting the reviewable-reason check and neutering the stale-name check both left 27/27 green,
+   * because the real allowance satisfies every category and nothing else ever called them. A check
+   * whose only input is data that passes it is the same dead branch this file keeps finding — the
+   * case that runs THROUGH a check is not the case that distinguishes it. Returning complaints
+   * instead of asserting them is what makes each category drivable without editing the seal.
+   */
+  const plumbingComplaints = (
+    allowance: Record<string, string>,
+    named: { name: string; init: ts.Node }[],
+  ): string[] => {
+    const out: string[] = [];
+    for (const k of Object.keys(allowance)) {
+      if (!named.some((r) => r.name === k)) out.push(`${k}: named as plumbing, but no such const`);
+    }
+    for (const r of named) {
+      if (r.name in allowance && !readsTheDisk(r.init)) {
+        out.push(`${r.name}: excused as plumbing, but reads no file and builds no path`);
+      }
+    }
+    for (const [k, why] of Object.entries(allowance)) {
+      if (!reasonIsReviewable(why)) out.push(`${k}: no reviewable reason`);
+    }
+    return out;
+  };
+
+  it("⛔ and the plumbing allowance cannot be claimed by a register — both directions", () => {
+    expect(
+      plumbingComplaints(PLUMBING, registers(SELF)),
+      "an entry is excused from the literal rule without earning it — see the complaint; the " +
+        "allowance is the escape hatch from every other arm in this describe, so it pays rent",
+    ).toEqual([]);
+  });
+
+  it("⛔ the plumbing complaints are driven with doctored allowances — one case per category", () => {
+    const named = registers(SELF);
+    const WHY = "a reason long enough to clear the reviewability threshold, stated so a reviewer has something to disagree with";
+    // Each case asserts ITS OWN complaint, not "some complaint": the peer's correction from their
+    // round 17 — dropping one category makes a combined assertion fire on the first one instead, so
+    // the measurement credits the wrong check and the fragment you predicted never appears.
+    expect(plumbingComplaints({ NO_SUCH_CONST: WHY }, named).join(" | ")).toContain(
+      "NO_SUCH_CONST: named as plumbing, but no such const",
+    );
+    expect(plumbingComplaints({ DURABLE_WRITERS: WHY }, named).join(" | ")).toContain(
+      "DURABLE_WRITERS: excused as plumbing, but reads no file and builds no path",
+    );
+    expect(plumbingComplaints({ SELF: "plumbing" }, named).join(" | ")).toContain(
+      "SELF: no reviewable reason",
+    );
+    // ⚠ And the same rule driven against a doctored SOURCE, not only a doctored allowance. Mutant S9
+    // — `readsTheDisk` widened to accept ANY call — was QUIET, because the refused case above is a
+    // real register whose initializer holds no call at all, so nothing distinguished "reads a file"
+    // from "calls something". Doctoring the source is what puts a computed const in the population.
+    // One source per case rather than a joined multi-line string: three separate declarations are
+    // three separate claims, and nothing here needs an escape to say what it means.
+    // Locals, deliberately not UPPER_SNAKE: the arm above reads every shouty const in this file as
+    // a register, so it caught these three the first time round when they were named COMPUTED, READ
+    // and BUILT. That is the population doing its job — the convention IS the signal — and the fix
+    // is the name, not an entry in the allowance.
+    const doctoredComputed = registers('const COMPUTED = Object.fromEntries(xs.map((f) => [f, "w"]));');
+    const doctoredRead = registers('const READ = readFileSync(p, "utf8");');
+    const doctoredBuilt = registers('const BUILT = path.join(d, "x.ts");');
+    expect(plumbingComplaints({ COMPUTED: WHY }, doctoredComputed).join(" | ")).toContain(
+      "COMPUTED: excused as plumbing, but reads no file and builds no path",
+    );
+    // And the accepting half in both plumbing shapes, or a rule that complains about everything
+    // would look identical here. (The real allowance is asserted by the arm above; mutant S10 showed
+    // that repeating it here distinguishes nothing, so these doctored consts stand in its place.)
+    expect(plumbingComplaints({ READ: WHY }, doctoredRead), "a real file read").toEqual([]);
+    expect(plumbingComplaints({ BUILT: WHY }, doctoredBuilt), "a real path build").toEqual([]);
+    expect(plumbingComplaints({ ISOLATION_SRC: WHY }, named)).toEqual([]);
   });
 });

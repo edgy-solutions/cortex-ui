@@ -817,9 +817,20 @@ has to be searched with the mutant that matters, not the nearest mutant to hand*
 one is exactly the mutant already in your hand when you are about to delete something.
 
 Restored, and stronger than planned: **forbidding the export** closes the hole at any number of hops,
-where taint-tracking a handle across modules would need a fixpoint inside a unit test. Passing storage
+where taint-tracking a handle across modules would need a fixpoint inside a unit test. ~~Passing storage
 as an *argument* stays allowed on purpose, because it is not silent — the call site names storage and
-so is itself in the register, which is precisely `auth/AuthProvider.tsx`.
+so is itself in the register, which is precisely `auth/AuthProvider.tsx`.~~
+
+> **Struck 2026-09-26, and struck HERE second.** The same claim was struck in the seal's docstring in
+> the eleventh addendum below, after it was fired and measured 21/21 GREEN — and it went on standing in
+> this paragraph, in its own words, wearing the authority of an addendum that never reached it. Found
+> by a sweep the invincible-agent lane asked for after the identical thing happened to them: **a
+> correction has as many homes as the claim had, and the searchable handle is the claim's SUBJECT, not
+> its struck wording.** Grepping for my struck phrasing would not have found this sentence; grepping
+> for *storage as an argument* did. What survives of the claim is the dependency clause only — a
+> package cannot carry a register entry, so `auth/AuthProvider.tsx` handing `sessionStorage` to
+> oidc-client-ts is still allowed and still registered. Passing storage to OUR OWN code is now
+> refused, by `storagePassedToOurCode`.
 
 The first version of the arm **reddened on the real tree**, flagging `useInterviewStore` and
 `usePersonaStore`: I had asked whether the initializer's subtree *contains* a storage reference, when
@@ -938,3 +949,113 @@ assertion's MESSAGE, not the exit code.
 Seal: 18 → **23 arms**. Gates: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0, **114 files / 1735
 tests** green. `tsc` again caught what no test could — a point-free `.filter(touchesStorage)` would
 have been handed the array index as its source argument.
+
+## Twelfth addendum, same day — a derived register agrees with its producer by construction, so the guard had to move to the source text
+
+The peer's §17 (their `dd8489cf`) landed on a register of mine that was one hour old. Their finding,
+stated as a property: **no mutant of a register's CONTENT can object to `KNOWN_STORES = [...storeModules]`.**
+A hand-written register is a second, independent statement of the same fact, and that independence is
+the whole of its value — so the tidy-up that "removes the duplication" removes the instrument while
+leaving every arm green. Fired on both of mine:
+
+| # | Mutant | Result |
+|---|---|---|
+| T1 | `const KNOWN_STORES = [...storeModules];` | **23/23 GREEN** |
+| T1+B2 | T1 applied to the register B2 had just repaired | **23/23 GREEN** — undoes the morning's fix |
+| T2 | `DURABLE_WRITERS` derived from `walk(SRC)` | **23/23 GREEN** (after the first attempt was INVALID: TS2448, `walk` used before declaration, and a collection-time failure with no named arm) |
+
+The fix cannot be another value assertion, because values are exactly what agree. It is a new describe
+— **"the seal's own registers are source text, not derivations"** — whose subject is this file's AST:
+every UPPER_SNAKE const must be *wholly literal*, with a named, reasoned, and **checkable** escape
+hatch. Seal: 23 → **28 arms**.
+
+### Ten mutants against the new arms, and five of them were mine to fix
+
+S2, S4, S5, S6, S9, S10 all came back GREEN or QUIET. What each one taught, because none of them
+taught the same thing:
+
+- **S2 — excuse-by-name.** Appending `"DURABLE_WRITERS"` to a bare `PLUMBING` Set excused a real
+  register, silently. An allow-list keyed on a name excuses *whatever is given that name*; the escape
+  hatch from every other arm in the describe was itself unguarded. Fixed by making the excuse
+  **checkable**: `readsTheDisk(initializer)` must be TRUE of the const, not merely asserted of it.
+  A declarative exemption is a comment with a syntax error budget.
+- **S4/S5 — QUIET because undriven.** Deleting the reviewable-reason check and neutering the
+  stale-name check both left 27/27 green: the real allowance satisfies every category, so nothing
+  else ever called them. **The case that runs THROUGH a check is not the case that distinguishes it** —
+  the B1 property, arriving at my own new work the same day I learned it. Fixed by extracting
+  `plumbingComplaints` so it returns complaints as data, then driving each category with a doctored
+  allowance and asserting **each case's own** fragment (a combined assertion fires on the first
+  category and credits the wrong check — the peer's round-17 correction, reused here).
+- **S6 — QUIET because REDUNDANT, not because uncovered.** The shorthand-property branch was already
+  subsumed: a shorthand's identifier child is rejected by the identifier rule. **Quiet is not the
+  same object as a hole.** The right response was deletion with the measurement recorded, not a new
+  case defending a line that defends nothing.
+- **S9 — QUIET because nothing distinguished the widening.** `readsTheDisk` relaxed to accept ANY
+  call stayed green, because the only refused case was a real register whose initializer holds no
+  call at all. Fixed by driving the rule against a doctored SOURCE, which is what puts a computed
+  const in the population in the first place.
+- **S10 — QUIET because duplicated.** The accepting half repeated the arm above verbatim. Replaced
+  with doctored-source cases.
+
+And one **false positive of my own rule**: the shape arm reded on `PLUMBING` itself, because an
+unquoted object key is an Identifier node. The fix belonged in the rule, not in quotes around the
+data — *a property name is a name, not a producer reference* — so a `PropertyAssignment` now visits
+only its initializer, with three controls added. Separately the arm reded on my own test locals
+`COMPUTED`/`READ`/`BUILT`: UPPER_SNAKE and call-initialized. Renamed to `doctoredComputed` and its
+siblings, because **the convention IS the signal** and a test local should not be shouting.
+
+### The layer question, asked of my own exclusion terms
+
+The peer's second carry: *fixing a term's derivation does not make the term cover anything — ask
+first whether the term and the population are drawn from the same LAYER.* A temporary probe put both
+sides of all four exclusion terms side by side, using the real derivations rather than a
+re-implementation:
+
+| Term | Layer | Measured |
+|---|---|---|
+| `writers` / `DURABLE_WRITERS` | relative source paths, both | 9 / 9, intersection **9**, both differences empty |
+| local persisted keys / `declaredStorageKeys` | storage key strings, both parsed from source | 2 / 2, intersection **2** |
+| `PLUMBING` keys / register names | identifiers from this file's AST | 4 / 12, intersection **4** |
+| `KNOWN_STORES` / `storeModules` | hook names, both | live — the B2 census already fired it |
+
+**None is inert.** Each difference is empty because the tree currently agrees, not because the
+operands can never meet — which is the distinction the peer's finding turns on, and it is only
+visible once the intersection is printed rather than inferred from a passing `toEqual([])`.
+
+The probe itself failed twice before it measured anything, both times the same class. **`console.log`
+inside a vitest run reached nothing** — 29 tests passed, zero log lines, no setup file to blame — so
+the probe's channel did not exist and its silence read exactly like "the numbers are zero". Rewritten
+as a deliberate RED, which carries its data in the assertion message: *a probe whose output channel is
+unproven is an instrument that cannot report.* Then `ReferenceError: DURABLE_WRITERS is not defined`:
+the consts live in sibling describes and **no single scope sees both**, which is itself worth knowing
+about a file whose arms keep citing each other's populations.
+
+Two incidental findings fell out of it, and both are now stated beside their claims rather than only
+here:
+
+- **The register population is 12 names, of which FOUR are registers.** The rest: `PLUMBING` itself,
+  a `WHY` reason string, and `D` **twice** — a doctored-filename local in two different arms, matching
+  the UPPER_SNAKE regex because single letters match it. Harmless for a per-member predicate, fatal
+  for a count: a floor of twelve here would be eleven parts decoration. *Mount on the four.*
+- **The persisted-key arm is one-directional on purpose**, and now says so with the numbers. The
+  reverse case is a declared key no store owns — a purge removing a key nobody writes, harmless. The
+  case that is not harmless, a store renaming its persist key, arrives through the existing direction
+  as a new undeclared key. An asymmetry on record is not the same object as an asymmetry nobody
+  examined.
+
+The surviving dependency clause got the same treatment: its discriminator is the **import kind**, not
+the callee's shape, and that is now written where the clause is — because "a callee was handed
+storage" is the wrong summary of the arm, and the wrong summary is the one that gets lifted back onto
+our own modules.
+
+### And the peer's sweep found a live restatement of a claim I had struck
+
+They asked for it after the identical thing happened on their side. The tenth addendum was still
+asserting, in its own words and wearing an addendum's authority, the claim the eleventh addendum had
+struck in the seal after measuring it 21/21 GREEN. Struck in place. **A correction has as many homes
+as the claim had, and the searchable handle is the claim's SUBJECT, not its struck wording** — grepping
+my struck phrasing would have found nothing; grepping *storage as an argument* found it.
+
+Seal: 23 → **28 arms**. Gates on the final state: `check:transport` EXIT 0 (9 sites / 7 files),
+`tsc --noEmit` EXIT 0, **114 files / 1740 tests** green. Every behavioural finding in this addendum
+is **REPORTED, NOT PATCHED** — only test files and this report changed.
