@@ -19,6 +19,7 @@ import path from "node:path";
  * Every enumeration carries a POSITIVE CONTROL. A derived guard whose derivation quietly
  * returns nothing passes vacuously and is worse than no test, because it reads as coverage.
  */
+import ts from "typescript";
 import { describe, it, expect, beforeEach } from "vitest";
 import { purgeUserScopedState, reconcileSessionOwner, PURGE_EXEMPT_STORES } from "./sessionIsolation";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -72,7 +73,24 @@ describe("sessionIsolation — the purge list stays complete", () => {
     expect(storeModules).toContain("useCanvasStore");
     expect(storeModules).toContain("useInterviewStore");
     expect(storeModules).toContain("usePersonaStore");
-    expect(storeModules.length).toBeGreaterThanOrEqual(7);
+    // ⛔ THE RATCHET, AND ITS COVER, MEASURED 2026-09-26. This said `>= 7` and was guarding ELEVEN
+    // — written when there were seven and never touched since, so it had silently loosened into four
+    // modules of slack. A shrinkage ratchet must equal the population at the moment it is written,
+    // or it is a bound drifting away from its own subject.
+    //
+    // ITS COVER WAS THEN MEASURED RATHER THAN ASSUMED, and the answer is narrower than "it covers
+    // nothing" — which is what I first wrote here and could not defend:
+    //
+    //   a store RENAMED out of the convention  → the convention arm reds on the unmatched file
+    //   a persisting store REMOVED             → the register's both-directions arm reds
+    //   an exempted store REMOVED              → the exemption arm reds ("no longer exists")
+    //   a plain store DELETED outright         → ⛔ NOTHING ELSE REDS. This count is sole cover.
+    //
+    // So it stays, and the honest statement of what it buys is bookkeeping, not leak-catching: a
+    // deliberate deletion is not a defect, and what this forces is that the number be re-stated by
+    // whoever did it. If a future re-run finds even that case covered elsewhere, delete this —
+    // a control that covers nothing is what goes stale and then reads as coverage.
+    expect(storeModules.length).toBeGreaterThanOrEqual(11);
   });
 
   it("the persisted-key derivation actually finds persisted stores — positive control", () => {
@@ -326,6 +344,8 @@ describe("every module that can outlive a reload is in a register", () => {
       "writes cortex-mock-grounding, the mock-mode toggle. DEVICE-scoped by derivation: it selects whether the backend is faked at all, which is a property of the machine and not of who is signed in",
     "hooks/useComposerDraft.ts":
       "keys are COMPUTED per owner (cortex-composer-draft:<owner>), so A's draft is unreachable from B's session by construction; deliberately unpurged, per the seal above about same-user re-login",
+    "api/client.ts":
+      "writes cortex-session-id to sessionStorage, which dies with the tab — a new tab is a new session id by construction, so the localStorage list's remit does not reach it",
     "lib/sessionIsolation.ts":
       "writes the owner stamp itself; purging it would make every reconcile look like a first observation and the purge would fire forever",
   };
@@ -340,8 +360,73 @@ describe("every module that can outlive a reload is in a register", () => {
     });
 
   const SRC = path.join(__dirname, "..");
+  /**
+   * ⛔ PARSED, NOT GREPPED — and the text version of this predicate was live for exactly one commit.
+   *
+   * It was /localStorage\.setItem|persist\(/ over the source text. M4 walked straight through it: a
+   * module doing `const ls = window.localStorage` and `window["localStorage"]`, then writing two
+   * durable keys, was INVISIBLE — all 18 green. A text pattern for a call cannot see that call under
+   * another name, which is the same defect the platform lane hit in the other language: a pattern for
+   * a quoted key cannot see an f-string. Same bug, two repos, two syntaxes, found a day apart.
+   *
+   * So the predicate reads the SYNTAX. Any `.setItem`/`.removeItem` call however the object was
+   * spelled, bracket access included, and any call to persist tracked by its ORIGINAL import name,
+   * so that `import { persist as p }` cannot dodge it either.
+   *
+   * IT OVER-MATCHES ON PURPOSE. `sessionStorage.setItem` lands here too, and so does a module that
+   * only REMOVES. Over-matching costs one register entry with a stated reason; under-matching costs a
+   * leak. That asymmetry is the entire argument for erring in this direction.
+   *
+   * ⚠ THE IRREDUCIBLE TAIL, stated rather than implied: a member name held in a variable
+   * (`const m = "setItem"; ls[m](v)`) is invisible to this too, as is a dependency writing storage on
+   * our behalf. The partition is total over SPELLING, not over indirection.
+   */
+  const touchesStorage = (file: string): boolean => {
+    const sf = ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const persistAliases = new Set<string>();
+    let found = false;
+    const visit = (n: ts.Node): void => {
+      if (
+        ts.isImportDeclaration(n) &&
+        ts.isStringLiteral(n.moduleSpecifier) &&
+        n.moduleSpecifier.text.startsWith("zustand")
+      ) {
+        const bindings = n.importClause?.namedBindings;
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const el of bindings.elements) {
+            if ((el.propertyName ?? el.name).text === "persist") persistAliases.add(el.name.text);
+          }
+        }
+      }
+      if (ts.isCallExpression(n)) {
+        const e = n.expression;
+        if (ts.isPropertyAccessExpression(e) && /^(setItem|removeItem)$/.test(e.name.text)) {
+          found = true;
+        }
+        if (
+          ts.isElementAccessExpression(e) &&
+          e.argumentExpression &&
+          ts.isStringLiteral(e.argumentExpression) &&
+          /^(setItem|removeItem)$/.test(e.argumentExpression.text)
+        ) {
+          found = true;
+        }
+        if (ts.isIdentifier(e) && persistAliases.has(e.text)) found = true;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return found;
+  };
+
   const writers = walk(SRC)
-    .filter((f) => /localStorage\.setItem|persist\(/.test(readFileSync(f, "utf8")))
+    .filter(touchesStorage)
     .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
     .sort();
 

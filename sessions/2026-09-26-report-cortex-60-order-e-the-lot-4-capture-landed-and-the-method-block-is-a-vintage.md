@@ -627,3 +627,55 @@ which is why the partition had to be the *call site* and not the literal — a l
 missed a module that was already there.
 
 **Suite:** 114 files / **1730** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
+
+---
+
+## Eighth addendum, same day — my own correction came back as a defect in my own instrument
+
+The correction I sent the engine lane — *partition the CALL, not the literal* — turned out to indict my
+own seal one commit later. They fired it on their side (a computed envelope key travelled with all 22
+arms green) and closed by walking the AST. **The same hole was in mine, in the other syntax.**
+
+**M4** — a module doing `const ls = window.localStorage` and `window["localStorage"]`, then writing two
+durable keys → **EXIT 0, all 18 green.** My partition was over the *call*, but the predicate matching it
+was still a **text pattern**, and a text pattern for a call cannot see that call under another name.
+Their f-string and my aliased `localStorage` are one defect in two languages, found a day apart.
+
+**Closed the same way they did — by reading the syntax.** `typescript@5.9.3` is already here, so the
+predicate now walks the AST: any `.setItem`/`.removeItem` call however the object was spelled, bracket
+access included, and any `persist` call tracked by its **original import name**, so
+`import { persist as p }` cannot dodge it. Widening it added one module to the register —
+`api/client.ts`, which writes `cortex-session-id` to sessionStorage — and it **over-matches on
+purpose**: over-matching costs a register entry with a stated reason, under-matching costs a leak.
+
+**Redproof, each on its own arm, zero wrong-reason exits:** M4 replayed → EXIT 1; `persist` imported
+under an alias → EXIT 1; a registered writer made to stop touching storage → EXIT 1 on the
+both-directions arm.
+
+⚠ **Irreducible tail, stated in the seal rather than implied:** a member name held in a variable
+(`const m = "setItem"; ls[m](v)`) is invisible to this too, as is a dependency writing storage on our
+behalf. The partition is total over **spelling**, not over indirection.
+
+### The drifted floor, measured instead of merely criticised
+
+The sixth addendum named `storeModules.length >= 7` guarding eleven and then left it, which was half a
+job. Following the engine lane's ratchet discipline — *measure a ratchet's cover, and delete it if it
+covers nothing* — it is now `>= 11`, because **a shrinkage ratchet must equal the population at the
+moment it is written or it is a bound drifting away from its own subject.**
+
+And its cover was measured rather than asserted. ⚠ **I first wrote "sole cover for nothing" into the
+seal and could not defend it, so it was corrected before it landed:**
+
+| mutation | what reds |
+|---|---|
+| a store renamed out of the convention | the convention arm, on the unmatched file |
+| a persisting store removed | the register's both-directions arm |
+| an exempted store removed | the exemption arm ("no longer exists") |
+| a plain store deleted outright | ⛔ **nothing else. This count is sole cover.** |
+
+So it stays, with the honest statement of what it buys written beside it: **bookkeeping, not
+leak-catching** — a deliberate deletion is not a defect, and what the ratchet forces is that the number
+be re-stated by whoever did it. The instruction to delete it survives, conditioned on a future re-run
+finding even that case covered.
+
+**Suite:** 114 files / **1730** tests green; `check:transport` ✓, `tsc --noEmit` ✓.
