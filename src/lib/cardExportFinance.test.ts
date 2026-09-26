@@ -1,5 +1,5 @@
 /**
- * THE SAME EXPORT, SEALED AGAINST THE NINE REAL FINANCE CAPTURES.
+ * THE SAME EXPORT, SEALED AGAINST THE TEN REAL CAPTURES — IN TWO ENVELOPE SHAPES.
  *
  * The order this was built for says "Finance panels second, same shape", and seals the whole thing
  * with "Fixture from the real payload". For CONTRIBUTION_RANKING that second phrase has no
@@ -45,6 +45,13 @@ const CAPTURES = [
   "2026-09-19-payload-finance-variance-decomposition.json",
   "2026-09-19-payload-finance-variance-drivers.json",
   "2026-09-19-payload-from-32-np-meridian-brief.json",
+  // ⛔ THE TENTH ARRIVED IN A DIFFERENT ENVELOPE, 2026-09-26. Lane 1's CONTRIBUTION_RANKING
+  // capture is the shape THE BROWSER receives — `{final: {components, presentation_provenance},
+  // events}` — not the `{prompt, asked_as, fleet_sha, routing, projected}` shape the nine
+  // 2026-09-19 captures carry. Reading it required a second reader (`projectionsOf` below), not a
+  // rewrite of these seals, and that is the point of adding it: this corpus now meets two real
+  // envelope shapes plus one document that is neither, instead of nine instances of one.
+  "2026-09-26-payload-lot4-contribution-ranking.json",
 ];
 
 interface Capture {
@@ -57,6 +64,48 @@ interface Capture {
     acting?: { persona?: string | null };
   };
   projected?: { archetype?: string; payload?: unknown }[];
+  /** The browser-side envelope — see the tenth entry in `CAPTURES`. */
+  final?: { components?: { archetype?: string }[] };
+  events?: { event?: string; data?: unknown }[];
+}
+
+/**
+ * THE PROJECTIONS OF A CAPTURE, WHICHEVER ENVELOPE IT ARRIVED IN.
+ *
+ * Two real shapes, read into one list of `{archetype, payload}`:
+ *
+ *   `projected: [{archetype, payload}]`        the 2026-09-19 producer captures
+ *   `final.components: [{archetype, ...rest}]` the browser-side capture, where the component IS
+ *                                              the payload and carries its own `archetype` key
+ *
+ * ⚠ NO THIRD BRANCH AND NO `?? []` FALLBACK THAT HIDES A THIRD SHAPE. A capture matching neither
+ * returns an empty list, which is what `from-32-np-meridian-brief.json` correctly does — and the
+ * census seal below asserts exactly how many captures project to nothing, so a new envelope shape
+ * that silently reads as "no projection" is caught by a count rather than passing as an absence.
+ */
+function projectionsOf(c: Capture): { archetype?: string; payload?: unknown }[] {
+  if (c.projected) return c.projected;
+  const components = c.final?.components;
+  if (components) return components.map((comp) => ({ archetype: comp.archetype, payload: comp }));
+  return [];
+}
+
+/**
+ * The routing block, whichever envelope it arrived in. The browser-side capture carries the same
+ * fields under its `route_decision` event, so provenance needs no second reader — only a lookup.
+ */
+type Routing = NonNullable<Capture["routing"]>;
+
+/**
+ * ⚠ THE CAST IS ON THE EVENT PAYLOAD, WHICH IS UNTYPED JSON EITHER WAY. A `route_decision`
+ * event's `data` is `unknown`, and returning it as `unknown` only moves the cast to every call
+ * site — where one of them would quietly widen `readExportProvenance`'s parameter instead. The
+ * seals below read the persona back out of the built document, so a wrong shape here fails there
+ * rather than passing as a type.
+ */
+function routingOf(c: Capture): Routing | undefined {
+  if (c.routing) return c.routing;
+  return (c.events ?? []).find((e) => e.event === "route_decision")?.data as Routing | undefined;
 }
 
 function load(name: string): Capture {
@@ -75,7 +124,7 @@ function readPayloadTable(html: string): PayloadCell[] {
 }
 
 function build(c: Capture) {
-  const projected = c.projected ?? [];
+  const projected = projectionsOf(c);
   const payload = projected.length === 1 ? projected[0].payload : projected.map((p) => p.payload);
   return buildCardExportHtml({
     title: c.prompt ?? "capture",
@@ -90,18 +139,18 @@ function build(c: Capture) {
       question_text: c.prompt,
       produced_by: { code_hash: c.fleet_sha },
       produced_for: { user_persona: c.asked_as?.persona },
-      routing: c.routing,
+      routing: routingOf(c),
     }),
     exportedAt: "2026-09-24T02:00:00.000Z",
   });
 }
 
-describe("the nine real finance captures export through the same builder", () => {
-  it("the census is nine, and each one names its archetype", () => {
+describe("the ten real captures export through the same builder", () => {
+  it("the census is ten, and all but one name an archetype", () => {
     // A control on the loop below: if a rename silently shrank this list, every `it.each` under it
     // would still pass while measuring less. The count is asserted on its own.
-    expect(CAPTURES).toHaveLength(9);
-    const archetypes = CAPTURES.map((n) => load(n).projected?.[0]?.archetype ?? null);
+    expect(CAPTURES).toHaveLength(10);
+    const archetypes = CAPTURES.map((n) => projectionsOf(load(n))[0]?.archetype ?? null);
     // EIGHT ARE CAPTURED ANSWERS. THE NINTH IS NOT, and it is kept deliberately.
     // `from-32-np-meridian-brief.json` matches the `*payload*` glob but is a different document
     // altogether — `{program_id, identity, findings, holes, rows, summary}`, with no `projected`,
@@ -111,8 +160,13 @@ describe("the nine real finance captures export through the same builder", () =>
     // shown to survive one it does not, and the file list a future reader globs will hand them this
     // file too. Its export renders one payload cell and six absent provenance lines, which is the
     // correct rendering of a document this surface knows nothing about.
-    expect(archetypes.filter(Boolean).length).toBe(8);
-    expect(archetypes).toContain(null);
+    expect(archetypes.filter(Boolean).length).toBe(9);
+    // EXACTLY ONE projects to nothing, and it is that file. Asserted as a count and by name,
+    // because `projectionsOf` returns an empty list for an envelope it does not recognise — so a
+    // future capture in a third shape would look like another harmless odd document here. Two
+    // nulls means a new shape arrived, not that a second brief did.
+    expect(archetypes.filter((a) => a === null)).toHaveLength(1);
+    expect(projectionsOf(load("2026-09-26-payload-lot4-contribution-ranking.json"))).toHaveLength(1);
     const odd = load("2026-09-19-payload-from-32-np-meridian-brief.json");
     expect(odd.projected).toBeUndefined();
     expect(odd.prompt).toBeUndefined();
@@ -120,8 +174,7 @@ describe("the nine real finance captures export through the same builder", () =>
 
   it.each(CAPTURES)("%s — every payload value renders verbatim, pairwise with a count", (name) => {
     const c = load(name);
-    const projected = c.projected ?? [];
-    const payload = projected.length === 1 ? projected[0].payload : projected.map((p) => p.payload);
+    const payload = payloadOf(c);
     const html = build(c);
 
     const expected = flattenPayload(payload);
@@ -152,20 +205,31 @@ describe("the nine real finance captures export through the same builder", () =>
 
     const get = (k: string) =>
       doc.querySelector(`[data-cx-prov="${k}"]`)?.textContent?.trim() ?? null;
-    // The three the captures carry — each written `?? ABSENT_MARK` because ONE OF THE NINE CARRIES
-    // NONE OF THEM. `from-32-np-meridian-brief` is not a projected-answer capture at all; see the
+    // The three the captures carry — each written `?? ABSENT_MARK` because NOT EVERY CAPTURE
+    // CARRIES THEM. `from-32-np-meridian-brief` is not a projected-answer capture at all; see the
     // census test below. This line was first written as `toBe(c.prompt)`, on the assumption that a
     // file matching `*payload*` is a captured answer, and that file is what said otherwise.
+    //
+    // ⛔ AND THE TENTH CAPTURE SPLIT THE PERSONA'S SOURCE IN TWO. The nine producer captures state
+    // the persona in `asked_as`; the browser-side capture states it only inside its
+    // `route_decision` event, and carries no `prompt` and no `fleet_sha` at all. So the expected
+    // persona is read from WHICHEVER PLACE THAT CAPTURE PUTS IT — written as an explicit either/or
+    // rather than as `readExportProvenance`'s own fallback chain, because an expectation computed
+    // by the code under test cannot indict it.
+    const eventPersona = routingOf(c)?.acting?.persona ?? undefined;
     expect(get("question asked")).toBe(c.prompt ?? ABSENT_MARK);
-    expect(get("persona")).toBe(c.asked_as?.persona ?? ABSENT_MARK);
+    expect(get("persona")).toBe(c.asked_as?.persona ?? eventPersona ?? ABSENT_MARK);
     expect(get("roll sha")).toBe(c.fleet_sha ?? ABSENT_MARK);
+    // The two sources are mutually exclusive across this corpus, which is why the either/or above
+    // is not hiding a precedence question: no capture states the persona in both places.
+    expect(c.asked_as?.persona !== undefined && eventPersona !== undefined).toBe(false);
     // Every line is one or the other — never an empty cell.
     for (const cell of cells) expect(cell.textContent?.trim()).not.toBe("");
   });
 
-  it("covers six distinct archetypes, so 'same shape' is measured and not assumed", () => {
+  it("covers seven distinct archetypes, so 'same shape' is measured and not assumed", () => {
     const seen = new Set(
-      CAPTURES.map((n) => load(n).projected?.[0]?.archetype).filter(Boolean) as string[],
+      CAPTURES.map((n) => projectionsOf(load(n))[0]?.archetype).filter(Boolean) as string[],
     );
     // The set, not the count of files: four captures could all be VARIANCE_TREE and the suite
     // would look broad while testing one shape.
@@ -176,9 +240,13 @@ describe("the nine real finance captures export through the same builder", () =>
     expect(seen).toContain("ELICITATION");
     expect(seen).toContain("COMPETING_MEASURES");
     expect(seen).toContain("KNOWLEDGE_DOCUMENT");
-    // And the one the order asked for first is NOT among them — the finding that sent the fixture
-    // question back to the architect, kept as an assertion so it cannot quietly stop being true.
-    expect(seen).not.toContain("CONTRIBUTION_RANKING");
+    // ⛔ THIS LINE WAS `not.toContain`, AND IT DID ITS JOB. The absence of CONTRIBUTION_RANKING was
+    // the finding that sent the fixture question back to the architect, and it was written as an
+    // assertion "so it cannot quietly stop being true". It stopped being true on 2026-09-26 and
+    // this is where that was noticed — an absence asserted is the only kind that reports its own
+    // end. The capture arrived in a different envelope shape, which is why adding it needed a
+    // second reader rather than a list entry alone.
+    expect(seen).toContain("CONTRIBUTION_RANKING");
   });
 });
 
@@ -271,7 +339,7 @@ function normalise(v: unknown): unknown {
 }
 
 function payloadOf(c: Capture): unknown {
-  const projected = c.projected ?? [];
+  const projected = projectionsOf(c);
   return projected.length === 1 ? projected[0].payload : projected.map((p) => p.payload);
 }
 
@@ -279,7 +347,7 @@ function payloadOf(c: Capture): unknown {
 const BY_ARCHETYPE: Record<string, string[]> = (() => {
   const m: Record<string, string[]> = {};
   for (const name of CAPTURES) {
-    const a = load(name).projected?.[0]?.archetype;
+    const a = projectionsOf(load(name))[0]?.archetype;
     if (!a) continue;
     (m[a] ??= []).push(name);
   }
@@ -292,19 +360,21 @@ describe("the exported table round-trips the real capture, one seal per archetyp
     // by not existing. Both the SET and the file total are asserted, because they can drift apart.
     expect(Object.keys(BY_ARCHETYPE).sort()).toEqual([
       "COMPETING_MEASURES",
+      "CONTRIBUTION_RANKING",
       "ELICITATION",
       "KNOWLEDGE_DOCUMENT",
       "MULTI_SERIES",
       "SHORTFALL_GRID",
       "VARIANCE_TREE",
     ]);
-    // Six archetypes, eight files — the two that arrive twice are why this block is keyed on the
-    // archetype and not on the file.
-    expect(Object.values(BY_ARCHETYPE).flat()).toHaveLength(8);
+    // Seven archetypes, nine files — the two that arrive twice are why this block is keyed on the
+    // archetype and not on the file. (Nine of ten: the tenth file projects to nothing.)
+    expect(Object.values(BY_ARCHETYPE).flat()).toHaveLength(9);
     expect(BY_ARCHETYPE.VARIANCE_TREE).toHaveLength(2);
     expect(BY_ARCHETYPE.ELICITATION).toHaveLength(2);
-    // The ninth file is absent BY MEASUREMENT, not by omission: it carries no projection, so there
-    // is no archetype to key a seal on. Its export is sealed per-file in the block above.
+    // `from-32-np-meridian-brief` is absent BY MEASUREMENT, not by omission: it carries no
+    // projection, so there is no archetype to key a seal on. Its export is sealed per-file in the
+    // block above.
     expect(Object.values(BY_ARCHETYPE).flat()).not.toContain(
       "2026-09-19-payload-from-32-np-meridian-brief.json",
     );
@@ -423,8 +493,10 @@ describe("the corpus covers every leaf type the walker branches on", () => {
 
   it("names which archetypes carry a boolean, because only those can catch a boolean defect", () => {
     // Not decoration: this is the list a future reader needs when a walker mutant kills fewer seals
-    // than they expected. Three of six, measured 2026-09-25 — if that set changes, the expectation
-    // about how many seals a leaf-type mutation should kill changes with it.
+    // than they expected. Three of six on 2026-09-25; FOUR OF SEVEN since the lot 4 capture landed,
+    // which carries `above_threshold` per row and `threshold_defaulted` on the envelope. If that
+    // set changes, the expectation about how many seals a leaf-type mutation should kill changes
+    // with it.
     const withBoolean = Object.keys(BY_ARCHETYPE).filter((a) =>
       BY_ARCHETYPE[a].some((f) => {
         let found = false;
@@ -439,6 +511,11 @@ describe("the corpus covers every leaf type the walker branches on", () => {
         return found;
       }),
     );
-    expect(withBoolean.sort()).toEqual(["COMPETING_MEASURES", "MULTI_SERIES", "VARIANCE_TREE"]);
+    expect(withBoolean.sort()).toEqual([
+      "COMPETING_MEASURES",
+      "CONTRIBUTION_RANKING",
+      "MULTI_SERIES",
+      "VARIANCE_TREE",
+    ]);
   });
 });
