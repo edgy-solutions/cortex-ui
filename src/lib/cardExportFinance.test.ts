@@ -181,3 +181,264 @@ describe("the nine real finance captures export through the same builder", () =>
     expect(seen).not.toContain("CONTRIBUTION_RANKING");
   });
 });
+
+/**
+ * ── ONE SEAL PER ARCHETYPE, AND IT ROUND-TRIPS ──────────────────────────────────────────────
+ *
+ * The block above seals the export PER FILE. That is not the same coverage, and the difference is
+ * measurable: nine files, eight projections, SIX distinct archetypes — VARIANCE_TREE and
+ * ELICITATION each arrive twice. So a per-file suite can lose an archetype entirely (rename the one
+ * SHORTFALL_GRID capture and nothing says SHORTFALL_GRID stopped being exercised) while its file
+ * count still looks healthy. These tests are keyed on the ARCHETYPE, derived at runtime, so a new
+ * capture for a new archetype gets a seal without anyone remembering to add one.
+ *
+ * ── WHY ROUND-TRIP AND NOT THE PAIRWISE COMPARE ABOVE ──────────────────────────────────────
+ *
+ * ⛔ The pairwise-with-a-count seal above compares the document to `flattenPayload(payload)` —
+ * BOTH SIDES RUN THE SAME WALKER. A defect inside the walker moves both sides together and stays
+ * green; that was measured with a mutant that made the walker skip boolean leaves, and it went red
+ * on one test that was not that one. The hand-written oracle in `cardExport.test.tsx` fixed it for
+ * ONE fixture, by being a different witness.
+ *
+ * This block generalises that. `unflatten` below is the walker's INVERSE, written from the path
+ * grammar rather than from the walker, and it is compared against `normalise(the capture read off
+ * disk)`. Neither side of that comparison calls `flattenPayload`. So the walker losing a leaf shows
+ * up as a missing key, on all eight real captures, instead of on 25 hand-written lines.
+ *
+ * The inverse has ONE ambiguity — a leaf whose value is literally "[]" is indistinguishable from an
+ * empty array — so that precondition is asserted rather than assumed, below, across every leaf.
+ */
+
+/** Split `rows[0].entity_id` into ["rows", 0, "entity_id"]. Numbers are indices, strings are keys. */
+function tokenize(path: string): (string | number)[] {
+  const out: (string | number)[] = [];
+  let i = 0;
+  while (i < path.length) {
+    if (path[i] === ".") {
+      i++;
+      continue;
+    }
+    if (path[i] === "[") {
+      const j = path.indexOf("]", i);
+      out.push(Number(path.slice(i + 1, j)));
+      i = j + 1;
+      continue;
+    }
+    let j = i;
+    while (j < path.length && path[j] !== "." && path[j] !== "[") j++;
+    out.push(path.slice(i, j));
+    i = j;
+  }
+  return out;
+}
+
+/** The walker's inverse: path/value rows back into the nesting they came from. */
+function unflatten(cells: PayloadCell[]): unknown {
+  const decode = (v: string): unknown => (v === "[]" ? [] : v === "{}" ? {} : v);
+  if (cells.length === 1 && cells[0].path === "(root)") return decode(cells[0].value);
+  const first = tokenize(cells[0].path)[0];
+  const root: Record<string | number, unknown> = typeof first === "number" ? ([] as never) : {};
+  for (const { path, value } of cells) {
+    const toks = tokenize(path);
+    let cur = root;
+    for (let k = 0; k < toks.length - 1; k++) {
+      const t = toks[k];
+      if (cur[t] === undefined) cur[t] = typeof toks[k + 1] === "number" ? [] : {};
+      cur = cur[t] as Record<string | number, unknown>;
+    }
+    cur[toks[toks.length - 1]] = decode(value);
+  }
+  return root;
+}
+
+/**
+ * The capture with every leaf stringified — the shape the export can possibly return.
+ *
+ * Deliberately NOT `formatLeaf`: if this called the production formatter, a defect in it would move
+ * both sides of the comparison together, which is the exact failure this block exists to rule out.
+ */
+function normalise(v: unknown): unknown {
+  if (Array.isArray(v)) return v.length === 0 ? [] : v.map(normalise);
+  if (v !== null && typeof v === "object") {
+    const keys = Object.keys(v as object);
+    if (keys.length === 0) return {};
+    const out: Record<string, unknown> = {};
+    for (const k of keys) out[k] = normalise((v as Record<string, unknown>)[k]);
+    return out;
+  }
+  if (v === null) return "null";
+  return String(v);
+}
+
+function payloadOf(c: Capture): unknown {
+  const projected = c.projected ?? [];
+  return projected.length === 1 ? projected[0].payload : projected.map((p) => p.payload);
+}
+
+/** archetype → the captures that projected to it. Derived, never listed. */
+const BY_ARCHETYPE: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {};
+  for (const name of CAPTURES) {
+    const a = load(name).projected?.[0]?.archetype;
+    if (!a) continue;
+    (m[a] ??= []).push(name);
+  }
+  return m;
+})();
+
+describe("the exported table round-trips the real capture, one seal per archetype", () => {
+  it("the archetype set is derived from the captures, and it is the six", () => {
+    // The control on `it.each` below: an empty or shrunken map would make every seal under it pass
+    // by not existing. Both the SET and the file total are asserted, because they can drift apart.
+    expect(Object.keys(BY_ARCHETYPE).sort()).toEqual([
+      "COMPETING_MEASURES",
+      "ELICITATION",
+      "KNOWLEDGE_DOCUMENT",
+      "MULTI_SERIES",
+      "SHORTFALL_GRID",
+      "VARIANCE_TREE",
+    ]);
+    // Six archetypes, eight files — the two that arrive twice are why this block is keyed on the
+    // archetype and not on the file.
+    expect(Object.values(BY_ARCHETYPE).flat()).toHaveLength(8);
+    expect(BY_ARCHETYPE.VARIANCE_TREE).toHaveLength(2);
+    expect(BY_ARCHETYPE.ELICITATION).toHaveLength(2);
+    // The ninth file is absent BY MEASUREMENT, not by omission: it carries no projection, so there
+    // is no archetype to key a seal on. Its export is sealed per-file in the block above.
+    expect(Object.values(BY_ARCHETYPE).flat()).not.toContain(
+      "2026-09-19-payload-from-32-np-meridian-brief.json",
+    );
+  });
+
+  it("the inverse is unambiguous on this corpus — asserted, not assumed", () => {
+    // `unflatten` cannot tell a leaf whose value is the STRING "[]" from an empty array, and cannot
+    // tokenize a key containing `.` or `[`. Neither occurs here. If a future capture introduces
+    // one, THIS fails rather than the round-trip failing in a way that reads as a builder bug.
+    let leaves = 0;
+    const scan = (v: unknown): void => {
+      if (Array.isArray(v)) {
+        if (v.length) v.forEach(scan);
+        return;
+      }
+      if (v !== null && typeof v === "object") {
+        const ks = Object.keys(v as object);
+        if (!ks.length) return;
+        for (const k of ks) {
+          expect(k, `key ${k} would break the path grammar`).not.toMatch(/[.[\]]/);
+          scan((v as Record<string, unknown>)[k]);
+        }
+        return;
+      }
+      leaves++;
+      expect(v, "a leaf equal to [] or {} would be ambiguous to the inverse").not.toBe("[]");
+      expect(v).not.toBe("{}");
+    };
+    for (const files of Object.values(BY_ARCHETYPE)) {
+      for (const f of files) scan(payloadOf(load(f)));
+    }
+    // Not vacuous, and the number is the corpus: 1116 leaves as measured 2026-09-25.
+    expect(leaves).toBeGreaterThan(1000);
+  });
+
+  it.each(Object.keys(BY_ARCHETYPE))(
+    "%s — the table parses back into the capture, through the walker's INVERSE",
+    (archetype) => {
+      for (const file of BY_ARCHETYPE[archetype]) {
+        const capture = load(file);
+        const payload = payloadOf(capture);
+        const table = readPayloadTable(build(capture));
+
+        // NEITHER SIDE OF THIS CALLS `flattenPayload`. That is the whole point: the document is
+        // read back through the inverse and compared to the capture read off disk. A leaf the
+        // walker drops is a key that is missing here, which no same-walker comparison can see.
+        expect(unflatten(table), `${archetype} via ${file}`).toEqual(normalise(payload));
+
+        // And it is not a comparison of two empty things.
+        expect(table.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it("the builder names no archetype — 'same builder' is structural, not reviewed", () => {
+    // The order says finance panels stay same-builder. That is a claim about the CODE, so it is
+    // asserted against the code rather than left to a reviewer noticing a new `case`.
+    //
+    // Comments are stripped before scanning, because a seal that searches for a name finds the
+    // prose ABOUT the name — including the builder's own header, and this file's.
+    const src = readFileSync("src/lib/cardExport.ts", "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    for (const a of Object.keys(BY_ARCHETYPE).concat("CONTRIBUTION_RANKING")) {
+      expect(src, `${a} appears in the builder — it is no longer one builder`).not.toContain(a);
+    }
+    // The control: the strip did not simply empty the file out.
+    expect(src).toContain("flattenPayload");
+  });
+});
+
+/**
+ * ── ONE SEAL PER ARCHETYPE IS NOT ONE SEAL PER LEAF TYPE ───────────────────────────────────
+ *
+ * ⛔ Measured while redproofing the block above, and it is the kind of gap that a per-archetype
+ * count hides. A mutant that made the walker skip BOOLEAN leaves went red on three of the six
+ * round-trip seals — not six — because only three archetypes' captures contain a boolean at all:
+ *
+ *     MULTI_SERIES         boolean, null, number, string
+ *     COMPETING_MEASURES   boolean, null, number, string
+ *     VARIANCE_TREE        boolean, null, number, string   (×2 captures)
+ *     SHORTFALL_GRID                null, number, string
+ *     ELICITATION                   null, number, string   / one capture: string only
+ *     KNOWLEDGE_DOCUMENT                            string
+ *
+ * So "every archetype has a seal" and "a walker defect in any leaf type has a seal" are DIFFERENT
+ * claims, and only the first was true by construction. KNOWLEDGE_DOCUMENT carries strings and
+ * nothing else — a defect in number, boolean or null handling is invisible through it, and a suite
+ * that only ever exported that one archetype would have looked fully covered.
+ *
+ * What has to hold is the union: every leaf type the walker branches on must appear SOMEWHERE in the
+ * corpus, or the mutation that breaks it has no witness. That is what this asserts. It is a claim
+ * about the CORPUS, not about the builder, which is why it is worth stating separately — the day the
+ * captures are pruned to a tidier set, this is the test that says what the pruning cost.
+ */
+describe("the corpus covers every leaf type the walker branches on", () => {
+  it("string, number, boolean and null all appear — so every branch has a witness", () => {
+    const seen = new Set<string>();
+    const walk = (v: unknown): void => {
+      if (Array.isArray(v)) {
+        v.forEach(walk);
+        return;
+      }
+      if (v !== null && typeof v === "object") {
+        Object.values(v as Record<string, unknown>).forEach(walk);
+        return;
+      }
+      seen.add(v === null ? "null" : typeof v);
+    };
+    for (const name of CAPTURES) walk(payloadOf(load(name)));
+
+    // `formatLeaf` has a distinct branch for each of these, and the walker decides container vs
+    // leaf before any of them. A type missing from the corpus is a branch nothing can indict.
+    expect([...seen].sort()).toEqual(["boolean", "null", "number", "string"]);
+  });
+
+  it("names which archetypes carry a boolean, because only those can catch a boolean defect", () => {
+    // Not decoration: this is the list a future reader needs when a walker mutant kills fewer seals
+    // than they expected. Three of six, measured 2026-09-25 — if that set changes, the expectation
+    // about how many seals a leaf-type mutation should kill changes with it.
+    const withBoolean = Object.keys(BY_ARCHETYPE).filter((a) =>
+      BY_ARCHETYPE[a].some((f) => {
+        let found = false;
+        const walk = (v: unknown): void => {
+          if (found) return;
+          if (Array.isArray(v)) return void v.forEach(walk);
+          if (v !== null && typeof v === "object")
+            return void Object.values(v as Record<string, unknown>).forEach(walk);
+          if (typeof v === "boolean") found = true;
+        };
+        walk(payloadOf(load(f)));
+        return found;
+      }),
+    );
+    expect(withBoolean.sort()).toEqual(["COMPETING_MEASURES", "MULTI_SERIES", "VARIANCE_TREE"]);
+  });
+});
