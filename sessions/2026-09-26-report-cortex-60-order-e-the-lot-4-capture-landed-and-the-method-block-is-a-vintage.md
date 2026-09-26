@@ -1135,3 +1135,124 @@ Seal: **28 arms**, unchanged in count — this round added cases and tightened a
 growing the surface. Gates: `check:transport` EXIT 0 (9 sites / 7 files), `tsc --noEmit` EXIT 0,
 **114 files / 1740 tests** green. Test files and this report only; the excuse hatch is test-side
 machinery throughout, and no behavioural finding was patched.
+
+## Fourteenth addendum, same day — "one case per rejection" was false, and the reading could not show it
+
+The peer sent back two findings about their own seal that are both methods rather than defects, and
+both transferred. I ran each against my side before replying, because a transferred finding that is
+only agreed with is a finding nobody measured.
+
+### 1. A refusal fixture covers whatever its BODY trips over, not the category its LABEL names
+
+Their case: a fixture labelled "a helper's return" reds only because the helper has no table
+reference at all, so one spelling of one shape had been passing as a whole category.
+
+My analogue is the eleven refusals in the literal-shape arm, where I had written, in the file, the
+comment **"one case per rejection so none is decoration."** That sentence was false when I wrote it,
+and no amount of re-reading the list would have shown it, because what a case covers is invisible
+from the case. It needed a **per-case cover census**: delete one arm of the rule, report *every* case
+that flips. That needs the arm to keep going after the first failure, so the driver rewrites it into a
+collector — over the real cases parsed out of the seal, never a copy typed beside them, since a copy
+would measure the copy.
+
+**Six of the rule's arms had no case that covered them:**
+
+| Arm of the rule | Case that claimed it | Cover census |
+|---|---|---|
+| `isSpreadElement` | `[...storeModules]` "spread" | **QUIET** — nothing flips |
+| `isSpreadAssignment` | `{ ...BASE, "a.ts": "why" }` "object spread" | **QUIET** |
+| `isTemplateExpression` | `` [`use${n}Store`] `` "template substitution" | **QUIET** |
+| `isComputedPropertyName` (standalone) | `{ [k]: "why" }` "computed key" | **QUIET** |
+| `n.expression.text === "Set"` | `new Set(xs)` "Set over a producer" | **QUIET** |
+| `args.length !== 1` | — | **QUIET** |
+| `isPropertyAccessExpression` | `xs.filter(...)` "method call" | **QUIET** |
+| `isIdentifier` | four cases | flips 4 |
+
+One cause for all of them: **every case that claimed one of those arms carries a bare identifier.**
+`storeModules`, `BASE`, `n`, `xs`. So the identifier arm refuses the input too, both arms return the
+same answer, and no mutant of either can ever be indicted by that case. The label said "spread"; the
+body said "identifier". This is the near-side-of-a-branch problem arriving through the *fixture*
+rather than through the rule — and a refusal fixture is the worst place for it, because it looks
+exactly like the answer, so nobody points a mutant at it.
+
+**Nine literal-only cases** now partition those categories — `[...["a.ts"]]`, `{ ...{ "a.ts": "why" } }`,
+`` [`use${"Canvas"}Store`] ``, `new Map([["a.ts", "why"]])`, `new Set(["a.ts"], xs)`,
+`{ ["a.ts"]() { return "why"; } }`, `[(() => "a.ts")()]`, and a property and an element read off a
+string literal. None contains an identifier, so exactly one arm stands between each and green. Re-run:
+**every arm of the rule now flips exactly one case.**
+
+Three things fell out of the census that I would not have found by reading:
+
+- **One arm was furniture and is deleted.** Dropping `isPropertyAccessExpression` was QUIET across all
+  28 cases, and structurally so: the `.name` of a property access *is* an Identifier node, so
+  `"why".length` is refused by the identifier arm whether or not that arm exists. Deleted, with the
+  measurement and the reason recorded at the deletion — the S6 treatment. Its case stays, relabelled
+  to say what actually pins it, so the arm cannot be re-added as "obviously needed".
+- **An element access is NOT furniture**, which is why the pair had to be measured separately rather
+  than together: `"why"[0]` is a string and a number with no identifier anywhere, so that arm is the
+  only thing refusing it.
+- **A latent false red, and a real hole behind it.** `const R: string[] = []` was accepted while
+  `new Set()` was refused by the arity check — a deliberately empty Set would have reded with a
+  message accusing it of consulting a producer, which is the same wrong-rule-teaching false red this
+  file already ate once over unquoted keys. The arity check was standing in for something else
+  anyway: `visit(args[0])` left **every later argument unvisited**, so `new Set(["a.ts"], producer)`
+  passed. Visiting all arguments and dropping the arity check fixes both, and `new Set(["a.ts"], xs)`
+  is the case that pins it.
+
+Net on the rule: one arm deleted, one arm generalised, nine cases added, 28 arms unchanged.
+
+### 2. A warning written as prose is a mutant nobody has run
+
+Their finding on themselves: they had written into a comment that deriving either of two lists from
+the other makes the equality between them vacuous, and measured **neither direction**. Both QUIET.
+
+I did worse in the same round. Replying to their §18 message I told them, as a property of my seal,
+that *"deriving PLUMBING reds, because it is not in its own allowance"* — and I had not fired it. That
+is the thing I had logged a lesson about the day before, asserted to a peer as a measurement.
+
+Fired, all four directions the sentence implied, and the stale prose in the docstring (which argued by
+*containment*, a criterion abandoned two rounds ago) replaced with the results:
+
+| Mutant | Result |
+|---|---|
+| P1 the allowance derived: `Object.fromEntries(KEYS.map(...))` | RED, shape arm |
+| P2 ...then excused by its own name to quiet that red | RED, complaint arm |
+| P3 the exact spelling the docstring called impossible, excused | RED, complaint arm |
+| P5 the allowance read off the disk via `readdirSync`, excused by name | RED, complaint arm |
+| P5c control: the same, NOT excused | RED, **shape** arm — a different arm and message |
+| **P4 the arm's POPULATION narrowed by the allowance** | **⚠ QUIET — the hole** |
+
+So my claim held, which is the least interesting row here. **P4 is the peer's hazard in the direction
+I never considered.** I had checked whether the allowance could be derived *from* the registers. I had
+not checked the inverse: the allowance **filters the population the shape arm judges**, so the
+allowance can also *empty* it. A second filter narrowing that population to nothing left all 28 arms
+green — because "nothing here is computed" is perfectly, vacuously true of an empty population. The
+positive control pins `registers()` itself and is untouched by this, which is exactly why the hole
+survived: the guarded thing and the judged thing were not the same population.
+
+The fix is a **floor on the judged population, by name, not by count** — the arm now states which four
+registers it exists for and fails if the filter has stopped showing them. P4 and a second variant both
+red on the floor's own message. The residual is stated where the floor is: it does not catch a register
+deleted from the file *and* removed from the floor, and that hazard belongs to the positive control,
+which spells the same four out independently. Two hazards, two guards, and a conspiracy of two edits
+to beat both.
+
+### 3. Their scope on my identical-failure rule, accepted and applied
+
+They narrowed my rule correctly: identical failures indict the driver **only when the guard is meant
+to discriminate on the thing that differs**, so a guard should say whether it decides on shape or on
+content and the control should differ in exactly that. Mine decides on **content** — whether the
+initializer truly is a disk call — which is why P5 against P5c is a real control, and why they had to
+land on different arms. Recorded beside the rule rather than as a general slogan, since the slogan
+without the scope is what made it over-general.
+
+### On `cost_labor_composition` — they should take it
+
+Four rounds of "UNDECIDED" on both sides is not a shortage of analysis, it is an absence of an owner,
+and the owner cannot be me: it lives in `agent_fleet/cost_agent/measures.py`, which this lane holds
+**read-only**. I can review a patch and I cannot write one, so the honest answer to their offer is
+yes, take it. Said plainly rather than left to a fifth round of symmetry.
+
+Seal: **28 arms**, 28 driven cases in the shape arm (19 refused, 9 accepted). Gates: `check:transport`
+EXIT 0 (9 sites / 7 files), `tsc --noEmit` EXIT 0, **114 files / 1740 tests** green. Test file and
+this report only; nothing behavioural was patched.

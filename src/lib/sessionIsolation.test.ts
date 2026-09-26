@@ -973,9 +973,24 @@ describe("the seal's own registers are source text, not derivations", () => {
    * refuse; I wrote the escape hatch without applying my own file's doctrine to it. So an entry now
    * costs two things: a stated reason, held to the same reviewability threshold as a purge
    * exemption, and — the half that actually does the work — the const's initializer must REALLY
-   * read a file or build a path. A register cannot be excused by being called plumbing, because
-   * `Object.fromEntries(writers.map(...))` contains no `readFileSync`, `readdirSync` or
-   * `path.join` and so cannot satisfy the excuse at all. The reason documents; the shape decides.
+   * read a file or build a path. The reason documents; the shape decides.
+   *
+   * ⚠ That claim used to be argued here by CONTAINMENT — "`Object.fromEntries(writers.map(...))`
+   * contains no `readFileSync`" — which was both the wrong criterion (see `isDiskCall`: a derived
+   * member list contains a disk read, which is the point of it) and an unfired prediction sitting in
+   * a comment. Fired, now, in every direction the sentence implied:
+   *
+   * | Mutant | Result |
+   * |---|---|
+   * | this allowance derived: `Object.fromEntries(KEYS.map(...))` | RED, shape arm |
+   * | ...and then excused by its own name to quiet that red | RED, complaint arm |
+   * | the exact spelling above — `Object.fromEntries(producer.map(...))` — excused | RED, complaint arm |
+   * | this allowance read OFF THE DISK via `readdirSync`, excused by its own name | RED, complaint arm |
+   * | control: the same, NOT excused — reds on a DIFFERENT arm, so the excuse was really installed | RED, shape arm |
+   *
+   * The last row is the point of running it. My guard decides on CONTENT — is the initializer truly a
+   * disk call — so a case that buys the excuse and one that does not must fail on different arms; had
+   * they matched, the excuse was never installed and the red meant nothing.
    */
   const PLUMBING: Record<string, string> = {
     ISOLATION_SRC:
@@ -1060,12 +1075,14 @@ describe("the seal's own registers are source text, not derivations", () => {
         // three of this file's registers are Sets and a Set of literals states its members.
         const isSet =
           ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "Set";
-        const args = n.arguments ?? ts.factory.createNodeArray<ts.Expression>([]);
-        if (!isSet || args.length !== 1) {
+        if (!isSet) {
           ok = false;
           return;
         }
-        visit(args[0]);
+        // EVERY argument, not the first: `new Set(["a"], producer)` passed an arity check and left
+        // the producer unvisited. A zero-argument `new Set()` is accepted for the same reason
+        // `const R: string[] = []` is — it states that there are no members.
+        for (const a of n.arguments ?? []) visit(a);
         return;
       }
       if (ts.isPropertyAssignment(n)) {
@@ -1088,7 +1105,11 @@ describe("the seal's own registers are source text, not derivations", () => {
         ts.isSpreadAssignment(n) ||
         ts.isComputedPropertyName(n) ||
         ts.isTemplateExpression(n) ||
-        ts.isPropertyAccessExpression(n) ||
+        // (No arm for a property ACCESS. Dropping one was QUIET across all 28 cases below, and
+        // structurally so: the `.name` of a PropertyAccessExpression is itself an Identifier node,
+        // so `"why".length` is refused by the identifier arm whether or not this arm exists. An
+        // element access is different — `"why"[0]` is a string and a number with no identifier
+        // anywhere in it, so that arm is the only thing refusing it and has its own case.)
         ts.isElementAccessExpression(n)
       ) {
         ok = false;
@@ -1158,10 +1179,21 @@ describe("the seal's own registers are source text, not derivations", () => {
   });
 
   it("⛔ no register in this file is computed — a derived register agrees with the producer", () => {
-    const computed = registers(SELF)
-      .filter((r) => !(r.name in PLUMBING))
-      .filter((r) => !isWhollyLiteral(r.init))
-      .map((r) => r.name);
+    const judged = registers(SELF).filter((r) => !(r.name in PLUMBING));
+    // ⚠ FLOOR ON THE JUDGED POPULATION, not on a count of it. Measured: adding a second filter that
+    // narrowed this population to nothing left all 28 arms GREEN, because "nothing here is computed"
+    // is perfectly true of an empty population — the allowance filters the population this arm
+    // judges, so the allowance can also empty it. The arm now states which registers it is FOR.
+    // What this floor does NOT catch is a register deleted from the file along with its name here;
+    // that hazard is the positive control's, which spells the same four out independently.
+    expect(
+      judged.map((r) => r.name),
+      "the shape arm is no longer looking at the registers it exists for — its population is " +
+        "filtered by PLUMBING, so check what the filter left before trusting an empty complaint",
+    ).toEqual(
+      expect.arrayContaining(["KNOWN_STORES", "NON_STORE_MODULES", "DURABLE_WRITERS", "READ_VERBS"]),
+    );
+    const computed = judged.filter((r) => !isWhollyLiteral(r.init)).map((r) => r.name);
     expect(
       computed,
       "this register consults something instead of stating it, so every arm that compares the " +
@@ -1173,6 +1205,16 @@ describe("the seal's own registers are source text, not derivations", () => {
   it("⛔ the literal-shape rule is driven directly — both directions", () => {
     const one = (src: string): boolean => isWhollyLiteral(registers(src)[0].init);
     // Refused: every shape a tidy-up reaches for, one case per rejection so none is decoration.
+    //
+    // ⚠ "One case per rejection" was FALSE when first written, and reading the list could not show
+    // it. A per-case cover census — delete one arm of the rule, report every case that flips —
+    // found SIX arms with no case that covered them: both spread arms, the template arm, the
+    // computed-name arm, the Set-name check and the arity check. Every case that claimed them
+    // (`[...storeModules]`, `new Set(xs)`, `{ ...BASE }`) carries a BARE IDENTIFIER, so the
+    // identifier arm refused the input as well and no mutant of either arm could be indicted by it.
+    // A refusal fixture reads as coverage of the category its LABEL names; what it covers is
+    // whatever its BODY actually trips over first. The nine literal-only cases below were added to
+    // partition those categories, and each of the rule's arms now flips exactly one case.
     expect(one("const R = [...storeModules];"), "spread").toBe(false);
     expect(one("const R = storeModules;"), "bare identifier").toBe(false);
     expect(one('const R = Object.fromEntries(xs.map((f) => [f, "why"]));'), "call").toBe(false);
@@ -1184,12 +1226,26 @@ describe("the seal's own registers are source text, not derivations", () => {
     expect(one("const R = ONE.concat(TWO);"), "two registers joined").toBe(false);
     expect(one('const R = { KEY: PRODUCER };'), "identifier as a VALUE").toBe(false);
     expect(one("const R = { PRODUCER };"), "shorthand property").toBe(false);
+    // ⚠ The nine below exist because the per-case cover census found their branches UNCOVERED. The
+    // obvious case for each — `[...storeModules]` for the spread arm, `new Set(xs)` for the Set
+    // arm — carries a bare identifier, so the identifier arm refuses it too and NEITHER arm can be
+    // indicted by it. These carry no identifier, so exactly one arm stands between them and green.
+    expect(one('const R = [...["a.ts"]];'), "spread of a LITERAL array").toBe(false);
+    expect(one('const R = { ...{ "a.ts": "why" } };'), "spread of a LITERAL object").toBe(false);
+    expect(one('const R = [`use${"Canvas"}Store`];'), "template with a LITERAL substitution").toBe(false);
+    expect(one('const R = { "a.ts": "why".length };'), "property read off a literal — pinned by the IDENTIFIER arm, which is why there is no property-access arm").toBe(false);
+    expect(one('const R = { "a.ts": "why"[0] };'), "element read off a literal").toBe(false);
+    expect(one('const R = new Map([["a.ts", "why"]]);'), "a constructor that is not Set").toBe(false);
+    expect(one('const R = new Set(["a.ts"], xs);'), "a SECOND argument to Set").toBe(false);
+    expect(one('const R = { ["a.ts"]() { return "why"; } };'), "computed METHOD name").toBe(false);
+    expect(one('const R = [(() => "a.ts")()];'), "an IIFE returning a literal").toBe(false);
     // Accepted, each a shape a real register in this file uses today.
     expect(one('const R = ["useCanvasStore", "useEvidenceStore"];'), "array of strings").toBe(true);
     expect(one('const R = { "a.ts": "why" };'), "object of strings").toBe(true);
     expect(one('const R = { "a.ts": "why, " + "at length" };'), "concatenated reason").toBe(true);
     expect(one('const R = new Set(["getItem", "key"]);'), "Set of literals").toBe(true);
     expect(one("const R: string[] = [];"), "deliberately empty").toBe(true);
+    expect(one("const R = new Set();"), "an empty Set states no members").toBe(true);
     expect(one('const R = "doctored.ts";'), "a plain string const").toBe(true);
     expect(one('const R = { KEY: "why, at length" };'), "unquoted KEY, literal value").toBe(true);
   });
