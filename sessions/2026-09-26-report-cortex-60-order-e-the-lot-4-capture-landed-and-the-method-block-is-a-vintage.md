@@ -1339,3 +1339,68 @@ Four rounds owed, and parking the dialogue does not clear it.
 Seal: **28 arms**, unchanged. Gates: `check:transport` EXIT 0 (9 sites / 7 files), `tsc --noEmit`
 EXIT 0, 28/28 on the isolation file with the full suite green at the previous commit. One comment block
 added; no rule, no case and nothing behavioural changed.
+
+## Sixteenth addendum, same day — rulings received from arch, and two halves land here that nobody assigned
+
+Six rulings arrived from the architecture seat, closing the twelve-round derivability question. They
+originate in `invincible-agent` and are **unnumbered on this side** — recorded here as in-flight state,
+not mirrored into `docs/rulings/`, which is a mirror of the platform register and not an origin.
+
+The discriminator is ratified as Lane 1 wrote it: **a fact travels from the producer iff it is a claim
+about the completeness of the row set; a fact derivable from the rows present is withheld.** It stops
+being two comments that read as a contradiction and becomes a seal — every allowlisted envelope key
+tagged completeness-bearing, red on an untagged count. Completeness-bearing facts get one vocabulary
+(the SDK's v0.9.4 `completeness`/`total_available`) rather than per-engine keys, with `methods_compared`
+grandfathered until that lands. The rule extends inside the payload, where it was previously
+unenforceable by construction: `change_count` is withdrawn as `len(entries)` on entries the card
+already holds.
+
+**Assigned here: our half of ruling 5, and the `readMethod` fix.** Finance's row-level `method` string
+is renamed (`method_label` or similar) because one key carrying two types is the defect measured on this
+side — a row reaching `readMethod` and yielding a plausible empty block. Producer and consumer change
+together and a parity seal proves it, so our half is *coupled*, not merely queued: it cannot land before
+the producer emits the new name. The part that is decoupled is hardening `readMethod` so a row cannot
+produce a method block at all, which is true regardless of what the key ends up called.
+
+**Ruling 4 closes `cost_labor_composition` as EXEMPT, which is a different reason than the one it was
+closed with this morning.** The peer closed it by showing the producer conformant — archetype declared,
+class registered, all six advertised fields emitted, card a stable pass. Arch closes it structurally:
+method-block inputs are **provenance**, rendered verbatim and never reconciled against rows, so a
+`len(rows)` inside one is a record rather than a second source, and the archetype does not matter. The
+structural reason is the stronger one because it removes the item from the seal's population instead of
+passing it through, and it generalises to every future method block. Nothing to change here: our
+`cardExport.ts` already states that doctrine as its own rule — *"NOTHING HERE DERIVES A METHOD. No
+formula is reconstructed from the rows, no bound is inferred from a threshold"* — so the ruling ratifies
+prose this side had already written, which is the cheapest possible outcome for us.
+
+### Two halves that land here and were not assigned
+
+Rulings 2 and 6 are listed as Lane 1's, but both have a consumer half in this repo, and it is the same
+line of code three times — `CompetingMeasures.tsx:77-81`:
+
+```
+const asked    = num(methods_compared) ?? rows.length;
+const replied  = num(methods_answered) ?? answered.length;
+const complete = typeof all_methods_answered === "boolean" ? all_methods_answered : replied === asked;
+```
+
+Each falls back to a count **derived from the rows present** when the producer's key is absent, under a
+comment saying so deliberately: *"TRUSTED FROM THE PRODUCER WHEN STATED, derived only as a fallback."*
+That is precisely the inference ruling 1's discriminator says is impossible and ruling 6 forbids by name
+— **declared-never-inferred**. The failure is not hypothetical and it is not symmetric: if rows were
+silently truncated, `asked` collapses to the number that survived, `replied === asked` becomes TRUE, and
+the card states **"all methods answered"** about a set it cannot see the whole of. The producer-side
+ruling (never emit `None`; absent means not evaluated) makes the fallback *worse*, not safer, because
+after it lands an absent key means the producer declined to claim completeness and this code answers the
+question anyway.
+
+So the consumer-side reading of ruling 6 is that these fallbacks are withdrawn: absent must render as
+unknown, the way `METHOD_ABSENT_SENTENCE` already does for an absent method block — the pattern for this
+exists in this repo and is three years of argument old. Flagged rather than patched, because it changes
+what a shipped card draws and the ruling did not assign it here.
+
+Ordering per arch: roll #3 and the docs rows come first, then our half of 5. The `readMethod` hardening
+and the fallback withdrawal are the two items to schedule after those, and the second one needs a
+ruling-holder's yes because it is behavioural.
+
+No code changed this addendum. Seal unchanged at 28 arms.
