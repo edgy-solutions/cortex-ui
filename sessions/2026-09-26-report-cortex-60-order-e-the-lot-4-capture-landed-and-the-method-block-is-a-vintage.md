@@ -173,3 +173,52 @@ Both were written as assertions so they could not quietly stop being true. Both 
    called a success.
 5. **Held by explicit order:** ADR-0055 step 2, and the transport-guard blind spot at
    `src/api/client.ts:58` (a live undeclared `axios.get<Entitlements>` the guard's regex cannot see).
+
+---
+
+## Addendum, same day — the omission's justification is now half-false
+
+Raised by the invincible-agent lane after this report was first committed, verified here against both
+producer files rather than taken on report, and **corrected by one field** in the process.
+
+The projector withholds one envelope field on purpose, with a reason stated at
+`presentation_agent/main.py:748`: `suppliers_above_threshold` "is a count the card derives from the
+rows it already has, and adding it would put two sources of the same fact on the wire — the kind of
+pair that goes out of agreement silently. The bound is a DECLARATION the card cannot reconstruct; the
+count is not."
+
+`method` — added later, to fix an unrelated drop, and by its own comment "the FOURTH field this tuple
+would otherwise have dropped" — walks through that rule. Its `inputs` carry **values**, and two of the
+five are facts the card derives from the rows it already has: `suppliers` = `len(rows)`, and
+`total purchased value` = the sum of the rows' `amount` strings.
+
+⚠ **The sharpening as it reached me was off by one field**, and the two readings call for different
+fixes. It is **not** `suppliers_above_threshold` that arrived by the back door — that count is in
+neither the tuple nor the method block, and both are now asserted. What arrived is two *other*
+derivable facts. So the rule was breached in principle while the field it was written about stayed off
+the wire: **widening the allowlist would not fix this; deciding what a method block's inputs may
+restate would.**
+
+**Where the drift actually lives.** Inside one payload the two sources cannot disagree — the block is
+built from the same locals as the rows, in the same call, which the producer says of the bound already.
+The exposure is downstream, in any consumer that filters or drops rows: `suppliers: "4"` and a total
+over four amounts keep describing a set the reader is no longer being shown.
+
+⚠ **This side already carries the contradicting check.** `cardExport.fixture.test.ts` recomputes both
+values from the capture's own rows rather than trusting the fixture — written for a different reason
+(a transcription needs its own seal) and turning out to be exactly the cheap guard the producer's
+reasoning implies, which neither side had written down.
+
+**Recorded, not patched, on both sides.** Widening `MethodBlock` here and widening that allowlist
+there are two halves of one ruling; no order covers either, and rulings originate in
+`invincible-agent`. A wider producer with no reader is the mirror of a wider reader with no renderer.
+Sealed in `projectedTupleParity.test.ts`, redproofed two ways: a deliberately wrong producer literal
+(which proves the source read is live and not an empty string) and a flipped withheld-count assertion.
+
+**Also settled with that lane:** `59fb2cb` is a cortex-ui commit and the capture was never in
+`invincible-agent` — its durable record said so correctly; only the message inverted it. Neither lane
+pushed cortex-ui master: it is **ahead 4**, which voids the condition Chris gave (push only if
+`59fb2cb` stood alone), and the push is his call. Lane 1 has accepted capturing the fleet sha beside
+the next fire, and stating how it was derived rather than only a timestamp.
+
+**Suite after the addendum:** 114 files / 1716 tests green; `check:transport` ✓, `tsc --noEmit` ✓.

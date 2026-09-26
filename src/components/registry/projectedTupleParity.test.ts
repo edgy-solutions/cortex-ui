@@ -145,6 +145,97 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     },
   );
 
+  /**
+   * ⛔ THE OMISSION'S JUSTIFICATION IS NOW HALF-FALSE — and it is the added field that broke it.
+   *
+   * Raised by the invincible-agent lane on 2026-09-26 and VERIFIED HERE against both producer
+   * files rather than taken on report, because a claim about the producer arriving by message is
+   * exactly the kind this file exists to check.
+   *
+   * The projector carries the payload key plus the declared envelope fields and nothing else, so
+   * every envelope field needs an entry. One is deliberately withheld, and the comment gives a
+   * reason: `suppliers_above_threshold` "is a count the card derives from the rows it already has,
+   * and adding it would put two sources of the same fact on the wire — the kind of pair that goes
+   * out of agreement silently. The bound is a DECLARATION the card cannot reconstruct; the count
+   * is not."
+   *
+   * That is a good rule, and `method` — added later, to fix an unrelated drop — walks straight
+   * through it. Its `inputs` carry VALUES, and two of the five are facts the card derives from the
+   * rows it already has:
+   *
+   *   `suppliers`               `len(rows)`
+   *   `total purchased value`   the sum of the rows' `amount` strings
+   *
+   * ⚠ AND THE SHARPENING THAT CAME WITH THE REPORT IS OFF BY ONE FIELD, which matters because the
+   * two readings call for different fixes. It is NOT `suppliers_above_threshold` that arrived by
+   * the back door — that count is in neither the tuple nor the method block, and this seal asserts
+   * both. What arrived is two OTHER derivable facts, so the rule was breached in principle while
+   * the field it was written about stayed off the wire. Widening the allowlist would not fix this;
+   * deciding what a method block's inputs may restate would.
+   *
+   * WHERE THE DRIFT ACTUALLY LIVES, since "two sources" is a hazard and not yet a defect: inside
+   * one payload they cannot disagree — the block is built from the same locals as the rows, in the
+   * same call, which the producer's own comment says of the bound. The exposure is downstream, in
+   * any consumer that FILTERS or drops rows: `suppliers: "4"` and a total over four amounts keep
+   * describing a set the reader is no longer being shown. ⚠ This side already carries the
+   * contradicting check — `cardExport.fixture.test.ts` recomputes both from the capture's own rows
+   * rather than trusting the fixture — which is the cheap guard the producer's reasoning implies
+   * and neither side had written down.
+   *
+   * RECORDED, NOT PATCHED, on both sides. Widening `MethodBlock` here and widening that allowlist
+   * there are two halves of one ruling; no order covers either, and rulings originate in
+   * invincible-agent. A wider producer with no reader is the mirror of a wider reader with no
+   * renderer.
+   */
+  it.skipIf(MEASURES.length === 0 || FOUND.length === 0)(
+    "⛔ the withheld count is still withheld — but the method block restates two facts the rows carry",
+    () => {
+      const projector = readFileSync(FOUND[0], "utf8");
+      const measures = readFileSync(MEASURES[0], "utf8");
+
+      // 1. The justification is really there, in those words. If someone rewrites or deletes it,
+      //    this goes red and the finding below loses its subject — which is the right outcome:
+      //    a note about a contradiction outliving the claim it contradicts is how this file's
+      //    own stale comment happened.
+      expect(projector).toContain("`suppliers_above_threshold` is DELIBERATELY NOT HERE");
+      expect(projector).toContain("two sources of the same fact on the wire");
+
+      // 2. And the withholding HELD. Asserted against the tuple, not against the comment.
+      const fields = declaredEnvelopeFields(projector);
+      expect(fields).not.toContain("suppliers_above_threshold");
+
+      // 3. The count is not in the method block either, so the report's version of this finding
+      //    is corrected rather than repeated.
+      const start = measures.indexOf("def cost_supplier_concentration(");
+      expect(start).toBeGreaterThan(-1);
+      const body = measures.slice(start, measures.indexOf("\ndef ", start + 1));
+      expect(body).not.toContain('_inp("suppliers_above_threshold"');
+
+      // 4. What IS in it: two inputs whose values the rows already carry. Read off the producer's
+      //    own call site, so this cannot drift into a claim about a block we composed.
+      expect(body).toContain('_inp("suppliers", len(rows))');
+      expect(body).toContain('_inp("total purchased value", purchased, VALUE_UNIT)');
+      // The control on that pair — the same instrument on an input that is NOT derivable from the
+      // rows. A bound is a declaration; if this matcher found nothing at all, points 4 and 5
+      // would both be vacuous.
+      expect(body).toContain('_inp("threshold", bound)');
+
+      // 5. And the same two facts are derivable from the capture's rows, measured on the bytes.
+      //    This is the half that makes it a restatement rather than new information.
+      const capture = JSON.parse(
+        readFileSync(
+          path.join(__dirname, "../../../sessions/2026-09-26-payload-lot4-contribution-ranking.json"),
+          "utf8",
+        ),
+      ) as { final?: { components?: { rows?: { amount: string }[] }[] } };
+      const rows = capture.final?.components?.[0]?.rows ?? [];
+      expect(rows).toHaveLength(4);
+      expect(String(rows.length)).toBe("4");
+      const cents = rows.reduce((t, r) => t + Math.round(Number(r.amount) * 100), 0);
+      expect((cents / 100).toFixed(2)).toBe("1475520.00");
+    },
+  );
+
   it.skipIf(FOUND.length === 0)("carries the bound pair — the correction, as an assertion", () => {
     const fields = declaredEnvelopeFields(readFileSync(FOUND[0], "utf8"));
     // The two fields the stale comment said were absent. THIS is the line that would have caught it.
