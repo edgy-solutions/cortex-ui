@@ -350,47 +350,69 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
 });
 
 /**
- * ⛔ THE WITHHELD-COUNT RULE WAS ALREADY CONTRADICTED — BY THE ALLOWLIST, A WEEK BEFORE `method`.
+ * THE WITHHELD-COUNT RULE AND THE ALLOWLISTED COUNTS ARE BOTH RIGHT — the discriminator is
+ * TRUNCATION DETECTABILITY, and until 2026-09-26 it lived in two comments and no seal.
  *
- * The finding above says the `method` block restates two facts the rows carry, breaching the rule
- * stated at `main.py:748` that a count the card can derive must not also travel on the wire. The
- * invincible-agent lane then enumerated the class through `_inp` and found three `len(rows)`
- * restatements and four row-sum totals, all in `cost_agent/measures.py`.
+ * ⚠ THIS BLOCK REPLACES A WRONG ONE, and the way it was wrong is the reason it is sealed now.
+ * Its first version read the COMPETING_MEASURES entry as a CONTRADICTION of the rule at
+ * `main.py:748` — three counts the card can derive, carried by name, ~70 lines from the comment
+ * forbidding exactly that, and observed on a real wire a week before the `method` block existed.
+ * Every one of those facts is true and the conclusion did not follow. `main.py:658-664`, dated
+ * 2026-09-11, states the exception and its reason twenty lines ABOVE the entry:
  *
- * ⚠ THAT CENSUS WAS FILTERED, and the filter is the interesting part. `_inp` is ONE engine's
- * helper. `finance_agent` emits no method block at all — its `"method"` is a row-level STRING
- * naming the EAC method, beside a row-level `"formula"` — so nothing built through `_inp` could
- * ever see what it does at the envelope level. A census through a helper is a claim about the
- * helper. (Same shape as this repo's own lesson: a NULL from a filtered grep is a claim about the
- * filter, not the population.)
+ *   "an undefined method KEEPS ITS ROW, and without these the card cannot say that three rows are
+ *   not three answers. Dropping a row would turn a comparison of three into a comparison of two
+ *   without appearing to."
  *
- * WHAT THE UNFILTERED LOOK FOUND, and it is stronger than the method-block finding in three ways:
+ * So the rule is not "a count derivable from the rows must not travel". It is "a count derivable
+ * from rows THAT COULD HAVE BEEN TRUNCATED WITHOUT TRACE must travel, and every other derivable
+ * count must not":
  *
- *   `methods_compared`, `methods_answered`, `all_methods_answered` are EXPLICITLY NAMED in the
- *   COMPETING_MEASURES tuple — deliberately carried, not leaked — and `methods_compared` is
- *   `len(rows)` at `finance_agent/measures.py:89`.
+ *   `suppliers_above_threshold`  a property of the rows PRESENT. If rows go missing both copies
+ *                               are wrong the same way, so the second copy buys only disagreement
+ *                               risk. Withholding is right.
+ *   `methods_compared`          a claim about the COMPLETENESS of the row set. A card counting its
+ *                               own rows to learn how many methods were compared cannot ever
+ *                               detect a dropped one — the total and the parts come from the same
+ *                               parse, so they agree by construction. Carrying it is right.
  *
- *   1. It is the ALLOWLIST doing it, not a block that slipped through one. The rule at :748 and the
- *      entry at :680 are ~70 lines apart in the same file.
- *   2. It is OBSERVED ON A REAL WIRE, not read from source: the 2026-09-19 EAC capture in this
- *      repo's own corpus carries `methods_compared: 3` beside `rows` of length 3, post-projector.
- *   3. It PREDATES the method block by a week, so "the added field broke the rule" is at best half
- *      the story. The rule was already false for a different archetype when it was written down.
+ * ⚠ AND MY OWN SEAL BELOW IS THE DEMONSTRATION, which is why it is kept rather than deleted: the
+ * second test asserts `methods_compared === rows.length` on a real capture, measured, green. That
+ * equality is exactly what a derivation cannot distinguish from truncation. An assertion that the
+ * two agree on unfiltered data is the coincidence-defect shape and not evidence of redundancy.
  *
- * SO THE RULING QUESTION WIDENS AGAIN. Not "may a method block restate a fact the rows carry" but
- * "may the WIRE restate one, and who reconciles the two sources" — the method block is one instance
- * of a pattern the projector already blesses by name elsewhere.
+ * THREE SESSIONS ARGUED THIS FROM SOURCE because the discriminator was prose on both sides and an
+ * assertion on neither. It is stated in this repo too — `CompetingMeasures.contract.ts` and that
+ * card's test header carry nearly the producer's sentence. So it is sealed in both places now:
+ * here, that the producer's two rules coexist and say why; and in
+ * `CompetingMeasures.test.tsx`, ⛔ that this side does NOT use the pair as the detector it is —
+ * `required: false`, a silent `?? rows.length` fallback, and no reconciliation when the two
+ * disagree. The consumer half of the ruling is there, not here.
  *
- * RECORDED, NOT PATCHED, and not ours to pick: "the producer should stop restating" and "the
- * consumer should reconcile" are opposite fixes. Rulings originate in invincible-agent.
+ * WHAT DOES STILL WANT A RULING, found by the engine lane once its own census was rerun
+ * unfiltered: `planning_agent/measures.py:1099` puts `change_count = len(entries)` INSIDE the
+ * payload key, and `tests/planning/test_engine_p_routes.py:189` reads it at
+ * `changes["rows"]["change_count"]`. A row-level field needs no allowlist entry, so `:748` cannot
+ * reach it at all. Whatever the ruling says about envelope declarations governs the smaller
+ * surface. RECORDED, NOT PATCHED; rulings originate in invincible-agent.
  */
-describe("the withheld-count rule against the rest of the allowlist", () => {
+describe("the withheld-count rule and the counts the allowlist carries anyway", () => {
   it.skipIf(FOUND.length === 0)(
-    "⛔ COMPETING_MEASURES carries three derivable counts BY NAME — the rule's own file contradicts it",
+    "the two rules coexist — and the file states the truncation discriminator, twenty lines up",
     () => {
       const projector = readFileSync(FOUND[0], "utf8");
       // The rule, in its own words, so this seal loses its subject if someone retracts it.
       expect(projector).toContain("two sources of the same fact on the wire");
+
+      // THE DISCRIMINATOR ITSELF, which is the assertion that did not exist before today. If
+      // someone deletes or rewords this, the exception below stops being explained and the
+      // argument that took three sessions is available to be had a fourth time.
+      expect(projector).toContain("an undefined method KEEPS ITS ROW");
+      // Two fragments, because the sentence wraps across a comment line in the producer and the
+      // contiguous form is not in the file — the first attempt at this assertion spanned the break
+      // and went red for a reason that had nothing to do with the claim.
+      expect(projector).toContain("Dropping a row would turn a comparison of three into a");
+      expect(projector).toContain("comparison of two without appearing to");
 
       const competing = declaredFieldsFor(projector, "COMPETING_MEASURES");
       // The control first: the extractor must have found a real tuple. An empty list would make
@@ -398,21 +420,19 @@ describe("the withheld-count rule against the rest of the allowlist", () => {
       expect(competing.length).toBeGreaterThan(5);
       expect(competing).toContain("verdict"); // a field nobody disputes, read by the same regex
 
+      // The three completeness-bearing counts travel, BY NAME.
       expect(competing).toContain("methods_compared");
       expect(competing).toContain("methods_answered");
       expect(competing).toContain("all_methods_answered");
 
-      // And the contrast that makes it a contradiction rather than an inconsistency of taste:
-      // the SAME file withholds `suppliers_above_threshold` from CONTRIBUTION_RANKING for being
-      // exactly this kind of count.
+      // And the count that is a property of the rows present does NOT — the same file, the other
+      // side of the discriminator. Asserted against the tuple, never against the comment.
       expect(declaredEnvelopeFields(projector)).not.toContain("suppliers_above_threshold");
     },
   );
-
-  it("⛔ and it is on a REAL wire, post-projector, a week before the method block existed", () => {
-    // Source says the projector carries it; this says the card got it. The 2026-09-19 capture is
-    // nine days older than the lot 4 one and seven older than 546e6bee, so no method block is
-    // involved anywhere in this observation.
+  it("on a real wire the count EQUALS the row count — which is what a derivation cannot tell from a drop", () => {
+    // Source says the projector carries it; this says the card got it, on the 2026-09-19 capture,
+    // nine days older than the lot 4 one and seven older than 546e6bee.
     const capture = JSON.parse(
       readFileSync(path.join(SESSIONS, "2026-09-19-payload-finance-eac-comparison.json"), "utf8"),
     ) as {
@@ -423,10 +443,11 @@ describe("the withheld-count rule against the rest of the allowlist", () => {
 
     const rows = comp!.rows as Record<string, unknown>[];
     expect(rows).toHaveLength(3);
-    // THE RESTATEMENT, MEASURED: the count equals the length of the rows sitting beside it. That
-    // equality is what makes it derivable — and, per this repo's own lesson about coincidence
-    // defects, it is also why a consumer that filters rows would not be caught by any check that
-    // compares the two only on unfiltered data.
+    // ⚠ THE POINT OF THIS TEST IS THAT IT PASSES, AND THAT PASSING PROVES NOTHING ABOUT
+    // REDUNDANCY. The producer's count equals the rows beside it on an intact payload — it must,
+    // or the producer is broken. A consumer that derives the count instead reproduces this same
+    // equality on a TRUNCATED payload too, agreeing with whatever survived. The two states are
+    // indistinguishable from the rows alone, which is why the field travels.
     expect(comp!.methods_compared).toBe(rows.length);
     expect(comp!.methods_answered).toBe(rows.filter((r) => r.eac_exact !== null).length);
 

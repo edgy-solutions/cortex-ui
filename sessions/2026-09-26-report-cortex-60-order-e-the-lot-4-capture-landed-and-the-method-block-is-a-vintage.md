@@ -292,3 +292,97 @@ same empty instrument as an EXIT 0 that cannot fail.
 
 **Suite after this addendum:** 114 files / **1719** tests green; `check:transport` ✓ (9 sites, 7
 files), `tsc --noEmit` ✓.
+
+---
+
+## Third addendum, same day — the second addendum's conclusion was wrong, and the real gap is on THIS side
+
+The second addendum concluded that the withheld-count rule at `main.py:748` was *already false*,
+because the COMPETING_MEASURES tuple names three counts a card could derive. The engine lane
+disputed the conclusion while accepting the facts, and **it is right.** Verified here rather than
+taken on report:
+
+`main.py:658-664`, dated **2026-09-11**, states the exception and its reason twenty lines *above*
+the entry I cited:
+
+> `methods_compared` / `methods_answered` / `all_methods_answered` travel for the sibling reason: an
+> undefined method KEEPS ITS ROW, and without these the card cannot say that three rows are not
+> three answers. Dropping a row would turn a comparison of three into a comparison of two without
+> appearing to.
+
+**So the discriminator is not "derivable from the rows". It is derivable from rows THAT COULD HAVE
+BEEN TRUNCATED WITHOUT TRACE.**
+
+| field | what it is | ruling |
+|---|---|---|
+| `suppliers_above_threshold` | a property of the rows **present** — rows go missing, both copies are wrong the same way | withholding is right |
+| `methods_compared` | a claim about the **completeness of the row set** — a card counting its own rows can never recover it, because the total and the parts come from the same parse | carrying it is right |
+
+Both rules are correct as written. Reading the exception as a leak is what made the rule look false
+a week early. **Every fact in the second addendum stands; its conclusion does not.**
+
+⚠ **And my own seal was the demonstration all along.** Its second test asserts
+`methods_compared === rows.length` on a real capture — green, and *that is the point*. The producer's
+count must equal its rows on an intact payload. A consumer that derives the count instead reproduces
+the same equality on a **truncated** payload, agreeing with whatever survived. The two states are
+indistinguishable from the rows alone. I had the coincidence-defect shape under the cursor and read
+it as evidence of redundancy.
+
+### The gap is real and it is ours
+
+The peer's closing point is the one that matters: **the discriminator lived in two comments and no
+seal**, which is why three sessions argued it from source. It is stated in this repo too —
+`CompetingMeasures.contract.ts` and that card's own test header carry nearly the producer's sentence,
+in capitals. So the producer built a truncation detector and cortex **documented agreement with it
+and then did not use it as one.** Three ways, all now measured:
+
+1. `CompetingMeasures.contract.ts:164-166` — all three are **`required: false`**. A producer that
+   omits the detector is accepted.
+2. `CompetingMeasures.tsx:77` — absent, `asked` falls back to **`?? rows.length`**: the exact number
+   the field exists to contradict. `complete` then falls back to `replied === asked`, self-consistent
+   by construction. A truncated set renders a confident full comparison with nothing blank.
+3. **Present and disagreeing, nothing compares them.** The heading prints `rows.length`, the banner
+   prints `asked`, and the banner's only gate is `!complete` — which the producer's own
+   `all_methods_answered: true` satisfies. Staged: three counted, three answered, one row lost
+   downstream → the card renders **"2 methods"** and no incompleteness notice. Both numbers are on
+   the card and it says nothing.
+
+Four characterisation seals in `CompetingMeasures.test.tsx`, marked ⛔, with a control that the
+banner *does* fire on a genuine blank row — so the silence above is not "this card can never speak".
+**Reported, not patched:** making the pair required and reconciling it against `rows.length` is the
+consumer half of a ruling whose producer half (must a completeness-bearing restatement be
+*required*?) originates in `invincible-agent`.
+
+### The instance that still wants a ruling, and it is smaller than either of us thought
+
+`planning_agent/measures.py:1099` puts `change_count = len(entries)` **inside the payload key**, read
+at `changes["rows"]["change_count"]` by `tests/planning/test_engine_p_routes.py:189`. A row-level
+field needs no allowlist entry — the engine lane's own
+`tests/finance/test_the_wire_carries_what_the_engine_declares.py:168`,
+`test_row_level_fields_need_NO_declaration_and_that_is_why_favourable_survived`, names that design
+outright. So `:748` cannot reach it at all, and whatever the ruling says about envelope declarations
+governs the **smaller** surface. The peer's third option — classify each restating fact as
+completeness-bearing or not, and *require* the completeness-bearing ones — is the only one of the
+three that explains why both existing rules are right. Neither lane picks it; it originates there.
+
+### Corrected in place
+
+The parity seal's prose and both test names were rewritten: `2348cd9` asserted true facts under a
+false heading, which is the failure this file exists to catch. The block now seals the
+**discriminator** — including the producer's sentence, so the argument cannot be had a fourth time
+from source — and carries the record of how it was wrong.
+
+**Redproof, four mutations, each on the intended assertion:** the discriminator comment reworded → the
+parity seal red; **the gap FIXED** (`complete` also requiring `asked === rows.length`) → the ⛔
+truncation seal red, which is the property a characterisation seal must have, since it names its own
+fix; the `?? rows.length` fallback changed → two red; `methods_compared` made `required: true` → the
+contract seal red.
+
+⚠ **Two self-inflicted instrument failures, recorded because both wasted a run and both were silent:**
+an assertion on the producer's sentence **spanned a comment line wrap** and went red for a reason
+unrelated to its claim; and a repo-wide `grep` over `invincible-agent` without excluding `.venv`
+timed out at 120s — the same hazard this lane already wrote down and walked into again.
+
+**Suite after this addendum:** 114 files / **1723** tests green; `check:transport` ✓, `tsc --noEmit` ✓
+(one real type error caught and fixed: a blank row built by spreading `SEED()[1]` infers
+`value: number` and will not take a null).

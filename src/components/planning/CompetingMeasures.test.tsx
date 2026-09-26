@@ -443,3 +443,115 @@ describe("the absences that were only punctuation", () => {
     expect(document.body.textContent).toContain("VAC");
   });
 });
+
+/**
+ * ⛔ THE COMPLETENESS PAIR IS THE TRUNCATION DETECTOR — AND THIS CARD DOES NOT USE IT AS ONE.
+ *
+ * Raised 2026-09-26 out of a three-session argument about whether the projector may put a count
+ * on the wire that the card could derive from its rows. The answer turned out to be stated in
+ * prose on BOTH sides and sealed on NEITHER, which is why it was argued three times:
+ *
+ *   producer  `presentation_agent/main.py:658-664` — "an undefined method KEEPS ITS ROW, and
+ *             without these the card cannot say that three rows are not three answers. Dropping
+ *             a row would turn a comparison of three into a comparison of two without appearing
+ *             to."
+ *   consumer  this file's own header, and `CompetingMeasures.contract.ts` — "DROPPING IT WOULD
+ *             TURN A COMPARISON OF THREE INTO A COMPARISON OF TWO WITHOUT APPEARING TO."
+ *
+ * So the discriminator is NOT "derivable from the rows". It is derivable from rows THAT COULD
+ * HAVE BEEN TRUNCATED WITHOUT TRACE. `suppliers_above_threshold` is a property of the rows
+ * present and is rightly withheld; `methods_compared` is a claim about the completeness of the
+ * row set, which a card counting its own rows can never recover — the derived answer agrees with
+ * the truncated set by construction. Two different rules, both correct.
+ *
+ * ⚠ WHAT THE CARD ACTUALLY DOES WITH IT, measured below and not what the prose implies:
+ *
+ *   1. The contract marks all three `required: false`, so a producer that omits them is accepted.
+ *   2. Absent, `asked` falls back to `rows.length` — the exact number the field exists to
+ *      contradict — and `complete` to `replied === asked`, which is then self-consistent by
+ *      construction. A truncated set renders a confident full comparison with nothing blank.
+ *   3. PRESENT AND DISAGREEING, nothing compares them. The heading prints `rows.length`, the
+ *      banner prints `asked`, and the only gate on the banner is `!complete` — which the
+ *      producer's own `all_methods_answered: true` satisfies.
+ *
+ * These are CHARACTERISATION seals: they assert today's behaviour so the gap has a referent, and
+ * they are marked ⛔ because two of the three are defects on this side. REPORTED, NOT PATCHED —
+ * making the pair required and reconciling it against `rows.length` is the consumer half of a
+ * ruling that originates in invincible-agent, alongside the producer half (whether a restating
+ * count must be REQUIRED when it is completeness-bearing). Same standing as the three gaps in
+ * the 2026-09-26 Order E report.
+ */
+describe("⛔ the completeness pair as a truncation detector", () => {
+  /** The producer's row set, minus one — the failure both headers describe, staged. */
+  const truncated = () => SEED().slice(0, 2);
+
+  it("⛔ says '2 methods' and claims a complete comparison of three — and flags nothing", () => {
+    // The producer counted three and answered three. One row was lost downstream. Both numbers
+    // are on this card and they disagree.
+    render(<CompetingMeasures rows={truncated()} {...ENVELOPE} />);
+
+    expect(document.body.textContent).toContain("2 methods");
+    // ⛔ THE SILENCE, ASSERTED. `all_methods_answered: true` satisfies the only gate there is.
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+    // And no other element says it either — this is the strong form, not "the banner is absent".
+    expect(document.body.textContent).not.toContain("3 of 2");
+    expect(document.body.textContent).not.toContain("2 of 3");
+  });
+
+  it("the control — a BLANK row does raise the banner, so the instrument is not simply mute", () => {
+    // Three rows, one unanswerable: the case the pair was added for, and it reports. Without
+    // this the seal above would be satisfied by a card that can never say anything.
+    // Built as a literal rather than by spreading SEED()[1], which infers `value: number` and
+    // would not take a null — the same idiom the blank-row seals above use.
+    const rows = [
+      SEED()[0],
+      {
+        method: "CPI_SPI",
+        formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
+        value: null,
+        unavailable_reason: "CPI x SPI is zero",
+      },
+      SEED()[2],
+    ];
+    render(
+      <CompetingMeasures rows={rows} {...ENVELOPE} methods_answered={2} all_methods_answered={false} />,
+    );
+
+    const banner = document.querySelector("[data-incomplete]");
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).toContain("2 of 3 methods answered");
+  });
+
+  it("⛔ and when the pair is ABSENT the count is derived from the surviving rows, silently", () => {
+    // The contract permits this. The derived `asked` equals the truncated row count, so the card
+    // is internally consistent and wrong — the coincidence shape: the total and the parts come
+    // from the same parse, so no assertion over them can ever disagree.
+    const { methods_compared, methods_answered, all_methods_answered, ...rest } = ENVELOPE;
+    void methods_compared;
+    void methods_answered;
+    void all_methods_answered;
+    render(<CompetingMeasures rows={truncated()} {...rest} />);
+
+    expect(document.body.textContent).toContain("2 methods");
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+  });
+
+  it("⛔ the contract accepts a producer that omits the detector — all three are required: false", () => {
+    // Asserted on the contract's own text rather than by exercising the validator, because the
+    // finding is the DECLARATION. If someone makes them required, this goes red and should.
+    const contract = readFileSync(
+      path.join(__dirname, "CompetingMeasures.contract.ts"),
+      "utf8",
+    );
+    for (const f of ["methods_compared", "methods_answered", "all_methods_answered"]) {
+      expect(contract).toMatch(new RegExp(f + ': \{ type: "(number|boolean)", required: false \}'));
+    }
+    // The control: this repo DOES mark things required, so `required: false` is a choice here and
+    // not the only spelling the file knows.
+    expect(contract).toContain("required: true");
+
+    // And the fallback that fills their absence, read off the component.
+    const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
+    expect(component).toContain("const asked = num(methods_compared) ?? rows.length;");
+  });
+});
