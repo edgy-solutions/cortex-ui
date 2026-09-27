@@ -46,3 +46,55 @@ export function answeringArtifactBody(
   if (!id) return {};
   return { [ANSWERING_ARTIFACT_FIELD]: id } as { answering_artifact_id: string };
 }
+
+/**
+ * ── WHETHER THE SERVER WILL HONOUR THE CLAIM, DECIDED BESIDE THE CLAIM ────────────────────
+ *
+ * The header above says the server "honours it only when the turn actually carries an answer".
+ * That sentence was true, sat one function away from the code that posts the claim, and NOTHING
+ * CHECKED IT. `boundSlots.test.ts` asserts that a guard named `_answers_something` exists in
+ * `gateway.py` and never reads what its condition is, so cortex could not learn the one fact
+ * that matters: a turn typed into the composer satisfies neither clause.
+ *
+ * MEASURED 2026-09-27 against `gateway.py`:
+ *
+ *     _answers_something = bool(request.bound_slots) or bool(request.spoken_answer)
+ *     _answering_artifact_id = (request.answering_artifact_id or None) if _answers_something else None
+ *
+ * and all THREE consumers read the post-guard variable — the pre-resolved route (which is what
+ * skips /plan, /resolve and /classify_predicate), the accumulated chain slots, and
+ * `derived_from_artifact_id` on the written artifact. So a refused claim does not cost a wrong
+ * arrow; it costs the route skip, the inherited slots AND the lineage edge, all three, silently.
+ *
+ * ⛔ THIS RETURNS THREE STATES AND NOT A BOOLEAN. "Nothing was claimed" and "a claim was thrown
+ * away" are the two outcomes this repo keeps confusing, and a boolean spells them the same. The
+ * gateway itself has exactly these three audible branches — REFUSED, ACCEPTED, and an ordinary
+ * question worth no line — so the mirror has three too, one for one.
+ *
+ * PYTHON TRUTHINESS, NOT JS TRUTHINESS, AND THE DIFFERENCE IS THE WHOLE POINT OF THE FUNCTION:
+ * `bool({})` is False where `{}` is truthy, so a body posting an empty `bound_slots` map is
+ * REFUSED by the server while the obvious JS spelling of this check would call it honoured. The
+ * one place the mirror is deliberately laxer than cortex is whitespace: `bool(" ")` is True to
+ * Python, and `spokenAnswerBody` trims such an answer away before it can ever be posted. This
+ * function answers "what will the server do", never "what should cortex have sent".
+ */
+export type LineageClaimVerdict = "honoured" | "refused" | "no_claim";
+
+/** The only three fields of the posted body that bear on the verdict. */
+export interface LineageBearingBody {
+  bound_slots?: Record<string, string>;
+  spoken_answer?: string;
+  answering_artifact_id?: string;
+}
+
+export function lineageClaimVerdict(body: LineageBearingBody): LineageClaimVerdict {
+  // `bool(request.answering_artifact_id or None)` — an empty string is no claim, which is also
+  // the state `answeringArtifactBody` produces by omitting the key entirely.
+  if (!body.answering_artifact_id) return "no_claim";
+  // `bool(request.bound_slots)`: a non-empty MAP. Keyed on the key count rather than on the
+  // object's own truthiness, because that is the clause JS gets backwards.
+  const carriesPick = Object.keys(body.bound_slots ?? {}).length > 0;
+  // `bool(request.spoken_answer)`: a non-empty STRING, untrimmed, mirroring the server.
+  const carriesWords = (body.spoken_answer ?? "") !== "";
+  return carriesPick || carriesWords ? "honoured" : "refused";
+}

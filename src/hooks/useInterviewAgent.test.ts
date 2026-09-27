@@ -25,6 +25,7 @@ import type { Artifact, StreamEvent } from "@/api/types";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCanvasStore, ELECTRIC_COVERED_FIELDS } from "@/store/useCanvasStore";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
+import { lineageClaimVerdict, type LineageBearingBody } from "@/api/answeringArtifact";
 import { useInterviewAgent } from "./useInterviewAgent";
 
 /**
@@ -866,6 +867,50 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     const r = mount();
     await composerTurn(r);
     expect(transport.request!.answering_artifact_id).toBe("prev-answer");
+  });
+
+  it("⛔ AND THE SERVER REFUSES IT — the arm above is a seal over a discarded field", async () => {
+    /*
+      THE OUTCOME, BESIDE THE SEND, MEASURED ON THE BODY THE HOOK REALLY POSTS.
+
+      Every other arm in this describe asserts WHICH id is claimed. None asked whether the claim
+      survives, and `gateway.py` honours it only when the same turn carries a pick or typed words:
+
+          _answers_something = bool(request.bound_slots) or bool(request.spoken_answer)
+
+      A composer turn carries neither, by design, so the id sealed one arm above is nulled before
+      the route reuse, the inherited chain slots and `derived_from_artifact_id` all read it. The
+      verdict is asserted here rather than in `lineageHonoured.test.ts` alone because that file
+      reassembles a body from the three spread functions; this one has the real request in hand,
+      so it cannot agree with me about what a composer turn posts.
+
+      WHY IT ASSERTS THE REFUSAL RATHER THAN THE FIX: satisfying the guard means posting
+      `spoken_answer`, which the gateway pairs with `spoken_slot`, and a composer turn has no slot
+      name to give it. Inventing one would feed the resolution ladder a slot nobody resolved —
+      trading a missing lineage arrow for a wrong route. Whether prose typed into the composer
+      should count as answering the drawn card is the architect's call; this arm goes RED the day
+      it is ruled either way, which is the only honest way to hold someone else's decision.
+    */
+    foreground(drawn());
+    const r = mount();
+    await composerTurn(r);
+    const body = transport.request as unknown as LineageBearingBody;
+    expect(body.answering_artifact_id).toBe("prev-answer"); // the claim really is posted
+    expect(transport.request).not.toHaveProperty("bound_slots");
+    expect(transport.request).not.toHaveProperty("spoken_answer");
+    expect(lineageClaimVerdict(body)).toBe("refused");
+  });
+
+  it("an answered ask IS honoured, so the refusal above is about the composer and not the field", async () => {
+    // The contrasting half. Without it "refused" reads as the field never working anywhere, and
+    // the two ask-card paths — which is where every menu answer goes — are honoured today.
+    foreground(drawn());
+    const r = mount();
+    await act(async () => {
+      r.result.current.sendMessage(QUERY, { capability_id: "C4" }, undefined, undefined, "ask-1");
+      await flush();
+    });
+    expect(lineageClaimVerdict(transport.request as unknown as LineageBearingBody)).toBe("honoured");
   });
 
   it("⛔ NEVER THE TURN'S OWN ARTIFACT — the drawn card is read before the pending row lands", async () => {
