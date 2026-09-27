@@ -174,14 +174,33 @@ describe("the fold and the claim are actually wired", () => {
   });
 
   it("the scan sees a real population, and would notice a stripped prop", () => {
-    // Positive control, twice over: it found interpreters at all, and removing a prop is
-    // detected. Without the second half a scanner with a broken matcher reports zero forever —
-    // which is the same false-green shape as the assertion it replaces.
-    const { total } = interpreterCensus();
-    expect(total).toBeGreaterThanOrEqual(5);
+    /*
+      Positive control, and a floor per TAG rather than one over the total.
+
+      ⛔ A TOTAL IS NOT ENOUGH ONCE THERE ARE TWO TAGS. Five gateway mounts alone clear a floor of
+      five, so a matcher that had silently stopped seeing `SemanticInterpreter` — the bypass half,
+      the one this census is actually for — would report a healthy population and zero missing.
+      That is the same false-green the assertion this replaced had. So each tag is floored on its
+      own, and each is probed on its own.
+    */
+    const all = interpreterElements();
+    const byTag = new Map<string, number>();
+    for (const e of all) byTag.set(e.tag, (byTag.get(e.tag) ?? 0) + 1);
+    for (const tag of Object.keys(ARTIFACT_BODY_PROP)) {
+      expect(byTag.get(tag) ?? 0, `the scan found no <${tag}> — the walker is broken`).toBeGreaterThan(0);
+    }
+    // The gateway is mounted at every branch that draws an answer, and there were five.
+    expect(byTag.get("AnswerBody") ?? 0).toBeGreaterThanOrEqual(5);
+    expect(interpreterCensus().total).toBeGreaterThanOrEqual(6);
+
+    // And removing the prop is detected — for BOTH tags, because a probe that only exercises one
+    // leaves the other's branch of the matcher unproven.
     expect(interpretersWithoutArtifactId("<SemanticInterpreter payload={{ components }} />")).toEqual(
       ["<probe>"],
     );
+    expect(interpretersWithoutArtifactId("<AnswerBody components={components} />")).toEqual(["<probe>"]);
+    // The near side, so the probe is not simply always positive.
+    expect(interpretersWithoutArtifactId("<AnswerBody artifact={a} components={components} />")).toEqual([]);
   });
 });
 
@@ -196,11 +215,36 @@ describe("the fold and the claim are actually wired", () => {
  *
  * BY AST, because the prop can sit on a line of its own and a line-based check cannot see it.
  */
-function interpreterElements(): { file: string; line: number; hasId: boolean }[] {
+/**
+ * ⛔ THE SUBJECT IS "DRAWS AN ARTIFACT'S COMPONENTS", NOT THE WORD `SemanticInterpreter`.
+ *
+ * This census was keyed on that one tag, and it went red — correctly, as a MEASUREMENT — the day
+ * the five artifact-fed mounts were unified behind `AnswerBody` so a generalist answer could be
+ * disclosed in one place. Five sites became one interpreter plus five gateway mounts, the scan
+ * counted one, and the floor caught it.
+ *
+ * The fix is NOT to lower the floor or to re-point the tag. Both tags are the subject now:
+ *
+ *   `AnswerBody` — every artifact-fed mount. Told which artifact by `artifact`.
+ *   `SemanticInterpreter` — the renderer. Told by `artifactId`, wherever it is mounted.
+ *
+ * Keeping the interpreter in the population is the load-bearing half: a new site that bypasses
+ * the gateway and mounts the renderer straight is exactly the drift that put three of five sites
+ * out of contact with their artifact, and a census re-pointed at `AnswerBody` alone would not
+ * see it. What no source census can see is a GATEWAY THAT DROPS THE PROP — `AnswerBody` would
+ * satisfy every arm here while handing the renderer nothing. That is sealed on the gateway
+ * itself, in `src/components/AgenticCanvas/answerBody.test.tsx`.
+ */
+const ARTIFACT_BODY_PROP: Record<string, string> = {
+  SemanticInterpreter: "artifactId",
+  AnswerBody: "artifact",
+};
+
+function interpreterElements(): { tag: string; file: string; line: number; hasId: boolean }[] {
   const ts = require("typescript") as typeof import("typescript");
   const fs = require("node:fs") as typeof import("node:fs");
   const root = path.join(__dirname, "..");
-  const out: { file: string; line: number; hasId: boolean }[] = [];
+  const out: { tag: string; file: string; line: number; hasId: boolean }[] = [];
   const walkDir = (dir: string) => {
     for (const entry of fs.readdirSync(dir)) {
       const full = path.join(dir, entry);
@@ -219,11 +263,14 @@ function interpreterElements(): { file: string; line: number; hasId: boolean }[]
         ts.isJsxSelfClosingElement(node) ? node
         : ts.isJsxOpeningElement(node) ? node
         : null;
-      if (opening && opening.tagName.getText(sf) === "SemanticInterpreter") {
+      const tag = opening ? opening.tagName.getText(sf) : "";
+      const wants = ARTIFACT_BODY_PROP[tag];
+      if (opening && wants) {
         const hasId = opening.attributes.properties.some(
-          (a) => ts.isJsxAttribute(a) && a.name.getText(sf) === "artifactId",
+          (a) => ts.isJsxAttribute(a) && a.name.getText(sf) === wants,
         );
         out.push({
+          tag,
           file: path.relative(root, file).split(path.sep).join("/"),
           line: sf.getLineAndCharacterOfPosition(opening.getStart(sf)).line + 1,
           hasId,
@@ -242,7 +289,7 @@ function interpreterCensus() {
   return { total: all.length, missing: all.filter((e) => !e.hasId).length };
 }
 
-/** Sites with no `artifactId`. Pass `probeSrc` to check a snippet instead of the tree. */
+/** Sites not told which artifact. Pass `probeSrc` to check a snippet instead of the tree. */
 function interpretersWithoutArtifactId(probeSrc?: string): string[] {
   if (probeSrc !== undefined) {
     const ts = require("typescript") as typeof import("typescript");
@@ -250,8 +297,9 @@ function interpretersWithoutArtifactId(probeSrc?: string): string[] {
     let bad = false;
     const visit = (node: import("typescript").Node): void => {
       const el = ts.isJsxSelfClosingElement(node) ? node : ts.isJsxOpeningElement(node) ? node : null;
-      if (el && el.tagName.getText(sf) === "SemanticInterpreter") {
-        if (!el.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText(sf) === "artifactId")) bad = true;
+      const wants = el ? ARTIFACT_BODY_PROP[el.tagName.getText(sf)] : undefined;
+      if (el && wants) {
+        if (!el.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText(sf) === wants)) bad = true;
       }
       ts.forEachChild(node, visit);
     };
@@ -260,7 +308,7 @@ function interpretersWithoutArtifactId(probeSrc?: string): string[] {
   }
   return interpreterElements()
     .filter((e) => !e.hasId)
-    .map((e) => `${e.file}:${e.line} — <SemanticInterpreter> with no artifactId`);
+    .map((e) => `${e.file}:${e.line} — <${e.tag}> with no ${ARTIFACT_BODY_PROP[e.tag]}`);
 }
 
 /**

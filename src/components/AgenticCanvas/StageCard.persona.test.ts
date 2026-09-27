@@ -37,12 +37,27 @@ describe("the persona is shown once, in the eyebrow", () => {
     expect(iChip).toBeLessThan(iBody);
   });
 
-  it("EVERY interpreter the card mounts is told to suppress its own badge", () => {
-    // Missing one leaves a card showing the persona twice — once small in the eyebrow and once
-    // as the old block — which is worse than either alone.
-    const mounts = CARD.split("<SemanticInterpreter").length - 1;
+  it("EVERY body the card mounts is told to suppress its own badge", () => {
+    /*
+      Missing one leaves a card showing the persona twice — once small in the eyebrow and once as
+      the old block — which is worse than either alone.
+
+      ⛔ COUNTED OVER BOTH NAMES, BECAUSE THE MOUNT MOVED. The card used to mount
+      `SemanticInterpreter` directly; its two branches now go through `AnswerBody`, so a count of
+      the old tag was ZERO — and zero mounts with zero suppressions is an equality that holds
+      vacuously. The positive control below is the only reason that read as a failure rather than
+      as a pass, which is what it is for. The renderer stays in the count so a branch that goes
+      round the gateway is still required to suppress.
+
+      ⚠ AND THE COUNT IS ONLY HALF THE CLAIM NOW: the prop reaches the badge through a gateway,
+      so `AnswerBody` FORWARDING it is load-bearing here and cannot be seen from this file. It is
+      sealed in `answerBody.test.tsx` — a gateway that accepted the prop and dropped it would
+      leave every arm in this file green and the persona drawn twice on screen.
+    */
+    const mounts =
+      CARD.split("<AnswerBody").length - 1 + (CARD.split("<SemanticInterpreter").length - 1);
     const suppressed = CARD.split("hidePersona").length - 1;
-    expect(mounts).toBeGreaterThan(0); // positive control
+    expect(mounts, "the card mounts no answer body — this count is vacuous").toBeGreaterThan(0);
     expect(suppressed).toBe(mounts);
   });
 

@@ -3,7 +3,7 @@ import { AttemptFailed } from "./AttemptFailed";
 import { AskedSection } from "@/components/elicitation/AskedSection";
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { useStageStore } from '@/store/useStageStore';
-import { SemanticInterpreter } from '../registry/SemanticInterpreter';
+import { AnswerBody } from './AnswerBody';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers, Route } from 'lucide-react';
 import { InlineFigures } from './InlineFigures';
@@ -154,7 +154,7 @@ export const CanvasPane = () => {
             {onWorkflow ? (
               <WorkflowLens taskRef={taskRef} />
             ) : components.length > 0 ? (
-              <SemanticInterpreter payload={{ components }} artifactId={artifact.id} />
+              <AnswerBody artifact={artifact} components={components} />
             ) : (
               <div className="h-full flex items-center justify-center">
                 <p className="font-mono text-xs tracking-widest uppercase text-slate-500">
@@ -319,7 +319,7 @@ export const CanvasPane = () => {
           {/* SemanticInterpreter handles the grid, col-spans, and
               RadarReveal for the LLM-generated answer body. */}
           <AskedSection artifact={artifact} />
-          <SemanticInterpreter payload={{ components: filteredComponents }} artifactId={artifact.id} />
+          <AnswerBody artifact={artifact} components={filteredComponents} />
           <InlineFigures artifact={artifact} />
         </div>
       )}

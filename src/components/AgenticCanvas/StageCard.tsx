@@ -3,7 +3,7 @@ import { AskedSection } from "@/components/elicitation/AskedSection";
 import { AttemptFailed } from "./AttemptFailed";
 import { GitBranch, GripVertical, X } from "lucide-react";
 import type { Artifact } from "@/api/types";
-import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
+import { AnswerBody } from "./AnswerBody";
 import { FitBox } from "./FitBox";
 import { AnsweredChip } from "./AnsweredChip";
 import { CardExportButton } from "./CardExportButton";
@@ -446,7 +446,7 @@ export function StageCard({
             <div className="absolute inset-0 overflow-auto custom-scrollbar p-3">
               <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
                 <AskedSection artifact={artifact} />
-                <SemanticInterpreter payload={{ components }} hidePersona artifactId={artifact.id} />
+                <AnswerBody artifact={artifact} components={components} hidePersona />
               </div>
             </div>
           ) : hasRendered ? (
@@ -467,9 +467,9 @@ export function StageCard({
                       so FitBox scales it by WIDTH (readable) instead of by HEIGHT
                       (the long-list shrink). compact/visual render whole — FitBox
                       centers the compact card and scales the visual one. */}
-                  <SemanticInterpreter
-                    payload={{ components }}
-                    artifactId={artifact.id}
+                  <AnswerBody
+                    artifact={artifact}
+                    components={components}
                     hidePersona
                     previewRows={
                       overviewTier((components?.[0] as { archetype?: string } | undefined)?.archetype) === "dense"

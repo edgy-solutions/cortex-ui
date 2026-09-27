@@ -157,7 +157,20 @@ describe("both surfaces read the same rule", () => {
  * anywhere an answer's components are rendered, the offer is rendered beside them.
  */
 describe("the offer is mounted wherever an answer is drawn", () => {
-  it("every SemanticInterpreter that draws an artifact has an AskedSection beside it", async () => {
+  /**
+   * ⛔ RE-KEYED ONTO THE SUBJECT, AND THE RE-KEY IS THE FOURTH TIME. The five artifact-fed mounts
+   * were unified behind `AnswerBody` so a generalist answer could be disclosed once; this scan
+   * was keyed on the `SemanticInterpreter` spelling and reported ZERO bodies — caught by its own
+   * positive control, which is what that control is for.
+   *
+   * Both tags stay in the population. `AnswerBody` is where the answer is drawn now; the renderer
+   * stays because a branch that bypasses the gateway is the drift this arm exists to see, and
+   * pointing it at the new name alone would make the bypass invisible — the same narrowing that
+   * left the offer on one of two branches to begin with.
+   */
+  const ANSWER_BODY_TAGS = ["AnswerBody", "SemanticInterpreter"];
+
+  it("every body that draws an artifact has an AskedSection beside it", async () => {
     const { readFileSync } = await import("node:fs");
     const path = await import("node:path");
     const ts = (await import("typescript")).default;
@@ -179,8 +192,8 @@ describe("the offer is mounted wherever an answer is drawn", () => {
           const kids = node.children;
           const hasInterp = kids.some(
             (k) =>
-              (ts.isJsxSelfClosingElement(k) && k.tagName.getText(sf) === "SemanticInterpreter") ||
-              (ts.isJsxElement(k) && k.openingElement.tagName.getText(sf) === "SemanticInterpreter"),
+              (ts.isJsxSelfClosingElement(k) && ANSWER_BODY_TAGS.includes(k.tagName.getText(sf))) ||
+              (ts.isJsxElement(k) && ANSWER_BODY_TAGS.includes(k.openingElement.tagName.getText(sf))),
           );
           if (hasInterp) {
             interpreters += 1;
@@ -189,7 +202,7 @@ describe("the offer is mounted wherever an answer is drawn", () => {
             );
             if (!hasAsked) {
               const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-              missing.push(`${rel.split("/").pop()}:${line + 1} — interpreter with no AskedSection`);
+              missing.push(`${rel.split("/").pop()}:${line + 1} — answer body with no AskedSection`);
             }
           }
         }
@@ -198,9 +211,10 @@ describe("the offer is mounted wherever an answer is drawn", () => {
       ts.forEachChild(sf, visit);
     }
 
-    // Positive control: the scan found interpreters at all. A walker that matched nothing would
-    // report zero missing and read as a clean bill of health forever.
-    expect(interpreters, "the scan found no interpreters — the walker is broken").toBeGreaterThanOrEqual(3);
+    // Positive control: the scan found answer bodies at all. A walker that matched nothing would
+    // report zero missing and read as a clean bill of health forever — which is exactly what it
+    // did when the tag it was keyed on moved, and why the floor is here.
+    expect(interpreters, "the scan found no answer bodies — the walker is broken").toBeGreaterThanOrEqual(3);
     expect(missing, missing.join("\n")).toEqual([]);
   });
 });

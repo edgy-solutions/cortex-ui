@@ -312,7 +312,14 @@ describe("a SIZED card renders its content; an unsized one previews it", () => {
     const branch = card.slice(card.indexOf("hasRendered && sized"), card.indexOf(") : hasRendered ?"));
     expect(branch.length).toBeGreaterThan(50); // positive control on the slice
     expect(branch).not.toContain("FitBox");
-    expect(branch).toContain("SemanticInterpreter");
+    /*
+      ⛔ THE CLAIM IS "IT DRAWS THE ANSWER", NOT THE NAME OF THE COMPONENT THAT DRAWS IT. Keyed on
+      the literal `SemanticInterpreter`, this went red the day the artifact-fed mounts were unified
+      behind `AnswerBody` — an improvement indicted by a spelling. Both names are accepted because
+      either one drawing here means the same thing for letterboxing, which is what this arm is
+      about; the population of bodies and what they must be handed is `askFold.test.ts`'s subject.
+    */
+    expect(branch).toMatch(/<(AnswerBody|SemanticInterpreter)\b/);
   });
 
   it("a sized card SCROLLS rather than clipping", () => {
