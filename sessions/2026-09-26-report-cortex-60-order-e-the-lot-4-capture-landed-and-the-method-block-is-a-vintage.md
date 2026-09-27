@@ -1404,3 +1404,139 @@ and the fallback withdrawal are the two items to schedule after those, and the s
 ruling-holder's yes because it is behavioural.
 
 No code changed this addendum. Seal unchanged at 28 arms.
+
+## Seventeenth addendum, same day — both ordered halves landed, and the thing that was wrong was the PIN
+
+Pushed `0d3d65d..092b0ba`. Gates before the push: `check:transport` EXIT 0, `tsc --noEmit` EXIT 0,
+full suite **114 files / 1746 tests EXIT 0**.
+
+### 1. `readMethod` hardening — the decoupled half, done
+
+A finance row carried `formula: "EAC = BAC / CPI"` beside a row-level `method` and no inputs, and
+the reader accepted it; the call site was the only guard. The fix is `if (inputs.length === 0)
+return null` — a **positive requirement**: a method block is a formula TOGETHER WITH its inputs.
+
+That framing is the whole of why it is allowed. The previous seal *declined* to reject row-shaped
+input, and recorded why: "a row could legitimately grow a field a block also has, and then the
+reader would be guessing." That objection is fatal to a blacklist and does not touch a positive
+requirement — keying on the SUBJECT makes every unknown shape not-a-block **by default**. It also
+refuses a formula with nothing behind it, which is the price rather than a side effect: such a
+block and a finance row are the same object seen from inside the reader.
+
+Proven live: deleting the guard reds exactly its two seals **by name** and nothing else.
+
+### 2. The completeness withdrawal — and the defect was a SHAPE, not a number
+
+`asked`/`replied` no longer fall back to `rows.length`/`answered.length`. The discriminator is why
+the old fallback could never be "deliberate": a card counting its own rows cannot recover a claim
+about the completeness of the row set, so deriving it does not approximate the field — it
+**reproduces the truncated set by construction**, and `replied === asked` goes true on exactly the
+payload the field exists to catch.
+
+The gate was `{!complete && ...}`, so an unstated completeness rendered **nothing** — and nothing
+is precisely what a complete comparison looks like. Not a wrong figure: an all-clear nobody wrote.
+`complete` is now three states, `null` = "the producer did not say", drawn as
+`data-completeness-unstated`.
+
+What stayed: `replied === asked` over the producer's OWN two counts. That is still reading a
+declaration, in the vocabulary ruling 2 grandfathers. What was withdrawn is computing either side
+of it here.
+
+### 3. ⛔ M5 went QUIET, and the reason is a coincidence I had built into every case
+
+Reverting the spread gate from `answered.length >= 2` to `(replied ?? 0) >= 2` was caught by
+**nothing**. Every case in the file sent `methods_answered` EQUAL to the number of answering rows,
+so the two readings agree on all of them and no green suite could say which one the card used.
+
+Fixed with the only input that can distinguish them — a payload where they DIVERGE, one per
+direction:
+
+| payload | rows answering | producer says | correct | mutant |
+|---|---|---|---|---|
+| count lower than the rows | 3 | `methods_answered: 1` | draws the line | suppresses it |
+| count higher than the rows | 1 | `methods_answered: 3` | silent | invents a missing spread |
+
+Both now red under M5, by name. The disagreement is deliberate and is **not** a contradiction this
+card resolves — ruling 3 owns that — it is only the instrument that separates the two readings.
+
+Re-fired all five after the addition: M1 reds 5 seals, M2/M3/M4 red, M5 red, file restored
+identical to base.
+
+### 4. The CI failure: both halves were right, and the PIN was the third declaration
+
+`projectedTupleParity.test.ts` asserted six fields; at pin `c0005142` the projector declared
+**four**. The seal was right, the producer was right, and CI was reading a producer from before
+either. **A pinned cross-repo seal has this failure mode by construction** — the pin is a third
+declaration of the same fact, and it goes stale silently while both halves it compares stay true.
+
+⚠ **The sha whose subject says it fixes this does not.** `546e6bee` — "every cost ranking states
+its own method, and the projector carries it" — still fails, because the seal also asserts the
+method block's *input spelling*, which `8b82761b` ("reconcile the method block to one shape")
+reconciled afterwards. The minimum satisfying sha is `8b82761b`. **A pin picked from commit
+subjects would have installed a red one**, and the log cannot show it: the subject says what
+someone meant to change.
+
+Verified literal by literal against `git show` at six candidates, all confirmed on `origin/master`:
+
+| sha | date | verdict |
+|---|---|---|
+| `988e2a47` | 09-19 | ❌ 6 fields, no method block at all |
+| `546e6bee` | 09-24 | ❌ tuple fine, **three input spellings wrong** |
+| `8b82761b` | 09-25 | ✅ minimum |
+| `e207baec` `78f04d3c` `1c1005c2` | 09-25/26 | ✅ |
+
+Pinned to **`1c1005c23586fb5a4d30ce9f275650e28b51fdb3`** — not the minimum, but the sha the full
+local suite was **actually measured against**: the producer checkout is clean at that HEAD for both
+files the seal reads. Pin what you ran, not what you reasoned about.
+
+The tuple assertion goes to SEVEN with it (`method`), still exact rather than `>=` — a loose bound
+is how a stale count lived in a comment for months, which is why this file exists.
+
+### 5. And the image gate confirmed the ambiguity it was warned about
+
+Runs **383, 384, 385 all failed at the same step** — "Test suite, with the producer present" — and
+in all three the six image steps read `skipped`. That is **identical** to what a sessions-only push
+produces. Nothing has pushed an image since run 381. The step list is the only instrument that
+separates them, exactly as the card says.
+
+### 6. My own probe reported on itself
+
+Diagnosing this, a `node -e` probe returned **NO MATCH** for the projector tuple against a file
+that matches it perfectly, which is what made the seal's local 10/10 look impossible. The Bash
+layer had eaten the backslashes: the regex node received was `"CONTRIBUTION_RANKING":s*\(s*"rows"`.
+The probe was reporting on **itself**, and it did not fail silently — it answered confidently and
+wrong. It only came apart because the next run printed `re.source` beside the verdict.
+
+Same family as the filtered-glob null already in this ledger: a NULL is a claim about the
+instrument until the instrument is shown. **Print the pattern, not only its verdict**, and build
+probes in a file rather than through a shell-quoted `-e` string.
+
+### Still open, unchanged by this beat
+
+- **Ruling 3** (present-and-disagreeing reconciliation) needs arch. Named in the new tests rather
+  than decided by them.
+- **`method_label`** rename stays coupled, waits for the producer.
+- **`helm/cortex-ui/values.yaml:20`** still defaults to `tag: latest` with no `required` guard —
+  a never-built tag renders and fails at the kubelet on a release Helm already called a success.
+- The peer still owes a **fleet sha beside the payload** (four rounds).
+
+### 7. The roll, closed out
+
+Run **386** on `092b0ba` went green and the image step's own conclusion says `success`, so this is
+the first pushed image since 381 — read from the step list, not from the run's verdict.
+
+    tag     092b0bab7eb4e7796ba7d01b4b9ff6b2e383efea
+    digest  sha256:6e2fc31db21f718b1aebc73d1cb5fcc2bc72361c0494c03512ce3e0093e3bbd0
+    type    application/vnd.oci.image.index.v1+json — amd64 + arm64 + two attestations
+
+Control asserted before the reading was believed: `ea060f37` → `sha256:38cda6c8…`, reproduces. The
+fallback pin I had prepared (`896ccf82`, run 381) also resolves — `sha256:28e50935…` — so it was a
+real fallback and not a hope, but it is no longer needed. `:latest` has moved onto `6e2fc31d`.
+
+⚠ **And the 404's fourth meaning caught me, from the inside.** My first read used a 40-character sha
+whose tail I had *typed rather than read*, and GHCR returned a 404 indistinguishable from "not built
+yet" — on a run whose push step I had already confirmed as `success`. The two instruments
+disagreeing is the only reason it took seconds: a digest read alone would have looked exactly like
+the gate skipping the build. `git rev-parse`, never a plausible-looking string.
+
+Packet out: `sessions/2026-09-26-packet-to-lane-1-digest-6e2fc31d-for-roll-3-and-the-producer-pin-moved.md`
