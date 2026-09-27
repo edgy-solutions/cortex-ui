@@ -1,0 +1,115 @@
+{
+  "provenance": {
+    "sdk_repo": "iagent-mesh-sdk",
+    "sdk_ref": "lane/ca",
+    "sdk_sha": "b0abd3b7daa78d973071c263bf4a124b6597225f",
+    "sdk_release": "UNRELEASED — the newest tag (v0.9.3) contains neither MethodBlock nor completeness; HEAD is past it and pyproject is unbumped, so a SHA is the only honest pin",
+    "extractor": "scripts/extract-mesh-sdk-parity.mjs",
+    "sources": [
+      "iagent_mesh/models.py",
+      "iagent_mesh/enumeration.py"
+    ]
+  },
+  "classes": {
+    "MethodInput": {
+      "file": "iagent_mesh/models.py",
+      "fields": [
+        {
+          "name": "name",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "value",
+          "annotation": "Union[bool, int, float, str]",
+          "default": null
+        },
+        {
+          "name": "unit",
+          "annotation": "Optional[str]",
+          "default": "None"
+        }
+      ]
+    },
+    "MethodBlock": {
+      "file": "iagent_mesh/models.py",
+      "fields": [
+        {
+          "name": "formula",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "inputs",
+          "annotation": "list[MethodInput]",
+          "default": null
+        },
+        {
+          "name": "bound",
+          "annotation": "Optional[float]",
+          "default": "None"
+        },
+        {
+          "name": "bound_defaulted",
+          "annotation": "Optional[bool]",
+          "default": "None"
+        },
+        {
+          "name": "producer_sha",
+          "annotation": "str",
+          "default": null
+        }
+      ]
+    },
+    "ToolOutput": {
+      "file": "iagent_mesh/models.py",
+      "fields": [
+        {
+          "name": "method",
+          "annotation": "Optional[MethodBlock]",
+          "default": "None"
+        }
+      ]
+    },
+    "InstanceOption": {
+      "file": "iagent_mesh/enumeration.py",
+      "fields": [
+        {
+          "name": "uri",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "label",
+          "annotation": "str",
+          "default": null
+        }
+      ]
+    },
+    "EnumerateInstancesResponse": {
+      "file": "iagent_mesh/enumeration.py",
+      "fields": [
+        {
+          "name": "instances",
+          "annotation": "Sequence[InstanceOption]",
+          "default": "()"
+        },
+        {
+          "name": "scoped_by",
+          "annotation": "Sequence[str]",
+          "default": "()"
+        },
+        {
+          "name": "completeness",
+          "annotation": "Literal[\"complete\", \"truncated\", \"unknown\"]",
+          "default": "\"unknown\""
+        },
+        {
+          "name": "total_available",
+          "annotation": "Optional[int]",
+          "default": "None"
+        }
+      ]
+    }
+  }
+}
