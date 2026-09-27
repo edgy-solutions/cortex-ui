@@ -457,36 +457,61 @@ describe("the withheld-count rule and the counts the allowlist carries anyway", 
     expect(typeof rows[0].method).toBe("string");
   });
 
-  it("⛔ a finance ROW reads as a valid method block — so the guard is the call site, not the reader", () => {
+  it("a finance ROW is REFUSED by the reader — the call site is no longer the only guard", () => {
     // WHY THIS IS SEALED, and it is not what I first assumed. Two engines now use the key `method`
     // for different things: cost sends an envelope-level BLOCK, finance a row-level STRING naming
     // the EAC method, beside a row-level `formula`. A reader chasing "why is method not rendering"
     // could reasonably point `readMethod` at the rows.
     //
-    // ⚠ MEASURED: THAT WOULD NOT FAIL SAFELY. The bare string is dropped, as a non-record must be.
-    // But a finance ROW PASSES, because it has a `formula`, and a non-empty `formula` is the only
-    // thing `readMethod` requires. What comes back is a plausible block carrying the row's formula
-    // with no inputs and no bound — rendered under a heading that tells the reader the PRODUCER
-    // accounted for its own arithmetic. That is fabricated provenance, not a blank: the shape this
-    // repo keeps finding, where the honest output would have been a stated absence.
+    // ⚠ WHAT THIS MEASURED, AND IT IS NOW FIXED. The bare string was dropped, as a non-record must
+    // be — but a finance ROW PASSED, because it has a `formula` and a non-empty `formula` was the
+    // only thing `readMethod` required. What came back was a plausible block carrying the row's
+    // formula with no inputs and no bound, rendered under a heading that tells the reader the
+    // PRODUCER accounted for its own arithmetic. Fabricated provenance, not a blank.
+    //
+    // Ruled 2026-09-26 (arch): a row must never yield a block, decoupled from the `method_label`
+    // rename that waits on the producer. So the reader is hardened and this seal now asserts the
+    // refusal. What changed my mind about the fix I declined below is the KEY it turns on — see
+    // `readMethod`: requiring the inputs a formula was computed from is a positive property of a
+    // method block, not a guess about a row, so a row that grows a block's field still fails it.
     expect(readMethod("CPI")).toBeNull();
 
-    const asIfRowWereBlock = readMethod({
-      method: "CPI",
-      formula: "EAC = BAC / CPI",
-      eac: 4200000,
-    });
-    expect(asIfRowWereBlock).not.toBeNull();
-    expect(asIfRowWereBlock?.formula).toBe("EAC = BAC / CPI");
-    // And it would say nothing about where the figure came from, which is the whole point of the
-    // block. A reader cannot tell this from a producer that sent a formula and omitted the rest.
-    expect(asIfRowWereBlock?.inputs).toEqual([]);
-    expect(asIfRowWereBlock?.bound).toBeNull();
+    expect(
+      readMethod({
+        method: "CPI",
+        formula: "EAC = BAC / CPI",
+        eac: 4200000,
+      }),
+    ).toBeNull();
+    // Verbatim from `sessions/2026-09-19-payload-finance-eac-comparison.json`, not a shape I
+    // composed to fail: the row this hazard was found on, with the keys it really ships.
+    expect(
+      readMethod({
+        acwp: 7430000.0,
+        bac: 12000000,
+        cpi: 0.847913862718708,
+        eac: 14152380.95,
+        eac_exact: "14152380.95",
+        formula: "EAC = BAC / CPI",
+        method: "CPI",
+        unavailable_reason: null,
+        value: 14152380.95,
+        value_unit: "USD",
+      }),
+    ).toBeNull();
+    // THE CONTROL, in the same breath: a real block still reads, so the hardening is a
+    // discrimination and not a mute. This one differs from the row in exactly the thing the
+    // reader decides on — it names what went in.
+    expect(
+      readMethod({
+        formula: "EAC = BAC / CPI",
+        inputs: [{ name: "BAC", value: 12000000 }],
+      }),
+    ).not.toBeNull();
 
-    // SO THE GUARD HAS TO BE THE CALL SITE, and it is asserted where it actually lives: the export
-    // reads `method` off the component and off the envelope, never off a row. Widening `readMethod`
-    // to reject row-shaped input is the other candidate fix and is NOT taken here — a row could
-    // legitimately grow a field a block also has, and then the reader would be guessing.
+    // AND THE CALL SITE IS STILL ASSERTED, because two guards for one hazard is the point: the
+    // export reads `method` off the component and off the envelope, never off a row. The reader's
+    // refusal makes a mistake here a blank instead of a fabrication; it does not make it correct.
     const exportButton = readFileSync(EXPORT_BUTTON, "utf8");
     expect(exportButton).toContain("readMethod(componentLevel?.method)");
     expect(exportButton).toContain("readMethod(envelopeLevel?.method)");

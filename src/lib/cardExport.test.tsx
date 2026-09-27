@@ -356,9 +356,26 @@ describe("the method block — rendered when present, said when absent", () => {
     expect(parse(html).querySelector('[data-cx-method="present"]')).not.toBeNull();
   });
 
-  it("a method with a formula but no inputs or bound says absent for those, not nothing", () => {
-    const m = readMethod({ formula: "EAC = AC + (BAC - EV)" });
-    expect(m).toEqual({ formula: "EAC = AC + (BAC - EV)", inputs: [], bound: null });
+  it("REFUSES a formula with nothing behind it — that shape is a data row", () => {
+    // Was: this read to `{formula, inputs: [], bound: null}` and rendered the formula with two
+    // absence marks. Withdrawn 2026-09-26 by ruling, because a finance row is that same object —
+    // a formula and no inputs — so accepting it made every row a block. See the reader's own
+    // comment for why the requirement is keyed on the inputs rather than on row spelling.
+    expect(readMethod({ formula: "EAC = AC + (BAC - EV)" })).toBeNull();
+    // And the inputs have to NAME something: a list of anonymous values is the same non-claim.
+    expect(readMethod({ formula: "f", inputs: [{ value: 3 }] })).toBeNull();
+    expect(readMethod({ formula: "f", inputs: [] })).toBeNull();
+    expect(readMethod({ formula: "f", inputs: {} })).toBeNull();
+    // The control, so the guard is not simply refusing everything: ONE named input is enough.
+    expect(readMethod({ formula: "f", inputs: [{ name: "BAC", value: 3 }] })).not.toBeNull();
+  });
+
+  it("the RENDERER still says absent for an empty block — now only constructible by hand", () => {
+    // Kept deliberately after the reader stopped producing this shape. The renderer's job is
+    // unchanged and is a different subject: given a block with no inputs and no bound it must
+    // print the absence marks rather than a bare formula with two blanks. Built as a literal,
+    // which is the point — `readMethod` can no longer hand this out.
+    const m = { formula: "EAC = AC + (BAC - EV)", inputs: [], bound: null };
     const body = sectionText(
       buildCardExportHtml(input({ method: m })),
       "How the producer computed this",

@@ -143,7 +143,8 @@ export function formatLeaf(v: unknown): string {
 /**
  * Read the producer's method block, or nothing.
  *
- * Dropped whole when there is no formula. `inputs` entries with no name are dropped
+ * Dropped whole when there is no formula, AND when nothing names an input — see the ruling at
+ * the second guard, which is what stops a data row reading as provenance. `inputs` entries with no name are dropped
  * individually — a row that cannot say which input it is cannot be checked against anything —
  * but a value of `0` or `false` or `""` is KEPT, because those are answers and the
  * absent-vs-falsy confusion is exactly how a zero becomes a blank. Only the name gates a row.
@@ -170,6 +171,29 @@ export function readMethod(raw: unknown): MethodBlock | null {
       inputs.push({ name: name.trim(), value: formatLeaf(raw.inputs[name]) });
     }
   }
+
+  // ⛔ A ROW IS NOT A BLOCK, AND THE INPUTS ARE THE ONLY THING THAT SEPARATES THEM. Ruled
+  // 2026-09-26 (arch, the decoupled half of the `method_label` ruling): a row must never yield a
+  // method block. MEASURED before it was ruled, in `projectedTupleParity.test.ts` — a finance row
+  // carries `formula: "EAC = BAC / CPI"` beside a row-level `method: "CPI"` and no inputs at all,
+  // so a non-empty formula being the ONLY requirement made every row read as a valid block whose
+  // provenance was silently empty, under a heading telling the reader the producer had accounted
+  // for its own arithmetic.
+  //
+  // The requirement is keyed on what a method block IS — a formula TOGETHER WITH the inputs it
+  // was computed from — and not on what a row looks like. That distinction is the whole reason
+  // this is now takeable: the seal that measured the defect declined the other candidate fix,
+  // rejecting row-SHAPED input, because "a row could legitimately grow a field a block also has,
+  // and then the reader would be guessing." That objection holds against a blacklist and does not
+  // touch a positive requirement, which counts every unknown shape as not-a-block by default.
+  //
+  // ⚠ IT ALSO REFUSES A FORMULA WITH NOTHING BEHIND IT, and that is the price rather than a side
+  // effect: such a block and a finance row are the same object seen from in here, so no rule
+  // refuses one and accepts the other without keying on row spelling. An unbacked formula drawn
+  // under a provenance heading is the invented method the docstring above forbids;
+  // METHOD_ABSENT_SENTENCE is the honest output for it. The RENDERER still handles an
+  // empty-inputs block, which is now only constructible by hand — sealed as such.
+  if (inputs.length === 0) return null;
 
   const boundRaw = raw.bound;
   const bound =

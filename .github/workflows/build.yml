@@ -24,7 +24,21 @@ env:
   # ends up measuring one producer and REPORTING another.
   #
   # Bump HERE and nowhere else.
-  PRODUCER_REF: c0005142a610bc7759cfc8953666aee7c6064632
+  #
+  # ⛔ BUMPED 2026-09-26, AND THE PIN IS WHAT WENT RED — not the seal and not the producer. At
+  # `c0005142` the projector tuple declared FOUR fields; `projectedTupleParity.test.ts` asserted
+  # six, correctly, against a producer that had already shipped them. Both sides were right and CI
+  # was reading a producer from before either. A pinned cross-repo seal has this failure mode by
+  # construction: the pin is a third declaration, and it goes stale silently while both halves it
+  # compares stay true.
+  #
+  # ⚠ CHOSEN BY RUNNING THE SUITE, NOT BY READING THE LOG. The minimum sha that satisfies this
+  # seal is `8b82761b` ("reconcile the method block to one shape") — NOT `546e6bee`, whose subject
+  # says it adds the `method` field and which still fails, because the seal also asserts the
+  # method block's input spelling that the later commit reconciled. A pin picked from commit
+  # subjects would have installed a red one. Verified literal by literal against `git show` at
+  # each candidate, then pinned to the sha the full local suite was actually measured against.
+  PRODUCER_REF: 1c1005c23586fb5a4d30ce9f275650e28b51fdb3
 
 permissions:
   contents: read
