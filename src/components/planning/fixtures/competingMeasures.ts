@@ -17,6 +17,11 @@ export const COMPETING_MEASURES_ABSENCES = [
   "data-spread-unreported",
   "data-range-absent",
   "data-secondary-absent",
+  // Added 2026-09-26 with the fallback withdrawal. THE CENSUS FOUND IT BEFORE I DID: the absence
+  // list is derived from the card's own rendered attributes, so the new branch failed "the card
+  // declares an absence no fixture flips" the moment it existed and before any seal was written
+  // for it. That is the instrument working in the direction it was built for.
+  "data-completeness-unstated",
 ] as const;
 
 export type CompetingMeasuresAbsence = (typeof COMPETING_MEASURES_ABSENCES)[number];
@@ -93,6 +98,31 @@ export const COMPETING_MEASURES_FIXTURES: CompetingMeasuresFixture[] = [
     rows: COMPLETE,
     envelope: { ...ENVELOPE, lowest_value: null, highest_value: null },
     declares: ["data-range-absent"],
+  },
+  {
+    /*
+     * THE TRUNCATION CASE, AND IT IS THE ONE THAT USED TO DRAW NOTHING. Three rows that all
+     * answer and a producer that claims no completeness: before the ruling this rendered a clean
+     * card with no banner, which is exactly what a full comparison looks like, so a set that had
+     * silently lost a row was indistinguishable from a whole one.
+     *
+     * The envelope is SPELLED OUT rather than spread-minus-three-keys, because this fixture's
+     * subject IS which keys are absent — `{ ...ENVELOPE, methods_compared: undefined }` leaves
+     * the keys present with undefined values, which renders the same and would satisfy any
+     * containment check on the payload while claiming the producer sent them.
+     */
+    name: "completeness not stated — every row answers and the producer claims nothing",
+    rows: COMPLETE,
+    envelope: {
+      spread: 1662607.71,
+      spread_percent_of_bac: 0.1386,
+      lowest_value: 13130000.0,
+      highest_value: 14792607.71,
+      reference_value: 12000000,
+      value_unit: "USD",
+      scope_label: "Notional Program Meridian",
+    },
+    declares: ["data-completeness-unstated"],
   },
   {
     name: "a secondary figure is absent — the primary already says why it is not",

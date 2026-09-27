@@ -81,6 +81,25 @@ const ENVELOPE = {
   scope_label: "Notional Program Meridian",
 };
 
+/**
+ * The same envelope from a producer that evaluated no completeness — the three keys ABSENT.
+ *
+ * Spelled out rather than `{ ...ENVELOPE, methods_compared: undefined, ... }`, and that is not a
+ * style preference: a key present with an `undefined` value renders identically here while passing
+ * any check that asks whether the producer sent it. This file has already been caught by that
+ * distinction once, in the fixture-corpus seal below. What `finance_agent/main.py:651` produces
+ * through `or {}` is an envelope with the keys GONE, which is this object.
+ */
+const ENVELOPE_NO_COMPLETENESS = {
+  spread: 1662607.71,
+  spread_percent_of_bac: 0.1386,
+  lowest_value: 13130000.0,
+  highest_value: 14792607.71,
+  reference_value: 12000000,
+  value_unit: "USD",
+  scope_label: "Notional Program Meridian",
+};
+
 describe("the spread is shown, and never computed here", () => {
   it("states the spread and what fraction of the reference it is", () => {
     // 1,662,607 is 13.9% of a 12M budget. A reader who has to work that out has been handed
@@ -118,6 +137,42 @@ describe("the spread is shown, and never computed here", () => {
       { method: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
     ];
     render(<CompetingMeasures rows={rows} methods_compared={3} methods_answered={1} />);
+    expect(document.querySelector("[data-spread-unreported]")).toBeNull();
+  });
+
+  /*
+   * ⛔ THE GATE READS THE ROWS PRESENT, AND ONLY A DISAGREEING PAYLOAD CAN SAY SO. Added
+   * 2026-09-26 because a mutant went QUIET: reverting this gate to the producer's
+   * `methods_answered` was caught by nothing in this file. Every case above sends a count EQUAL
+   * to the number of answering rows, so the two readings agree by coincidence and a green suite
+   * could not say which one the card used.
+   *
+   * The two payloads below are where they diverge, one in each direction. The disagreement is
+   * deliberate and is NOT a contradiction this card resolves: the sentence is about the methods
+   * BELOW, so the honest quantity is the ones it drew (ruling 1's other half). Which side is
+   * right when the counts and the rows disagree is ruling 3's question and is not answered here.
+   */
+  it("draws the line off the ROWS when the producer's count is lower", () => {
+    // Three methods answer on screen and the producer said one. The reader can see three figures
+    // disagreeing, so the absent spread has to be said — reading `1` here would suppress a
+    // sentence about rows the card is itself showing.
+    const { spread: _s, spread_percent_of_bac: _p, ...rest } = ENVELOPE;
+    render(
+      <CompetingMeasures rows={SEED()} {...rest} methods_compared={1} methods_answered={1} />,
+    );
+    expect(document.querySelector("[data-spread-unreported]")).not.toBeNull();
+  });
+
+  it("stays SILENT when one row answers, whatever the producer's count claims", () => {
+    // The other direction, and the one that would invent a measurement: the producer says three
+    // answered, one figure is on screen, and "spread not reported" would announce the absence of
+    // a spread of a single number.
+    const rows = [
+      SEED()[0],
+      { method: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
+      { method: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
+    ];
+    render(<CompetingMeasures rows={rows} methods_compared={3} methods_answered={3} />);
     expect(document.querySelector("[data-spread-unreported]")).toBeNull();
   });
 });
@@ -449,7 +504,7 @@ describe("the absences that were only punctuation", () => {
 });
 
 /**
- * ⛔ THE COMPLETENESS PAIR IS THE TRUNCATION DETECTOR — AND THIS CARD DOES NOT USE IT AS ONE.
+ * THE COMPLETENESS PAIR IS THE TRUNCATION DETECTOR — ONE HALF NOW RULED AND WIRED, ONE STILL OPEN.
  *
  * Raised 2026-09-26 out of a three-session argument about whether the projector may put a count
  * on the wire that the card could derive from its rows. The answer turned out to be stated in
@@ -468,22 +523,31 @@ describe("the absences that were only punctuation", () => {
  * row set, which a card counting its own rows can never recover — the derived answer agrees with
  * the truncated set by construction. Two different rules, both correct.
  *
- * ⚠ WHAT THE CARD ACTUALLY DOES WITH IT, measured below and not what the prose implies:
+ * ⚠ WHAT THE CARD DOES WITH IT, measured below — three findings, and the RULING OF 2026-09-26
+ * (arch) closes the second, which was the dangerous one:
  *
  *   1. The contract marks all three `required: false`, so a producer that omits them is accepted.
- *   2. Absent, `asked` falls back to `rows.length` — the exact number the field exists to
- *      contradict — and `complete` to `replied === asked`, which is then self-consistent by
- *      construction. A truncated set renders a confident full comparison with nothing blank.
- *   3. PRESENT AND DISAGREEING, nothing compares them. The heading prints `rows.length`, the
- *      banner prints `asked`, and the only gate on the banner is `!complete` — which the
- *      producer's own `all_methods_answered: true` satisfies.
+ *      NO LONGER A GAP, and it is worth saying why rather than quietly dropping the ⛔: omission
+ *      is what "absent means not evaluated" requires the producer to be allowed to do. A field
+ *      cannot be both absent-means-silent and mandatory. What made `required: false` dangerous
+ *      was never the declaration, it was finding 2 underneath it.
+ *   2. ✅ CLOSED. Absent, `asked` fell back to `rows.length` — the exact number the field exists
+ *      to contradict — and `complete` to `replied === asked`, self-consistent by construction, so
+ *      a truncated set rendered a confident full comparison with nothing blank. Ruled: absent
+ *      renders UNKNOWN, never a value derived from the rows. `complete` is now `boolean | null`
+ *      and the third state has its own line, `data-completeness-unstated`.
+ *   3. ⛔ STILL OPEN. PRESENT AND DISAGREEING, nothing compares them. The heading prints
+ *      `rows.length`, the banner prints `asked`, and the only gate is `all_methods_answered`,
+ *      which the producer's own `true` satisfies while two rows sit under a claim of three.
  *
- * These are CHARACTERISATION seals: they assert today's behaviour so the gap has a referent, and
- * they are marked ⛔ because two of the three are defects on this side. REPORTED, NOT PATCHED —
- * making the pair required and reconciling it against `rows.length` is the consumer half of a
- * ruling that originates in invincible-agent, alongside the producer half (whether a restating
- * count must be REQUIRED when it is completeness-bearing). Same standing as the three gaps in
- * the 2026-09-26 Order E report.
+ * ⚠ WHY 3 WAS NOT TAKEN WITH 2, said plainly so it is an assignment and not a shrug. The ruling
+ * says absent must render unknown and never a value derived from rows; reconciling `asked`
+ * against `rows.length` is the opposite operation — using the rows to CONTRADICT a producer claim
+ * rather than to invent one — and that is a second behavioural change no order covers. The
+ * argument for it is strong and belongs in the packet, not in this commit: a completeness key
+ * that travels and is never compared against the rows present detects nothing, which is the
+ * entire justification ruling 1 gives for putting it on the wire. **It needs arch, and nobody
+ * else can decide it** — the seal below asserts today's silence so the claim keeps a referent.
  */
 describe("⛔ the completeness pair as a truncation detector", () => {
   /** The producer's row set, minus one — the failure both headers describe, staged. */
@@ -540,7 +604,7 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     expect(document.querySelector("[data-incomplete]")).toBeNull();
   });
 
-  it("⛔ the contract accepts a producer that omits the detector — all three are required: false", () => {
+  it("the contract accepts a producer that omits the detector — and the card now SAYS so", () => {
     // Asserted on the contract's own text rather than by exercising the validator, because the
     // finding is the DECLARATION. If someone makes them required, this goes red and should.
     const contract = readFileSync(
@@ -554,9 +618,16 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     // not the only spelling the file knows.
     expect(contract).toContain("required: true");
 
-    // And the fallback that fills their absence, read off the component.
-    const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
-    expect(component).toContain("const asked = num(methods_compared) ?? rows.length;");
+    // ⛔ WAS: `expect(component).toContain("const asked = num(methods_compared) ?? rows.length;")`
+    // — the fallback that filled their absence, pinned as text so the gap had a referent. The
+    // ruling withdrew it, so the assertion is replaced by its opposite, BEHAVIOURALLY rather than
+    // as a second spelling: `required: false` is only sound if omitting the fields produces a
+    // stated absence, so that is what gets asserted here, beside the declaration that permits it.
+    render(<CompetingMeasures rows={SEED()} spread={1662607.71} value_unit="USD" />);
+    expect(document.querySelector("[data-completeness-unstated]")).not.toBeNull();
+    // And no all-clear anywhere: three rows that all answer must not add up to a claim.
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/3 of 3/);
   });
 
   /**
@@ -581,26 +652,45 @@ describe("⛔ the completeness pair as a truncation detector", () => {
    * Add an EAC archetype whose methods all project indices, change `_totals`, or reuse this card
    * for another comparison, and the absent-`asked` path goes live with every layer green.
    *
-   * THIS SEAL IS THE MEASURABLE FORM OF THAT. All six fixtures spread one `ENVELOPE`, so not one
-   * of them omits the pair, and the single `data-incomplete` fixture reaches the banner through
-   * the producer's explicit `all_methods_answered: false` — never through the card's own
-   * `replied === asked` derivation. The branch that would carry the failure is covered by the ⛔
-   * seals above and by nothing else in this repo. A corpus whose every member states a field
-   * cannot report what happens when it is absent.
+   * ⚠ THIS SEAL WAS THE MEASURABLE FORM OF THAT, AND IT HAS FLIPPED. It read "no fixture omits
+   * the pair" — all six spread one `ENVELOPE`, so a corpus whose every member states a field
+   * could not report what happens when it is absent. With the ruling, a seventh fixture omits all
+   * three and declares the stated absence, so the branch that would have carried the failure is
+   * now reachable from the corpus instead of only from the hand-written seals in this file. The
+   * reachability argument above is kept verbatim because it is the reason the fix was not
+   * urgent — and because "safe only by one method's index-freeness in one engine" is exactly the
+   * kind of guarantee that expires without telling anyone.
    */
-  it("⛔ no fixture omits the completeness pair, and the only banner route is producer-stated", () => {
+  it("exactly ONE fixture omits the completeness pair — the corpus can reach the absent branch", () => {
     expect(COMPETING_MEASURES_FIXTURES.length).toBeGreaterThan(4);
 
-    for (const f of COMPETING_MEASURES_FIXTURES) {
-      // Every fixture, not merely most: the absence must be unreachable from the corpus rather
-      // than rare in it.
+    const KEYS = ["methods_compared", "methods_answered", "all_methods_answered"] as const;
+    // ON THE KEY HERE, because absence is the subject: a fixture that omits them is what the
+    // producer's `or {}` really sends.
+    const omitters = COMPETING_MEASURES_FIXTURES.filter((f) =>
+      KEYS.every((k) => !(k in f.envelope)),
+    );
+    expect(omitters.map((f) => f.name)).toHaveLength(1);
+    // It must reach the new line, or it is a fixture that omits the pair and proves nothing.
+    expect(omitters[0].declares).toContain("data-completeness-unstated");
+    // PARTIAL OMISSION IS NOT COVERED BY ANYTHING and is a real payload — `or {}` drops all three
+    // together today, but nothing in the contract makes them arrive as a set. Stated rather than
+    // left to look intentional; the card handles it (`complete` needs BOTH counts or the boolean).
+    expect(
+      COMPETING_MEASURES_FIXTURES.filter((f) => KEYS.some((k) => !(k in f.envelope))),
+    ).toHaveLength(1);
+
+    for (const f of COMPETING_MEASURES_FIXTURES.filter((f) => !omitters.includes(f))) {
+      // Every OTHER fixture, not merely most: the absent state must be the one fixture's alone,
+      // so the `it.each` above is asserting the new line's presence against six negatives.
       //
       // ⚠ ON THE VALUE, NOT THE KEY, and the first version of this seal got that wrong. It
       // asserted `Object.keys(envelope)` contained the names, which a fixture written
-      // `methods_compared: undefined` satisfies — while the card reads `num(undefined) ?? rows.length`
-      // and takes the fallback. The seal was blind to the exact state it claimed to exclude, and
+      // `methods_compared: undefined` satisfies — while the card read `num(undefined) ?? rows.length`
+      // and took the fallback. The seal was blind to the exact state it claimed to exclude, and
       // the mutation that set a fixture's value to `undefined` SURVIVED it. Presence of a key is
-      // not availability of a figure.
+      // not availability of a figure. The withdrawn fallback does not retire the lesson: an
+      // `undefined` value now renders the unstated line while the fixture claims a figure.
       expect(typeof f.envelope.methods_compared, f.name).toBe("number");
       expect(typeof f.envelope.all_methods_answered, f.name).toBe("boolean");
     }
@@ -615,8 +705,12 @@ describe("⛔ the completeness pair as a truncation detector", () => {
   });
 
   /**
-   * ⛔ THE CARD STATES THE RULE 31 LINES ABOVE THE LINE THAT BREAKS IT — so this is not a policy
-   * question, it is an internal contradiction in one component.
+   * ✅ THE CARD STATED THE RULE 31 LINES ABOVE THE LINE THAT BROKE IT — AND NOW OBEYS IT.
+   *
+   * Kept whole rather than deleted with the fix, because the argument is what made the fix
+   * ratifiable in a day: the finding never asked for a new policy, it showed one component
+   * contradicting a rule it cites in its own comments. That is the cheapest kind of fix to get
+   * agreed and the easiest kind of regression to re-introduce, since the fallback looks helpful.
    *
    * The engine lane's closing point, verified here: the rule the consumer half needs already
    * exists, twice, ratified nowhere. `finance_agent/measures.py:124-127` states it outright —
@@ -631,13 +725,13 @@ describe("⛔ the completeness pair as a truncation detector", () => {
    *                                the words that decide this: "THE PRODUCER DID NOT REPORT IT,
    *                                AND THIS CARD MAY NOT COMPUTE IT. Said rather than omitted."
    *   `lowest_value`/`highest_value` absent → `data-range-absent`, "no range".
-   *   `methods_compared` absent  → ⛔ SILENTLY COMPUTED from `rows.length`, at :77.
+   *   `methods_compared` absent  → was ⛔ SILENTLY COMPUTED from `rows.length` at :77; now
+   *                                `data-completeness-unstated`, the sixth absence said.
    *
-   * Five absences said, one inferred, in one file, thirty-one lines apart. `?? rows.length` is the
+   * Five absences said, one inferred, in one file, thirty-one lines apart. `?? rows.length` was the
    * exact inverse of the doctrine the same card cites when it refuses to subtract two figures it
-   * can see. So `complete` requiring `asked === rows.length` FOLLOWS FROM THE CARD'S OWN RULE
-   * rather than proposing a new one, and the ask of the ruling shrinks to ratifying
-   * absent-means-silent generally.
+   * can see, which is why the ask shrank to ratifying absent-means-silent generally rather than
+   * proposing anything new.
    *
    * ⚠ THE HINGE, which corrects what the fourth addendum of the Order E report claimed. I wrote
    * that the absent-pair payload "cannot be built". Wrong link: `finance_agent/main.py:651` is
@@ -648,31 +742,84 @@ describe("⛔ the completeness pair as a truncation detector", () => {
    * `measures.py:83` returns None → `or {}` drops the keys → `contract.ts:164-166` accepts their
    * absence → `asked ?? rows.length` → `complete` derived from the fallback → banner silent.
    *
-   * STILL REPORTED, NOT PATCHED — the fix changes what the card renders, and no order covers it.
-   * But it is reclassified: not an open design question, a violation of a stated rule.
+   * PATCHED 2026-09-26 on the ruling. The seal below is rewritten from the contradiction to the
+   * agreement, and it is the SEAL THE RULING ASKED FOR: rows present, no completeness keys, no
+   * claim that every method answered.
    */
-  it("⛔ says every other absent envelope figure and infers only this one — its own rule, 31 lines up", () => {
+  it("says EVERY absent envelope figure including this one — rows present, no claim made", () => {
     const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
 
-    // THE RULE, IN THE CARD'S OWN WORDS. If someone deletes this comment the finding loses its
-    // subject, and that is the right outcome — the contradiction is between two live claims.
+    // THE RULE, IN THE CARD'S OWN WORDS — the sentence the fix was argued from. Kept asserted
+    // because the fallback is the sort of thing a later reader re-adds as an improvement, and
+    // this is what it would have to be deleted past.
     expect(component).toContain("THE PRODUCER DID NOT REPORT IT, and this card may not compute it");
     expect(component).toContain("Said rather");
 
-    // The practice: two absences the card STATES rather than computing.
+    // The practice, now three absences the card STATES rather than computing.
     expect(component).toContain("data-spread-unreported");
     expect(component).toContain("data-range-absent");
+    expect(component).toContain("data-completeness-unstated");
+    expect(COMPETING_MEASURES_ABSENCES).toHaveLength(7);
 
-    // ⛔ And the one it computes instead, in the same file.
-    expect(component).toContain("const asked = num(methods_compared) ?? rows.length;");
+    // ⛔ THE SEAL, BEHAVIOURAL AND IN THE RULING'S OWN TERMS. Three rows, every one of them
+    // answering, and a producer that states nothing: the case where the old code was MOST
+    // confident, because `replied === asked` was true of the survivors whatever had been lost.
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE_NO_COMPLETENESS} />);
+    expect(document.querySelector("[data-completeness-unstated]")).not.toBeNull();
+    // Not the banner either — "3 of 3" is the same claim with a number on it.
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/\bof 3\b/);
+    expect(text).not.toMatch(/all methods answered/i);
+    // ⚠ AND THE CARD IS NOT SIMPLY MUTE, which is how the defect read from outside: it drew, with
+    // its rows and its spread. A silent card would satisfy every negative above.
+    expect(document.querySelectorAll("li")).toHaveLength(3);
+    expect(document.querySelector("[data-spread]")).not.toBeNull();
 
-    // The absence has no marker to be said WITH, which is the structural form of the same point:
-    // six declared absences and not one of them means "how many were asked was not stated".
-    expect(COMPETING_MEASURES_ABSENCES).toHaveLength(6);
-    expect(COMPETING_MEASURES_ABSENCES).not.toContain("data-asked-absent");
-    // `data-incomplete` is the only count-bearing marker and it is NOT that: it is gated on
-    // `!complete`, which the fallback renders false. The control on the claim.
-    expect(COMPETING_MEASURES_ABSENCES).toContain("data-incomplete");
-    expect(component).toContain("{!complete && (");
+    // THE CONTROL, and it is the one that matters: with the pair STATED the new line is gone. The
+    // marker must track the declaration rather than the card's mood — without this, a card that
+    // always said "completeness not stated" would pass the seal above.
+    cleanup();
+    render(<CompetingMeasures rows={SEED()} {...ENVELOPE} />);
+    expect(document.querySelector("[data-completeness-unstated]")).toBeNull();
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+  });
+
+  it("the boolean ALONE is a declaration — `false` with no counts still warns, without figures", () => {
+    // A producer may evaluate completeness and not count: ruling 6 makes the boolean its own
+    // statement. The banner used to interpolate `replied`/`asked` unconditionally, which after
+    // the withdrawal would have printed "null of null" — the failure mode of removing a fallback
+    // rather than replacing it, and the reason this case is driven rather than reasoned about.
+    render(<CompetingMeasures rows={SEED()} spread={1662607.71} all_methods_answered={false} />);
+    const el = document.querySelector("[data-incomplete]");
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toContain("not every method answered");
+    expect(el!.textContent).not.toMatch(/null|undefined|NaN/);
+    // And the unstated line is NOT also drawn — the three states are exclusive.
+    expect(document.querySelector("[data-completeness-unstated]")).toBeNull();
+  });
+
+  it("the COUNTS alone are a declaration too — the grandfathered vocabulary still reads", () => {
+    // `methods_compared`/`methods_answered` are completeness-bearing in their own right (ruling 2
+    // grandfathers them until `completeness`/`total_available` land), so a producer that sends the
+    // pair and no boolean has declared the answer and this card may read it. THIS IS THE LINE
+    // BETWEEN THE TWO RULES: `replied === asked` over the producer's own two numbers is reading a
+    // declaration; the same expression over `rows.length` was inventing one.
+    render(<CompetingMeasures rows={SEED()} methods_compared={4} methods_answered={3} />);
+    expect(document.querySelector("[data-incomplete]")!.textContent).toMatch(/3 of 4/);
+    expect(document.querySelector("[data-completeness-unstated]")).toBeNull();
+
+    cleanup();
+    render(<CompetingMeasures rows={SEED()} methods_compared={3} methods_answered={3} />);
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
+    expect(document.querySelector("[data-completeness-unstated]")).toBeNull();
+
+    // ⚠ HALF THE PAIR IS NOT A DECLARATION. One count says nothing about completeness on its own,
+    // and the tempting reading — compare the one that arrived against the rows — is the withdrawn
+    // fallback wearing a different name.
+    cleanup();
+    render(<CompetingMeasures rows={SEED()} methods_compared={4} />);
+    expect(document.querySelector("[data-completeness-unstated]")).not.toBeNull();
+    expect(document.querySelector("[data-incomplete]")).toBeNull();
   });
 });

@@ -74,11 +74,32 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
   const spreadValue = num(spread);
   const spreadPct = num(spread_percent_of_bac);
 
-  const asked = num(methods_compared) ?? rows.length;
-  const replied = num(methods_answered) ?? answered.length;
-  // TRUSTED FROM THE PRODUCER WHEN STATED, derived only as a fallback — and the fallback is a
-  // count of rows, not a subtraction of figures. See `spreadIsUpstream`.
-  const complete = typeof all_methods_answered === "boolean" ? all_methods_answered : replied === asked;
+  // ⛔ NO FALLBACK TO THE ROWS. Ruled 2026-09-26 (arch): these render UNKNOWN when the producer
+  // did not state them, never a value derived from the rows present.
+  //
+  // What was here fell back to `rows.length` and `answered.length` under a comment calling it
+  // deliberate. The discriminator that ruling ratifies is why it cannot be: a fact travels from
+  // the producer IFF it is a claim about the completeness of the row set, and `methods_compared`
+  // travels precisely because a card counting its own rows can never recover it. Deriving it
+  // from those rows therefore does not approximate the field — it reproduces the truncated set
+  // by construction. Silently lose a row and `asked` collapses to the survivors, `replied ===
+  // asked` goes true, and the card claims a full comparison of the set it cannot see the whole of.
+  //
+  // The producer-side half makes the fallback WORSE rather than safer: `all_methods_answered` is
+  // never `None` any more, so an absent key means the producer declined to evaluate it. Answering
+  // it here would be overruling a declared silence. Absent-means-silent, declared-never-inferred.
+  const asked = num(methods_compared);
+  const replied = num(methods_answered);
+  // THREE STATES, AND THE THIRD IS THE WHOLE POINT — `null` is "the producer did not say", which
+  // is not "yes". Reading `replied === asked` off the producer's OWN two counts is still reading a
+  // declaration, in the grandfathered vocabulary ruling 2 keeps until `completeness` /
+  // `total_available` land; what is withdrawn is computing either side of it from the rows.
+  const complete: boolean | null =
+    typeof all_methods_answered === "boolean"
+      ? all_methods_answered
+      : asked !== null && replied !== null
+        ? replied === asked
+        : null;
 
   // The bar scale is over the ANSWERING methods only. Including a null would put a zero-length
   // bar beside real ones and read as "this method says nothing is left", which is a figure.
@@ -103,7 +124,13 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
               spread {formatAmount(spreadValue, value_unit)}
               {spreadPct !== null ? ` · ${(spreadPct * 100).toFixed(1)}% of reference` : ""}
             </p>
-          ) : replied >= 2 ? (
+          ) : answered.length >= 2 ? (
+            /*
+              THE ROWS PRESENT, not the producer's count — this sentence is about the methods
+              BELOW, so counting them is the honest quantity and never a completeness claim
+              (ruling 1's other half). It also used to read `replied`, which now goes null when
+              the producer states nothing, and would have taken this line down with it.
+            */
             /*
               THE PRODUCER DID NOT REPORT IT, and this card may not compute it. Said rather
               than omitted: the methods below genuinely disagree, so a card that showed the
@@ -141,9 +168,35 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
         of a row they were never shown, and this card does show every row, so this line is the
         belt to that braces.
       */}
-      {!complete && (
+      {complete === false && (
         <p className="font-mono text-[10px] uppercase tracking-widest text-amber-400/80" data-incomplete>
-          {replied} of {asked} methods answered — this is not a full comparison
+          {asked !== null && replied !== null
+            ? `${replied} of ${asked} methods answered — this is not a full comparison`
+            : /*
+                `all_methods_answered: false` WITHOUT THE COUNTS is a real payload — the boolean is
+                its own declaration and does not depend on them. Said without the figures rather
+                than dropped, and rather than filling them in from the rows.
+              */
+              "not every method answered — this is not a full comparison"}
+        </p>
+      )}
+
+      {/*
+        ⛔ AND THE THIRD STATE, WHICH USED TO BE SILENCE. The gate above was `!complete`, so an
+        unstated completeness rendered NOTHING — and nothing is what a full comparison looks like.
+        That is the shape of the defect ruled on: not a wrong number on the card, an all-clear
+        nobody wrote. Absent keys now say so, in the register this repo already uses for a fact the
+        producer did not send (`METHOD_ABSENT_SENTENCE`, `data-spread-unreported`): the absence is
+        on the card as words, because the reader cannot see the absence of a row they were never
+        shown and cannot see the absence of a warning either.
+      */}
+      {complete === null && (
+        <p
+          className="font-mono text-[10px] uppercase tracking-widest text-amber-400/70"
+          data-completeness-unstated
+        >
+          completeness not stated — {rows.length} rows shown, and whether that is every method was
+          not sent
         </p>
       )}
 
