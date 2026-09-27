@@ -84,3 +84,35 @@ go red on a stale pin rather than on your change, and the failure will name our 
 3. **A fleet sha beside the payload.** Fourth round of asking. The 2026-09-26 capture carries no
    producer sha, no `fleet_sha` and no `code_hash`, so the absent `method` block could only be
    diagnosed as a *vintage* by elimination. The next absence will read exactly like this one.
+
+---
+
+## 5. SENT, and arch's sequencing call
+
+Relayed 2026-09-26 to the invincible-agent sessions on this machine, verbatim as arch gave it:
+
+> Frontend-only bump: pin `sha256:6e2fc31db21f718b1aebc73d1cb5fcc2bc72361c0494c03512ce3e0093e3bbd0`
+> (tag `092b0bab…`, not master head `219c19a`, which has no image). Dry run, full-manifest diff,
+> verify by `imageID`. Chris fires.
+
+⚠ **Addressed to two sessions on purpose.** `ListAgents` shows `invincible-agent-67` and
+`invincible-agent-aa`, and neither name says which owns the values file. Rather than guess a
+recipient for a digest instruction, both copies lead with "FOR LANE 1 — ignore if that is not you,
+and say which session is." A misdelivery that announces itself is cheaper than a silent one, and the
+message asks for a dry run and a diff, never a fire: **Chris fires.**
+
+**Sequencing, ruled by arch:** bump now; tonight's two walk defects ride the NEXT digest rather than
+holding a verified image for two fixes not yet built. A frontend bump is cheap and the gate is
+proven. Neither defect is in `6e2fc31d`:
+
+1. **Lot 3 elicitation** — picking a vintage option records it under "what this one accepts" but does
+   not re-issue the question with the slot filled. Expected: a re-ask with `rate_vintage` set. Fix
+   and seal.
+2. **PROGRAM FINANCE STATUS** — a new canvas on that template comes up empty; it should seed six
+   panels and the finance sheet's prompts. **Report before fixing**, by order.
+
+Lot 4 passed every sheet check on the same walk, and the ledger card drew for the first time.
+
+And arch on the pin: a pin chosen from a commit subject rather than a measured green is the same
+"a name is not a measurement" defect this week keeps finding — which is why `546e6bee` was rejected
+despite its subject, and why the pin is the sha the suite was actually run against.
