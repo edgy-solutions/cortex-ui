@@ -110,3 +110,93 @@ export function readTemplateCatalog(raw: unknown): TemplateCatalog {
   if (templates.length === 0) return { status: "empty", unreadable };
   return { status: "ready", templates, unreadable };
 }
+
+/**
+ * ── SEEDABILITY: THE THIRD STATE THE PICKER NEVER HAD ─────────────────────────────────────
+ *
+ * A walk picked PROGRAM FINANCE STATUS and got an empty board. The template is not broken —
+ * `policy/canvases/program_finance.yaml` is ratified, schema-valid, and says in its own header
+ * that it CANNOT seed: `shared_slots: [program]` is declared with nothing binding it, so the
+ * platform's seed route answers 409 (R-005, *"panel(s) consuming shared slot(s) ['program']
+ * that nothing binds yet"*) and the file ends with, verbatim, *"Do not wire it into a seed path
+ * expecting cards."*
+ *
+ * ⛔ CORTEX NEVER SEES THAT 409, BECAUSE CORTEX NEVER ASKS — the create path is local. So the
+ * refusal the producer wrote down never reaches a reader, and the board we draw instead is one
+ * we invented where the platform would have refused and named the reason.
+ *
+ * The evidence was already arriving. `/templates` sends `shared_slots` per row and `readRow`
+ * projects it faithfully to `TemplateRow.sharedSlots` — and NOTHING READ IT. A correct field
+ * with no consumer, which is the defect class this codebase keeps filing against: the picker
+ * had two buckets, offerable and *"cannot be offered: <reason>"* for a file that will not
+ * parse, and a ratified-but-unbindable template fell into the offerable one because there was
+ * nowhere else for it to go.
+ *
+ * ── WHY NON-EMPTY IS ENOUGH, AND WHY THERE IS NO SECOND FLAG ──────────────────────────────
+ *
+ * `sharedSlots` NON-EMPTY means unseedable *from this picker*, with no further question asked,
+ * because the create path binds nothing: `createCanvas` takes a name, a lens, and a template
+ * id, and there is no argument through which a slot could be bound. The binding set is empty by
+ * construction, not by accident — so when ADR-0050 §3 lands and create DOES carry a binding,
+ * this predicate is the one place that has to learn about it.
+ *
+ * A producer-side `seedable: false` would be a THIRD declaration of one truth, after the
+ * slots themselves and the seed route's 409, and this lane has already paid for that shape once
+ * — a pinned seal that went stale while both halves it compared stayed true.
+ */
+export function needsBinding(row: TemplateRow): boolean {
+  return row.sharedSlots.length > 0;
+}
+
+/**
+ * Split the ready menu into what may be offered and what must be NAMED WITH ITS REASON.
+ *
+ * The unseedable rows are not dropped, for the reason the producer already gives for
+ * `unreadable`: *"silently omitting it would make the list SHORTER and nothing would say why,
+ * and a shorter list reads as the complete set."* A reader who came looking for the finance
+ * board must find out that it exists and what it is waiting for.
+ */
+export function partitionTemplates(rows: TemplateRow[]): {
+  offerable: TemplateRow[];
+  unbound: TemplateRow[];
+} {
+  const offerable: TemplateRow[] = [];
+  const unbound: TemplateRow[] = [];
+  for (const row of rows) (needsBinding(row) ? unbound : offerable).push(row);
+  return { offerable, unbound };
+}
+
+/**
+ * Whether a create may carry this template id, and the reason when it may not.
+ *
+ * ⛔ THIS ENUMERATES THE SAFE SET, NOT THE DANGEROUS ONE. It permits exactly two things — no
+ * template at all, and an id the catalog currently offers — so a stale id, an id that never
+ * existed, an id from the `unreadable` list, and an id whose row grew a shared slot since it
+ * was picked ALL refuse by default, without this function having to know their spellings. A
+ * rule written the other way round is total only over the forms somebody thought to list.
+ *
+ * The stale path is reachable, not hypothetical: Cancel leaves `newTemplate` set, so a
+ * selection outlives the form it was made in.
+ *
+ * Returning the reason rather than a boolean is deliberate. A create that silently does nothing
+ * is the defect this repo fixed on the elicitation seam the same day — a reader who clicks and
+ * is told nothing clicks again, or worse, believes it worked.
+ */
+export function refuseTemplateForCreate(
+  templateId: string,
+  catalog: TemplateCatalog,
+): string | null {
+  const id = templateId.trim();
+  if (!id) return null; // a freeform board, which is always allowed
+  const rows = catalog.status === "ready" ? catalog.templates : [];
+  const row = rows.find((r) => r.templateId === id);
+  if (!row) {
+    // Not on the menu we can see. That covers a registry we could not read at all, which is
+    // why the message does not claim the template is missing — only that we cannot offer it.
+    return `${id} is not on offer, so no board was created.`;
+  }
+  if (needsBinding(row)) {
+    return `${row.title || row.templateId} is ratified but needs a binding for ${row.sharedSlots.join(", ")} before it can arrange a board — no board was created.`;
+  }
+  return null;
+}

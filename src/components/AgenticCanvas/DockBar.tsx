@@ -6,6 +6,7 @@ import {
   type CustomCanvas,
 } from "@/store/useStageStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
+import { partitionTemplates, refuseTemplateForCreate } from "@/lib/templateCatalog";
 
 /**
  * DockBar — the canvas dock (ADR-0028 canvas-dock model, Stage 3). Pinned below
@@ -78,8 +79,23 @@ export function DockBar() {
   const [newName, setNewName] = useState("");
   const [newUse, setNewUse] = useState<CanvasUse | "">("");
   const [newTemplate, setNewTemplate] = useState("");
+  /**
+   * Why a create refused, shown in the form. A create that quietly does nothing is the exact
+   * shape this repo fixed on the elicitation seam the same day: an unacknowledged click invites
+   * a second one, and a receipt for a thing that did not happen is worse still.
+   */
+  const [createBlocked, setCreateBlocked] = useState<string | null>(null);
   const templateStatus = useTemplateStore((s) => s.status);
   const catalog = useTemplateStore((s) => s.catalog);
+  /**
+   * The menu, split by whether a board can actually be arranged from it. `sharedSlots` has been
+   * arriving on every row since `/templates` landed and nothing read it — see
+   * `templateCatalog.ts`'s seedability header for what the producer already declared and where.
+   */
+  const { offerable, unbound } =
+    catalog.status === "ready"
+      ? partitionTemplates(catalog.templates)
+      : { offerable: [], unbound: [] };
   const loadTemplates = useTemplateStore((s) => s.load);
   // Fetched when the creation form OPENS, not on mount: the menu is only needed by someone
   // about to choose from it, and the store makes the call once per session regardless.
@@ -105,6 +121,21 @@ export function DockBar() {
   };
 
   const submitCreate = () => {
+    /*
+      ⛔ THE GUARD IS HERE AS WELL AS IN THE MENU, AND THAT IS NOT BELT-AND-BRACES.
+
+      Not offering a button and refusing the action are two different claims, and the second is
+      reachable without the first failing: Cancel does not clear `newTemplate`, so a selection
+      outlives the form it was made in and can be submitted against a catalog that has since
+      moved. `refuseTemplateForCreate` permits only "no template" and an id currently on offer,
+      so every other case — stale, unreadable, unknown, or newly grown a shared slot — refuses
+      by default rather than by being listed.
+    */
+    const refusal = refuseTemplateForCreate(newTemplate, catalog);
+    if (refusal) {
+      setCreateBlocked(refusal);
+      return;
+    }
     createCanvas(
       newName || `Canvas ${canvases.length + 1}`,
       newUse || undefined,
@@ -114,6 +145,7 @@ export function DockBar() {
     setNewName("");
     setNewUse("");
     setNewTemplate("");
+    setCreateBlocked(null);
     setCreating(false);
   };
 
@@ -271,7 +303,10 @@ export function DockBar() {
             ) : (
               <div className="flex flex-wrap gap-1">
                 <button
-                  onClick={() => setNewTemplate("")}
+                  onClick={() => {
+                    setNewTemplate("");
+                    setCreateBlocked(null);
+                  }}
                   data-template-option=""
                   className={`rounded px-2 py-1 text-[9px] font-mono uppercase tracking-wider border transition-colors ${
                     newTemplate === ""
@@ -281,10 +316,13 @@ export function DockBar() {
                 >
                   None
                 </button>
-                {catalog.templates.map((t) => (
+                {offerable.map((t) => (
                   <button
                     key={t.templateId}
-                    onClick={() => setNewTemplate(t.templateId)}
+                    onClick={() => {
+                      setNewTemplate(t.templateId);
+                      setCreateBlocked(null);
+                    }}
                     data-template-option={t.templateId}
                     /* The producer's own words, and the panel count, so a reader picks a board
                        by what it IS rather than by decoding an id. */
@@ -297,6 +335,31 @@ export function DockBar() {
                   >
                     {t.title || t.templateId}
                   </button>
+                ))}
+              </div>
+            )}
+            {/*
+              ── RATIFIED, AND WAITING ON A BINDING ─────────────────────────────────────────
+
+              The third state the picker did not have. These templates parse, validate and are
+              ratified — they simply cannot ARRANGE a board until something binds their shared
+              slots, which the local create path has no way to do. Offered as buttons they drew
+              an empty canvas and looked like the board on offer; dropped, the menu would read as
+              the complete set. So they are named, with the slot they are waiting for, which is
+              the reason the producer already put on the row.
+            */}
+            {unbound.length > 0 && (
+              <div className="mt-1 flex flex-col gap-0.5" data-template-unbound>
+                {unbound.map((t) => (
+                  <div
+                    key={t.templateId}
+                    className="text-[9px] font-mono text-amber-500/80"
+                    data-template-unbound-id={t.templateId}
+                    title={`${t.description || t.templateId} — ${t.panels} panels`}
+                  >
+                    {t.title || t.templateId} — ratified, needs a binding:{" "}
+                    {t.sharedSlots.join(", ")}
+                  </div>
                 ))}
               </div>
             )}
@@ -315,6 +378,13 @@ export function DockBar() {
               </div>
             )}
           </div>
+          {/* The create that did not happen, and why. Not a toast: it sits beside the button
+              that refused, so the reader is looking at it when they reach for that button again. */}
+          {createBlocked && (
+            <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-create-blocked>
+              {createBlocked}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button
               onClick={submitCreate}

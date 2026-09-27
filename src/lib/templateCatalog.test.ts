@@ -127,3 +127,106 @@ describe("the catalog keeps its four states apart", () => {
     expect(c.templates[0].panels).toBe(0);
   });
 });
+
+/**
+ * ── THE FIELD THAT ARRIVED CORRECTLY AND WAS NEVER READ ────────────────────────────────────
+ *
+ * `shared_slots` was projected onto every row and had no consumer, so a ratified template that
+ * cannot arrange a board was offered exactly like one that can, and drew an empty canvas. These
+ * arms are the consumer, and they are here rather than in the component because the decision is
+ * a derivation over producer data, not a rendering.
+ *
+ * Fixtures go through `readTemplateCatalog` on purpose: a hand-built `TemplateCatalog` would let
+ * these arms pass over a shape the wire cannot produce.
+ */
+import {
+  needsBinding,
+  partitionTemplates,
+  refuseTemplateForCreate,
+  type TemplateCatalog,
+} from "./templateCatalog";
+
+const ready = (...rows: Record<string, unknown>[]): TemplateCatalog =>
+  readTemplateCatalog({ composed: true, templates: rows, unreadable: [] });
+
+const BINDABLE = row({
+  template_id: "portfolio_planning",
+  title: "Portfolio planning",
+  shared_slots: [],
+});
+const UNBOUND = row(); // the real shape: program_finance, shared_slots non-empty
+
+describe("a template that cannot be bound cannot be offered", () => {
+  it("reads the slots the producer sent rather than a flag nobody declared", () => {
+    const c = ready(UNBOUND);
+    if (c.status !== "ready") throw new Error("expected ready");
+    expect(needsBinding(c.templates[0])).toBe(true);
+  });
+
+  it("STILL offers a template with no shared slots — the near side is the whole menu", () => {
+    // If this arm goes with the one above, the picker has stopped offering anything at all,
+    // which is a worse outcome than the defect: `>= 0` would refuse every board that works.
+    const c = ready(BINDABLE);
+    if (c.status !== "ready") throw new Error("expected ready");
+    expect(needsBinding(c.templates[0])).toBe(false);
+  });
+
+  it("splits the menu and loses nothing — counted, not merely contained", () => {
+    // Asserted by ID AND by length in both buckets. A containment check cannot see a row that
+    // went missing or one that landed in both, and both are the plausible mistakes here.
+    const c = ready(BINDABLE, UNBOUND);
+    if (c.status !== "ready") throw new Error("expected ready");
+    const { offerable, unbound } = partitionTemplates(c.templates);
+    expect(offerable.map((t) => t.templateId)).toEqual(["portfolio_planning"]);
+    expect(unbound.map((t) => t.templateId)).toEqual(["program_finance"]);
+    expect(offerable.length + unbound.length).toBe(c.templates.length);
+  });
+
+  it("names the slot it is waiting for, so the reason is the producer's and not ours", () => {
+    const refusal = refuseTemplateForCreate("program_finance", ready(UNBOUND));
+    expect(refusal).toMatch(/needs a binding for program_id/);
+    expect(refusal).toMatch(/no board was created/);
+  });
+});
+
+describe("the create permits the safe set and refuses everything else by default", () => {
+  it("allows a freeform board — no template is not a bad template", () => {
+    expect(refuseTemplateForCreate("", ready(BINDABLE))).toBeNull();
+    // And whitespace is the same case, not an id: `"  "` must not reach the find as a name.
+    expect(refuseTemplateForCreate("   ", ready(BINDABLE))).toBeNull();
+  });
+
+  it("allows a template the catalog is currently offering", () => {
+    expect(refuseTemplateForCreate("portfolio_planning", ready(BINDABLE))).toBeNull();
+  });
+
+  it("refuses an id the catalog never mentioned, without knowing its spelling", () => {
+    expect(refuseTemplateForCreate("invented_board", ready(BINDABLE))).toMatch(/not on offer/);
+  });
+
+  it("refuses an id that is only in the unreadable list", () => {
+    // It IS ratified and it is NOT offerable, and the safe-set rule catches it without a second
+    // branch — which is the point of enumerating what may pass rather than what may not.
+    const c = readTemplateCatalog({
+      composed: true,
+      templates: [BINDABLE],
+      unreadable: [{ template_id: "half_written", reason: "yaml: unexpected token" }],
+    });
+    expect(refuseTemplateForCreate("half_written", c)).toMatch(/not on offer/);
+  });
+
+  it("refuses a selection that outlived the catalog it was made from", () => {
+    // Reachable, not hypothetical: Cancel leaves the selection set, so an id picked while the
+    // registry answered can be submitted after it stopped answering. We cannot confirm it, so
+    // we do not carry it — and we say which id we could not confirm.
+    expect(refuseTemplateForCreate("portfolio_planning", { status: "unreachable" })).toMatch(
+      /portfolio_planning is not on offer/,
+    );
+  });
+
+  it("still lets a freeform board through when the registry is unreachable", () => {
+    // The near side of the arm above. Refusing here would make an unreachable registry block
+    // every board in the app, template or not.
+    expect(refuseTemplateForCreate("", { status: "unreachable" })).toBeNull();
+  });
+});

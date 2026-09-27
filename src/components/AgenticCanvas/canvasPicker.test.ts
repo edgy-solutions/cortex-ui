@@ -1,5 +1,6 @@
 /**
- * THE NEW-CANVAS PICKER OFFERS LENSES, AND HAS NEVER OFFERED TEMPLATES.
+ * THE LENS ROW OFFERS LENSES, AND HAS NEVER OFFERED TEMPLATES. (The form's separate template
+ * menu came later — see the last section, and do not read this file as covering it.)
  *
  * A live walk found "Portfolio Planning and no Program Finance" and asked the right question:
  * is that list a derivation or a literal correct-when-written? **It was a literal**, and a
@@ -24,13 +25,21 @@
  * there is nothing to derive FROM, so the compiler is the closest thing to a population check
  * available — verified by adding a lens and watching the build go red, not by assertion.
  *
- * ── WHAT IS STILL OPEN, AND IS A RULING RATHER THAN A DEFECT ──────────────────────────────
+ * ── WHAT WAS OPEN HERE IS NOW RULED, AND THIS HEADER OUTLIVED ITS OWN BODY ────────────────
  *
- * `template_id` is set in exactly ONE place — the seed path. `createCanvas` cannot set one, so
- * **there is no way for a person to hand-build a board with any template at all**, finance or
- * portfolio. Whether the picker should offer arrangements, and whether a finance board should
- * have its own lens, are both product rulings nobody has made. Recorded here so the absence is
- * a decision somebody can find rather than an omission.
+ * It used to end: *"`template_id` is set in exactly ONE place — the seed path. `createCanvas`
+ * cannot set one, so there is no way for a person to hand-build a board with any template at
+ * all."* That was true when written and stopped being true when `/templates` landed with
+ * R-039's read path — and the last `it` in this file had ALREADY been inverted to say so while
+ * this paragraph still said the opposite. **A file arguing with itself is how a wrong premise
+ * survives**, so the stale half is replaced rather than annotated.
+ *
+ * The settled state: the form offers a LENS row (this file's subject) and, separately, the
+ * ratified TEMPLATE menu. `createCanvas` takes a `templateId` and stamps it. Which templates
+ * may be offered is not a free choice either — a ratified template whose shared slots nothing
+ * binds cannot arrange a board, and offering one drew an empty canvas on a live walk. That
+ * partition and its rendering are sealed in `dockBarTemplatePicker.test.tsx` and
+ * `src/lib/templateCatalog.test.ts`; nothing about it belongs in here, which is about lenses.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -104,10 +113,37 @@ describe("lenses and templates are different vocabularies", () => {
   });
 
   it("and the picker offers what the SERVER ratified, not a hardcoded list", () => {
-    // The whole point of the read path: a menu built from cortex's own constants would drift
-    // from the registry silently — the two-declarations shape found three times this week.
+    /*
+      The whole point of the read path: a menu built from cortex's own constants would drift from
+      the registry silently — the two-declarations shape found three times this week.
+
+      ⛔ RE-KEYED ONTO THE SUBJECT, BECAUSE THE SPELLING WAS NOT THE CLAIM. This asserted the
+      literal `catalog.templates.map`, and it went red the day the menu started being FILTERED
+      before it was rendered — an improvement, keyed out by an assertion pinned to one phrasing.
+      What must hold is that the rows come from the store and that no template id is written down
+      here; how they are narrowed on the way to the screen is the business of the seals that
+      cover the narrowing.
+    */
     const dock = src("DockBar.tsx");
     expect(dock).toContain("useTemplateStore");
-    expect(dock).toContain("catalog.templates.map");
+    // The rows are the store's, whatever the local name for them is.
+    expect(dock).toMatch(/catalog\.templates/);
+    /*
+      And no template id is spelled in this component — that is what "hardcoded list" means.
+
+      ⚠ THE FLOOR IS NOT DECORATION. `KNOWN_TEMPLATE_IDS` has exactly ONE member today, and it is
+      `portfolio_planning`, which this loop must skip because the lens collides with it by design.
+      So the obvious spelling of this check — iterate the known ids, skip the collision — is a
+      loop over an EMPTY list: green forever, measuring nothing. The population is widened to the
+      ids cortex can name at all and then asserted to be non-empty, so the check goes red if it
+      ever stops having something to check.
+    */
+    const spellable = [...new Set([...KNOWN_TEMPLATE_IDS, PROGRAM_FINANCE_TEMPLATE_ID])].filter(
+      (id) => id !== "portfolio_planning",
+    );
+    expect(spellable.length).toBeGreaterThan(0);
+    for (const id of spellable) {
+      expect(dock, `${id} is written into the picker`).not.toContain(`"${id}"`);
+    }
   });
 });
