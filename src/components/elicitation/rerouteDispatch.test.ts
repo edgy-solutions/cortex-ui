@@ -132,3 +132,101 @@ describe("the phrase and the pick stay separate", () => {
     expect(result.blocked).toMatch(/no words/);
   });
 });
+
+/**
+ * AN ASK WITH NO QUESTION BEHIND IT — the walk of 2026-09-26, lot 3.
+ *
+ * Picking a vintage recorded the choice under the menu that says what this one accepts, and no
+ * new question ever arrived. Nothing was broken in the click, the resolve or the post: a BIND
+ * sends `sub_query` AS THE TURN'S WHOLE PHRASE, and the ask that raised it had none.
+ *
+ * ── WHY EVERY SEAL IN THIS DIRECTORY WAS GREEN ────────────────────────────────────────────
+ *
+ * Measured across the elicitation suite: every fixture that gets CLICKED carries a non-empty
+ * `sub_query`, and the one fixture without it — the refusal ask in `askFromRefusal.test.tsx`,
+ * the only shape matching what the producer actually emits — is rendered and read and never
+ * clicked. Two disjoint populations, so no case existed where the phrase was absent AND a pick
+ * was made. The fixture covered what it tripped over.
+ *
+ * ── AND IT IS THE PRODUCER'S SHAPE, NOT AN INVENTED ONE ───────────────────────────────────
+ *
+ * Read at `agent_fleet/presentation_agent/main.py` on 2026-09-26, not from a message:
+ * `_render_refusal_menu` returns `slot`, `options`, `option_source`, `reason`, `message`. No
+ * `sub_query`, and no `accepted_slots` either — see the note on the last case, which is the
+ * quieter defect this loud one was hiding.
+ */
+describe("an ask that carries no phrase cannot be re-asked, and says so", () => {
+  /** The refusal ask as the producer projects it. Byte-for-byte the fields it emits, no more. */
+  const REFUSAL = ask({
+    slot: "rate_vintage",
+    options: [{ value: "2022-02-01", label: "2022-02-01" }],
+    option_source: "refusal",
+    reason: "not_in_model",
+    message: "no rate set for fiscal year 2022 at vintage 2021-02-01",
+    sub_query: "",
+  });
+
+  it("refuses a BIND whose ask has no sub_query, instead of posting an empty turn", () => {
+    const send = vi.fn();
+    const result = dispatchReroute(bind({ rate_vintage: "2022-02-01" }), REFUSAL, send);
+    // NOT SENT, and this is the part that was happening anyway: the send path drops an empty
+    // phrase, so the post was made and discarded one layer down with nothing said.
+    expect(send).not.toHaveBeenCalled();
+    expect(result.blocked).toMatch(/without the question it came from/);
+  });
+
+  it("refuses a RESPEAK the same way — the words are not the turn", () => {
+    // `resolveAsk` sets a RESPEAK's query to `ask.sub_query` too, so answering a refusal ask in
+    // WORDS lands in the identical empty turn. Guarding only the menu path would have left half
+    // the defect in place, on the arm a reader falls back to when the menu does not fit.
+    const send = vi.fn();
+    const result = dispatchReroute(
+      { action: RESPEAK, slots: {}, query: "", slot: "rate_vintage", spoken_answer: "2022-02-01" },
+      REFUSAL,
+      send,
+    );
+    expect(send).not.toHaveBeenCalled();
+    expect(result.blocked).toMatch(/without the question it came from/);
+  });
+
+  it("still sends when the phrase IS there — the guard is on the phrase, not on refusal asks", () => {
+    // THE NEAR SIDE OF THE BRANCH, on purpose. A guard keyed on `option_source === "refusal"`
+    // would pass every case above and silence a refusal ask the day the producer starts
+    // carrying the phrase. The subject is the phrase; who raised the ask is not the question.
+    const send = vi.fn();
+    const result = dispatchReroute(
+      bind({ rate_vintage: "2022-02-01" }),
+      ask({ ...REFUSAL, sub_query: "what rate applies for fiscal year 2022" }),
+      send,
+    );
+    expect(result.blocked).toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toBe("what rate applies for fiscal year 2022");
+  });
+});
+
+describe("a turn the send path drops is reported, not assumed", () => {
+  it("reports a BIND the send path refused", () => {
+    // `sendMessage` returns false while a turn is in flight. The card's options are live during
+    // a stream, so this is reachable by an ordinary click and not only by another caller — and
+    // before the send reported it, the pick vanished and the card locked on it.
+    const result = dispatchReroute(bind({ capability_id: "C1" }), ask(), () => false);
+    expect(result.blocked).toMatch(/still in flight/);
+  });
+
+  it("reports a RESPEAK the send path refused", () => {
+    const result = dispatchReroute(
+      { action: RESPEAK, slots: {}, query: "what is the capability path", slot: "capability_id", spoken_answer: "meridian" },
+      ask({ options: [] }),
+      () => false,
+    );
+    expect(result.blocked).toMatch(/still in flight/);
+  });
+
+  it("treats a send that reports NOTHING as having gone", () => {
+    // `void` is the test-double case and the pre-existing callers. Only `false` is a claim of a
+    // drop, so a send with no opinion must not be read as one — otherwise every unwired mount
+    // in this suite would start reporting a failure that did not happen.
+    expect(dispatchReroute(bind({ capability_id: "C1" }), ask(), vi.fn()).blocked).toBeUndefined();
+  });
+});

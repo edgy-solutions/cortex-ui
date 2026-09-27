@@ -9,6 +9,9 @@ import {
   type AskCardPayload,
   type Reroute,
 } from "./Elicitation.contract";
+// TYPE ONLY, and the split holds: this card still dispatches nothing and takes no hook. What it
+// imports is the SHAPE of the answer its injector gives back.
+import type { DispatchResult } from "./rerouteDispatch";
 
 /**
  * The ask, rendered inline — a question, never an answer.
@@ -84,8 +87,15 @@ export function AskCard({
   pending,
 }: {
   component: unknown;
-  /** Where an answered ask goes. Injected so this component dispatches nothing itself. */
-  onReroute?: (reroute: Reroute, ask: AskCardPayload) => void;
+  /**
+   * Where an answered ask goes. Injected so this component dispatches nothing itself.
+   *
+   * IT REPORTS BACK NOW, and only so this card knows whether to lock. The REASON is rendered by
+   * the wrapper that owns the dispatch — one fact, one place — so nothing here reads `blocked`
+   * for anything but that decision. A `void` return still means it went: an unwired card
+   * dispatches nothing and is not claiming a drop.
+   */
+  onReroute?: (reroute: Reroute, ask: AskCardPayload) => DispatchResult | void;
   /** True while the turn this card started is still in flight. Supplied by the wrapper. */
   pending?: boolean;
 }) {
@@ -156,10 +166,17 @@ export function AskCard({
     try {
       setRefusal(null);
       const reroute = resolveAsk(ask, value);
-      onReroute?.(reroute, ask);
-      // LOCKED ONLY AFTER THE RE-ROUTE RESOLVED. A refused pick throws above and never reaches
-      // here, so the card cannot lock on an answer that was never sent — which would be the
-      // worst of both, showing a choice as made while nothing carried it.
+      const outcome = onReroute?.(reroute, ask);
+      // ── LOCKED ONLY ON A DISPATCH THAT WENT ────────────────────────────────────────────────
+      //
+      // The sentence that used to be here — "the card cannot lock on an answer that was never
+      // sent" — was TRUE OF ONE PATH ONLY. A pick outside the menu throws from `resolveAsk` and
+      // never reaches the lock, which is what it was written about; but a pick the dispatch
+      // could not CARRY returned quietly, and this ran anyway. Walked 2026-09-26: a refusal ask
+      // with no `sub_query`, the pick recorded under the menu that was supposed to be what this
+      // one accepts, and no new question. That is the worst of both — a choice shown as made
+      // while nothing carried it — and it is now the one case the lock is conditioned on.
+      if (outcome?.blocked) return;
       const picked = ask.options.find((o) => o.value === reroute.slots[ask.slot]);
       setAnswered({
         slot: ask.slot,

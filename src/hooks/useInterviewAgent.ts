@@ -697,7 +697,22 @@ export function useInterviewAgent() {
     },
   });
 
-  /** What one turn carries. An answer rides BESIDE the phrase, never inside it. */
+  /**
+   * What one turn carries. An answer rides BESIDE the phrase, never inside it.
+   *
+   * ── IT RETURNS WHETHER THE TURN WENT OUT, AND THAT RETURN IS THE POINT ────────────────────
+   *
+   * Both guards below are right. A second turn while one streams must not queue, and an empty
+   * phrase is not a turn. What was wrong is that a `void` send made them INVISIBLE to every
+   * caller: a menu card dispatched a pick, got nothing back, and locked itself showing the
+   * choice as made while nothing carried it. Walked 2026-09-26 on a `rate_vintage` refusal ask
+   * — the producer's refusal projection carries no `sub_query`, so the phrase was empty, this
+   * returned here, and the only thing that happened on screen was the card going quiet.
+   *
+   * ABSENCE OF A REPORT IS NOT A REPORT. Every early return in this function is now legible to
+   * the caller, including the next one anyone adds — which is why the flag is "did it go"
+   * rather than one boolean per guard.
+   */
   const sendMessage = useCallback(
     (
       userInput: string,
@@ -705,8 +720,8 @@ export function useInterviewAgent() {
       spoken?: SpokenAnswer,
       answeredWith?: AnsweredWith,
       answeringArtifactId?: string,
-    ) => {
-      if (mutation.isPending || !userInput.trim()) return;
+    ): boolean => {
+      if (mutation.isPending || !userInput.trim()) return false;
       mutation.mutate({
         userInput: userInput.trim(),
         boundSlots,
@@ -714,6 +729,7 @@ export function useInterviewAgent() {
         answeredWith,
         answeringArtifactId,
       });
+      return true;
     },
     [mutation]
   );

@@ -148,3 +148,49 @@ describe("a refusal is not an answer", () => {
     expect(document.querySelector("[data-ask-chosen]")).toBeNull();
   });
 });
+
+/**
+ * AND THE AFTER STATE IS A CLAIM, so it must not be drawn for a pick that never left.
+ *
+ * The comment at the lock used to say the card cannot lock on an answer that was never sent.
+ * That was true of ONE path — a pick outside the menu throws from `resolveAsk` and never reaches
+ * it — and false of the other: a dispatch that could not carry the pick returned quietly and the
+ * lock ran anyway. Walked 2026-09-26 on a `rate_vintage` refusal ask with no `sub_query`: the
+ * choice was marked, the options went dead, a receipt appeared, and nothing had been sent.
+ *
+ * A LOCKED CARD IS A WORSE FAILURE THAN A LIVE ONE. An unacknowledged click invites a second
+ * click, which is how the previous defect in this file was found; a locked card with a receipt
+ * tells the reader the system HAS their answer and leaves them waiting on a turn that never ran.
+ */
+describe("a dispatch that could not carry the pick leaves the card live", () => {
+  const blocked = () => ({ blocked: "This card arrived without the question it came from." });
+
+  it("draws no receipt and marks nothing when the dispatch reports blocked", () => {
+    render(<AskCard component={card({ sub_query: "" })} onReroute={blocked} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inventory Visibility" }));
+
+    expect(document.querySelector("[data-ask-answered]"), "a receipt for an unsent pick").toBeNull();
+    expect(document.querySelector("[data-ask-chosen]"), "marked as chosen but unsent").toBeNull();
+  });
+
+  it("keeps every option live, so the reader can pick again once it can be carried", () => {
+    render(<AskCard component={card({ sub_query: "" })} onReroute={blocked} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inventory Visibility" }));
+
+    for (const b of document.querySelectorAll("[data-ask-option]")) {
+      expect((b as HTMLButtonElement).disabled, `${b.textContent} went dead on an unsent pick`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("STILL locks when the dispatch reports nothing — void is not a drop", () => {
+    // The near side, and it is load-bearing here: every unwired mount in this suite returns
+    // undefined, so a lock conditioned on a truthy result rather than on `blocked` would stop
+    // acknowledging every pick in the app and read as the defect this file was opened for.
+    render(<AskCard component={card()} onReroute={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Inventory Visibility" }));
+
+    expect(document.querySelector("[data-ask-answered]")).toBeTruthy();
+  });
+});

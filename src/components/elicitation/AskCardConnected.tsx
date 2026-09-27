@@ -36,6 +36,9 @@ export function AskCardConnected({
             sendMessage(query, boundSlots, spoken, answeredWith, answeringArtifactId),
           );
           setBlocked(result.blocked ?? null);
+          // RETURNED, NOT JUST RENDERED. The card locks on this and must not lock on a pick the
+          // dispatch could not carry; the amber line above is for the reader, this is for the card.
+          return result;
         }}
       />
       {blocked && (

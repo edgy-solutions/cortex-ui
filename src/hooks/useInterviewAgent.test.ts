@@ -209,13 +209,47 @@ describe("useInterviewAgent — turn start", () => {
     // true for the whole stream — so the second keystroke produces no user message at all.
     const r = mount();
     await startTurn(r, "first");
+    let went: boolean | undefined;
     await act(async () => {
-      r.result.current.sendMessage("second");
+      went = r.result.current.sendMessage("second");
       await flush();
     });
 
     expect(transport.calls).toBe(1);
     expect(messages().filter((m) => m.role === "user").map((m) => m.content)).toEqual(["first"]);
+    // AND IT SAYS SO. Dropping the turn is right; dropping it silently is what let a menu card
+    // lock itself on a pick that never left. The caller's only way to know is this return.
+    expect(went, "the drop was not reported to the caller").toBe(false);
+  });
+
+  it("an empty phrase is not a turn, and the caller is told", async () => {
+    // The other early return, and the one the 2026-09-26 walk came through: a BIND sends the
+    // ask's `sub_query` as the whole phrase, the producer's refusal projection carries none, so
+    // the turn arrived here empty. `false` is what makes that visible one layer up.
+    const r = mount();
+    let went: boolean | undefined;
+    await act(async () => {
+      went = r.result.current.sendMessage("   ");
+      await flush();
+    });
+
+    expect(transport.calls).toBe(0);
+    expect(messages().filter((m) => m.role === "user")).toEqual([]);
+    expect(went, "an empty phrase was reported as sent").toBe(false);
+  });
+
+  it("a turn that DOES go out reports that it went", async () => {
+    // The near side. A `sendMessage` that returned false unconditionally would satisfy both
+    // cases above and block every answer in the app while reporting a reason that is not true.
+    const r = mount();
+    let went: boolean | undefined;
+    await act(async () => {
+      went = r.result.current.sendMessage("first");
+      await flush();
+    });
+
+    expect(transport.calls).toBe(1);
+    expect(went).toBe(true);
   });
 
   it("cancelStream aborts the signal the transport was handed — not a detached one", async () => {
