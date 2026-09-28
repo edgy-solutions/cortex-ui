@@ -869,27 +869,43 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     expect(transport.request!.answering_artifact_id).toBe("prev-answer");
   });
 
-  it("⛔ AND THE SERVER REFUSES IT — the arm above is a seal over a discarded field", async () => {
+  it("⛔ AND THE SERVER'S ANSWER TURNS ON THE GRAPH — the arm above seals a field that is now kept", async () => {
     /*
       THE OUTCOME, BESIDE THE SEND, MEASURED ON THE BODY THE HOOK REALLY POSTS.
 
       Every other arm in this describe asserts WHICH id is claimed. None asked whether the claim
-      survives, and `gateway.py` honours it only when the same turn carries a pick or typed words:
+      survives. When this arm was written `gateway.py` honoured it only when the same turn carried a
+      pick or typed words:
 
           _answers_something = bool(request.bound_slots) or bool(request.spoken_answer)
 
-      A composer turn carries neither, by design, so the id sealed one arm above is nulled before
-      the route reuse, the inherited chain slots and `derived_from_artifact_id` all read it. The
+      A composer turn carries neither, by design, so the id sealed one arm above was nulled before
+      the route reuse, the inherited chain slots and `derived_from_artifact_id` ever read it. The
       verdict is asserted here rather than in `lineageHonoured.test.ts` alone because that file
       reassembles a body from the three spread functions; this one has the real request in hand,
       so it cannot agree with me about what a composer turn posts.
 
-      WHY IT ASSERTS THE REFUSAL RATHER THAN THE FIX: satisfying the guard means posting
+      WHY IT ASSERTED THE REFUSAL RATHER THAN THE FIX: satisfying that guard meant posting
       `spoken_answer`, which the gateway pairs with `spoken_slot`, and a composer turn has no slot
       name to give it. Inventing one would feed the resolution ladder a slot nobody resolved —
-      trading a missing lineage arrow for a wrong route. Whether prose typed into the composer
-      should count as answering the drawn card is the architect's call; this arm goes RED the day
-      it is ruled either way, which is the only honest way to hold someone else's decision.
+      trading a missing lineage arrow for a wrong route. So the question went to the architect, and
+      this arm said it "goes RED the day it is ruled either way, which is the only honest way to
+      hold someone else's decision."
+
+      ⛔ IT WAS RULED, AND THIS ARM DID NOT GO RED. THAT IS THE MORE IMPORTANT FINDING.
+
+      `invincible-agent` d3944da8 (2026-09-27) widened the rule: prose naming an ask IS honoured,
+      provided the graph vouches that the ask is this caller's, while the pre-resolved route keeps
+      the narrow predicate. This arm asserted `lineageClaimVerdict(body) === "refused"` — and
+      `lineageClaimVerdict` is cortex's own COPY of the producer's rule. So on the day the producer
+      moved, the arm compared the mirror against itself and passed. A tripwire pinned to a mirror
+      cannot report that the mirror is stale; what reddened were the arms in
+      `lineageHonoured.test.ts` that read the producer's source live.
+
+      The lesson is kept where it was learned rather than only in the report: an arm that means to
+      hold someone else's decision has to read THEIR artifact. This one reads the hook's real
+      request, which is its job and is why it stays — but the verdict half of it is now a mirror
+      check, and the live seal is what holds the producer.
     */
     foreground(drawn());
     const r = mount();
@@ -898,7 +914,11 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     expect(body.answering_artifact_id).toBe("prev-answer"); // the claim really is posted
     expect(transport.request).not.toHaveProperty("bound_slots");
     expect(transport.request).not.toHaveProperty("spoken_answer");
-    expect(lineageClaimVerdict(body)).toBe("refused");
+    // `ownership_decides`, not `honoured`: the widened arm pays for itself with a graph read that
+    // only the server can do. For a card cortex drew this turn that read should pass — but "should"
+    // is not something a client can assert, and cortex's own ordering seal below (the pending row
+    // landing after the drawn card is read) is exactly the window where it might not.
+    expect(lineageClaimVerdict(body)).toBe("ownership_decides");
   });
 
   it("an answered ask IS honoured, so the refusal above is about the composer and not the field", async () => {
