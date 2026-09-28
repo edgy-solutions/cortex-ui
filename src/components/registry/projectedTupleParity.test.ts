@@ -198,10 +198,18 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
    * rather than trusting the fixture — which is the cheap guard the producer's reasoning implies
    * and neither side had written down.
    *
-   * RECORDED, NOT PATCHED, on both sides. Widening `MethodBlock` here and widening that allowlist
-   * there are two halves of one ruling; no order covers either, and rulings originate in
-   * invincible-agent. A wider producer with no reader is the mirror of a wider reader with no
-   * renderer.
+   * ⛔ THE READER HALF IS NOW DONE; THE PRODUCER HALF IS NOT. This paragraph used to say "no order
+   * covers either", and half of that went stale on 2026-09-27: an order did arrive for the reader,
+   * and `MethodBlock` now carries `unit`, `bound`, `bound_defaulted` and `producer_sha` with their
+   * JSON types, sealed against the producer's own executed `model_dump` in
+   * `src/lib/methodBlockPacketCapture.json`. So "a wider producer with no reader" is no longer the
+   * standing state — this is a wider producer WITH a reader, and the asymmetry has moved.
+   *
+   * What is still open is the other half, and it is the one that needs a ruling rather than a
+   * reader: whether a method block's `inputs` may restate a fact the rows already carry, and hence
+   * whether the projector's allowlist should widen. Rulings originate in invincible-agent, so this
+   * side records the question and does not number an answer. The seal below is unchanged either
+   * way — it asserts what is on the wire, not what ought to be.
    */
   it.skipIf(MEASURES.length === 0 || FOUND.length === 0)(
     "⛔ the withheld count is still withheld — but the method block restates two facts the rows carry",

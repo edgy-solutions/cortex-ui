@@ -10,7 +10,8 @@
  *
  *   1. THE CARD AS RENDERED    — the live DOM, verbatim, with the page's own CSS inlined.
  *   2. THE FULL PAYLOAD        — every leaf value, at its path, UNFORMATTED.
- *   3. THE PRODUCER'S METHOD   — formula, inputs, bound. Or the sentence. See below.
+ *   3. THE PRODUCER'S METHOD   — formula, inputs (with units), bound, bound_defaulted,
+ *                                producer_sha. Or the sentence. See below.
  *   4. PROVENANCE              — persona, verb, engine, roll sha, timestamp, question asked.
  *
  * Section 2 exists BECAUSE of section 1, not beside it. The card formats for a reader:
@@ -55,27 +56,122 @@
  * than this one.
  */
 
+// A TYPE-ONLY import, so nothing about `src/api` reaches this module at runtime — the whole file is
+// still a leaf. It is imported rather than restated because `MethodInputValue` is the wire's union
+// and a second copy of a union is a second thing to keep in step. See `meshSdkTypes.ts`, which
+// carries the reason the union must not be flattened to `string`.
+import type { MethodInputValue, WireMethodBlock } from "@/api/meshSdkTypes";
+
 /** The exact words drawn where a method block would be, when the producer supplied none. */
 export const METHOD_ABSENT_SENTENCE = "method not supplied";
 
 /** Drawn for any single provenance line the artifact did not carry. */
 export const ABSENT_MARK = "absent";
 
-/** One named input to a formula, as the producer states it. Both sides verbatim. */
+/** Drawn where a tri-state flag's third state is the answer: the producer did not say. */
+export const NOT_STATED_MARK = "not stated";
+
+/**
+ * One named input to a formula, as the producer states it. Both sides verbatim.
+ *
+ * ⛔ `value` KEEPS ITS JSON TYPE (ordered 2026-09-27, from ca's packet of 2026-09-26). It used to
+ * be `string`, stringified by `formatLeaf` in the reader, and that is precisely the loss
+ * `meshSdkTypes.ts` names: "a reader that receives `"true"` cannot tell it from a producer that
+ * sent the word." Formatting now happens at the RENDER edge, where it belongs, and this type is
+ * `MethodInputValue` — the same union the wire mirror declares, imported rather than restated so
+ * the two cannot drift apart by being written twice.
+ */
 export interface MethodInput {
   name: string;
-  value: string;
+  /**
+   * The producer's scalar, by identity. A value that is NOT a JSON scalar is off contract; it is
+   * kept as its `formatLeaf` text rather than dropped, because an input the reader cannot type is
+   * still an input the reader must be able to see. A MISSING value reads as the distinct text
+   * `"undefined"` for the same reason — see `formatLeaf`.
+   */
+  value: MethodInputValue;
+  /**
+   * ⛔ `null` IS "NO UNIT STATED", NEVER "DIMENSIONLESS", and never dropped. Mirrors
+   * `WireMethodInput.unit`: both an explicit `null` and an absent key arrive and are the same
+   * state, so both read as `null` here. Blank reads as `null` too — a blank unit is neither state,
+   * and this side must not invent a third.
+   */
+  unit: string | null;
 }
 
 /**
  * The producer's account of how it computed the figures on the card.
- * `formula` is required — see the header. `bound` is null when the producer stated none.
+ *
+ * `formula` is required — see the header. Every other field is nullable because this is a
+ * DISPLAY type read from a possibly-off-contract producer, not the wire contract: the wire's
+ * `producer_sha` is required and non-blank, and a block that omits it is still a block worth
+ * drawing with the omission visible. That asymmetry is deliberate — refusing the block would
+ * hide the formula to punish a missing provenance line.
+ *
+ * ⛔ THE FIELD TYPES ARE THE WIRE'S, NOT A REFORMATTING OF THEM. `bound` is a number, so a bound
+ * of `0` is a bound and not a blank; `bound_defaulted` is a strict TRI-STATE, so "the producer did
+ * not say" cannot be read as "the caller chose it". See `WireMethodBlock` for what each state means
+ * upstream — this type exists to carry those states through, not to collapse them.
+ *
+ * ⚠ AND THE PAIR IS NOW ENFORCED UPSTREAM, WHICH DOES NOT MAKE THIS READER'S BRANCHES DEAD. As of
+ * 2026-09-27 the mesh SDK carries a `model_validator` requiring `(bound is None) ==
+ * (bound_defaulted is None)` — so "a flag with no bound" and "a bound with no flag" are refused at
+ * the producer rather than merely discouraged, which answers the XOR question this lane had open
+ * from the packet. The reader still reads the two independently, on purpose: the combinations the
+ * validator forbids are exactly what an OFF-CONTRACT or older producer emits, and a reader that
+ * assumed the pair agreed would draw a confident half-statement instead of showing the halves. The
+ * branch arms covering those combinations are claims about this reader, NOT about what the wire may
+ * carry. ⚠ The mirror does not know about the validator yet: `meshSdkParity.json` pins
+ * `b0abd3b7`, which predates it. Whoever bumps that pin re-extracts, and that is when the XOR can
+ * become a seal here rather than a sentence.
+ *
+ * ⚠ THE FIELD NAMES ARE THE WIRE'S TOO, DELIBERATELY — `bound_defaulted`, not `boundDefaulted`,
+ * against this file's own TS habit. A camelCase rename would force the seal on "which wire fields
+ * survive the reader" to carry a hand-written wire→display mapping, and a hand-written list is a
+ * population that cannot notice a field the wire GAINS. Spelled the wire's way, the census is
+ * `keyof WireMethodBlock` against the read block and needs no list. `boundUnreadable` is the one
+ * field with no wire counterpart and is camelCase on purpose, so the census subtracts exactly the
+ * thing that is ours.
  */
 export interface MethodBlock {
   formula: string;
   inputs: MethodInput[];
-  bound: string | null;
+  /** `null` = the producer stated no bound. A numeric `0` is a STATED bound, not an absence. */
+  bound: number | null;
+  /**
+   * The verbatim text of a bound that was PRESENT but did not read as a number — off contract
+   * upstream (`Optional[float]`), and therefore exactly the case that must not disappear. `null`
+   * when `bound` read cleanly or when the producer stated none, so "stated nothing" and "stated
+   * something unreadable" stay distinguishable at the render edge.
+   */
+  boundUnreadable: string | null;
+  /** `true` = the producer's own default · `false` = the caller chose it · `null` = did not say. */
+  bound_defaulted: boolean | null;
+  /** Which code produced the figure. `null` = the producer sent none; never a blank. */
+  producer_sha: string | null;
 }
+
+type _Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type _Assert<T extends true> = T;
+
+/**
+ * ⛔ THE CENSUS OF WHAT THE READER CARRIES, AT COMPILE TIME, KEYED ON THE WIRE.
+ *
+ * The population is `keyof WireMethodBlock` — not a list written here, which is the shape that
+ * cannot notice a field the wire GAINS. Add `unit_system` upstream and this goes red the next time
+ * anything type-checks; hand-pick five names instead and it stays green forever.
+ *
+ * Read as: no wire field is missing from the display block (first), and the display block invents
+ * exactly one field of its own (second, and it is named, so a silent sixth cannot hide behind a
+ * `never`). Both directions, because "the reader dropped one" and "the reader grew one nobody
+ * declared" are different defects and one assertion sees only the first.
+ */
+export type _reader_carries_every_wire_field = _Assert<
+  _Exactly<Exclude<keyof WireMethodBlock, keyof MethodBlock>, never>
+>;
+export type _reader_adds_only_boundUnreadable = _Assert<
+  _Exactly<Exclude<keyof MethodBlock, keyof WireMethodBlock>, "boundUnreadable">
+>;
 
 /** One leaf of the payload, at its path, formatted by nothing. */
 export interface PayloadCell {
@@ -141,6 +237,66 @@ export function formatLeaf(v: unknown): string {
 }
 
 /**
+ * One input's value, WITH ITS JSON TYPE INTACT.
+ *
+ * A scalar passes through by identity — that is the whole change, and `4` staying a number is what
+ * lets the render edge tell it from a producer that sent `"4"`. Anything else (an object, an array,
+ * `null`, a missing key) is off contract and becomes its `formatLeaf` text, because the type union
+ * cannot hold it and dropping it would lose an input the reader is entitled to see. `formatLeaf`
+ * spells `null` and `undefined` DISTINCTLY, so "the producer sent null" and "the producer sent no
+ * value" survive as different cells.
+ */
+function readInputValue(v: unknown): MethodInputValue {
+  if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") return v;
+  return formatLeaf(v);
+}
+
+/**
+ * The bound, as a number, and the text of one that could not be read as a number.
+ *
+ * ⛔ `0` IS A BOUND. Every spelling that tests the bound for truthiness — here, or at the render
+ * edge — turns a threshold of zero into "the producer stated none", and a zero threshold is a
+ * perfectly ordinary one (`contribution >= 0`). The test is `=== null`, and the guard against a
+ * `NaN` sneaking through as a "number" is explicit rather than implied.
+ *
+ * A NUMERIC STRING is accepted and converted: `"0.25"` and `0.25` are the same value, and the
+ * producer narrowed to a float only recently. Anything else present — a SENTENCE bound such as
+ * `"|contribution| >= 100000"`, which is what this repo's own fixture carried before the narrowing
+ * — is off contract and is returned as `boundUnreadable`, NOT as `null`. Nulling it would render as
+ * "absent" and tell the reader the producer stated no bound when it stated one this side could not
+ * parse, which is the absent-vs-unreadable confusion, on the field where it costs the most.
+ */
+function readBound(raw: unknown): { bound: number | null; boundUnreadable: string | null } {
+  if (raw === null || raw === undefined) return { bound: null, boundUnreadable: null };
+  if (typeof raw === "number") {
+    return Number.isFinite(raw)
+      ? { bound: raw, boundUnreadable: null }
+      : { bound: null, boundUnreadable: formatLeaf(raw) };
+  }
+  if (typeof raw === "string") {
+    // A BLANK bound is not an unreadable one — there is nothing in it to fail to read, and
+    // carrying `""` through as `boundUnreadable` would draw an empty strong tag where the absent
+    // mark belongs. Blank and absent are the same state, as everywhere else in this file.
+    if (raw.trim() === "") return { bound: null, boundUnreadable: null };
+    const n = Number(raw);
+    if (Number.isFinite(n)) return { bound: n, boundUnreadable: null };
+  }
+  return { bound: null, boundUnreadable: formatLeaf(raw) };
+}
+
+/**
+ * The producer's sha, or none. Blank and absent are the same state; a present non-string is off
+ * contract (`producer_sha` is required and non-blank upstream) and is shown as its text rather than
+ * nulled, because "the producer sent nothing" and "the producer sent something odd" are the pair
+ * this file refuses to collapse.
+ */
+function readProducerSha(v: unknown): string | null {
+  if (typeof v === "string") return orNull(v);
+  if (v === null || v === undefined) return null;
+  return formatLeaf(v);
+}
+
+/**
  * Read the producer's method block, or nothing.
  *
  * Dropped whole when there is no formula, AND when nothing names an input — see the ruling at
@@ -160,7 +316,7 @@ export function readMethod(raw: unknown): MethodBlock | null {
       if (!isRecord(i)) continue;
       const name = str(i.name);
       if (!name) continue;
-      inputs.push({ name, value: formatLeaf(i.value) });
+      inputs.push({ name, value: readInputValue(i.value), unit: orNull(i.unit) });
     }
   } else if (isRecord(raw.inputs)) {
     // The producer may send inputs as `{name: value}`. Both shapes read to the same pairs;
@@ -168,7 +324,11 @@ export function readMethod(raw: unknown): MethodBlock | null {
     // silently renders as nothing.
     for (const name of Object.keys(raw.inputs)) {
       if (!name.trim()) continue;
-      inputs.push({ name: name.trim(), value: formatLeaf(raw.inputs[name]) });
+      // The map shape has nowhere to PUT a unit — `{name: value}` carries a value and nothing
+      // else — so `unit` is null here by construction and not by a reading. That is a real
+      // difference between the two accepted shapes, recorded rather than papered over: a producer
+      // that needs to state units cannot use the map form.
+      inputs.push({ name: name.trim(), value: readInputValue(raw.inputs[name]), unit: null });
     }
   }
 
@@ -195,11 +355,20 @@ export function readMethod(raw: unknown): MethodBlock | null {
   // empty-inputs block, which is now only constructible by hand — sealed as such.
   if (inputs.length === 0) return null;
 
-  const boundRaw = raw.bound;
-  const bound =
-    boundRaw === null || boundRaw === undefined ? null : formatLeaf(boundRaw) || null;
+  const { bound, boundUnreadable } = readBound(raw.bound);
 
-  return { formula, inputs, bound };
+  return {
+    formula,
+    inputs,
+    bound,
+    boundUnreadable,
+    // ⛔ NO `!!` AND NO `Boolean(...)`, EVER, ON A TRI-STATE. A coercion here reads "the producer
+    // did not say" as `false`, which upstream means "the caller chose this bound" — an unmade
+    // claim rewritten as a claim, about the one fact that says whose number 0.25 is. Only a real
+    // boolean is a statement; anything else, including a string `"true"`, is not one.
+    bound_defaulted: typeof raw.bound_defaulted === "boolean" ? raw.bound_defaulted : null,
+    producer_sha: readProducerSha(raw.producer_sha),
+  };
 }
 
 /**
@@ -376,23 +545,59 @@ function methodSection(input: CardExportInput): string {
     );
   }
   const inputRows = m.inputs.length
-    ? `<table class="cx-table"><thead><tr><th>input</th><th>value</th></tr></thead><tbody>` +
+    ? `<table class="cx-table"><thead><tr><th>input</th><th>value</th><th>unit</th>` +
+      `</tr></thead><tbody>` +
       m.inputs
         .map(
           (i) =>
             `<tr><td class="cx-path">${escapeHtml(i.name)}</td>` +
-            `<td class="cx-value">${escapeHtml(i.value)}</td></tr>`,
+            // `formatLeaf` at the RENDER edge, not in the reader. The block carries the producer's
+            // scalar; this is the one place it becomes text, which is what keeps `4` and `"4"`
+            // distinguishable everywhere upstream of here.
+            `<td class="cx-value">${escapeHtml(formatLeaf(i.value))}</td>` +
+            // ⛔ THE UNIT COLUMN IS DRAWN EVEN WHEN NO INPUT HAS ONE, and an unstated unit gets
+            // the absent mark rather than a blank cell. A blank says nothing about whether the
+            // producer declined to annotate the input or this side lost the annotation, and this
+            // side did lose it until 2026-09-27. `null` is "no unit STATED" and never
+            // "dimensionless" — the mark reads as the former.
+            `<td class="cx-value">` +
+            (i.unit === null ? absentSpan(ABSENT_MARK) : escapeHtml(i.unit)) +
+            `</td></tr>`,
         )
         .join("") +
       `</tbody></table>`
     : `<p>inputs: ${absentSpan(ABSENT_MARK)}</p>`;
-  const bound = m.bound
-    ? `<p class="cx-note">bound: <strong>${escapeHtml(m.bound)}</strong></p>`
-    : `<p class="cx-note">bound: ${absentSpan(ABSENT_MARK)}</p>`;
+  // ⛔ `=== null`, NOT TRUTHINESS. `m.bound ? ... : absent` drew a bound of `0` as "absent" — the
+  // producer states a threshold of zero and the page said it stated none. A zero threshold is
+  // ordinary, so this was not a corner: it was the field's own cheapest value rendering as its
+  // opposite. The unreadable case is a THIRD branch, because a bound the producer stated and this
+  // side could not parse must not read as one it never stated.
+  const bound =
+    m.bound !== null
+      ? `<p class="cx-note">bound: <strong>${escapeHtml(formatLeaf(m.bound))}</strong></p>`
+      : m.boundUnreadable !== null
+        ? `<p class="cx-note">bound: <strong>${escapeHtml(m.boundUnreadable)}</strong> ` +
+          absentSpan("(not a number — stated by the producer, unparsed here)") + `</p>`
+        : `<p class="cx-note">bound: ${absentSpan(ABSENT_MARK)}</p>`;
+  // THREE BRANCHES FOR THREE STATES. The third is not a fallback: "the producer did not say whose
+  // bound this is" is an answer a reader recomputing the formula needs, and it is the answer a
+  // `!!` would have destroyed on the way in.
+  const defaulted =
+    m.bound_defaulted === null
+      ? `<p class="cx-note">bound_defaulted: ${absentSpan(NOT_STATED_MARK)}</p>`
+      : `<p class="cx-note">bound_defaulted: <strong>${m.bound_defaulted}</strong> ` +
+        `<span class="cx-note">(${
+          m.bound_defaulted ? "the producer's own default" : "chosen by the caller"
+        })</span></p>`;
+  const sha =
+    m.producer_sha === null
+      ? `<p class="cx-note">producer_sha: ${absentSpan(ABSENT_MARK)}</p>`
+      : `<p class="cx-note">producer_sha: <strong>${escapeHtml(m.producer_sha)}</strong></p>`;
   return section(
     "How the producer computed this",
     `<div data-cx-method="present">` +
-      `<p class="cx-formula">${escapeHtml(m.formula)}</p>${inputRows}${bound}</div>`,
+      `<p class="cx-formula">${escapeHtml(m.formula)}</p>${inputRows}${bound}${defaulted}${sha}` +
+      `</div>`,
   );
 }
 

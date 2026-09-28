@@ -32,6 +32,7 @@ import { ContributionRanking } from "@/components/planning/ContributionRanking";
 import {
   ABSENT_MARK,
   METHOD_ABSENT_SENTENCE,
+  NOT_STATED_MARK,
   buildCardExportHtml,
   exportFileName,
   flattenPayload,
@@ -39,6 +40,7 @@ import {
   readMethod,
   stripExecutable,
   type CardExportInput,
+  type MethodBlock,
   type PayloadCell,
 } from "./cardExport";
 import {
@@ -49,6 +51,9 @@ import {
   LOT4_METHOD_PRESENT,
   LOT4_PRODUCER_METHOD_RAW,
 } from "./cardExport.fixture";
+// ca's OWN `model_dump(mode="json")`, lifted out of the 2026-09-26 packet into a file a fixture
+// glob can see. The arm that ties it back to the packet's fence is in the last describe.
+import PACKET_METHOD_CAPTURE from "./methodBlockPacketCapture.json";
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
@@ -343,15 +348,19 @@ describe("the method block — rendered when present, said when absent", () => {
     expect(sectionText(html, "How the producer computed this")).not.toContain("=");
   });
 
-  it("present method renders formula, inputs and bound", () => {
+  it("present method renders formula, inputs, units and bound", () => {
     const html = buildCardExportHtml(input({ method: LOT4_METHOD_PRESENT }));
     const body = sectionText(html, "How the producer computed this");
     expect(body).toContain(LOT4_METHOD_PRESENT.formula);
     for (const i of LOT4_METHOD_PRESENT.inputs) {
       expect(body).toContain(i.name);
-      expect(body).toContain(i.value);
+      expect(body).toContain(String(i.value));
+      // The unit travels with the input or is visibly absent. `toContain(i.unit)` alone would be
+      // satisfied by "USD" appearing once anywhere in the section, so the null case is asserted as
+      // the mark rather than left to the absence of a string.
+      if (i.unit !== null) expect(body).toContain(i.unit);
     }
-    expect(body).toContain(LOT4_METHOD_PRESENT.bound as string);
+    expect(body).toContain(LOT4_METHOD_PRESENT.boundUnreadable as string);
     expect(body).not.toContain(METHOD_ABSENT_SENTENCE);
     expect(parse(html).querySelector('[data-cx-method="present"]')).not.toBeNull();
   });
@@ -375,7 +384,14 @@ describe("the method block — rendered when present, said when absent", () => {
     // unchanged and is a different subject: given a block with no inputs and no bound it must
     // print the absence marks rather than a bare formula with two blanks. Built as a literal,
     // which is the point — `readMethod` can no longer hand this out.
-    const m = { formula: "EAC = AC + (BAC - EV)", inputs: [], bound: null };
+    const m: MethodBlock = {
+      formula: "EAC = AC + (BAC - EV)",
+      inputs: [],
+      bound: null,
+      boundUnreadable: null,
+      bound_defaulted: null,
+      producer_sha: null,
+    };
     const body = sectionText(
       buildCardExportHtml(input({ method: m })),
       "How the producer computed this",
@@ -383,6 +399,11 @@ describe("the method block — rendered when present, said when absent", () => {
     expect(body).toContain("EAC = AC + (BAC - EV)");
     expect(body).toContain(`inputs: ${ABSENT_MARK}`);
     expect(body).toContain(`bound: ${ABSENT_MARK}`);
+    // The three fields added 2026-09-27 take the same treatment in this shape: each states its own
+    // absence rather than vanishing, and `bound_defaulted` says NOT STATED rather than "absent",
+    // because a tri-state's third state is a reading and not a missing field.
+    expect(body).toContain(`bound_defaulted: ${NOT_STATED_MARK}`);
+    expect(body).toContain(`producer_sha: ${ABSENT_MARK}`);
   });
 
   it("drops a formula-less block whole — the formula is the claim", () => {
@@ -403,44 +424,54 @@ describe("the method block — rendered when present, said when absent", () => {
         { value: "no name here" },
       ],
     });
+    // ⛔ THE TYPES, NOT JUST THE PRESENCE. `0` is a number and `false` is a boolean — they used to
+    // arrive here as the strings "0" and "false", which is the loss the wire mirror names: a reader
+    // handed `"false"` cannot tell it from a producer that sent the word. `toEqual` distinguishes
+    // them, so this arm is also the seal on type preservation for the falsy values, where a
+    // stringifier is least visible.
     expect(m?.inputs).toEqual([
-      { name: "sv", value: "0" },
-      { name: "loe", value: "false" },
-      { name: "note", value: "" },
+      { name: "sv", value: 0, unit: null },
+      { name: "loe", value: false, unit: null },
+      { name: "note", value: "", unit: null },
     ]);
   });
 
   it("reads inputs given as an object as well as an array", () => {
     const m = readMethod({ formula: "f", inputs: { BCWP: 2200000, ACWP: 3000000 } });
+    // `unit: null` by CONSTRUCTION in this shape, not by a reading — `{name: value}` has nowhere to
+    // put one. Asserted so the difference between the two accepted shapes is written down where
+    // someone comparing them will look.
     expect(m?.inputs).toEqual([
-      { name: "BCWP", value: "2200000" },
-      { name: "ACWP", value: "3000000" },
+      { name: "BCWP", value: 2200000, unit: null },
+      { name: "ACWP", value: 3000000, unit: null },
     ]);
   });
 
   /**
-   * ⛔ WHAT THIS SIDE DROPS FROM THE PRODUCER'S BLOCK — three fields, measured not assumed.
+   * ⛔ WHAT THIS SIDE CARRIES FROM THE PRODUCER'S BLOCK — five fields, measured not assumed.
    *
    * Every other test in this describe feeds `readMethod` a block composed on this side, so all of
    * them agree with the reader about which fields exist. `LOT4_PRODUCER_METHOD_RAW` carries the
    * producer's OWN field names and types, so it is the only input here that can show a field
    * arriving and going nowhere.
    *
-   * The producer's docstring already says one of the three is dropped and calls it "a cortex-side
-   * gap, reported and not patched from here". That sentence is evidence about the producer's
-   * intent, NOT about this repo — a docstring in another tree cannot know what this reader does,
-   * and the whole reason this lane reads producer source live is that prose about the other side
-   * ages. So the drop is asserted here against the reader itself.
+   * ── THIS ARM WAS THE REPORT, AND IT IS NOW THE SEAL ───────────────────────────────────────
    *
-   * ⚠ NOTHING IS PATCHED. No order covers widening `MethodBlock`, and the export renders what the
-   * type carries, so a wider reader with no renderer would be a silent half-fix. The gap is
-   * REPORTED — this seal is the report's instrument — and it goes red the day someone closes it,
-   * which is when the header above needs rewriting.
+   * Until 2026-09-27 it was titled "drops bound_defaulted, producer_sha and each input's unit —
+   * the three cortex-side gaps", and its header said: "NOTHING IS PATCHED. No order covers widening
+   * `MethodBlock` ... it goes red the day someone closes it, which is when the header above needs
+   * rewriting." An order covered it, the gap is closed, and this is that rewrite. The header is
+   * replaced rather than annotated, because a stale ⚠ describing a gap that no longer exists is the
+   * failure this file warns about two describes down.
+   *
+   * What it now asserts is the OPPOSITE claim over the same input, which is why it stayed one arm
+   * instead of being deleted and replaced: the fixture, the controls and the subject are unchanged,
+   * so a reader can see that the thing once measured as lost is the thing now measured as carried.
    */
-  it("⛔ drops bound_defaulted, producer_sha and each input's unit — the three cortex-side gaps", () => {
+  it("carries bound_defaulted, producer_sha and each input's unit — the three gaps, closed", () => {
     const raw = LOT4_PRODUCER_METHOD_RAW;
-    // THE CONTROLS FIRST: the fields must be present on the way IN, or "dropped" is a claim about
-    // a fixture that never carried them.
+    // THE CONTROLS FIRST: the fields must be present on the way IN, or "carried" is a claim about
+    // a fixture that never carried them — which passes just as well over a reader that drops them.
     expect(raw.bound_defaulted).toBe(true);
     expect(raw.producer_sha).toBeTruthy();
     expect(raw.inputs.filter((i) => "unit" in i)).toHaveLength(1);
@@ -448,39 +479,59 @@ describe("the method block — rendered when present, said when absent", () => {
     const m = readMethod(raw);
     expect(m).not.toBeNull();
 
-    // WHAT SURVIVES. The bound arrives as the STRING "0.25" — `MethodBlock.bound` is
-    // `string | null` and the producer now sends a float, so the reader is also the narrowing.
     expect(m?.formula).toBe(raw.formula);
-    expect(m?.bound).toBe("0.25");
     expect(m?.inputs).toHaveLength(5);
+    // ⛔ A NUMBER, NOT THE STRING "0.25". The producer sends a float and the reader used to be the
+    // narrowing; `toBe(0.25)` fails on `"0.25"` and is therefore the arm that notices a
+    // stringifier coming back.
+    expect(m?.bound).toBe(0.25);
+    expect(m?.boundUnreadable).toBeNull();
+    // TRUE, not truthy: `toBe(true)` fails on `"true"` and on `1`, which a `!!` read would produce.
+    expect(m?.bound_defaulted).toBe(true);
+    expect(m?.producer_sha).toBe(raw.producer_sha);
 
-    // WHAT IS LOST, field by field, against the parsed block rather than against the rendered
-    // page: a value missing from the page could be a layout question, but a key missing from the
-    // object is the reader's decision.
+    // THE KEY CENSUS, both directions. Written as an equality over the whole key set rather than
+    // five `toBeDefined()` checks, because a set of present-checks cannot see a field the reader
+    // stops emitting later, and cannot see one it invents either.
     const parsed = m as unknown as Record<string, unknown>;
-    expect(Object.keys(parsed).sort()).toEqual(["bound", "formula", "inputs"]);
-    expect(parsed.bound_defaulted).toBeUndefined();
-    expect(parsed.producer_sha).toBeUndefined();
-    for (const i of m?.inputs ?? []) {
-      expect(Object.keys(i).sort()).toEqual(["name", "value"]);
+    expect(Object.keys(parsed).sort()).toEqual([
+      "boundUnreadable",
+      "bound",
+      "bound_defaulted",
+      "formula",
+      "inputs",
+      "producer_sha",
+    ].sort());
+    // THE UNIT, PER INPUT, against the producer's own key rather than against a list written here.
+    // `"unit" in i` on the raw side is the population: whatever the fixture states, the block must
+    // state, and whatever it does not state must read as `null` and not as a missing key.
+    expect(m?.inputs.map((i) => Object.keys(i).sort())).toEqual(
+      raw.inputs.map(() => ["name", "unit", "value"]),
+    );
+    for (const [n, i] of (m?.inputs ?? []).entries()) {
+      const rawInput = raw.inputs[n] as { unit?: string };
+      expect(i.unit).toBe("unit" in rawInput ? rawInput.unit : null);
     }
 
-    // AND WHAT THAT COSTS ON SCREEN. `bound_defaulted` is the only thing that says whether 0.25
-    // was the caller's choice or the engine's default, so the page states a bound and cannot say
-    // whose it is. The envelope pair DOES survive by a different route — `threshold_defaulted` is
-    // a declared tuple field and is sealed elsewhere in this file — which is exactly why the drop
-    // is a gap and not a data loss: the same fact reaches the card twice, and the method block's
-    // copy is the one a reader recomputing the formula would read beside it.
+    // AND WHAT THAT BUYS ON SCREEN — the reader and the renderer together, because a wider reader
+    // with no renderer is the silent half-fix the old header named as the reason not to widen one
+    // without the other.
     const html = buildCardExportHtml(input({ method: readMethod(raw) }));
-    expect(html).toContain("0.25");
-    expect(html).not.toContain("bound_defaulted");
-    expect(html).not.toContain(raw.producer_sha);
-    // The unit goes with it: "1475520.00" renders, "USD" does not appear beside it as this input's
-    // unit. Asserted on the method section alone, because `value_unit` puts USD elsewhere on the
-    // page and a whole-page `not.toContain("USD")` would fail for an unrelated reason.
     const methodSection = sectionText(html, "How the producer computed this");
+    expect(methodSection).toContain("0.25");
+    // `bound_defaulted` was the only thing that could say whether 0.25 was the caller's choice or
+    // the engine's default. It now says so, in the section a reader recomputing the formula reads.
+    expect(methodSection).toContain("bound_defaulted");
+    expect(methodSection).toContain("the producer's own default");
+    expect(methodSection).toContain(raw.producer_sha);
+    // The unit arrives beside its input. Asserted on the method section alone, because `value_unit`
+    // puts USD elsewhere on the page and a whole-page assertion would pass for an unrelated reason.
     expect(methodSection).toContain("1475520.00");
-    expect(methodSection).not.toContain("USD");
+    expect(methodSection).toContain("USD");
+    // And the four inputs the producer did NOT annotate are marked absent rather than blank.
+    const unannotated = raw.inputs.filter((i) => !("unit" in i)).length;
+    expect(unannotated).toBe(4);
+    expect(methodSection.split(ABSENT_MARK).length - 1).toBeGreaterThanOrEqual(unannotated);
   });
 });
 
@@ -792,5 +843,241 @@ describe("the file itself", () => {
 
   it("is pure — the same input builds the same bytes", () => {
     expect(buildCardExportHtml(input())).toBe(buildCardExportHtml(input()));
+  });
+});
+
+/**
+ * ⛔ THE READER AGAINST ca's OWN EXECUTED DUMP — the fixture the 2026-09-27 order names.
+ *
+ * Every other arm in this file feeds `readMethod` a block written on this side, including
+ * `LOT4_PRODUCER_METHOD_RAW`, which is TRANSCRIBED from producer source and says so. A
+ * transcription can be faithful and still be a claim about what someone typed. This block is
+ * neither: it is the JSON ca got back from `MethodBlock(...).model_dump(mode="json")` and pasted
+ * into the packet, so it is the only method block in this repo that a producer process actually
+ * emitted.
+ *
+ * ── WHY IT IS A `.json` FILE AND NOT THE FENCE IN THE PACKET ──────────────────────────────────
+ *
+ * It arrived inside a `.md`, where every fixture sweep in this repo is blind to it: the glob is
+ * `sessions/*payload*.json`, and a capture in the wrong file type has already cost this lane a
+ * seal that stayed green the day it became false. So the dump is extracted to
+ * `methodBlockPacketCapture.json` and imported like any other fixture — and the FIRST arm below
+ * reads the packet's fence back and compares it, so the extraction cannot drift from the packet it
+ * claims to be. Without that arm the JSON file is just another block written on this side, wearing
+ * a provenance it cannot prove.
+ */
+describe("readMethod over the packet's executed dump", () => {
+  const PACKET = path.join(
+    __dirname,
+    "../../sessions",
+    "2026-09-26-packet-from-ca-the-ts-mirror-of-completeness-total-available-and-methodblock.md",
+  );
+
+  it("the json fixture IS the packet's fenced block — the extraction has not drifted", () => {
+    const src = readFileSync(PACKET, "utf8");
+    const fences = [...src.matchAll(/```json\r?\n([\s\S]*?)```/g)].map((m) => m[1]);
+    // The instrument, asserted before it is used: exactly one json fence. If the packet grows a
+    // second one, "the fenced block" stops naming a single thing and this must be re-pointed rather
+    // than silently reading the first.
+    expect(fences).toHaveLength(1);
+    expect(JSON.parse(fences[0])).toEqual(PACKET_METHOD_CAPTURE);
+  });
+
+  it("carries every field of the dump, with the dump's own JSON types", () => {
+    const m = readMethod(PACKET_METHOD_CAPTURE);
+    expect(m).not.toBeNull();
+    expect(m?.formula).toBe("share = value / total");
+    expect(m?.producer_sha).toBe("abc1234");
+
+    // ⛔ `1475520.0` IS A NUMBER AND `4` IS A NUMBER, and this is the assertion the old reader
+    // failed: it handed back the strings "1475520" and "4". `toEqual` is type-strict, so a
+    // stringifier reintroduced anywhere between here and the wire fails here first.
+    expect(m?.inputs).toEqual([
+      { name: "total purchased value", value: 1475520.0, unit: "USD" },
+      { name: "lot", value: 4, unit: null },
+    ]);
+
+    // The dump states `null` for both, and BOTH nulls are meaningful: no bound stated, and no
+    // statement about whose bound it would have been. Neither may read as `false` or as `0`.
+    expect(m?.bound).toBeNull();
+    expect(m?.boundUnreadable).toBeNull();
+    expect(m?.bound_defaulted).toBeNull();
+    // `toBeNull` and not `toBeFalsy`: `false` and `0` both satisfy falsiness and both are the
+    // defect this field exists to prevent.
+    expect(m?.bound_defaulted).not.toBe(false);
+  });
+
+  it("renders the dump's unit beside its input, and its two nulls as two different words", () => {
+    const body = sectionText(
+      buildCardExportHtml(input({ method: readMethod(PACKET_METHOD_CAPTURE) })),
+      "How the producer computed this",
+    );
+    expect(body).toContain("share = value / total");
+    expect(body).toContain("1475520");
+    expect(body).toContain("USD");
+    expect(body).toContain("abc1234");
+    // THE TWO ABSENCES ARE SPELLED DIFFERENTLY ON PURPOSE. An unstated bound is `absent`; an
+    // unstated `bound_defaulted` is `not stated`, because "the producer set no threshold" and "the
+    // producer did not say whose threshold this is" are different facts and one word for both is
+    // how a tri-state gets read as a boolean by the person holding the page.
+    expect(body).toContain(`bound: ${ABSENT_MARK}`);
+    expect(body).toContain(`bound_defaulted: ${NOT_STATED_MARK}`);
+    expect(NOT_STATED_MARK).not.toBe(ABSENT_MARK);
+  });
+
+  it("the lot input's unit is null in the dump — absent key and explicit null are one state", () => {
+    // The dump carries `"unit": null` EXPLICITLY for `lot`, where the producer's own dict omits the
+    // key. Both must read as `null`, and the control is that they read the SAME: the SDK's dump and
+    // the producer's dict disagree about spelling and agree about the fact.
+    const explicit = readMethod(PACKET_METHOD_CAPTURE);
+    const omitted = readMethod({
+      ...PACKET_METHOD_CAPTURE,
+      inputs: [
+        { name: "total purchased value", value: 1475520.0, unit: "USD" },
+        { name: "lot", value: 4 },
+      ],
+    });
+    expect(omitted?.inputs).toEqual(explicit?.inputs);
+    expect(omitted?.inputs[1].unit).toBeNull();
+  });
+});
+
+/**
+ * ⛔ THE BRANCHES ca's DUMP DOES NOT REACH — one case per branch, including the near sides.
+ *
+ * The packet's capture states `null` for both `bound` and `bound_defaulted`, so on its own it
+ * exercises the absent side of each and nothing else. A field whose only test case is its null
+ * state is a field whose stated states are untested, and for `bound` the untested state is the one
+ * that was WRONG: `m.bound ? ... : absent` drew a bound of `0` as "the producer stated none".
+ *
+ * That defect could not be caught by any input above. `LOT4_PRODUCER_METHOD_RAW` has `bound: 0.25`
+ * and the dump has `null`, and BOTH render correctly under the broken spelling — the values are on
+ * either side of the one that breaks it. So the case had to be constructed, which is the shape of
+ * this lane's own note about coincidence defects: a bug hidden because two readings agree on
+ * ordinary data is only catchable where they diverge.
+ */
+describe("the method block's stated states, one case per branch", () => {
+  const block = (over: Record<string, unknown>) =>
+    readMethod({ formula: "f", inputs: [{ name: "x", value: 1 }], ...over });
+  const render = (over: Record<string, unknown>) =>
+    sectionText(
+      buildCardExportHtml(input({ method: block(over) })),
+      "How the producer computed this",
+    );
+
+  it("⛔ A BOUND OF ZERO IS A BOUND — the truthiness trap, which no real fixture could catch", () => {
+    expect(block({ bound: 0 })?.bound).toBe(0);
+    expect(block({ bound: 0 })?.boundUnreadable).toBeNull();
+    const body = render({ bound: 0 });
+    expect(body).toContain("bound: 0");
+    // The claim is not merely that "0" appears — it is that the absence mark does NOT. Under the
+    // old spelling the section said `bound: absent` while the producer had stated a threshold.
+    expect(body).not.toContain(`bound: ${ABSENT_MARK}`);
+  });
+
+  it("keeps a negative and a fractional bound, and does not reformat either", () => {
+    expect(block({ bound: -100000 })?.bound).toBe(-100000);
+    expect(block({ bound: 0.25 })?.bound).toBe(0.25);
+    // No thousands separator, no percent, no fixed places — the same rule the payload table lives
+    // by. A bound a reader cannot type back into the formula is not provenance.
+    expect(render({ bound: -100000 })).toContain("-100000");
+  });
+
+  it("converts a NUMERIC STRING bound, because 0.25 and \"0.25\" are one value", () => {
+    expect(block({ bound: "0.25" })?.bound).toBe(0.25);
+    expect(block({ bound: "0" })?.bound).toBe(0);
+    expect(block({ bound: "0.25" })?.boundUnreadable).toBeNull();
+  });
+
+  it("⛔ A SENTENCE BOUND IS UNREADABLE, NOT ABSENT — the two must not render alike", () => {
+    // This is the shape this repo's own fixture carried before the producer narrowed to a float,
+    // so it is not a hypothetical: `|contribution| >= 100000` was a bound someone wrote down.
+    const m = block({ bound: "|contribution| >= 100000" });
+    expect(m?.bound).toBeNull();
+    expect(m?.boundUnreadable).toBe("|contribution| >= 100000");
+    const body = render({ bound: "|contribution| >= 100000" });
+    expect(body).toContain("|contribution| >= 100000");
+    // The page must not claim the producer stated no bound when it stated one this side cannot
+    // parse. That is the absent-vs-unreadable confusion, on the field where it costs most.
+    expect(body).not.toContain(`bound: ${ABSENT_MARK}`);
+  });
+
+  it("a NaN or Infinity bound is unreadable too — `typeof 'number'` is not enough", () => {
+    expect(block({ bound: Number.NaN })?.bound).toBeNull();
+    expect(block({ bound: Number.NaN })?.boundUnreadable).toBe("NaN");
+    expect(block({ bound: Number.POSITIVE_INFINITY })?.bound).toBeNull();
+  });
+
+  it("a BLANK bound is absent, not unreadable — there is nothing in it to fail to read", () => {
+    expect(block({ bound: "   " })?.bound).toBeNull();
+    expect(block({ bound: "   " })?.boundUnreadable).toBeNull();
+    expect(render({ bound: "   " })).toContain(`bound: ${ABSENT_MARK}`);
+  });
+
+  it("bound_defaulted FALSE is a statement and says so — the near side of the tri-state", () => {
+    // The near side, asserted on purpose. Its obvious mutation (`false` → `null`) still renders a
+    // line and still contains the word "bound_defaulted", so an arm keyed on the field's NAME
+    // reads as covering this and covers nothing.
+    expect(block({ bound_defaulted: false })?.bound_defaulted).toBe(false);
+    const body = render({ bound_defaulted: false });
+    expect(body).toContain("chosen by the caller");
+    expect(body).not.toContain(NOT_STATED_MARK);
+  });
+
+  it("bound_defaulted TRUE names the producer's default", () => {
+    expect(block({ bound_defaulted: true })?.bound_defaulted).toBe(true);
+    expect(render({ bound_defaulted: true })).toContain("the producer's own default");
+  });
+
+  it("⛔ A NON-BOOLEAN bound_defaulted IS 'DID NOT SAY' — never coerced to a claim", () => {
+    // `!!"false"` is `true`, `!!1` is `true`, `!!0` is `false`. Every one of those is a statement
+    // about whose bound it is, invented out of a value that stated nothing.
+    for (const v of ["true", "false", 1, 0, "", "yes", {}, []]) {
+      expect(block({ bound_defaulted: v })?.bound_defaulted).toBeNull();
+    }
+    expect(render({ bound_defaulted: "true" })).toContain(`bound_defaulted: ${NOT_STATED_MARK}`);
+  });
+
+  it("a blank or absent producer_sha is none, and a non-string one is shown not dropped", () => {
+    expect(block({ producer_sha: "   " })?.producer_sha).toBeNull();
+    expect(block({})?.producer_sha).toBeNull();
+    expect(block({ producer_sha: null })?.producer_sha).toBeNull();
+    // Off contract upstream (`str`, required), so it is not nulled: "sent nothing" and "sent
+    // something odd" are the pair this reader refuses to collapse.
+    expect(block({ producer_sha: 1234 })?.producer_sha).toBe("1234");
+    expect(render({ producer_sha: " deadbee " })).toContain("deadbee");
+  });
+
+  it("a blank unit is no unit STATED — and neither blank nor null means dimensionless", () => {
+    const m = readMethod({
+      formula: "f",
+      inputs: [
+        { name: "a", value: 1, unit: "  " },
+        { name: "b", value: 1, unit: null },
+        { name: "c", value: 1 },
+      ],
+    });
+    expect(m?.inputs.map((i) => i.unit)).toEqual([null, null, null]);
+    // Three inputs, three unit cells, all marked — a blank cell would say nothing about whether
+    // the producer declined to annotate or this side lost the annotation.
+    const body = sectionText(
+      buildCardExportHtml(input({ method: m })),
+      "How the producer computed this",
+    );
+    expect(body.split(ABSENT_MARK).length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("an off-contract input value is kept as its text, and null keeps its own word", () => {
+    const m = readMethod({
+      formula: "f",
+      inputs: [
+        { name: "obj", value: { a: 1 } },
+        { name: "nul", value: null },
+        { name: "missing" },
+      ],
+    });
+    // The union cannot hold an object, so it becomes text — but it is not DROPPED, and `null` and
+    // a missing key stay distinguishable, which is `formatLeaf`'s whole reason for existing.
+    expect(m?.inputs.map((i) => i.value)).toEqual(['{"a":1}', "null", "undefined"]);
   });
 });

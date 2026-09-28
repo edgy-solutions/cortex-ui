@@ -304,15 +304,47 @@ export const LOT4_EXPORT_PROVENANCE: ExportProvenance = {
  * The real capture has no `method` key at all (see the header). Its only job is to drive the
  * present-method branch of the renderer so that branch is not shipped unexecuted. The
  * absent-method branch is the one that matches reality, and it is sealed against `null`.
+ *
+ * ── WIDENED 2026-09-27, AND WHAT EACH NEW FIELD IS SET TO IS A DECISION ───────────────────────
+ *
+ * `MethodBlock` grew `unit`, `bound_defaulted`, `producer_sha` and `boundUnreadable`. Because this
+ * block is CONSTRUCTED, every value here is a choice, and the license the header grants is narrow:
+ * drive the renderer's branches, invent no facts.
+ *
+ * - **`bound` moved into `boundUnreadable`, unchanged in text.** `|contribution| >= 100000` was
+ *   always a SENTENCE, and `bound` is now `number | null` because upstream is `Optional[float]`.
+ *   A conformant producer can no longer send this — so the sentence is not deleted, it is filed
+ *   where an unparseable bound belongs. Deleting it would have quietly removed the only case in
+ *   the repo that proves the unreadable branch is reachable from a real shape someone once wrote.
+ * - **`bound` is `null` here, so this fixture does NOT cover the numeric branch** — including the
+ *   zero bound, which is the one that used to render as "absent". Those cases live in
+ *   `cardExport.test.tsx` as small blocks per branch; a single fixture cannot cover a tri-state
+ *   and two numeric edges at once, and stretching it to try is how a fixture starts asserting
+ *   things nobody checked.
+ * - **`bound_defaulted` is `null`** — "the producer did not say". Not `false`: this block's
+ *   provenance is a construction, and `false` would assert the caller chose a bound that nobody
+ *   chose. Null is the honest value for a fact no capture carries.
+ * - **`producer_sha` is `null`** for the same reason, and it is the stronger case: a sha is a
+ *   FACT about which code ran, and there is no image behind this block. Making one up would be
+ *   the invention this file's header spends nine lines refusing.
+ * - **Input values keep JSON types, mixed on purpose.** `BCWP`/`ACWP` are numbers because the
+ *   producer computes them as floats, `as_of` is a string because a date is one. A block whose
+ *   values were all strings could not tell a passing reader from one that stringifies.
+ * - **Units on the two monetary inputs, `null` on the date.** Both unit branches, once each —
+ *   which is the fixture's stated job — and a currency on a currency figure is the renderer's
+ *   case rather than a claim about lot 4.
  */
 export const LOT4_METHOD_PRESENT: MethodBlock = {
   formula: "contribution_i = ACWP_i - BCWP_i ; share_i = contribution_i / Σ|contribution|",
   inputs: [
-    { name: "BCWP", value: "2200000" },
-    { name: "ACWP", value: "3000000" },
-    { name: "as_of", value: "2026-09-19" },
+    { name: "BCWP", value: 2200000, unit: "USD" },
+    { name: "ACWP", value: 3000000, unit: "USD" },
+    { name: "as_of", value: "2026-09-19", unit: null },
   ],
-  bound: "|contribution| >= 100000",
+  bound: null,
+  boundUnreadable: "|contribution| >= 100000",
+  bound_defaulted: null,
+  producer_sha: null,
 };
 
 /**

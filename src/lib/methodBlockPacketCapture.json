@@ -1,0 +1,18 @@
+{
+  "formula": "share = value / total",
+  "inputs": [
+    {
+      "name": "total purchased value",
+      "value": 1475520,
+      "unit": "USD"
+    },
+    {
+      "name": "lot",
+      "value": 4,
+      "unit": null
+    }
+  ],
+  "bound": null,
+  "bound_defaulted": null,
+  "producer_sha": "abc1234"
+}
