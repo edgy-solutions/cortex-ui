@@ -46,7 +46,8 @@ const SDK = path.join(__dirname, "../../../iagent-mesh-sdk");
 const HAVE_SDK = existsSync(path.join(SDK, "iagent_mesh/models.py"));
 
 type PyField = { name: string; annotation: string; default: string | null };
-type PyClass = { file: string; fields: PyField[] };
+type PyValidator = { name: string; kind: string; decorator: string; source: string };
+type PyClass = { file: string; fields: PyField[]; validators: PyValidator[] };
 const SNAP = SNAPSHOT as { provenance: Record<string, unknown>; classes: Record<string, PyClass> };
 
 /**
@@ -443,5 +444,94 @@ describe("the extractor refuses the shapes that would put phantom fields in the 
     // `out: dict` sits at 8 spaces inside the method and must not be mistaken for a declaration —
     // it is annotated, lower-case and looks like a field in every way except its indentation.
     expect(extractClass(src, "Thing").map((f) => f.name)).toEqual(["kept"]);
+  });
+});
+
+describe("the rules the producer ENFORCES, which a fields-only mirror could not see", () => {
+  /*
+    ⛔ WHY THESE ARMS EXIST, AND WHAT THEY CAUGHT BEFORE THEY WERE WRITTEN.
+
+    The ruling of 2026-09-27 was to bump the SDK pin "past 7e429d5 so the XOR validator is what the
+    mirror mirrors". Bumping it changed this snapshot by ONE LINE — the sha — because the extractor
+    took fields and explicitly not validators. The pin would have named the commit that carries the
+    rule while the mirror still said nothing about it: a stale-sha fix that leaves the mirror exactly
+    as blind as it was, and reports done.
+
+    So the snapshot now carries every validator the mirrored classes declare, and the drift arm in
+    "the snapshot still matches the live Python" covers them for free — a validator added, removed or
+    reworded upstream reddens that comparison. These arms are here for the part a diff cannot say:
+    WHICH rule mattered and why cortex cares.
+
+    That these arms can still FAIL is proven by `scripts/redproof-sdk-parity-validators.mjs`
+    (`npm run check:parity:redproof`): six mutants on the fixture, each required to redden the arm it
+    was aimed at, scored on the failed arm NAME. It found one hole on the day it was written, noted
+    at the raise assertion below.
+  */
+
+  it("captured validators at all, across more than one class", () => {
+    /*
+      ⛔ THE POSITIVE CONTROL FOR EVERY OTHER VALIDATOR ASSERTION IN THIS FILE, INCLUDING THE DRIFT
+      ARM. If `extractValidators` returned [] for everything — a decorator regex that stopped
+      matching, a body-slicer that fell off the end — then `expect(live.classes).toEqual(SNAP.classes)`
+      compares [] to [] for all five classes and passes, reporting that the mirror tracks validators
+      when it tracks nothing. That is a hollow green that never self-corrects, so the population is
+      asserted here rather than assumed by the arms that read it.
+    */
+    const perClass = Object.entries(SNAP.classes).map(([c, e]) => [c, e.validators.length] as const);
+    const total = perClass.reduce((n, [, k]) => n + k, 0);
+    expect(total, "no validator was captured at all, so every validator arm here is vacuous").toBeGreaterThan(0);
+    expect(
+      perClass.filter(([, k]) => k > 0).length,
+      "validators came from a single class, which is what a parser that only matches one shape looks like",
+    ).toBeGreaterThan(1);
+  });
+
+  it("every captured validator carries the def it decorates", () => {
+    // A decorator captured with no body would be a validator the snapshot claims to track and
+    // cannot see inside — drift in the CONDITION would then be invisible while the name sat still.
+    for (const [cls, entry] of Object.entries(SNAP.classes)) {
+      for (const v of entry.validators) {
+        expect(v.kind, `${cls}.${v.name} has no decorator kind`).toMatch(/^(field|model)_validator$/);
+        expect(v.decorator, `${cls}.${v.name} lost its decorator line`).toContain("@" + v.kind);
+        expect(v.source, `${cls}.${v.name} was captured without its def`).toContain("def " + v.name);
+        expect(
+          v.source.split("\n").length,
+          `${cls}.${v.name} was captured as a decorator with no body`,
+        ).toBeGreaterThan(2);
+      }
+    }
+  });
+
+  it("MethodBlock enforces the bound/bound_defaulted XOR, which is the rule cortex's reader is written against", () => {
+    /*
+      The rule: `(bound is None) == (bound_defaulted is None)`. Ruled 2026-09-27, reconciling the
+      model with the fleet producer that was already checking it.
+
+      ⛔ AND CORTEX'S READER DELIBERATELY DOES NOT ENFORCE IT — see the paragraph in
+      `src/lib/cardExport.ts`. The combinations this validator forbids are exactly what an older or
+      off-contract producer emits, and a reader that assumed the pair agreed would draw a confident
+      half-statement instead of showing the halves. So this arm seals that the PRODUCER enforces it,
+      which is what makes the reader's tolerance a deliberate choice rather than a gap. If ca ever
+      drops the validator, this reddens and that tolerance stops being belt-and-braces.
+    */
+    const v = SNAP.classes.MethodBlock.validators.find((x) => x.kind === "model_validator");
+    expect(v, "MethodBlock declares no model_validator at the pinned sha").toBeDefined();
+    expect(v!.decorator).toContain('mode="after"');
+    // Keyed on the FIELDS and the raise, not on the method's name: a rename is not a weakening, and
+    // a rule that still mentions only one of the two fields is.
+    expect(v!.source, "the rule does not mention bound").toContain("self.bound");
+    expect(v!.source, "the rule does not mention bound_defaulted").toContain("self.bound_defaulted");
+    // ⛔ ANCHORED TO A LINE THAT STARTS WITH THE RAISE, not to the substring. Measured 2026-09-27:
+    // a mutant that replaced the raise with `pass  # was: raise ValueError` left the substring in
+    // place and this arm stayed GREEN on a rule that had stopped forbidding anything. A commented-out
+    // or renamed-away raise is exactly how a validator gets defanged without losing its name.
+    expect(
+      /^\s*raise ValueError/m.test(v!.source),
+      "the rule no longer RAISES on a line of its own, so it forbids nothing",
+    ).toBe(true);
+    expect(
+      v!.source.replace(/\s+/g, " "),
+      "the rule is no longer the XOR: it must compare both is-None tests against each other",
+    ).toContain("(self.bound is None) != (self.bound_defaulted is None)");
   });
 });

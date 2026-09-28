@@ -13,6 +13,19 @@ export interface PyFieldDecl {
   default: string | null;
 }
 
+export interface PyValidatorDecl {
+  /** The name of the `def` the decorator decorates — NOT the field it validates. */
+  name: string;
+  /** `field_validator` or `model_validator`. Both are captured; keying on one would have taken
+   *  1 of the 7 validators the mirrored files declare. */
+  kind: string;
+  /** The decorator line(s) as written, including `mode="after"` where present. */
+  decorator: string;
+  /** The whole block, decorator through body, so drift in the CONDITION is visible and not just
+   *  drift in the name. */
+  source: string;
+}
+
 export interface MeshSdkParitySnapshot {
   provenance: {
     sdk_repo: string;
@@ -22,10 +35,11 @@ export interface MeshSdkParitySnapshot {
     extractor: string;
     sources: string[];
   };
-  classes: Record<string, { file: string; fields: PyFieldDecl[] }>;
+  classes: Record<string, { file: string; fields: PyFieldDecl[]; validators: PyValidatorDecl[] }>;
 }
 
 export declare const DEFAULT_SDK: string;
 export declare const MIRRORED: [string, string][];
 export declare function extractClass(src: string, className: string): PyFieldDecl[];
+export declare function extractValidators(src: string, className: string): PyValidatorDecl[];
 export declare function extract(sdkRoot?: string): MeshSdkParitySnapshot;

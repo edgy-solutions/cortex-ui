@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:redproof": "node scripts/redproof-contract-tests.mjs",
     "check:seals": "node scripts/check-cross-repo-seals.mjs node_modules/.cache/cortex-vitest-report.json",
+    "check:parity:redproof": "node scripts/redproof-sdk-parity-validators.mjs",
     "check:seals:redproof": "node scripts/redproof-cross-repo-seals.mjs node_modules/.cache/cortex-vitest-report.json"
   },
   "devDependencies": {

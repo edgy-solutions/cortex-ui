@@ -2,7 +2,7 @@
   "provenance": {
     "sdk_repo": "iagent-mesh-sdk",
     "sdk_ref": "lane/ca",
-    "sdk_sha": "b0abd3b7daa78d973071c263bf4a124b6597225f",
+    "sdk_sha": "5ef95b670faa14e3bf9e2338d40b79c3c7749703",
     "sdk_release": "UNRELEASED — the newest tag (v0.9.3) contains neither MethodBlock nor completeness; HEAD is past it and pyproject is unbumped, so a SHA is the only honest pin",
     "extractor": "scripts/extract-mesh-sdk-parity.mjs",
     "sources": [
@@ -28,6 +28,20 @@
           "name": "unit",
           "annotation": "Optional[str]",
           "default": "None"
+        }
+      ],
+      "validators": [
+        {
+          "name": "_name_not_blank",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"name\")",
+          "source": "    @field_validator(\"name\")\n    @classmethod\n    def _name_not_blank(cls, v: str) -> str:\n        if not v.strip():\n            raise ValueError(\"a method input must be named\")\n        return v"
+        },
+        {
+          "name": "_unit_not_blank",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"unit\")",
+          "source": "    @field_validator(\"unit\")\n    @classmethod\n    def _unit_not_blank(cls, v: Optional[str]) -> Optional[str]:\n        if v is not None and not v.strip():\n            raise ValueError(\"a blank unit is not 'no unit' — omit it\")\n        return v"
         }
       ]
     },
@@ -59,6 +73,20 @@
           "annotation": "str",
           "default": null
         }
+      ],
+      "validators": [
+        {
+          "name": "_not_blank",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"formula\", \"producer_sha\")",
+          "source": "    @field_validator(\"formula\", \"producer_sha\")\n    @classmethod\n    def _not_blank(cls, v: str) -> str:\n        if not v.strip():\n            raise ValueError(\"a method block must name its formula and its producer, not blanks\")\n        return v"
+        },
+        {
+          "name": "_bound_and_its_flag_agree",
+          "kind": "model_validator",
+          "decorator": "@model_validator(mode=\"after\")",
+          "source": "    @model_validator(mode=\"after\")\n    def _bound_and_its_flag_agree(self) -> \"MethodBlock\":\n        if (self.bound is None) != (self.bound_defaulted is None):\n            raise ValueError(\n                f\"bound={self.bound!r} and bound_defaulted={self.bound_defaulted!r} disagree \"\n                \"about whether this measure has a bound; a flag without a bound, or a bound \"\n                \"without a flag, is the half-stated disclosure this block exists to end\"\n            )\n        return self"
+        }
       ]
     },
     "ToolOutput": {
@@ -69,7 +97,8 @@
           "annotation": "Optional[MethodBlock]",
           "default": "None"
         }
-      ]
+      ],
+      "validators": []
     },
     "InstanceOption": {
       "file": "iagent_mesh/enumeration.py",
@@ -84,7 +113,8 @@
           "annotation": "str",
           "default": null
         }
-      ]
+      ],
+      "validators": []
     },
     "EnumerateInstancesResponse": {
       "file": "iagent_mesh/enumeration.py",
@@ -108,6 +138,14 @@
           "name": "total_available",
           "annotation": "Optional[int]",
           "default": "None"
+        }
+      ],
+      "validators": [
+        {
+          "name": "_no_blank_slot_names",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"scoped_by\")",
+          "source": "    @field_validator(\"scoped_by\")\n    @classmethod\n    def _no_blank_slot_names(cls, v: Sequence[str]) -> Sequence[str]:\n        if any(not s or not s.strip() for s in v):\n            raise ValueError(\n                \"scoped_by carries a blank slot name, which claims a scoping nobody can check\"\n            )\n        return v"
         }
       ]
     }
