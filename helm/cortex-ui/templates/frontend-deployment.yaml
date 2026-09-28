@@ -1,4 +1,52 @@
 {{- if .Values.frontend.enabled -}}
+{{- /*
+  ⛔ THE IMAGE PIN IS VALIDATED HERE, AT RENDER, BECAUSE NOTHING ELSE EVER WILL.
+
+  A bad image reference is the one failure a Helm release cannot report. The chart renders,
+  `helm upgrade` reports success, and the pull fails minutes later at the kubelet with
+  ImagePullBackOff — or, worse, SUCCEEDS onto a different image than the one anybody reviewed,
+  because the tag floated. Both happen after the only thing that could have complained has
+  already said OK. So the complaint has to happen at render.
+
+  This chart is also never rendered in CI: `helm-release.yml` runs chart-releaser, which
+  PACKAGES (`helm package`) and does not template. That is how `tag: latest` sat in
+  `values.yaml` as the default until 2026-09-27 with nothing to object. `scripts/redproof-chart-image-pin.mjs`
+  is the first thing in this repo that renders the chart at all, and it exists to prove these
+  refusals can still fire.
+
+  ⛔ THE ACCEPTED FORMS ARE ENUMERATED, NOT THE REFUSED ONES. A guard that lists what is
+  forbidden — `latest`, then `main`, then `edge` — is only ever total over the spellings
+  somebody thought of, and the next floating alias is accepted by default. So this keys on the
+  SAFE set: a digest, a 40-character commit sha, or a release version. `latest` is refused as a
+  CONSEQUENCE of not being any of those, which means `nightly` and `demo-week` are refused too,
+  without this comment being edited.
+
+  Exactly one of `digest` / `tag` must be set. Both set is refused rather than silently resolved
+  in the digest's favour, because a values file carrying `digest: sha256:…` next to `tag: latest`
+  reads to a human as though the tag is what ships.
+*/ -}}
+{{- $img := .Values.frontend.image }}
+{{- $digest := $img.digest | default "" | toString | trim }}
+{{- $tag := $img.tag | default "" | toString | trim }}
+{{- $base := printf "%s/%s/%s" .Values.global.imageRegistry .Values.global.imagePrefix $img.name }}
+{{- if and $digest $tag }}
+{{-   fail (printf "frontend.image: TWO PINS. digest=%q and tag=%q are both set, so which one ships is decided by this template rather than by you. Set exactly one and leave the other empty." $digest $tag) }}
+{{- end }}
+{{- $_ := required "frontend.image: NO PIN. Set frontend.image.digest (preferred) or frontend.image.tag. There is deliberately no default: this chart carried `tag: latest` until 2026-09-27, and a floating default cannot be told apart from a deliberate choice, so it was removed rather than replaced. Try --set frontend.image.digest=sha256:<64 hex>, read back from the registry with `curl -s https://ghcr.io/v2/edgy-solutions/cortex-ui/frontend/manifests/<full 40-char sha>` and never from a build log." (or $digest $tag) }}
+{{- $ref := "" }}
+{{- if $digest }}
+{{-   if not (regexMatch "^sha256:[0-9a-f]{64}$" $digest) }}
+{{-     fail (printf "frontend.image.digest: MALFORMED, so it names no image: %q. Wanted sha256: followed by exactly 64 lowercase hex characters. An abbreviated digest is the same mistake as an abbreviated tag — the registry 404s on it." $digest) }}
+{{-   end }}
+{{-   $ref = printf "%s@%s" $base $digest }}
+{{- else }}
+{{-   $isSha := regexMatch "^[0-9a-f]{40}$" $tag }}
+{{-   $isRelease := regexMatch "^(v?[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?|[A-Za-z][A-Za-z0-9-]*-[0-9]+[.][0-9]+[.][0-9]+)$" $tag }}
+{{-   if not (or $isSha $isRelease) }}
+{{-     fail (printf "frontend.image.tag: NOT A PIN: %q. Accepted are a full 40-character commit sha (what build.yml pushes on master) or a release version like v0.2.0 / cortex-ui-0.1.0. Anything else is refused because it may be re-pointed after this release renders — `latest` is refused by this rule, and so is any other alias, whether or not anyone has named it. Prefer digest:, which cannot be moved at all." $tag) }}
+{{-   end }}
+{{-   $ref = printf "%s:%s" $base $tag }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +72,7 @@ spec:
       {{- end }}
       containers:
         - name: frontend
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.global.imagePrefix }}/{{ .Values.frontend.image.name }}:{{ .Values.frontend.image.tag }}"
+          image: {{ $ref | quote }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy | default .Values.global.imagePullPolicy }}
           ports:
             - name: http

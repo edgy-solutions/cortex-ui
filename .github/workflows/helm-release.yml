@@ -42,6 +42,25 @@ jobs:
         with:
           version: v3.14.0
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ⛔ THE ONLY THING IN CI THAT RENDERS THIS CHART.
+      #
+      # chart-releaser PACKAGES the chart; `helm package` does not template it. So until this step
+      # existed, no job in this repo had ever rendered helm/cortex-ui — which is exactly how
+      # `tag: latest` survived as the default in values.yaml with nothing to object, and how a
+      # never-built tag would have rendered perfectly and failed minutes later at the kubelet on a
+      # release Helm had already called a success.
+      #
+      # It runs BEFORE chart-releaser on purpose: a chart whose image-pin guard has stopped
+      # refusing must not be published. The script needs only node builtins and helm, so there is
+      # deliberately no `npm ci` here — a dependency install is another way for this to stop
+      # running for a reason that has nothing to do with the chart.
+      - name: Prove the chart can still refuse a bad image pin
+        run: node scripts/redproof-chart-image-pin.mjs
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.6.0
         env:

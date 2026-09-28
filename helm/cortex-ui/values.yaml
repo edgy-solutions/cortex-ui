@@ -17,7 +17,43 @@ frontend:
   replicaCount: 1
   image:
     name: frontend
-    tag: latest
+    # ⛔ NO DEFAULT, AND THE PIN IS REQUIRED. This said `tag: latest` until 2026-09-27, which is the
+    # one failure a chart cannot report: a floating tag renders perfectly, Helm calls the release a
+    # success, and the kubelet pulls whatever `latest` points at minutes later — or fails with
+    # ImagePullBackOff for a tag that was never built. Both happen after the thing that could have
+    # complained has already said OK.
+    #
+    # ⛔ AND A DEFAULT IS WORSE THAN AN ABSENCE HERE, because it silently TRACKS. An unset value can
+    # be refused; `latest` cannot be told apart from a deliberate choice. Measured on this fleet
+    # 2026-09-19: a running frontend pod was on neither `:latest` nor the chart's pin, with
+    # `pullPolicy: Always` — one restart away from becoming a different image with no chart change
+    # and no commit. That is what removing this default closes.
+    #
+    # PREFER `digest`. It is the only pin that names one image: a tag can be moved, a digest cannot,
+    # and the fleet's own cortex-ui entry (invincible-agent `values-sandbox.yaml`) already pins this
+    # image by digest for exactly that reason. `frontend-deployment.yaml` validates the pin at RENDER
+    # so a bad one fails before Helm reports success — read the comment there for the rules, and
+    # `scripts/redproof-chart-image-pin.mjs` (`npm run check:chart:redproof`) for the proof those
+    # refusals still fire. `helm-release.yml` runs that redproof before chart-releaser, because it is
+    # the only thing in CI that renders this chart at all.
+    #
+    # ⛔ EXACTLY ONE of the two below. Both set is REFUSED rather than quietly resolved in the
+    # digest's favour: a file carrying `digest:` next to `tag: latest` reads to a human as though the
+    # tag is what ships.
+    #
+    # ⛔ AND THE ACCEPTED FORMS ARE ENUMERATED, NOT THE REFUSED ONES — so `latest` is refused as a
+    # consequence of not being a pin, and `nightly`, `main` and `demo-week` are refused too without
+    # anybody having to think of them first. Accepted: a digest; a full 40-character commit sha
+    # (what build.yml pushes on master); a release version like `v0.2.0` or `cortex-ui-0.1.0`.
+    #
+    #   helm ... --set frontend.image.digest=sha256:<64 hex>     # preferred
+    #   helm ... --set frontend.image.tag=<full 40-char sha>     # accepted; never an alias
+    #
+    # Read the digest back from the registry, never from a build log — and with a control, because a
+    # 404 from GHCR means any of four things (not built, skipped by the sessions-only build gate, no
+    # anonymous access, or a tag spelled short) and they print the same message.
+    digest: ""
+    tag: ""
     # Override global pull policy
     # pullPolicy: Always
 
