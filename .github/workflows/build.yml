@@ -389,6 +389,102 @@ jobs:
           echo "producer seed declarations:    $(ls ../invincible-agent/policy/task_kinds | wc -l)"
           echo "producer overlay declarations: $(ls ../invincible-agent/policy/overlays/sample/task_kinds | wc -l)"
 
+      # ── AND THE SECOND PEER, WHICH IS A DIFFERENT REPO FROM THE PRODUCER ────────────────
+      #
+      # `src/api/meshSdkParity.test.ts` mirrors the mesh SDK's pydantic models into TypeScript, and
+      # it is gated on `iagent-mesh-sdk` — NOT on `invincible-agent`. The producer checkout above
+      # does nothing for it. So until this step existed, three of its arms skipped on every CI run:
+      # the same silent-coverage failure the producer checkout was added to fix, one repo over.
+      #
+      # ⛔ THE PIN IS READ, NOT RESTATED. `meshSdkParity.json` already carries `provenance.sdk_sha`
+      # — the sha the mirror was extracted FROM — and that file's own comment warns that a second
+      # literal is how the two drift. A sha written here as well would let the extracted mirror and
+      # the checked-out SDK disagree while both files looked authoritative, which is the same
+      # "measures one peer, reports another" failure the producer's assertion below guards against.
+      - name: Read the mesh SDK pin out of the parity fixture
+        id: sdkpin
+        run: |
+          set -euo pipefail
+          SHA="$(jq -r '.provenance.sdk_sha' src/api/meshSdkParity.json)"
+          # An ABSENT key reads as the string "null" through `jq -r`, which `actions/checkout` would
+          # take for a ref and fail on obscurely two steps later. Named here instead, because a pin
+          # nobody wrote is a different fault from a pin that does not resolve.
+          if [ -z "$SHA" ] || [ "$SHA" = "null" ]; then
+            echo "::error::src/api/meshSdkParity.json has no provenance.sdk_sha, so the mirror" \
+                 "cannot be checked against an SDK nobody pinned. Re-run the extractor."
+            exit 1
+          fi
+          echo "mesh SDK repo: $(jq -r '.provenance.sdk_repo' src/api/meshSdkParity.json)"
+          echo "mesh SDK ref:  $(jq -r '.provenance.sdk_ref' src/api/meshSdkParity.json)"
+          echo "mesh SDK pin:  $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the mesh SDK beside cortex-ui
+        uses: actions/checkout@v4
+        with:
+          repository: edgy-solutions/iagent-mesh-sdk
+          ref: ${{ steps.sdkpin.outputs.sha }}
+          path: _sdk
+          persist-credentials: false
+          # ⛔ FULL HISTORY, AND THE TAGS, BECAUSE ONE ARM SHELLS OUT TO GIT. Unlike the producer
+          # seal — which only reads files off the disk, so `fetch-depth: 1` would do — the mirror's
+          # "no released version contains these FIELDS" arm runs `git describe --tags` and then
+          # `git show <newest tag>:<file>` inside this checkout. Under the default shallow fetch
+          # there is no tag to describe and no tagged tree to show, so that arm would go RED the
+          # moment it stopped skipping — trading a silent skip for a red that looks like a parity
+          # failure and is really a checkout depth. MEASURED, not reasoned: it failed exactly that
+          # way against a copy of the pinned sources that was not a git repository.
+          fetch-depth: 0
+
+      # Same shape as the producer's move, and for the same reason: `actions/checkout` refuses a
+      # `path` outside GITHUB_WORKSPACE, and the seal resolves the SDK as a SIBLING of this
+      # checkout's root. The seal reads two .py files and no history, so a plain move suffices.
+      - name: Put the mesh SDK where the seal looks for it
+        run: |
+          set -euo pipefail
+          mv _sdk ../iagent-mesh-sdk
+
+          # ⛔ ASSERT THE PIN RESOLVED. If `steps.sdkpin.outputs.sha` were ever empty, checkout
+          # would silently take the default branch, every arm would still run, the suite would
+          # still pass, and the mirror would be measured against models the fixture was not
+          # extracted from — a claim nothing in the run could contradict.
+          ACTUAL="$(git -C ../iagent-mesh-sdk rev-parse HEAD)"
+          PINNED="${{ steps.sdkpin.outputs.sha }}"
+          echo "mesh SDK HEAD: $ACTUAL"
+          echo "pinned ref:    $PINNED"
+          if [ "$ACTUAL" != "$PINNED" ]; then
+            echo "::error::mesh SDK checkout is at $ACTUAL but meshSdkParity.json pins $PINNED —" \
+                 "the mirror would be measured against models it was not extracted from."
+            exit 1
+          fi
+
+          # ⛔ AND THE FILES THE SEAL OPENS MUST BE THERE. A present-but-reorganised SDK passes the
+          # sha assertion above and still skips every arm, because the seal's gate is
+          # `existsSync(iagent_mesh/models.py)` and not "the directory exists". The paths are read
+          # out of the fixture's own `provenance.sources` rather than typed here, so an upstream
+          # rename lands as a red on this step instead of as three quietly skipped arms.
+          SOURCES="$(jq -r '.provenance.sources[]' src/api/meshSdkParity.json)"
+          # An empty list would make the loop below a no-op that prints nothing and passes: the
+          # zero-population green this lane has paid for more than once. Counted before it is walked.
+          N="$(printf '%s\n' "$SOURCES" | grep -c . || true)"
+          if [ "$N" -eq 0 ]; then
+            echo "::error::meshSdkParity.json lists no provenance.sources, so there is nothing to" \
+                 "check the checkout against. That is a claim about the fixture, not the SDK."
+            exit 1
+          fi
+          echo "mesh SDK sources to verify: $N"
+          MISSING=0
+          for f in $SOURCES; do
+            if [ -f "../iagent-mesh-sdk/$f" ]; then
+              echo "  present: $f ($(wc -l < "../iagent-mesh-sdk/$f") lines)"
+            else
+              echo "::error::meshSdkParity.json names $f as a source but it is not in the SDK at" \
+                   "$ACTUAL — the seal's skipIf gate would silence the mirror rather than fail."
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then exit 1; fi
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -428,7 +524,7 @@ jobs:
       # If CI's headroom ever goes, the echoes below are what make the failure read as a
       # resource limit rather than as a code regression — which is the shape that gets a real
       # red retried away.
-      - name: Test suite, with the producer present
+      - name: Test suite, with both peers present
         env:
           # Named in the seal's own assertion messages, so a parity red says which producer
           # state it was measured against instead of leaving the reader to guess.
@@ -443,6 +539,29 @@ jobs:
           echo "vitest maxWorkers: (unset — vitest default, derived from cores)"
           echo "node heap limit:   $(node -e 'console.log(require("v8").getHeapStatistics().heap_size_limit / 1048576 + " MB")')"
           npm run test
+
+      # ⛔ AND DID THOSE CROSS-REPO ARMS ACTUALLY RUN? A skipped arm is GREEN, so every step above
+      # can succeed with a peer absent while the suite reports coverage it does not have — which is
+      # exactly what happened on every build between the task-kind seal landing and the producer
+      # checkout being added. A passing suite cannot answer the question. The report can.
+      #
+      # `npm run test` now writes a machine-readable report beside its console output, and this step
+      # reads it: it CENSUSES every test file that reaches a peer — keyed on the path traversal, not
+      # on any peer's name, so a tenth seal added next month is in scope by default — and fails if
+      # any of their arms did not run.
+      #
+      # Deliberately NOT part of `npm run build`: a developer without the peers checked out must
+      # still be able to build, which is the entire reason those arms are `skipIf`-gated.
+      - name: Cross-repo seals must have RUN, not merely passed
+        run: npm run check:seals
+
+      # A guard that has only ever seen a good run has not been shown able to indict a bad one.
+      # This doctors the REPORT — the peer checkouts are read-only here — and checks that each
+      # rejection carries the message it must, because a redproof that exits 1 from a crash
+      # measures nothing. The clean case is asserted first, so a guard that rejects everything
+      # cannot score a perfect redproof.
+      - name: Prove the cross-repo seal guard can still fail
+        run: npm run check:seals:redproof
 
       - name: Typecheck
         run: npx tsc --noEmit

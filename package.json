@@ -14,9 +14,11 @@
     "build:bundle": "tsc && vite build",
     "start": "serve dist -s -l ${PORT:-8080}",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --reporter=default --reporter=json --outputFile=node_modules/.cache/cortex-vitest-report.json",
     "test:watch": "vitest",
-    "test:redproof": "node scripts/redproof-contract-tests.mjs"
+    "test:redproof": "node scripts/redproof-contract-tests.mjs",
+    "check:seals": "node scripts/check-cross-repo-seals.mjs node_modules/.cache/cortex-vitest-report.json",
+    "check:seals:redproof": "node scripts/redproof-cross-repo-seals.mjs node_modules/.cache/cortex-vitest-report.json"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
