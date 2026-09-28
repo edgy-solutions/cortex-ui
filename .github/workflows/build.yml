@@ -38,7 +38,27 @@ env:
   # method block's input spelling that the later commit reconciled. A pin picked from commit
   # subjects would have installed a red one. Verified literal by literal against `git show` at
   # each candidate, then pinned to the sha the full local suite was actually measured against.
-  PRODUCER_REF: 1c1005c23586fb5a4d30ce9f275650e28b51fdb3
+  #
+  # ⛔ BUMPED AGAIN 2026-09-28, AND THIS TIME THE PIN WENT STALE IN THE SAME COMMIT THAT NEEDED IT
+  # BUMPED — which is the failure mode the paragraph above describes, committed by the person who
+  # wrote it. `4189488` re-aimed `lineageHonoured.test.ts` at the producer's new rule module after
+  # `d3944da8` extracted it. The local suite was green at 1871/1871 because the sibling checkout was
+  # standing on `ec055c49`. CI checks out the PIN, `1c1005c2`, which predates `d3944da8`. Result:
+  # `Test Files 1 failed | 118 passed`, the six image steps skipped, and a chart released against an
+  # image that was never built.
+  #
+  # ⚠ NOTE WHICH ARMS CAUGHT IT, BECAUSE IT WAS NOT THE ONES AIMED AT THE RULING. The four arms that
+  # read `iagent_pure/lineage_claim.py` SKIPPED — the file does not exist at the old pin, so their
+  # `skipIf` gate silenced them. What failed were the three WIRING arms that read `gateway.py`, a
+  # file present at both shas, so they could actually compare and disagree. An arm gated on the
+  # peer file's existence cannot report that the peer is too old to have it; an arm reading a file
+  # that exists at every sha can. Worth remembering when adding a seal against a NEW peer module.
+  #
+  # Pinned to `ec055c49` — origin/master, 10 commits past the old pin, contains `d3944da8`, and is
+  # exactly the sha the 1871-green local suite was measured against. Diffed for only the files the
+  # seals open: `gateway.py` (+124/-9) and `lineage_claim.py` (new, +88) move; `human_tasks.py` and
+  # `defs/dynamic_supervisor.py` do not, so the seals reading those are untouched.
+  PRODUCER_REF: ec055c49da24cdbc39950a126321183c6974b668
 
 permissions:
   contents: read
