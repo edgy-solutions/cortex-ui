@@ -1,9 +1,9 @@
 {
   "provenance": {
     "sdk_repo": "iagent-mesh-sdk",
-    "sdk_ref": "lane/ca",
-    "sdk_sha": "5ef95b670faa14e3bf9e2338d40b79c3c7749703",
-    "sdk_release": "UNRELEASED — the newest tag (v0.9.3) contains neither MethodBlock nor completeness; HEAD is past it and pyproject is unbumped, so a SHA is the only honest pin",
+    "sdk_ref": "v0.9.4",
+    "sdk_sha": "c75587e96bbe9d93c192bd0dda2464c205001d51",
+    "sdk_release": "v0.9.4",
     "extractor": "scripts/extract-mesh-sdk-parity.mjs",
     "sources": [
       "iagent_mesh/models.py",

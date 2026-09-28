@@ -167,10 +167,13 @@ export function extractValidators(src, className) {
 
 export function extract(sdkRoot = DEFAULT_SDK) {
   const classes = {};
+  /** The mirrored sources as read, so the pin can be decided on the bytes actually extracted. */
+  const onDisk = {};
   for (const [file, className] of MIRRORED) {
     const full = path.join(sdkRoot, file);
     if (!existsSync(full)) throw new Error(`the SDK source is not here: ${full}`);
     const src = readFileSync(full, "utf8");
+    onDisk[file] = src;
     classes[className] = {
       file,
       fields: extractClass(src, className),
@@ -179,10 +182,10 @@ export function extract(sdkRoot = DEFAULT_SDK) {
   }
   let sha = "unknown";
   let ref = "unknown";
+  let release = "UNKNOWN — this checkout could not be interrogated with git";
   try {
     const git = (...a) => execFileSync("git", ["-C", sdkRoot, ...a], { encoding: "utf8" }).trim();
-    sha = git("rev-parse", "HEAD");
-    ref = git("rev-parse", "--abbrev-ref", "HEAD");
+    ({ ref, sha, release } = pinFor(git, sdkRoot, onDisk));
   } catch {
     // Provenance the seal asserts is present; an un-gitted checkout is recorded as such rather
     // than guessed at, and the seal's provenance arm says what is missing.
@@ -192,12 +195,100 @@ export function extract(sdkRoot = DEFAULT_SDK) {
       sdk_repo: "iagent-mesh-sdk",
       sdk_ref: ref,
       sdk_sha: sha,
-      sdk_release: "UNRELEASED — the newest tag (v0.9.3) contains neither MethodBlock nor completeness; HEAD is past it and pyproject is unbumped, so a SHA is the only honest pin",
+      sdk_release: release,
       extractor: "scripts/extract-mesh-sdk-parity.mjs",
       sources: MIRRORED.map(([f]) => f).filter((f, i, a) => a.indexOf(f) === i),
     },
     classes,
   };
+}
+
+/**
+ * WHICH REF THE SNAPSHOT SHOULD SAY IT CAME FROM — computed, not written down.
+ *
+ * ⛔ WHY THIS IS NOT A CONSTANT ANY MORE. It used to be a sentence: "UNRELEASED — the newest tag
+ * (v0.9.3) contains neither MethodBlock nor completeness ... so a SHA is the only honest pin". That
+ * was true when it was typed and FALSE about four hours later: v0.9.4 was cut on 2026-09-27 at
+ * 23:20 carrying every mirrored field and the bound/bound_defaulted XOR. A justification in prose
+ * does not expire on its own, and this one was the reason the mirror pinned a lane-branch commit
+ * instead of a release. The seal's own release arm is what reported it, within the hour.
+ *
+ * ⛔ AND A RELEASE IS THE BETTER PIN WHEN ONE FITS. A tag on origin is fetchable by anyone and
+ * survives the lane branch being rebased or deleted; `5ef95b6` was a commit on `lane/ca`, which is
+ * neither. So: the newest tag whose blobs for the mirrored sources are byte-identical to what was
+ * just read off the disk WINS, and the pin records that tag with its commit.
+ *
+ * ⛔ IDENTITY IS ON THE CONTENT, NOT ON ANCESTRY. "HEAD is a descendant of v0.9.4" would not say the
+ * files match — a later commit may have touched them. And a checkout can be standing anywhere:
+ * measured the same night, HEAD was `ed74f1f`, which is NOT an ancestor of v0.9.4, so a snapshot
+ * that recorded HEAD would have pinned an unreleased commit again while the content on disk was
+ * exactly the release's. The check is: same bytes, or it is not that tag.
+ *
+ * Returns `{ ref, sha, release }`. With no tag matching, `release` says which tag was newest and
+ * how many mirrored sources it failed to match, so the fallback to a sha carries its own reason
+ * rather than inheriting last month's.
+ */
+export function pinFor(git, sdkRoot, onDisk) {
+  const headSha = git("rev-parse", "HEAD");
+  const headRef = git("rev-parse", "--abbrev-ref", "HEAD");
+  const fallback = (why) => ({ ref: headRef, sha: headSha, release: why });
+
+  let tags = [];
+  try {
+    // Newest first by creation, so a release cut today wins over one cut last month.
+    tags = git("tag", "--sort=-creatordate").split("\n").map((t) => t.trim()).filter(Boolean);
+  } catch {
+    return fallback("UNRELEASED — this checkout has no tags to compare against");
+  }
+  if (tags.length === 0) return fallback("UNRELEASED — this checkout has no tags to compare against");
+
+  let firstMismatch = "";
+  for (const tag of tags) {
+    let all = true;
+    let missed = 0;
+    for (const [file, text] of Object.entries(onDisk)) {
+      let atTag = null;
+      try {
+        atTag = execFileSync("git", ["-C", sdkRoot, "show", `${tag}:${file}`], {
+          encoding: "utf8",
+          maxBuffer: 64e6,
+          // stderr discarded: walking back through the tags, most of them predate one of these
+          // files and git says so on stderr. Sixteen `fatal: path ... exists on disk, but not in
+          // v0.2.0` lines would bury the INSTRUMENT lines the --write path prints, and "the file
+          // was not there yet" is the expected answer here, not a failure.
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+      } catch {
+        // The file did not exist at that tag, which is a mismatch and not an error.
+      }
+      // Line endings normalised on BOTH sides: a working tree may be checked out CRLF while the
+      // blob is LF, and that is not drift in the mirrored declarations. Nothing else is normalised —
+      // whitespace inside a declaration IS drift worth refusing the tag over.
+      if (atTag === null || text.replace(/\r\n/g, "\n") !== atTag.replace(/\r\n/g, "\n")) {
+        all = false;
+        missed++;
+      }
+    }
+    if (all) {
+      let sha;
+      try {
+        // Peel, because an annotated tag's own object is not the commit CI would check out.
+        sha = git("rev-parse", `${tag}^{commit}`);
+      } catch {
+        // ⛔ NOT a fall-through to HEAD. The bytes match the tag, but without its commit there is
+        // nothing to record as the pin, and HEAD is measurably not it. Say so instead of naming a
+        // release next to the wrong sha, which is the stale-pin defect wearing a tag's name.
+        return fallback(`UNRELEASED — the content matches ${tag} but its commit could not be resolved`);
+      }
+      return { ref: tag, sha, release: tag };
+    }
+    if (!firstMismatch) {
+      firstMismatch =
+        `UNRELEASED — the newest tag (${tag}) does not match ${missed} of ${Object.keys(onDisk).length} ` +
+        `mirrored sources, so a SHA is the only honest pin`;
+    }
+  }
+  return fallback(firstMismatch);
 }
 
 const invokedDirectly = process.argv[1] && process.argv[1].endsWith("extract-mesh-sdk-parity.mjs");

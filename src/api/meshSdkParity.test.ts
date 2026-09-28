@@ -305,63 +305,164 @@ describe("the snapshot still matches the live Python", () => {
     expect(live).toEqual(declared);
   });
 
-  it.skipIf(!HAVE_SDK)("no released version contains these FIELDS, which is why it pins a SHA", async () => {
+  it.skipIf(!HAVE_SDK)("the pin names a RELEASE, and the release is what was extracted", async () => {
     /*
-      ⛔ THIS ARM WAS WRONG ON ITS FIRST RUN AND SAID SO. It asserted the SDK had no tags at all;
-      the repo is tagged to v0.9.3 and HEAD is 21 commits past it. The fact worth sealing is not
-      "there are no releases" but "no RELEASE CONTAINS WHAT IS MIRRORED" — the newest tag has
-      neither `MethodBlock` nor `completeness`, so a version pin would point at a file where these
-      classes do not exist. That is the whole reason the snapshot records a SHA.
+      ⛔ THIS ARM REPLACES ITS OWN OPPOSITE, WHICH EXPIRED IN UNDER FOUR HOURS. Until 2026-09-27 it
+      read "no released version contains these FIELDS, which is why it pins a SHA", and it was
+      right: the newest tag was v0.9.3, whose `models.py` is 600 bytes and declares no `MethodBlock`
+      at all, so a version pin would have named a file where the mirrored classes do not exist. It
+      went RED the same night when v0.9.4 was cut carrying every mirrored field and the
+      bound/bound_defaulted XOR, and its own failure message said what to do — "pin the mirror to
+      that version instead of a SHA". That is the arm working, not the arm having been wrong.
 
-      When a tag finally carries them, this goes red and the decision to pin a version instead
-      becomes a task rather than a stale sentence in a JSON file.
+      ⛔ AND THE LESSON IS ABOUT THE FIXTURE, NOT THE TAG. The reason to pin a sha lived in
+      `meshSdkParity.json` as a SENTENCE: "UNRELEASED — the newest tag (v0.9.3) contains neither
+      MethodBlock nor completeness ... so a SHA is the only honest pin". A justification in prose
+      does not expire when its premise does, it just keeps reading as current — and this one was the
+      standing reason the mirror pinned a commit on a lane branch, which is a ref that can be
+      rebased or deleted, instead of a tag anyone can fetch. So `sdk_release` is now COMPUTED by the
+      extractor from the bytes it read (`pinFor`), and this arm checks that computation against an
+      independent one.
+
+      ⛔ RECOMPUTED HERE, NOT ASKED OF `pinFor`. The extractor decides by walking tags
+      newest-by-creatordate and comparing blobs. Calling that same function for the expectation
+      would make this arm agree with it by construction and indict nothing, which is the hollow-green
+      shape this repo has paid for before. So the tag comes from `describe --abbrev=0` — newest
+      REACHABLE, a different question with a different answer when tags are cut off-trunk — and the
+      byte comparison is written out below rather than borrowed.
     */
-    const git = (...a: string[]) => execFileSync("git", ["-C", SDK, ...a], { encoding: "utf8" }).trim();
-    const newest = git("describe", "--tags", "--abbrev=0");
+    const git = (...a: string[]) =>
+      execFileSync("git", ["-C", SDK, ...a], { encoding: "utf8", maxBuffer: 64e6 });
+    const t = (...a: string[]) => git(...a).trim();
+    const newest = t("describe", "--tags", "--abbrev=0");
     expect(newest, "positive control: no tag was read at all").toMatch(/^v[0-9]+[.][0-9]+[.][0-9]+/);
-    /*
-      ⛔ AND THE SUBJECT IS THE FIELDS, NOT THE CLASSES — this arm's SECOND wrong premise, also
-      caught by running it. `EnumerateInstancesResponse` has existed since long before v0.9.3; what
-      is unreleased is `completeness` and `total_available` ON it. Keyed on the class name the arm
-      read as satisfied while saying nothing about the thing the mirror actually describes, which is
-      a field set. A class can sit still for releases while its fields drift underneath.
-    */
-    const { extractClass } = await import("../../scripts/extract-mesh-sdk-parity.mjs");
-    const missing: string[] = [];
-    for (const [cls, entry] of Object.entries(SNAP.classes)) {
-      let released = "";
-      try {
-        released = git("show", `${newest}:${entry.file}`);
-      } catch {
-        // The whole FILE postdates the tag: every field in it is unreleased.
-      }
-      if (!released.includes(`class ${cls}`)) {
-        missing.push(...entry.fields.map((f) => `${cls}.${f.name}`));
-        continue;
-      }
-      let there = new Set<string>();
-      try {
-        there = new Set(extractClass(released, cls).map((f) => f.name));
-      } catch {
-        /*
-          The extractor THROWS on a class with no fields, because on the live read that means its
-          parser broke. Read historically it can be the truth instead: at v0.9.3 `ToolOutput` is
-          literally `class ToolOutput(BaseModel): """...""" ; pass` — a bare base class. So the hard
-          guard stays hard where it belongs and an empty set is the right reading here, which is
-          why this catch is in THIS arm and not in the extractor.
-        */
-      }
-      for (const f of entry.fields) if (!there.has(f.name)) missing.push(`${cls}.${f.name}`);
-    }
-    // The two the overnight order named by hand, so this cannot go green by finding some other gap.
-    expect(missing).toContain("EnumerateInstancesResponse.completeness");
-    expect(missing).toContain("EnumerateInstancesResponse.total_available");
+
+    const sources = SNAP.provenance.sources as string[];
     expect(
-      missing.filter((m) => m.startsWith("MethodBlock.")).length,
-      `${newest} now ships MethodBlock — pin the mirror to that version instead of a SHA`,
-    ).toBe(SNAP.classes.MethodBlock.fields.length);
-    // And HEAD really is ahead of it, so "a SHA past the newest tag" is the honest description.
-    expect(git("describe", "--tags")).toMatch(/-[0-9]+-g[0-9a-f]+$/);
+      sources.length,
+      "positive control: no sources to compare, so the filter below proves nothing",
+    ).toBeGreaterThan(0);
+    const mismatched = sources.filter((f) => {
+      let atTag: string | null = null;
+      try {
+        atTag = git("show", `${newest}:${f}`);
+      } catch {
+        atTag = null; // the file postdates the tag, which is a mismatch and not an error
+      }
+      // Line endings only. Whitespace inside a declaration IS drift worth refusing a tag over.
+      const onDisk = readFileSync(path.join(SDK, f), "utf8").replace(/\r\n/g, "\n");
+      return atTag === null || onDisk !== atTag.replace(/\r\n/g, "\n");
+    });
+
+    if (mismatched.length === 0) {
+      /*
+        The near branch, and the one that ran when this was written: the newest release IS the
+        content the mirror was extracted from, so the pin must name it — not a sha, and not a
+        sentence about why a sha was necessary.
+      */
+      expect(
+        SNAP.provenance.sdk_ref,
+        `${newest} matches the mirrored sources byte for byte, so the pin must name the release`,
+      ).toBe(newest);
+      expect(
+        SNAP.provenance.sdk_release,
+        "sdk_release must BE the tag; prose here is what went stale last time",
+      ).toBe(newest);
+      expect(
+        SNAP.provenance.sdk_sha,
+        "the sha must be the tag's COMMIT — an annotated tag's own object is not what CI checks out",
+      ).toBe(t("rev-parse", `${newest}^{commit}`));
+    } else {
+      /*
+        The far branch: the SDK has moved past its newest release in a way that touches what is
+        mirrored, so a sha is the honest pin again. The claim it holds is that the REASON is
+        recomputed — a sha pin has to name the release it could not use, so it cannot inherit the
+        reason from the last time this happened, which is exactly how the last one went stale.
+
+        ⛔ AND THIS BRANCH DOES NOT RUN AGAINST THE REAL CHECKOUT TODAY, so it is stated where it can
+        be checked rather than trusted. Reaching it needs the disk to differ from the newest tag, and
+        the SDK belongs to another lane — nothing here may write to it. `npm run check:parity:redproof`
+        reaches it from THIS side instead: the branch turns on `provenance.sources`, which is the
+        fixture's own claim about which files it mirrors, so a mutant that adds a path no release
+        carries sends the arm down here. Two cases do that, one aimed at each assertion below. An
+        accepting branch nothing exercises is where a defect lives rent-free.
+      */
+      expect(
+        String(SNAP.provenance.sdk_release),
+        "a sha pin must state which release it could not use, and name it",
+      ).toContain(newest);
+      expect(String(SNAP.provenance.sdk_sha)).toMatch(/^[0-9a-f]{40}$/);
+      expect(SNAP.provenance.sdk_ref, "a sha pin must not also claim to be a release").not.toBe(newest);
+    }
+  });
+
+  it.skipIf(!HAVE_SDK)("the pinned ref CONTAINS every mirrored field, and the XOR rule", async () => {
+    /*
+      The expired arm's inverse, kept on the same three subjects so the reversal is legible:
+      `MethodBlock`'s fields and `EnumerateInstancesResponse.completeness` / `total_available` were
+      the three the overnight order named by hand as unreleased. They are asserted PRESENT here.
+
+      ⛔ WHY THIS IS NOT THE ARM ABOVE AGAIN. That one compares the newest TAG to the disk; this one
+      reads whatever `sdk_ref` actually names, which in the far branch is a sha and not a tag at all.
+      The claim is the one a consumer of the fixture depends on and neither the live arms nor the
+      snapshot arms make: the thing the mirror PINS contains what the mirror says it does. When the
+      near branch above holds, this follows from it — that is the cheap day, not the reason it exists.
+    */
+    const ref = String(SNAP.provenance.sdk_ref);
+    const git = (...a: string[]) =>
+      execFileSync("git", ["-C", SDK, ...a], { encoding: "utf8", maxBuffer: 64e6 });
+    const { extractClass } = await import("../../scripts/extract-mesh-sdk-parity.mjs");
+
+    const missing: string[] = [];
+    let counted = 0;
+    for (const [cls, entry] of Object.entries(SNAP.classes)) {
+      // No try/catch on the read or the parse. At a ref the mirror PINS, a missing file or a class
+      // the extractor cannot parse is the finding, and swallowing it would report it as zero fields.
+      const atRef = git("show", `${ref}:${entry.file}`);
+      const there = new Set(extractClass(atRef, cls).map((f) => f.name));
+      for (const f of entry.fields) {
+        counted++;
+        if (!there.has(f.name)) missing.push(`${cls}.${f.name}`);
+      }
+    }
+    /*
+      ⛔ TIED TO THE POPULATION, NOT TO A NUMBER I GUESSED. The first draft of this control said
+      `toBeGreaterThan(20)` and went RED at 15 — the control doing its job, but a threshold picked
+      without measuring the population is a number that can only fail LOUDLY once and then sit
+      there passing forever while the real count halves. The honest control is that the loop visited
+      EVERY field the snapshot declares: a class silently skipped drops the count, and `missing`
+      being empty can never see that, because a containment check is blind to what was never looked
+      at. This is the cardinality assertion beside the membership one.
+    */
+    const declaredFieldCount = Object.values(SNAP.classes).reduce((n, e) => n + e.fields.length, 0);
+    expect(declaredFieldCount, "positive control: the snapshot declares no fields at all").toBeGreaterThan(0);
+    expect(counted, "the census skipped a class the snapshot describes").toBe(declaredFieldCount);
+    /*
+      ⛔ THE SUBJECTS GO IN THE MESSAGE, BECAUSE THE VALUE IS ABBREVIATED. Measured 2026-09-28: the
+      redproof case that pins v0.9.3 and narrows the census to the one class that release declares
+      reddened HERE, correctly, and reported `expected [ …(2) ] to deeply equal []` — two missing
+      fields, neither of them named. A reader of that line cannot tell `completeness` absent from a
+      release from a typo in the snapshot, and a redproof cannot tell this assertion from any other
+      `toEqual([])` in the file. Naming them here is what makes the red attributable.
+    */
+    expect(missing, `fields the pinned ref ${ref} does not carry: ${missing.join(", ") || "(none)"}`).toEqual([]);
+    // Named, so this cannot read as satisfied by some other class's fields happening to be there.
+    expect(
+      SNAP.classes.MethodBlock.fields.map((f) => f.name),
+      "positive control: MethodBlock contributes nothing to the census above",
+    ).not.toEqual([]);
+    for (const named of ["completeness", "total_available"]) {
+      expect(
+        SNAP.classes.EnumerateInstancesResponse.fields.map((f) => f.name),
+        `${named} is what the overnight order named; the mirror has stopped describing it`,
+      ).toContain(named);
+    }
+    // The rule ruling 2 was about, read at the pinned ref rather than off the disk.
+    const modelsAtRef = git("show", `${ref}:${SNAP.classes.MethodBlock.file}`);
+    expect(
+      modelsAtRef,
+      "the pinned ref does not carry the bound/bound_defaulted XOR, so the pin predates the rule again",
+    ).toContain("(self.bound is None) != (self.bound_defaulted is None)");
   });
 });
 
@@ -462,10 +563,12 @@ describe("the rules the producer ENFORCES, which a fields-only mirror could not 
     reworded upstream reddens that comparison. These arms are here for the part a diff cannot say:
     WHICH rule mattered and why cortex cares.
 
-    That these arms can still FAIL is proven by `scripts/redproof-sdk-parity-validators.mjs`
-    (`npm run check:parity:redproof`): six mutants on the fixture, each required to redden the arm it
-    was aimed at, scored on the failed arm NAME. It found one hole on the day it was written, noted
-    at the raise assertion below.
+    That these arms can still FAIL is proven by `scripts/redproof-sdk-parity.mjs`
+    (`npm run check:parity:redproof`): mutants applied to the fixture, each required to redden the
+    arm it was aimed at, scored on the failed arm NAME and never on the exit code or the log. The
+    count is deliberately not written here — it grew when the pin arms were added, and a number in
+    prose is one more thing that can quietly stop being true. It found one hole on the day it was
+    written, noted at the raise assertion below.
   */
 
   it("captured validators at all, across more than one class", () => {
