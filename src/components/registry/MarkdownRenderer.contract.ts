@@ -39,6 +39,26 @@ export const MARKDOWN_RENDERER_CONTRACT = {
     markdown_content: { encoding: "string", required: true },
     /** Card title. Falls back to "Knowledge Document" when absent. */
     subject_concept: { encoding: "string", required: false },
+    // ── engine-docs (`mesh:explain`) — OPTIONAL, and WINNING when present ──────────────────
+    //
+    // invincible-agent `agent_fleet/docs_agent/explain.py` (`explain`, `abstain`) and
+    // `main.py:360-370` (the envelope). Neither shape carries `markdown_content`; the platform's
+    // deterministic projector wrote "No content available." over them. When `pages` or
+    // `abstained` arrives, the card draws THAT and ignores `markdown_content` — see
+    // `knowledgeDocumentView.ts`. None of these can make the card refuse: the vocabulary below
+    // stays empty, which is what keeps this archetype the universal fallback.
+    /** The subject asked about. Names the gap on an abstain. */
+    subject: { encoding: "string", required: false },
+    /** Every tied page, each `{title, audience_hint, cited_seals, body, ...}`; each drawn whole. */
+    pages: { encoding: "array", required: false },
+    /** How many pages tied. Kept so a card with fewer pages than counted says so. */
+    page_count: { encoding: "number", required: false },
+    /** `true` on an abstain: no page explains the subject yet. A result, not a failure. */
+    abstained: { encoding: "boolean", required: false },
+    /** The abstain's machine reason, e.g. `no_page_explains_this_subject`. */
+    reason: { encoding: "string", required: false },
+    /** The abstain's sentence, naming the subject. Drawn as written. */
+    body: { encoding: "string", required: false },
   },
   rowRequirements: MARKDOWN_ROW_REQUIREMENTS,
   refusalReasons: MARKDOWN_REFUSAL_REASONS,

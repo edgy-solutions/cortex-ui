@@ -628,6 +628,33 @@ const DERIVED_BINDINGS = [
     domain_fit: ["SUSTAINMENT"],
     contract: MARKDOWN_RENDERER_CONTRACT,
   },
+  // ── engine-docs: THE DOCS ANSWER IS A KNOWLEDGE_DOCUMENT, AND NOW IT DRAWS ─────────────
+  //
+  // `mesh:explain` returns the reviewed page(s) covering a subject, whole, or an abstain naming
+  // the subject no page covers yet (invincible-agent `agent_fleet/docs_agent/explain.py`). Its
+  // `ARCHETYPE` is KNOWLEDGE_DOCUMENT, and until the contract learned `pages`/`abstained` the
+  // card could only draw the projector's "No content available." over both.
+  //
+  // THE SUBJECT IS READ, NOT CHOSEN: `docs_agent/main.py:106` declares
+  // `output_uri: f"{DOCS}DocExplanation"` with `DOCS = "http://invincible-agent/docs#"` (:80).
+  // Full IRI per the registrar's canonical form, as the cost row below.
+  //
+  // ⚠ ONE-SIDED UNTIL THE PLATFORM ADDS ITS ROW. `PRESENTATION_CAPABILITIES` has no `docs:`
+  // subject, so the producer's mirror seal reads this pair as frontend-only. That is a TRUE
+  // statement — the card now draws and the mesh does not advertise it — and the packet asking
+  // for the other half travels with this commit.
+  {
+    subject_uri: "http://invincible-agent/docs#DocExplanation",
+    object_uri: "mesh:KnowledgeDocument",
+    // EMPTY, AND SOURCED. `docs_agent/main.py:241` registers `domains=[]` — "DECLARED
+    // AGNOSTIC, never reached by leaving the argument off": the corpus answers about the
+    // system, not a domain's subjects. The engine declares no owner persona either; who a page
+    // is FOR travels per page as `audience_hint`, which is display routing and is drawn on the
+    // card rather than lifted into a verb-level affinity that would rank one reader over another.
+    persona_fit: [],
+    domain_fit: [],
+    contract: MARKDOWN_RENDERER_CONTRACT,
+  },
   // ── SOURCE_LEDGER — TWO CONSUMERS ON DAY ONE, WHICH IS WHY THE NAME IS STRUCTURAL ────
   //
   // A program brief and a cost lot review both emit ledgers, so an archetype named BRIEF would

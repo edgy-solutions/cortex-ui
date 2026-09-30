@@ -1,5 +1,6 @@
 import React from "react";
 import { fallbackSubjectLabel, looksLikeIri } from "@/lib/confidence";
+import { knowledgeDocumentView } from "./knowledgeDocumentView";
 import { AlertCircle, FileText, Zap } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -190,9 +191,15 @@ const SupplyTable = ({ data, subject }: { data: any[]; subject?: string }) => {
 const MarkdownRenderer = ({
   content,
   subject,
+  audience,
+  citedSeals,
 }: {
   content: string;
   subject?: string;
+  /** engine-docs `audience_hint`: DISPLAY ROUTING, NOT AUTHZ. Shown, never used to hide. */
+  audience?: string;
+  /** engine-docs `cited_seals`, in the page's own order. */
+  citedSeals?: string[];
 }) => {
   const wordCount = content
     ? content.split(/\s+/).filter((w) => w.length > 0).length
@@ -217,6 +224,7 @@ const MarkdownRenderer = ({
         <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
           <FileText className="w-3 h-3" />
           Knowledge Document · {wordCount} {wordCount === 1 ? "word" : "words"}
+          {audience && <span data-doc-audience>· for {audience}</span>}
         </p>
       </div>
 
@@ -362,6 +370,15 @@ const MarkdownRenderer = ({
           <span>{wordCount}</span>
         </div>
       </div>
+      {citedSeals && citedSeals.length > 0 && (
+        <ol data-doc-cited-seals className="mt-3 space-y-0.5 text-[10px] font-mono text-slate-500">
+          {citedSeals.map((seal) => (
+            <li key={seal}>
+              <span className="text-cyan-500/50">Seal:</span> {seal}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 };
@@ -452,13 +469,40 @@ const renderComponent = (
         />
       );
 
-    case "KNOWLEDGE_DOCUMENT":
-      return (
-        <MarkdownRenderer
-          content={comp.markdown_content}
-          subject={comp.subject_concept}
-        />
-      );
+    case "KNOWLEDGE_DOCUMENT": {
+      // Three shapes, decided in knowledgeDocumentView.ts: engine-docs pages, an engine-docs
+      // abstain, or the plain markdown string. Structure wins over a placeholder string.
+      const view = knowledgeDocumentView(comp);
+      if (view.kind === "pages") {
+        const short = view.declaredCount !== undefined && view.declaredCount !== view.pages.length;
+        return (
+          <div data-doc-pages={view.pages.length}>
+            {short && (
+              <p data-doc-page-count-mismatch className="text-[10px] font-mono text-amber-400/80 uppercase tracking-widest">
+                {view.pages.length} of {view.declaredCount} pages arrived
+              </p>
+            )}
+            {view.pages.map((p, i) => (
+              <MarkdownRenderer
+                key={`${p.title ?? "page"}-${i}`}
+                content={p.body}
+                subject={p.title ?? view.subject}
+                audience={p.audience}
+                citedSeals={p.citedSeals}
+              />
+            ))}
+          </div>
+        );
+      }
+      if (view.kind === "abstain") {
+        return (
+          <div data-doc-abstained>
+            <MarkdownRenderer content={view.body} subject={view.subject} />
+          </div>
+        );
+      }
+      return <MarkdownRenderer content={view.content} subject={view.subject} />;
+    }
 
     case "CHART_WIDGET":
       return (

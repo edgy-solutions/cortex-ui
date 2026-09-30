@@ -302,3 +302,29 @@ describe("SOURCE_LEDGER's two consumers", () => {
     expect(brief.domain_fit).toEqual([]);
   });
 });
+
+describe("engine-docs' answer is bound to the card that can now draw it", () => {
+  // `docs_agent/main.py:106` — `output_uri: f"{DOCS}DocExplanation"`, DOCS at :80. Read from the
+  // engine, not chosen, and in the registrar's canonical full-IRI form.
+  const DOC_EXPLANATION = "http://invincible-agent/docs#DocExplanation";
+
+  it("the subject binds to KNOWLEDGE_DOCUMENT under MarkdownRenderer's contract", () => {
+    const rows = assembleDerivedCapabilities().filter((c) => c.subject_uri === DOC_EXPLANATION);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].archetype).toBe("KNOWLEDGE_DOCUMENT");
+    expect(rows[0].expected_fields).toEqual(Object.keys(MARKDOWN_RENDERER_CONTRACT.fields));
+    // The fields the card reads off a docs answer travel in the registration, or the HUD
+    // would report them unread and the selector would never learn the card consumes them.
+    for (const k of ["pages", "page_count", "abstained", "subject", "body"]) {
+      expect(rows[0].expected_fields, k).toContain(k);
+    }
+  });
+
+  it("its affinity is EMPTY because the engine declares it agnostic — sourced, not defaulted", () => {
+    // `docs_agent/main.py:241` registers `domains=[]` and names no owner persona; audience is
+    // per page (`audience_hint`) and is drawn on the card, not lifted into a ranking.
+    const row = assembleDerivedCapabilities().find((c) => c.subject_uri === DOC_EXPLANATION)!;
+    expect(row.persona_fit).toEqual([]);
+    expect(row.domain_fit).toEqual([]);
+  });
+});
