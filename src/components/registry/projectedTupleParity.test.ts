@@ -309,8 +309,11 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     //    extracted INTO that glob's reach, which is the other half of the fix. ───────────────
     const jsonFixtures = all.filter((n) => n.includes("payload") && n.endsWith(".json"));
     expect(jsonFixtures.length, "no payload captures found — arm 1 would be vacuous").toBeGreaterThan(0);
-    const jsonThreshold = jsonFixtures.filter((n) => read(n).includes("threshold"));
-    const jsonVerdict = jsonFixtures.filter((n) => read(n).includes("verdict"));
+    // JSON-SHAPED HERE TOO, AND FOR BOTH. Arm 1 matched the bare word until 2026-09-30, when a
+    // docs capture arrived whose 77k runbook body says "threshold" in prose and the arm counted it
+    // as a second capture of the field. The control uses the same instrument as the arm it controls.
+    const jsonThreshold = jsonFixtures.filter((n) => jsonShaped("threshold").test(read(n)));
+    const jsonVerdict = jsonFixtures.filter((n) => jsonShaped("verdict").test(read(n)));
     // EXACTLY ONE, BY NAME. The nine 2026-09-19 producer captures still carry nothing, so this is
     // not "the glob was always fine" — it is "the capture is now where the glob can see it".
     expect(jsonThreshold).toEqual(["2026-09-26-payload-lot4-contribution-ranking.json"]);
