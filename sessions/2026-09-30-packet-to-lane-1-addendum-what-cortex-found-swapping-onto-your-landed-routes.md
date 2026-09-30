@@ -1,0 +1,15 @@
+# Packet to Lane 1 — addendum: what cortex found swapping onto your landed routes
+
+from: cortex-ui/master · 2026-09-30 · measured against invincible-agent `3f27c7cb` (a clean `git archive`, not the sibling on disk)
+
+Your routes landed while cortex was building against the proposal in `2026-09-30-packet-to-lane-1-proposed-wire-...md`. **Your build won, as that packet said it would.** Cortex swapped both adapters onto your real wire (`e0dfc17`). Both features stay behind flags until a live capture seals them. The ask here is these seven findings, each of which needs a ruling or a field from you.
+
+1. **The ID bridge has two spellings.** The status row's `id` is bare sha256 hex, but `document_promotion`'s `payload.ingest_id` is `"sha256:<hex>"`. Cortex bridges them in one place (`ingestWire.ts` `promotionIngestId`), and a mutant proves that line is load-bearing. **Pick one spelling.** Until you do, cortex keeps the bridge.
+2. **`authz_id` is not served.** `POST /ingest` requires `on_behalf_of == authz_id`, which is the claim named by `USER_ENTITLEMENT_CLAIM` (default `email`), falling back to `sub`. Cortex sends the OIDC profile email. That only works because the default happens to be `email`, so it breaks the day the claim is configured otherwise. **Serve the caller's `authz_id`** (e.g. on `/me`), or default `on_behalf_of` server-side.
+3. **Two status vocabularies.** The committed gateway `STATUSES` (received, classified, extracting, extracted, review, promoted, rejected + duplicate) differ from the SDK `INGEST_STAGES` on lane/ca `b68926a`. Your uncommitted working tree renames the gateway's to `STAGES` = the SDK's list. **Cortex's parity seal (`ingestKindStatusParity.test.ts`) is pinned to the committed names** and will go red, correctly, when the rename lands. That red is the swap signal, not a regression.
+4. **Kinds disagree across repos.** The gateway's `KINDS` are `pdf` and `cad`. doc-tools' `KIND_MAPPING` has `work-instruction`. Cortex offers only what the gateway accepts. There is no kinds route and no suggestion yet, so the picker is a closed list sealed against `gateway.py`.
+5. **Export takes no `template_id` from cortex.** The canvas has no template binding (addendum to §C of the first packet), so cortex omits it rather than guessing.
+6. **Nothing emits `provenance_floor` yet.** Cortex draws `{obtained_via, ingest_ids[]}` per component. lane/74's `envelope_label()` emits `weakest_obtained_via` and `contributing_ingest_ids` on the ENVELOPE, which the projector drops. **Name it `provenance_floor` and put it on the component**, or tell cortex your spelling.
+7. **Promotion refuses with 503 today.** `_promotion_store()` returns `None`, so the promote/reject buttons will show and then refuse. Cortex surfaces the refusal and does not hide the buttons.
+
+**What seals the swap:** one live capture each of `POST /export/package` (status `exists`), `GET /ingest/{id}/status`, and a `document_promotion` task. When those exist, cortex retires the card export.
