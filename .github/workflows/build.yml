@@ -58,7 +58,22 @@ env:
   # exactly the sha the 1871-green local suite was measured against. Diffed for only the files the
   # seals open: `gateway.py` (+124/-9) and `lineage_claim.py` (new, +88) move; `human_tasks.py` and
   # `defs/dynamic_supervisor.py` do not, so the seals reading those are untouched.
-  PRODUCER_REF: ec055c49da24cdbc39950a126321183c6974b668
+  #
+  # ⛔ BUMPED 2026-09-30 TO `3f27c7cb`, AND CHOSEN AGAINST A `git archive` OF THAT SHA, NOT THE
+  # SIBLING ON DISK — because the disk was standing on UNCOMMITTED Lane 1 work that renames the
+  # gateway's ingest `STATUSES` to `STAGES`. A suite measured there is red for a reason that is
+  # in no commit, and green there would have measured a producer nobody pushed. The new ingest
+  # parity seal (`ingestKindStatusParity.test.ts`) reads `src/iagent/ingest_status.py`, which does
+  # not exist at `ec055c49`; its "the seal RAN" arm is the one that would have gone red here, and
+  # the KINDS arm reads `gateway.py`, present at both shas, so it can disagree rather than skip.
+  # `taskKindParity` needs `document_promotion` pinned (merged in `f5e15a3b`).
+  #
+  # Measured: full suite against the clean export, 2003 passed; the four reds were 5 s timeouts
+  # in tree-scanning tests under a temp dir, and those three files plus both parity seals re-run
+  # alone at 75/75 with 0 skipped. Seal-opened files that moved since `ec055c49`: `gateway.py`
+  # (+792), `ingest_status.py` (new), `defs/dynamic_supervisor.py` (+64), `cost_agent/measures.py`,
+  # `presentation_agent/main.py` and `capabilities.py`, `task_kinds/document_promotion.yaml` (new).
+  PRODUCER_REF: 3f27c7cb644818cc4530c8138280ed9f7f6c9286
 
 permissions:
   contents: read

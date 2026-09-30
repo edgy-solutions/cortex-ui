@@ -329,6 +329,11 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
     "risk_acceptance_low",
     "risk_acceptance_medium",
     "risk_acceptance_serious",
+    // ADDED 2026-09-30 WITH THE PIN BUMP TO `3f27c7cb`, which merged lane/74-promotion
+    // (`f5e15a3b`): ADR-0041 §5's review is this species. Pinned for the same reason as
+    // `safety_redraft` — the card renders it from the SERVED menu, and a table row would feed
+    // what M3.3 deletes. The ingest status card finds it by payload.ingest_id (ingestWire.ts).
+    "document_promotion",
   ];
 
   it("no declared species is unaccounted for on the cortex side", () => {
