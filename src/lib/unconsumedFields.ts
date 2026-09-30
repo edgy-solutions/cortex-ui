@@ -107,7 +107,15 @@ const CONTRACTS: Record<string, { archetype: string; fields?: Record<string, unk
  * key this control stops being able to report, so the list is a denylist of last resort rather
  * than a convenient place to silence noise.
  */
-const STRUCTURAL = new Set(["archetype"]);
+const STRUCTURAL = new Set([
+  "archetype",
+  // ADR-0041 §7: rides any component, on purpose — it is the provenance-floor label's input
+  // (see ProvenanceFloorLabel / readProvenanceFloor), not a field any one archetype's contract
+  // is expected to declare. Without this it would show up as "unread" on every archetype that
+  // carries it, which is not a finding — it is a cross-cutting label the UI does read. Renamed
+  // by the 2026-09-30 dispatch (see ingestWire.ts's header for the prior field name).
+  "provenance_floor",
+]);
 
 export type UnconsumedReport =
   /** The component names no archetype — a different defect, and not this one's to report. */

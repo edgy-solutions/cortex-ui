@@ -478,6 +478,8 @@ describe("every module that can outlive a reload is in a register", () => {
       "writes cortex-grounding-display-mode directly, with no persist() wrapper. DEVICE-scoped by derivation: a display mode for how grounding is rendered, holding no interview content, so a switch of user need not reset it",
     "lib/mockGroundingEmitter.ts":
       "writes cortex-mock-grounding, the mock-mode toggle. DEVICE-scoped by derivation: it selects whether the backend is faked at all, which is a property of the machine and not of who is signed in",
+    "lib/ingestFlag.ts":
+      "writes cortex.ingest and cortex.ingestMock, the ADR-0041 ingest UI and mock-transport toggles. DEVICE-scoped by the same derivation as mockGroundingEmitter above: both select which UI/transport this machine runs, not anything about who is signed in, so a user switch must not reset them",
     "hooks/useComposerDraft.ts":
       "keys are COMPUTED per owner (cortex-composer-draft:<owner>), so A's draft is unreachable from B's session by construction; deliberately unpurged, per the seal above about same-user re-login",
     "api/client.ts":

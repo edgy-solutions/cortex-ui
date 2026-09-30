@@ -1,3 +1,6 @@
+// Slated for retirement in favour of `CanvasExportButton` once `POST /canvas/export` is served
+// (packet 2026-09-30, section A) — until then this stays live. Its method-block rendering and
+// data-layer seals (`cardExport.ts`, `cardExportFinance.test.ts`, the fixture tests) stay.
 import { useCallback, useState, type RefObject } from "react";
 import { Download } from "lucide-react";
 import type { Artifact } from "@/api/types";

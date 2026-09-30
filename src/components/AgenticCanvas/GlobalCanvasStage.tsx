@@ -14,6 +14,7 @@ import { PlanningChrome } from "./PlanningChrome";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
+import { CanvasExportButton } from "./CanvasExportButton";
 
 /**
  * GlobalCanvasStage — the center canvas as ONE camera-driven world (ADR-0028
@@ -946,6 +947,14 @@ export function GlobalCanvasStage() {
           </div>
         </div>
       )}
+
+      {/* Canvas-level export (PROPOSED wire, packet 2026-09-30 §A; flag-gated, inert until the
+          gateway serves it). `bottom-20 right-3` clears the dock (h-14, bottom-0) below it and
+          stays out of the top-right corner the shell's own fullscreen toggle and this file's
+          focus/group exits already contest (see the `right-32` note above). Hidden in
+          focus/full-pane the same way the group-overview button is — both are whole-canvas
+          controls with no meaning once a single card fills the view. */}
+      {!focusId && !fullPane && <CanvasExportButton />}
 
       {/* The dock — GLOBAL + custom canvases + NEW. */}
       {!fullPane && <DockBar />}

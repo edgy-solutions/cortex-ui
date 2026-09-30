@@ -45,6 +45,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
+import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
 
 /**
  * SupplyTable — ASSET_STATE_METRIC render.
@@ -994,6 +995,12 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 {pCfg.label}
               </div>
             )}
+            {/* ADR-0041 §7: the provenance-floor label, above EVERY archetype's own
+                rendering — archetype-agnostic by construction, not a per-case addition.
+                `ProvenanceFloorLabel` self-guards via `readProvenanceFloor` and draws nothing
+                when `comp.provenance_floor` is absent or unreadable (field renamed by the
+                2026-09-30 dispatch — see ingestWire.ts for the prior name). */}
+            <ProvenanceFloorLabel component={comp} />
             {renderComponent(comp, handlePublish, previewRows, artifactId)}
           </div>
         );

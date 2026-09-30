@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
-import { Radar } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Radar, UploadCloud, X } from "lucide-react";
+import { useState } from "react";
 import { OntologyMap } from "./OntologyMap";
 import { RoutingDecision } from "./RoutingDecision";
 import { SourcesTrail } from "./SourcesTrail";
@@ -11,6 +12,8 @@ import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCurrentArtifact } from "@/store/useCanvasStore";
 import { CompileButton } from "@/components/Compilation/CompileButton";
+import { IngestPanel } from "@/components/ingest/IngestPanel";
+import { isIngestUiEnabled } from "@/lib/ingestFlag";
 
 /**
  * HUD — the right-side grounding panel.
@@ -35,6 +38,13 @@ export function HUD() {
   // The HUD follows the selection's KIND: a task shows task-context, an answer
   // shows the routing/sources/graph trail. One contract, no overlay war.
   const isTask = !!useCurrentArtifact()?.task_ref;
+  // ADR-0041 ingest UI — flag-gated (default OFF), a right-edge slide-in on the same pattern
+  // as FiguresSlideIn.tsx. The trigger itself lives here because FiguresSlideIn's own trigger
+  // is a per-source button on SourcesTrail, not a HUD header control — there is no existing
+  // HUD-header trigger to sit literally "next to"; this is the nearest honest equivalent: same
+  // slide-in mechanics, same header row as ModeToggle.
+  const [ingestOpen, setIngestOpen] = useState(false);
+  const ingestUiEnabled = isIngestUiEnabled();
 
   return (
     <div className="flex flex-col h-full p-4 space-y-4 overflow-y-auto">
@@ -49,6 +59,17 @@ export function HUD() {
         <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neon-cyan/70 flex-1">
           Live Context HUD
         </span>
+        {ingestUiEnabled && (
+          <button
+            type="button"
+            data-ingest-trigger
+            onClick={() => setIngestOpen(true)}
+            className="p-1 rounded text-neon-cyan/70 hover:text-neon-cyan hover:bg-slate-800/60"
+            title="Ingest a document"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+          </button>
+        )}
         <ModeToggle />
       </motion.div>
 
@@ -92,6 +113,46 @@ export function HUD() {
         >
           <CompileButton />
         </motion.div>
+      )}
+
+      {/* ADR-0041 ingest panel — same slide-in mechanics as FiguresSlideIn.tsx. Renders
+          nothing (IngestPanel self-guards too) when the flag is off; the AnimatePresence
+          wrapper itself only mounts children while ingestOpen is true. */}
+      {ingestUiEnabled && (
+        <AnimatePresence>
+          {ingestOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                onClick={() => setIngestOpen(false)}
+              />
+              <motion.aside
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", stiffness: 340, damping: 32 }}
+                className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[520px] lg:w-[640px] bg-slate-950 border-l border-slate-800 shadow-2xl overflow-y-auto"
+                data-ingest-slide-in
+              >
+                <div className="sticky top-0 z-10 backdrop-blur-md bg-slate-950/90 border-b border-slate-800 px-5 py-4 flex items-center gap-3">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 flex-1">
+                    Ingest a document
+                  </span>
+                  <button onClick={() => setIngestOpen(false)} data-ingest-close>
+                    <X className="w-4 h-4 text-slate-400" />
+                  </button>
+                </div>
+                <div className="p-5">
+                  <IngestPanel />
+                </div>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
       )}
     </div>
   );

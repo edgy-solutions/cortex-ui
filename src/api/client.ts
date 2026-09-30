@@ -5,6 +5,7 @@ import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
+import type { ExportRecipient } from "@/lib/canvasExport";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -828,4 +829,100 @@ export async function fetchTaskKinds(): Promise<unknown[] | null> {
   } catch {
     return null;
   }
+}
+
+// ── Canvas export (THE REAL WIRE — invincible-agent origin/master, 3f27c7cb) ──
+/**
+ * `POST /export/package` and friends, against the gateway routes as they actually shipped
+ * (`feat(export): the gateway serves canvas export -- POST /export/package and the artifact
+ * proxy`, rides roll #10) — not this repo's own proposed packet
+ * (`sessions/2026-09-30-packet-to-lane-1-proposed-wire-for-canvas-export-and-the-ingest-routes.md`
+ * section A, which proposed `/canvas/export/*`; the built wire is `/export/package`). Callers
+ * must still gate behind `isCanvasExportEnabled()` (`src/lib/canvasExport.ts`) — the flag stays
+ * until a live capture against this route seals it.
+ */
+export async function fetchExportRecipients(): Promise<ExportRecipient[]> {
+  const { data } = await api.get<{ recipients: ExportRecipient[] }>(
+    "/export/package/recipients",
+  );
+  return data.recipients ?? [];
+}
+
+export async function startCanvasExport(body: {
+  answers: { artifact_id: string }[];
+  recipient_scope: string;
+  template_id?: string;
+}): Promise<unknown> {
+  const { data } = await api.post<unknown>("/export/package", body);
+  return data;
+}
+
+/**
+ * The download proxy needs the caller's own bearer — a bare `<a href>` would hit nginx with no
+ * Authorization header and never reach the gateway (3f27c7cb's `/export/package/artifact/{filename}`
+ * is itself gated). Refuses any uri outside the gateway's own download-proxy prefix so this
+ * client never fetches an arbitrary path handed back in a response.
+ */
+export async function downloadExportArtifact(uri: string): Promise<Blob> {
+  if (!uri.startsWith("/export/package/artifact/")) {
+    throw new Error(`refusing to download outside /export/package/artifact/: ${uri}`);
+  }
+  const { data } = await api.get<Blob>(uri, { responseType: "blob" });
+  return data;
+}
+
+// ── Ingest (THE REAL WIRE — invincible-agent origin/master, 12d3ca6f) ──
+/**
+ * ADR-0041's first client, against the gateway routes as they actually shipped, not the
+ * proposed packet this file wrapped through 2026-09-30. Sources:
+ *   - invincible-agent origin/master, commit 12d3ca6f — `src/iagent/gateway.py`'s `POST /ingest`
+ *     and `GET /ingest/{id}/status`, and `src/iagent/ingest_status.py` (the `STATUSES`/
+ *     `DUPLICATE`/`KINDS` closed sets `src/lib/ingestWire.ts` mirrors).
+ *   - invincible-agent commit f5e15a3b (origin/lane/74-promotion, merged to local master at
+ *     9fdbcc18, not yet pushed to origin/master) — `src/iagent/promotion.py`, the
+ *     `document_promotion` HumanTask species acted through `actOnHumanTask` below, never a new
+ *     route.
+ *   - iagent-mesh-sdk branch lane/ca, commit b68926a — `INGEST_STAGES`' six-value vocabulary
+ *     (received/extracting/awaiting_disposition/promoted/rejected/failed) is NOT what the
+ *     gateway serves; `ingest_status.py.STATUSES` is a different seven-value ladder with no
+ *     "failed" and an out-of-band "duplicate". Reported to Lane 1 as an SDK/gateway divergence;
+ *     this file follows the gateway, the wire this UI actually talks to.
+ *
+ * Callers still gate behind `isIngestUiEnabled()` (`src/lib/ingestFlag.ts`), and
+ * `src/lib/ingestTransport.ts` still picks this real transport or the in-memory mock by
+ * `isIngestMockEnabled()`. `src/lib/ingestWire.ts` is the one place that parses the response;
+ * this file only sends the request and hands back whatever came back raw (or throws on
+ * transport failure) for the wire module's readers to validate.
+ *
+ * Promote/reject are DELIBERATELY NOT HERE — the ingest row carries no task; a `document_promotion`
+ * HumanTask is found by `promotionIngestId` (`src/lib/ingestWire.ts`) among the tasks this app
+ * already tracks, and acted on through the EXISTING `actOnHumanTask` above, never a new route.
+ */
+/**
+ * Multipart upload — `file`, `kind` and `on_behalf_of` are all REQUIRED fields on the real
+ * route (`kind` is validated against `ingest_status.py.KINDS`; `on_behalf_of` must equal the
+ * caller's own `authz_id` or the gateway answers 403). NOT setting a Content-Type header on
+ * purpose — axios's own `isFormData` branch strips the instance's default `application/json`
+ * and lets the browser attach `multipart/form-data; boundary=...` itself; overriding it here
+ * would supply a Content-Type with no boundary and the server could not parse the body.
+ */
+export async function uploadIngest(file: File, kind: string, onBehalfOf: string): Promise<unknown> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("kind", kind);
+  formData.append("on_behalf_of", onBehalfOf);
+  const { data } = await api.post<unknown>("/ingest", formData);
+  return data;
+}
+
+/**
+ * NOTE THE `/status` SUFFIX — `GET /ingest/{id}` (no suffix) is not a route on this gateway.
+ * A 404 means "not found, or not yours" — the server makes these indistinguishable on purpose
+ * (`ingest_status.get_status_for`'s own scoping), and `isIngestNotFoundError` /
+ * `readIngestStatusRow` in `src/lib/ingestWire.ts` are how a caller reads that without guessing
+ * at a reason the server deliberately did not give.
+ */
+export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
+  const { data } = await api.get<unknown>(`/ingest/${encodeURIComponent(ingestId)}/status`);
+  return data;
 }
