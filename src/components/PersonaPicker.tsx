@@ -29,6 +29,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { isPlatformDomain, pickableDomains } from "@/lib/platformDomains";
 
 // Design tokens — exact values from the handoff spec. The app's neon
 // palette doesn't have direct equivalents for these specific shades,
@@ -205,15 +206,17 @@ export function PersonaPicker() {
 
   // ── Full picker ──────────────────────────────────────────────
   const personaOpts = personas();
-  const domainOpts = selectedPersona ? domainsFor(selectedPersona) : [];
-  const activeDomain = selectedDomains[0] ?? domainOpts[0] ?? "";
+  // PLATFORM DOMAINS (MESH, DOCS) ARE NOT OFFERED — they stay in scope at send time instead
+  // (src/lib/platformDomains.ts). The active readout skips them for the same reason.
+  const domainOpts = selectedPersona ? pickableDomains(domainsFor(selectedPersona)) : [];
+  const activeDomain = selectedDomains.find((d) => !isPlatformDomain(d)) ?? domainOpts[0] ?? "";
 
   const pickPersona = (p: string) => {
     setSelectedPersona(p);
     // Single-domain design: reset to the first entitled domain of the
     // newly-chosen persona (store's setSelectedPersona populates ALL;
     // narrow to one to match the "Persona · Domain" single readout).
-    const firstDomain = domainsFor(p)[0];
+    const firstDomain = pickableDomains(domainsFor(p))[0];
     if (firstDomain) setSelectedDomains([firstDomain]);
     // Deliberately DO NOT close: switching persona surfaces a
     // different set of entitled domains in the right column, and the
@@ -221,7 +224,7 @@ export function PersonaPicker() {
     // pick a domain or dismiss (Esc / click-away). If the new persona
     // has exactly one domain there's nothing more to choose, so close
     // as a convenience.
-    if (domainsFor(p).length <= 1) setOpen(false);
+    if (pickableDomains(domainsFor(p)).length <= 1) setOpen(false);
   };
   const pickDomain = (d: string) => {
     setSelectedDomains([d]);

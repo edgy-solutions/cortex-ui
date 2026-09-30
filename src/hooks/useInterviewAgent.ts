@@ -16,6 +16,7 @@ import {
 } from "@/store/useInterviewStore";
 
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { inScope } from "@/lib/platformDomains";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import {
   isMockGroundingEnabled,
@@ -653,7 +654,12 @@ export function useInterviewAgent() {
         ...(personaSelection.hasEntitlements() && personaSelection.selectedPersona
           ? {
               active_persona: personaSelection.selectedPersona,
-              active_domains: personaSelection.selectedDomains,
+              // The pick, plus the persona's entitled platform domains (MESH, DOCS), which the
+              // picker no longer offers but which must stay in scope. src/lib/platformDomains.ts.
+              active_domains: inScope(
+                personaSelection.selectedDomains,
+                personaSelection.domainsFor(personaSelection.selectedPersona),
+              ),
             }
           : {}),
       };

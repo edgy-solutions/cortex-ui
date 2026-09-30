@@ -33,6 +33,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 import type { Entitlements, EntitlementCell } from "@/api/types";
+import { isPlatformDomain, pickableDomains } from "@/lib/platformDomains";
 
 interface PersonaState {
   // Fetched from GET /me/entitlements on login.
@@ -134,6 +135,16 @@ export const usePersonaStore = create<PersonaState>()(
               selectedPersona: e.cells[0].persona,
               selectedDomains: [e.cells[0].domain],
             });
+          }
+          // A PLATFORM DOMAIN IS NEVER THE PICK. `default`, the first cell, or a selection
+          // persisted before the picker hid them can all land on MESH or DOCS alone; narrow to the
+          // persona's first pickable domain. Platform scope is re-added at send (inScope).
+          {
+            const st2 = get();
+            if (st2.selectedPersona && !st2.selectedDomains.some((d) => !isPlatformDomain(d))) {
+              const first = pickableDomains(st2.domainsFor(st2.selectedPersona))[0];
+              if (first) set({ selectedDomains: [first] });
+            }
           }
           return;
         } catch (err: any) {
