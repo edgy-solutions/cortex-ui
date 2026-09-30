@@ -3,6 +3,17 @@ entries:
   cortex-ui:
   - apiVersion: v2
     appVersion: 1.0.0
+    created: "2026-09-30T02:03:00.932481903Z"
+    description: The Cortex — the cortex-ui frontend (nginx serving the Vite build).
+      No backend; the platform chart runs those.
+    digest: f3044b4cabb83a98bf1b3cd756a8fe4d6f6955f07d7a17cd8e503727acb0f7fa
+    name: cortex-ui
+    type: application
+    urls:
+    - https://github.com/edgy-solutions/cortex-ui/releases/download/cortex-ui-0.2.1/cortex-ui-0.2.1.tgz
+    version: 0.2.1
+  - apiVersion: v2
+    appVersion: 1.0.0
     created: "2026-09-28T13:32:10.388100632Z"
     description: A Helm chart for the Process Spawner dashboard and backend API
     digest: c038c6fa782bc60f7d19d19fbadfcdcdabe700de610d92f942b98b2bfe72c634
@@ -21,4 +32,4 @@ entries:
     urls:
     - https://github.com/edgy-solutions/cortex-ui/releases/download/cortex-ui-0.1.0/cortex-ui-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-28T13:32:10.38811544Z"
+generated: "2026-09-30T02:03:00.932493976Z"
