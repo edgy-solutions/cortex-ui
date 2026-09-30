@@ -1,6 +1,6 @@
 apiVersion: v2
 name: cortex-ui
-description: A Helm chart for the Process Spawner dashboard and backend API
+description: The Cortex — the cortex-ui frontend (nginx serving the Vite build). No backend; the platform chart runs those.
 type: application
-version: 0.2.0
+version: 0.2.1
 appVersion: "1.0.0"

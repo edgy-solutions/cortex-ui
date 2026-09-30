@@ -17,6 +17,12 @@ on:
       - master
     paths:
       - "helm/**"
+      # The chart's own checks. A change to a guard must run that guard and its redproof, or an
+      # edit that silently disarms one lands on master unmeasured. chart-releaser is a no-op on
+      # these pushes: it publishes only charts whose version moved.
+      - "scripts/check-chart-renders.mjs"
+      - "scripts/redproof-chart-*.mjs"
+      - ".github/workflows/helm-release.yml"
 
 jobs:
   release:
@@ -47,18 +53,27 @@ jobs:
         with:
           node-version: "20"
 
-      # ⛔ THE ONLY THING IN CI THAT RENDERS THIS CHART.
+      # ⛔ THE ONLY PLACE IN CI THAT RENDERS THIS CHART.
       #
-      # chart-releaser PACKAGES the chart; `helm package` does not template it. So until this step
+      # chart-releaser PACKAGES the chart; `helm package` does not template it. So until these steps
       # existed, no job in this repo had ever rendered helm/cortex-ui — which is exactly how
       # `tag: latest` survived as the default in values.yaml with nothing to object, and how a
       # never-built tag would have rendered perfectly and failed minutes later at the kubelet on a
       # release Helm had already called a success.
       #
-      # It runs BEFORE chart-releaser on purpose: a chart whose image-pin guard has stopped
-      # refusing must not be published. The script needs only node builtins and helm, so there is
-      # deliberately no `npm ci` here — a dependency install is another way for this to stop
-      # running for a reason that has nothing to do with the chart.
+      # All three run BEFORE chart-releaser on purpose: a chart that cannot render, or whose
+      # image-pin guard has stopped refusing, must not be published. The scripts need only node
+      # builtins and helm, so there is deliberately no `npm ci` here — a dependency install is
+      # another way for this to stop running for a reason that has nothing to do with the chart.
+
+      # ⛔ FIRST: does it render for a CALLER — the pin and nothing else? cortex-ui-0.2.0 was
+      # published unable to render at all (a template read .Values.invincibleAgent.*, never
+      # declared), while the pin redproof below stayed green by passing those values itself. A
+      # fixture that reaches further than the artifact cannot report that the artifact is broken.
+      - name: The chart renders for a caller who supplies only the image pin
+        run: node scripts/check-chart-renders.mjs
+      - name: Prove that render check can still fail, each time for its own reason
+        run: node scripts/redproof-chart-renders.mjs
       - name: Prove the chart can still refuse a bad image pin
         run: node scripts/redproof-chart-image-pin.mjs
       - name: Run chart-releaser

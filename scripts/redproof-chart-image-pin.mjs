@@ -15,13 +15,17 @@
 // OWN reason. The four reasons are deliberately distinct strings (NO PIN / TWO PINS / MALFORMED /
 // NOT A PIN) so that one arm cannot be satisfied by another arm's message.
 //
-// ⛔ AND EVERY REFUSAL IS CHECKED AGAINST THE WRONG-REASON ERROR. This chart cannot render with
-// its own values.yaml at all: templates/configmap.yaml:10 reads .Values.invincibleAgent.*, which
-// values.yaml does not define, so a bare render dies with a nil-pointer BEFORE reaching the image.
-// That is a real defect, it is not this ruling's, and it is why every case below passes
-// CONFIGMAP_VALUES — and why each refusal additionally asserts the output is NOT the nil-pointer.
-// Without that assertion this whole script would report green against a chart whose pin guard had
-// been deleted outright.
+// ⛔ AND EVERY REFUSAL IS CHECKED AGAINST THE WRONG-REASON ERROR. Until 0.2.1 this chart could not
+// render with its own values.yaml at all: templates/configmap.yaml read .Values.invincibleAgent.*,
+// which values.yaml never declared, so a bare render died with a nil-pointer BEFORE reaching the
+// image. This script got past it by passing those three values itself — and so it stayed green
+// over a chart that no caller could install. That workaround is GONE: the template was deleted
+// (nothing read it), and every case below now renders exactly what a caller renders, plus its pin.
+//
+// The nil-pointer assertion stays, because it is not about that one template. Any refusal that is
+// really a nil-pointer means the render broke before the pin guard ran, and without the check this
+// script would report green against a chart whose pin guard had been deleted outright. Whether the
+// chart renders AT ALL for a caller is scripts/check-chart-renders.mjs's question, not this one's.
 //
 // Run:  node scripts/redproof-chart-image-pin.mjs
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,17 +39,12 @@ const REGISTRY = "ghcr.io/edgy-solutions/cortex-ui/frontend";
 const GOOD_DIGEST = "sha256:692954e9aead0627303ef86199d3f4fff055452a1d022ef4695925b02c16a151";
 const GOOD_SHA = "a2e7701fe3a98989365b6f751414b3aaaaa8b7e7";
 
-// Only here to get PAST templates/configmap.yaml — see the header. Nothing below depends on these
-// values, and no case varies them.
-const CONFIGMAP_VALUES = [
-  "--set", "invincibleAgent.namespace=ns",
-  "--set", "invincibleAgent.releaseName=rel",
-  "--set", "invincibleAgent.urls.ontologyService=http://o:8084",
-];
 const WRONG_REASON = "nil pointer";
 
 function render(sets) {
-  const args = ["template", "redproof", CHART, ...CONFIGMAP_VALUES];
+  // ⛔ NOTHING BUT THE CASE'S OWN --set. This array once carried three invincibleAgent.* values to
+  // get past a broken template, which is how the chart shipped unrenderable under a green proof.
+  const args = ["template", "redproof", CHART];
   for (const s of sets) args.push("--set", s);
   let r = spawnSync("helm", args, { encoding: "utf8" });
   if (r.error && r.error.code === "ENOENT") r = spawnSync("helm.exe", args, { encoding: "utf8" });
@@ -196,7 +195,7 @@ for (const c of REFUSED) {
     continue;
   }
   if (out.includes(WRONG_REASON)) {
-    fail(c.name, "refused for the WRONG REASON (" + WRONG_REASON + ") — this arm measured the configmap, not the pin");
+    fail(c.name, "refused for the WRONG REASON (" + WRONG_REASON + ") — the render broke before the pin guard ran, so this arm measured the chart, not the pin");
     continue;
   }
   if (!out.includes(c.reason)) {

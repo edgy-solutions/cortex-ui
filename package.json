@@ -10,6 +10,8 @@
     "dev": "vite",
     "check:transport": "node scripts/check-transport-declarations.mjs",
     "check:transport:redproof": "node scripts/redproof-transport-guard.mjs",
+    "check:chart": "node scripts/check-chart-renders.mjs",
+    "check:chart:renders:redproof": "node scripts/redproof-chart-renders.mjs",
     "check:chart:redproof": "node scripts/redproof-chart-image-pin.mjs",
     "build": "npm run check:transport && npm run test && tsc && vite build",
     "build:bundle": "tsc && vite build",

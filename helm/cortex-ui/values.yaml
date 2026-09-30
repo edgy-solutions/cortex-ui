@@ -1,5 +1,5 @@
 # ==============================================================================
-# Process Spawner Helm Values
+# cortex-ui Helm Values
 # ==============================================================================
 
 # -- Global image settings -----------------------------------------------------
@@ -34,8 +34,15 @@ frontend:
     # image by digest for exactly that reason. `frontend-deployment.yaml` validates the pin at RENDER
     # so a bad one fails before Helm reports success — read the comment there for the rules, and
     # `scripts/redproof-chart-image-pin.mjs` (`npm run check:chart:redproof`) for the proof those
-    # refusals still fire. `helm-release.yml` runs that redproof before chart-releaser, because it is
-    # the only thing in CI that renders this chart at all.
+    # refusals still fire. `helm-release.yml` runs it before chart-releaser, next to
+    # `scripts/check-chart-renders.mjs` (`npm run check:chart`), which renders this chart the way a
+    # caller does — the pin and NOTHING else. That second arm exists because 0.2.0 was published
+    # unable to render at all (a template read values this file never declared), while the pin
+    # redproof stayed green by supplying those values itself.
+    #
+    # ⛔ SO: ANY NEW TEMPLATE MUST RENDER FROM THIS FILE ALONE, PLUS THE PIN. If it needs a value,
+    # declare it here with a working default, or `required` it with a message — never read an
+    # undeclared `.Values.x.y`, which is a nil-pointer at render for every caller.
     #
     # ⛔ EXACTLY ONE of the two below. Both set is REFUSED rather than quietly resolved in the
     # digest's favour: a file carrying `digest:` next to `tag: latest` reads to a human as though the
