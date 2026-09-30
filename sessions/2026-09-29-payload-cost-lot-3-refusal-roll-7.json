@@ -1,0 +1,357 @@
+{
+  "_what_this_is": "The census's Lot 3 rate-comparison refusal ('did the rates move against the estimate on lot 3'). Roll #7 sends BOTH re-ask fields (sub_query byte-equal, accepted_slots {lot:3}) but NO MENU for rate_vintage: options [], option_source 'none', free_text_reason 'no_referent' — the census expects two option chips. Re-fired by cortex-ui against roll #7 (helm revision 158, every deployment at 90fabab), asked as the census asks, through the BFF's /orchestrate. Captured with a standalone node probe mirroring scripts/walk_census.py _fire; nothing hand-written.",
+  "prompt": "did the rates move against the estimate on lot 3",
+  "row_id": "cost-rate-comparison-lot-3-refusal",
+  "asked_as": {
+    "user": "alice",
+    "persona": "COST_ANALYST",
+    "domains": [
+      "PRODUCTION_COST"
+    ],
+    "frontend_id": "cortex-ui-desktop"
+  },
+  "fleet_sha": "90fabab",
+  "helm_revision": 158,
+  "captured_at": "2026-09-30T04:21:18.452Z",
+  "projected": [
+    {
+      "archetype": "ELICITATION",
+      "payload": {
+        "accepted_slots": {
+          "lot": 3
+        },
+        "archetype": "ELICITATION",
+        "disposition": "ask",
+        "found": "",
+        "free_text_reason": "no_referent",
+        "message": "Which rate vintage? Name it and I will run this.",
+        "option_source": "none",
+        "options": [],
+        "reason": "slot-unfilled",
+        "slot": "rate_vintage",
+        "source_persona": "COST_ANALYST",
+        "spoken": "",
+        "sub_query": "did the rates move against the estimate on lot 3",
+        "total_count": 0,
+        "truncated_from": 0,
+        "verb_iri": "mesh:costRateComparison"
+      }
+    }
+  ],
+  "raw_events": [
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "started"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "understanding",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "started"
+      }
+    },
+    {
+      "event": "context_update",
+      "data": {
+        "type": "ontology",
+        "data": [
+          "rates",
+          "estimate",
+          "lot 3"
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "locating",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "choosing_action",
+        "status": "completed",
+        "detail": {
+          "step_key": "create_task_plan"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "started",
+        "detail": {
+          "step_key": "create_task_plan_dispatch"
+        }
+      }
+    },
+    {
+      "event": "route_decision",
+      "data": {
+        "about": {
+          "label": "Production Lot",
+          "uri": "http://invincible-agent/cost#ProductionLot",
+          "confidence": 0.9,
+          "instance_resolved": true,
+          "instance_identifier": "3",
+          "instance_label": "Lot 3"
+        },
+        "action": {
+          "label": "cost Rate Comparison",
+          "iri": "mesh:costRateComparison",
+          "confidence": 0.95,
+          "classify_called": true,
+          "candidate_count": 7,
+          "owner_persona": "COST_ANALYST"
+        },
+        "handled_by": {
+          "engine_name": "iagent-engine-cost",
+          "provider": "iagent-engine-cost",
+          "endpoint_url": "http://iagent-engine-cost.sandbox.svc.cluster.local:8097/measure/cost_rate_comparison"
+        },
+        "route_status": "matched",
+        "fallback": false,
+        "acting": {
+          "persona": "COST_ANALYST",
+          "domains": [
+            "PRODUCTION_COST"
+          ]
+        },
+        "candidates": [
+          {
+            "uri": "http://invincible-agent/cost#ProductionLot",
+            "label": "Production Lot",
+            "description": "One numbered quantity built under a single authorization at a single point in time, costed as a self-contained whole. Questions asking what a quantity cost, what it cost per unit, how its labor split, which rates were applied to it, or how its base cost builds up to a price through the burden steps target this class. They target it WHETHER OR NOT THEY NAME THE NUMBER: a question about a price walk is about this class before anyone has said which lot, and the lot is then a missing slot to ask for rather than a reason to route elsewhere. It is the unit at which cost is accumulated and reported, and the smallest thing that has a complete price of its own.",
+            "score": 0.8566701412200928
+          },
+          {
+            "uri": "http://invincible-agent/cost#RateTable",
+            "label": "Rate Table",
+            "description": "The set of direct rates, indirect rates and escalation indices in force for a fiscal year, carrying the date on which that set was fixed. Questions asking which assumptions produced a number, what escalation was applied, or what the burden factors were at a stated point in time target this class. Two answers computed from different vintages of the same fiscal year are both correct and are not comparable, which is why the vintage is part of the identity rather than metadata about it.",
+            "score": 0.7068436145782471
+          },
+          {
+            "uri": "http://invincible-agent/cost#CostCategory",
+            "label": "Cost Category",
+            "description": "One of the accounting buckets a price is decomposed into for reporting - labor, material, other direct charges, warranty, or contracted effort. Questions asking where the money went, which bucket grew, or what proportion of a total came from a named bucket target this class. It is a reporting dimension rather than a thing that is built, and it exists so a total can be explained rather than merely stated.",
+            "score": 0.5223780870437622
+          },
+          {
+            "uri": "http://invincible-agent/cost#ProductionProgram",
+            "label": "Production Program",
+            "description": "A recurring manufacturing effort measured across its successive quantities, where the question is direction rather than amount. Questions asking whether cost per unit is rising or falling, whether the effort is getting cheaper as it matures, or how any measure has moved from one buy to the next target this class. It is the subject of every trend, and it is a cost-accumulation view rather than an earned-value one.",
+            "score": 0.22578521072864532
+          }
+        ],
+        "excluded": [
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#Thing",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#KnowledgeQuery",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#ResolvableReferent",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#Archetype",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#CatalogAssetQuery",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          },
+          {
+            "kind": "class",
+            "uri": "http://invincible-agent/mesh#CatalogScopeQuery",
+            "gate": "productive_option",
+            "disposal": "removed",
+            "reason": "no_verb_in_scope"
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "event": "graph_trace",
+      "data": {
+        "nodes": [
+          {
+            "uri": "http://invincible-agent/cost#ProductionLot",
+            "label": "Production Lot",
+            "role": "resolved_subject",
+            "hops": 0
+          },
+          {
+            "uri": "http://invincible-agent/cost#RateComparison",
+            "label": "Rate Comparison",
+            "role": "output_class",
+            "via_verb": "mesh:costRateComparison"
+          }
+        ],
+        "alternates": [
+          {
+            "uri": "http://invincible-agent/cost#LotCostBreakdown",
+            "label": "Lot Cost Breakdown",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costLotBreakdown",
+            "hops": 0,
+            "score": 0.6840276718139648
+          },
+          {
+            "uri": "http://invincible-agent/cost#LotCostingReview",
+            "label": "Lot Costing Review",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costLotCostingReview",
+            "hops": 0,
+            "score": 0.6882566809654236
+          },
+          {
+            "uri": "http://invincible-agent/cost#PriceComposition",
+            "label": "Price Composition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costPriceComposition",
+            "hops": 0,
+            "score": 0.5056027770042419
+          },
+          {
+            "uri": "http://invincible-agent/cost#LaborComposition",
+            "label": "Labor Composition",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costLaborComposition",
+            "hops": 0,
+            "score": 0.5073152184486389
+          },
+          {
+            "uri": "http://invincible-agent/cost#SupplierConcentration",
+            "label": "Supplier Concentration",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costSupplierConcentration",
+            "hops": 0,
+            "score": 0.47382593154907227
+          },
+          {
+            "uri": "http://invincible-agent/cost#CategoryBreakdown",
+            "label": "Category Breakdown",
+            "role": "alternate_verb",
+            "via_verb": "mesh:costCategoryBreakdown",
+            "hops": 0,
+            "score": 0.5912688374519348
+          }
+        ]
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "retrieving",
+        "status": "completed",
+        "detail": {
+          "step_key": "execute_subtask[task_0]"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "synthesize_stateful"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed",
+        "detail": {
+          "step_key": "generate_ui_payload"
+        }
+      }
+    },
+    {
+      "event": "pipeline_stage",
+      "data": {
+        "kind": "composing",
+        "status": "completed"
+      }
+    },
+    {
+      "event": "final_payload",
+      "data": {
+        "components": [
+          {
+            "accepted_slots": {
+              "lot": 3
+            },
+            "archetype": "ELICITATION",
+            "disposition": "ask",
+            "found": "",
+            "free_text_reason": "no_referent",
+            "message": "Which rate vintage? Name it and I will run this.",
+            "option_source": "none",
+            "options": [],
+            "reason": "slot-unfilled",
+            "slot": "rate_vintage",
+            "source_persona": "COST_ANALYST",
+            "spoken": "",
+            "sub_query": "did the rates move against the estimate on lot 3",
+            "total_count": 0,
+            "truncated_from": 0,
+            "verb_iri": "mesh:costRateComparison"
+          }
+        ],
+        "presentation_provenance": {
+          "archetype": "ELICITATION",
+          "candidates_considered": 1,
+          "candidates_satisfied": 1,
+          "frontend_id": "cortex-ui-desktop",
+          "presentation_source": "registered",
+          "refusals": [],
+          "registration_version": "graph",
+          "selection_basis": "output_uri+payload"
+        }
+      }
+    },
+    {
+      "event": "stream_end",
+      "data": {}
+    }
+  ]
+}
