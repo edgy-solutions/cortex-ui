@@ -1,0 +1,10 @@
+{
+  "provenance": {
+    "measured_by": "invincible-agent Lane 1",
+    "source": "sessions/2026-09-30-packet-to-cortex-ui-the-ingest-seam-is-live-and-two-fields-my-last-packet-left-out.md §2",
+    "release": "helm rev 162, images 0f48fe2f",
+    "note": "transcribed from Lane 1's measurement, not captured by cortex; the happy-path drop capture is pending roll #11"
+  },
+  "status_404": {"status": 404, "body": {"detail": "ingest not found"}},
+  "upload_403": {"status": 403, "body": {"detail": "on_behalf_of must match the authenticated caller (no delegation in v1)"}}
+}

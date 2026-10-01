@@ -1,37 +1,41 @@
 /**
- * IngestStatusCard — one ingest's progress, keyed by `row.id`.
+ * IngestStatusCard — one ingest's progress, keyed by `row.ingest_id`.
  *
  * ⛔ DOES NOT REUSE StepLadder OR IntervalTimeline — re-checked again for this revision and
  * still unsuited (StepLadder requires a monetary `amount` per row; IntervalTimeline requires a
  * `group_kind` of "initiative"/"capability"/"target" and a live drag-to-reschedule commit). The
- * stage ladder below (`ingestStageLadder`, `src/lib/ingestWire.ts`) is a bespoke six/seven-rung
- * list drawn from the real, closed `STATUSES` tuple.
+ * stage ladder below (`ingestStageLadder`, `src/lib/ingestWire.ts`) is a bespoke list drawn from
+ * the real, closed `STAGES` tuple (producer 0f48fe2f).
  *
  * ── ONE ROW, ONE FETCH — AND A SEPARATE STORE LOOKUP FOR REVIEW ───────────────────────────
  *
  * `GET /ingest/{id}/status` returns the whole row in one shot; there is no second envelope
  * layer. The row itself carries NO TASK, though — review is an ordinary `document_promotion`
  * HumanTask found among what this app already tracks in `useHumanTaskStore`, matched by
- * `promotionIngestId(row)` against each pending task's `payload.ingest_id` (THE ID BRIDGE: the
- * row's `sha256` is bare hex, the task's `ingest_id` is `sha256:`-prefixed — see
- * `src/lib/ingestWire.ts` for why this is a single exported function rather than an inline
- * comparison).
+ * `promotionIngestId(row)` against each pending task's `payload.ingest_id`. THE BRIDGE IS GONE
+ * as of 0f48fe2f — the row's own `ingest_id` is already `sha256:`-prefixed, so
+ * `promotionIngestId` is an identity read now; see its doc comment in `src/lib/ingestWire.ts`.
  *
  * `duplicate` is OUT-OF-BAND: no ladder is drawn for it at all, and no review lookup either — a
- * duplicate never reaches `review`.
+ * duplicate never reaches `awaiting_disposition`.
  *
  * Verbs are drawn from the served `document_promotion` declaration
  * (`useTaskKindStore().declarationFor("document_promotion")`) when the app has one, falling back
  * to `policy/task_kinds/document_promotion.yaml`'s own static `accepts`/`reason_required`
  * otherwise — the same served-menu-then-fallback shape `ApprovalTaskCard` uses.
  *
- * A refusal acting on the task (`_promotion_store()` returning `None` today → 503 with a
- * `{error, task_id, message}` detail) is shown via `readIngestErrorMessage`, and the task is
- * NEVER rendered as done on a refusal — it stays exactly as pending as it was before the press.
+ * A refusal acting on the task (`promotion.act`'s `PromotionRefused` — `ingest_node_absent` →
+ * 409, `promotion_store_unavailable`/`promotion_store_unconfigured` → 503, each a
+ * `{error, task_id, message}` detail) is read via `readActRefusal` and drawn as
+ * `Refused (<error>): <message>` with `data-ingest-act-refusal="<error>"`, naming this document's
+ * ingest_id. The task is NEVER rendered as done on a refusal — it stays exactly as pending as it
+ * was before the press, and there is NO automatic retry: the button stays available for a
+ * deliberate retry only.
  *
- * Polling stops per `ingestPollingDone`: `promoted`, `rejected` or `duplicate`. A 404 (existence-
- * oracle-safe "not found, or not yours") also stops polling, distinctly from a transient
- * transport error, which is tolerated and retried.
+ * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed`.
+ * `awaiting_disposition` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
+ * also stops polling, distinctly from a transient transport error, which is tolerated and
+ * retried.
  */
 import { useEffect, useRef, useState } from "react";
 import { actOnHumanTask } from "@/api/client";
@@ -40,14 +44,14 @@ import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import {
   readIngestStatusRow,
-  readIngestErrorMessage,
+  readActRefusal,
   isIngestNotFoundError,
   ingestStageLadder,
   ingestPollingDone,
   promotionIngestId,
   payloadMatchesIngestId,
   type IngestStatusRow,
-  type IngestStatusValue,
+  type IngestStage,
 } from "@/lib/ingestWire";
 
 const RUNG_GLYPH: Record<string, string> = {
@@ -75,6 +79,7 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
   const [notFound, setNotFound] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -138,7 +143,7 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
     );
   }
 
-  const isDuplicate = row.status === "duplicate";
+  const isDuplicate = row.duplicate !== null;
 
   const reviewTask = isDuplicate
     ? null
@@ -157,45 +162,54 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
     if (!reviewTask) return;
     setActing(verb);
     setActionError(null);
+    setActionErrorCode(null);
     try {
       await actOnHumanTask(reviewTask.taskId, verb, reason.trim());
     } catch (err) {
-      // A refusal (e.g. 503 "promotion store not configured") is shown; the task is never
-      // rendered as done — nothing about `reviewTask` changes here.
-      setActionError(readIngestErrorMessage(err) ?? "Action failed.");
+      // A refusal (e.g. 409 ingest_node_absent, 503 promotion_store_unavailable) is shown; the
+      // task is never rendered as done — nothing about `reviewTask` changes here, and there is NO
+      // automatic retry: the button stays available, but only for a deliberate press.
+      const refusal = readActRefusal(err);
+      setActionError(
+        refusal ? `Refused (${refusal.error}): ${refusal.message} — ingest ${row.ingest_id}` : "Action failed.",
+      );
+      setActionErrorCode(refusal?.error ?? null);
     } finally {
       setActing(null);
     }
   };
 
   return (
-    <div className="glass-panel p-4 my-2 border-cyan-500/20" data-ingest-id={row.id}>
+    <div className="glass-panel p-4 my-2 border-cyan-500/20" data-ingest-id={row.ingest_id}>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm text-slate-100 font-mono truncate">{row.source ?? row.id}</p>
-        <span
-          className="text-[9px] font-mono uppercase tracking-widest text-cyan-400/70"
-          data-ingest-status={row.status}
-        >
-          {row.status}
-        </span>
+        <p className="text-sm text-slate-100 font-mono truncate">{row.ingest_id}</p>
+        {row.stage && (
+          <span
+            className="text-[9px] font-mono uppercase tracking-widest text-cyan-400/70"
+            data-ingest-status={row.stage}
+          >
+            {row.stage}
+          </span>
+        )}
       </div>
 
       {isDuplicate ? (
         <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-duplicate>
-          {row.detail ?? "This file was already processed."}
-          {row.duplicate_of && <span> (duplicate of {row.duplicate_of})</span>}
+          {row.duplicate!.message}
+          <span> (duplicate of {row.duplicate!.of_ingest_id})</span>
+          {row.stage && <span> — original is at {row.stage}</span>}
         </p>
       ) : (
         <>
           <ul className="flex items-center gap-2" data-ingest-ladder>
-            {ingestStageLadder(row.status as IngestStatusValue).map((rung) => (
+            {ingestStageLadder(row.stage as IngestStage).map((rung) => (
               <li
                 key={rung.stage}
                 className="flex items-center gap-1 text-[10px] font-mono text-slate-300"
                 data-ingest-ladder-stage={rung.stage}
                 data-ingest-ladder-state={rung.state}
               >
-                <span className={rung.stage === "rejected" ? "text-amber-400" : undefined}>
+                <span className={rung.stage === "rejected" || rung.stage === "failed" ? "text-amber-400" : undefined}>
                   {RUNG_GLYPH[rung.state]}
                 </span>
                 <span>{rung.stage}</span>
@@ -203,14 +217,7 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
             ))}
           </ul>
 
-          {(row.extracted_count !== null || row.extracted_total !== null) && (
-            <p className="mt-2 text-[10px] font-mono text-slate-400" data-ingest-extracted>
-              extracted {row.extracted_count ?? 0}
-              {row.extracted_total !== null ? ` / ${row.extracted_total}` : ""}
-            </p>
-          )}
-
-          {row.detail && (
+          {(row.stage === "rejected" || row.stage === "failed") && row.detail && (
             <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-detail>
               {row.detail}
             </p>
@@ -219,7 +226,11 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
           {reviewTask ? (
             <div className="mt-3 flex flex-col gap-2" data-ingest-review>
               {actionError && (
-                <p className="text-[10px] font-mono text-rose-400" data-ingest-act-error>
+                <p
+                  className="text-[10px] font-mono text-rose-400"
+                  data-ingest-act-error
+                  data-ingest-act-refusal={actionErrorCode ?? undefined}
+                >
                   {actionError}
                 </p>
               )}

@@ -871,22 +871,21 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
   return data;
 }
 
-// ── Ingest (THE REAL WIRE — invincible-agent origin/master, 12d3ca6f) ──
+// ── Ingest (THE REAL WIRE — invincible-agent origin/master, 0f48fe2f, live on helm rev 162) ──
 /**
- * ADR-0041's first client, against the gateway routes as they actually shipped, not the
- * proposed packet this file wrapped through 2026-09-30. Sources:
- *   - invincible-agent origin/master, commit 12d3ca6f — `src/iagent/gateway.py`'s `POST /ingest`
- *     and `GET /ingest/{id}/status`, and `src/iagent/ingest_status.py` (the `STATUSES`/
- *     `DUPLICATE`/`KINDS` closed sets `src/lib/ingestWire.ts` mirrors).
+ * ADR-0041's first client, against the gateway routes as they actually shipped. Sources:
+ *   - invincible-agent origin/master, commit 0f48fe2feb863e2d65b56efc6a4a0528a81f4fb3 —
+ *     `src/iagent/gateway.py`'s `POST /ingest` and `GET /ingest/{id}/status`, and
+ *     `src/iagent/ingest_status.py` (the `STAGES`/`DUPLICATE`/`KINDS` closed sets
+ *     `src/lib/ingestWire.ts` mirrors).
  *   - invincible-agent commit f5e15a3b (origin/lane/74-promotion, merged to local master at
  *     9fdbcc18, not yet pushed to origin/master) — `src/iagent/promotion.py`, the
  *     `document_promotion` HumanTask species acted through `actOnHumanTask` below, never a new
  *     route.
  *   - iagent-mesh-sdk branch lane/ca, commit b68926a — `INGEST_STAGES`' six-value vocabulary
- *     (received/extracting/awaiting_disposition/promoted/rejected/failed) is NOT what the
- *     gateway serves; `ingest_status.py.STATUSES` is a different seven-value ladder with no
- *     "failed" and an out-of-band "duplicate". Reported to Lane 1 as an SDK/gateway divergence;
- *     this file follows the gateway, the wire this UI actually talks to.
+ *     (received/extracting/awaiting_disposition/promoted/rejected/failed) now MATCHES
+ *     `ingest_status.py.STAGES` at 0f48fe2f; the previously-reported SDK/gateway divergence
+ *     (a different seven-value ladder with no "failed" and an in-band "duplicate") is closed.
  *
  * Callers still gate behind `isIngestUiEnabled()` (`src/lib/ingestFlag.ts`), and
  * `src/lib/ingestTransport.ts` still picks this real transport or the in-memory mock by

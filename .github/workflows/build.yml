@@ -64,16 +64,25 @@ env:
   # gateway's ingest `STATUSES` to `STAGES`. A suite measured there is red for a reason that is
   # in no commit, and green there would have measured a producer nobody pushed. The new ingest
   # parity seal (`ingestKindStatusParity.test.ts`) reads `src/iagent/ingest_status.py`, which does
-  # not exist at `ec055c49`; its "the seal RAN" arm is the one that would have gone red here, and
-  # the KINDS arm reads `gateway.py`, present at both shas, so it can disagree rather than skip.
-  # `taskKindParity` needs `document_promotion` pinned (merged in `f5e15a3b`).
+  # not exist at `ec055c49`; its "the seal RAN" arm is the one that would have gone red here.
+  # CORRECTION (see the next bump below): every arm of that seal — KINDS, STAGES/STATUSES and
+  # DUPLICATE alike — reads `src/iagent/ingest_status.py`, not `gateway.py`; the claim this
+  # paragraph originally made, that the KINDS arm read `gateway.py` and so could disagree rather
+  # than skip, was wrong. `taskKindParity` needs `document_promotion` pinned (merged in `f5e15a3b`).
   #
   # Measured: full suite against the clean export, 2003 passed; the four reds were 5 s timeouts
   # in tree-scanning tests under a temp dir, and those three files plus both parity seals re-run
   # alone at 75/75 with 0 skipped. Seal-opened files that moved since `ec055c49`: `gateway.py`
   # (+792), `ingest_status.py` (new), `defs/dynamic_supervisor.py` (+64), `cost_agent/measures.py`,
   # `presentation_agent/main.py` and `capabilities.py`, `task_kinds/document_promotion.yaml` (new).
-  PRODUCER_REF: 3f27c7cb644818cc4530c8138280ed9f7f6c9286
+  #
+  # ⛔ BUMPED AGAIN 2026-09-30, SAME DAY, TO `0f48fe2f` — the ingest seam went live on helm rev
+  # 162 after the `3f27c7cb` bump above landed. `src/iagent/ingest_status.py`'s `STATUSES` was
+  # renamed to `STAGES` (six values: received/extracting/awaiting_disposition/promoted/rejected/
+  # failed), now matching `iagent_mesh.ingest.INGEST_STAGES` (lane/ca `b68926a`) — the SDK/gateway
+  # divergence the previous revision of `src/lib/ingestWire.ts` reported to Lane 1 is closed as of
+  # this sha. `ingestKindStatusParity.test.ts`'s renamed "STAGES" arm resolves against this file.
+  PRODUCER_REF: 0f48fe2feb863e2d65b56efc6a4a0528a81f4fb3
 
 permissions:
   contents: read

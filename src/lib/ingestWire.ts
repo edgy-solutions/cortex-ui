@@ -2,25 +2,24 @@
  * ingestWire — the ONE adapter for the ADR-0041 ingest routes.
  *
  * SOURCES:
- *   - invincible-agent, origin/master, commit 12d3ca6f — `src/iagent/gateway.py`'s
- *     `POST /ingest` and `GET /ingest/{id}/status`, and `src/iagent/ingest_status.py`
- *     (STATUSES, DUPLICATE, KINDS, `get_status_for`'s row shape) are the REAL wire this file
- *     types. This replaces the proposed packet/SDK wire the first two builds of this file were
- *     written against in full — no `ContentKindRegistration`, no classifier suggestion, no
- *     `steps`/`review`/`produced` envelope nesting; see git history on this file for that shape.
- *   - invincible-agent, commit f5e15a3b (on origin/lane/74-promotion, merged to local master at
- *     9fdbcc18, not yet pushed to origin/master) — `src/iagent/promotion.py` (the
- *     `sha256:<64 lowercase hex>` ingest_id spelling `promotionIngestId` below mirrors) and
+ *   - invincible-agent, producer `0f48fe2feb863e2d65b56efc6a4a0528a81f4fb3`, live on helm rev
+ *     162 — `src/iagent/gateway.py`'s `POST /ingest` and `GET /ingest/{id}/status`, and
+ *     `src/iagent/ingest_status.py` (`STAGES`, `DUPLICATE`, `ALL_STATUSES`, `KINDS`, the
+ *     `ingest_status_route`'s renamed-on-the-wire row shape) are the REAL wire this file types.
+ *     This replaces the 12d3ca6f wire (`STATUSES`'s seven-value received/classified/extracting/
+ *     extracted/review/promoted/rejected ladder, bare `id`/`status`/`object_prefix` field names)
+ *     — see git history on this file for that shape.
+ *   - invincible-agent, same producer sha — `src/iagent/promotion.py` (the `sha256:<64 lowercase
+ *     hex>` ingest_id spelling `promotionIngestId` below used to synthesize, and now reads
+ *     verbatim off the row — see "THE BRIDGE IS GONE" below) and
  *     `policy/task_kinds/document_promotion.yaml` (`accepts: [promoted, rejected]`,
  *     `reason_required: [rejected]` — the fallback this file uses when no served declaration
  *     has reached the app yet).
- *   - iagent-mesh-sdk, branch lane/ca, commit b68926a — `iagent_mesh/ingest.py`'s
- *     `INGEST_STAGES` closed vocabulary (received/extracting/awaiting_disposition/promoted/
- *     rejected/failed) is NOT what the gateway actually serves: the real
- *     `ingest_status.py.STATUSES` is a DIFFERENT seven-value ladder (received/classified/
- *     extracting/extracted/review/promoted/rejected, no "failed", "duplicate" out-of-band
- *     rather than terminal-in-ladder). Reported to Lane 1 as a divergence between the SDK and
- *     what shipped; this adapter follows the gateway, the wire this UI actually talks to.
+ *   - iagent-mesh-sdk, branch lane/ca, commit b68926a — `iagent_mesh/ingest.py`'s `INGEST_STAGES`
+ *     closed vocabulary (received/extracting/awaiting_disposition/promoted/rejected/failed) is
+ *     what the gateway now actually serves (`ingest_status.py.STAGES`, same six values, same
+ *     order) — the divergence this file's previous revision reported to Lane 1 is CLOSED as of
+ *     0f48fe2f: the SDK's vocabulary and `ingest_status.py`'s own are the same list.
  *   - the 2026-09-30 dispatch — renamed the component-level label field to `provenance_floor`
  *     (unrelated to the ingest row above; a component-level field read off rendered capability
  *     components, not off an ingest status row). Unchanged by this revision.
@@ -37,16 +36,16 @@
  * cannot parse is a refusal to render, never a crash.
  *
  * ── ONE ROW, ONE FETCH ──────────────────────────────────────────────────────────────────────
- * `GET /ingest/{id}/status` returns the full `ingest_status_projection` row — status, counts,
- * duplicate info, everything — in one shot. There is no second envelope layer (packet §B's
- * `request`/`provenance` nesting is gone), and no `steps`/`review`/`produced` on the wire at
- * all: extraction progress is `extracted_count`/`extracted_total`, and review is an ordinary
- * `document_promotion` HumanTask found by `promotionIngestId`, not carried on this row.
+ * `GET /ingest/{id}/status` returns the full `ingest_status_projection` row — stage, duplicate
+ * info, everything — in one shot. There is no second envelope layer, and no extraction-progress
+ * counts on this wire at all (`extracted_count`/`extracted_total` are gone — see the field
+ * deletion list on `IngestStatusRow` below): review is an ordinary `document_promotion` HumanTask
+ * found by `promotionIngestId`, not carried on this row.
  *
  * ── WHY THIS DOES NOT ADAPT INTO StepLadder OR IntervalTimeline ────────────────────────────
  * (Unchanged from the first two builds — re-read again for this revision and still unsuited;
  * see `IngestStatusCard`'s header for the full reasoning.) `ingestStageLadder` stays a bespoke
- * list, now drawn from the REAL `STATUSES` tuple rather than the SDK's.
+ * list, now drawn from the REAL `STAGES` tuple rather than the old `STATUSES`.
  */
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
@@ -135,97 +134,117 @@ export function provenanceFloorIsUnverified(floor: ProvenanceFloor): boolean {
 export const INGEST_KINDS = ["pdf", "cad"] as const;
 export type IngestKind = (typeof INGEST_KINDS)[number];
 
-/** `ingest_status.py.STATUSES` — closed, ordered nearest-to-arrival first. NOTE this is NOT
- *  `iagent_mesh.ingest.INGEST_STAGES` (no "failed" here; see this file's header). */
-export const INGEST_STATUSES = [
+/** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. SAME vocabulary as
+ *  `iagent_mesh.ingest.INGEST_STAGES` (ca b68926a); the divergence the previous revision of this
+ *  file reported is closed as of producer 0f48fe2f. */
+export const INGEST_STAGES = [
   "received",
-  "classified",
   "extracting",
-  "extracted",
-  "review",
+  "awaiting_disposition",
   "promoted",
   "rejected",
+  "failed",
 ] as const;
-export type IngestStatusValue = (typeof INGEST_STATUSES)[number];
+export type IngestStage = (typeof INGEST_STAGES)[number];
 
 /** `ingest_status.py.DUPLICATE` — OUT-OF-BAND, never in the ladder. A repeat arrival is
- *  recorded once and done; it never extracts, never reviews. */
+ *  recorded once and done; it never extracts, never awaits disposition. */
 export const INGEST_DUPLICATE_STATUS = "duplicate" as const;
-export type IngestRowStatus = IngestStatusValue | typeof INGEST_DUPLICATE_STATUS;
 
-const INGEST_ROW_STATUSES: readonly string[] = [...INGEST_STATUSES, INGEST_DUPLICATE_STATUS];
-
-/** `ingest_status.get_status_for`'s row — `GET /ingest/{id}/status`'s whole response. */
+/** `ingest_status_route`'s row — `GET /ingest/{id}/status`'s whole response. `stage` is `null`
+ *  ONLY on a duplicate whose original is not visible to this caller (existence-oracle safe — see
+ *  `readIngestStatusRow`'s rule below and the route's own comment on `gateway.py`). */
 export interface IngestStatusRow {
-  id: string;
+  ingest_id: string;
   sha256: string;
   kind: IngestKind;
-  object_prefix: string;
-  submitted_by: string;
-  on_behalf_of: string;
-  source: string | null;
-  status: IngestRowStatus;
-  extracted_count: number | null;
-  extracted_total: number | null;
-  duplicate_of: string | null;
+  stage: IngestStage | null;
   detail: string | null;
+  duplicate: { of_ingest_id: string; message: string } | null;
   created_at: string;
   updated_at: string;
 }
 
+const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
+
 /**
  * `GET /ingest/{id}/status` → the row, or `null` on anything malformed — including an
- * unrecognised `status` value, which this client has no ladder position for.
+ * unrecognised `stage` value, which this client has no ladder position for.
  */
 export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   if (!isRecord(raw)) return null;
-  if (!isNonEmptyString(raw.id)) return null;
+  if (!isNonEmptyString(raw.ingest_id) || !/^sha256:[0-9a-f]{64}$/.test(raw.ingest_id)) return null;
   if (!isNonEmptyString(raw.sha256)) return null;
   if (typeof raw.kind !== "string" || !(INGEST_KINDS as readonly string[]).includes(raw.kind)) {
     return null;
   }
-  if (!isNonEmptyString(raw.object_prefix)) return null;
-  if (!isNonEmptyString(raw.submitted_by)) return null;
-  if (!isNonEmptyString(raw.on_behalf_of)) return null;
-  if (typeof raw.status !== "string" || !INGEST_ROW_STATUSES.includes(raw.status)) return null;
+
+  let stage: IngestStage | null;
+  if (raw.stage === null) {
+    stage = null;
+  } else if (typeof raw.stage === "string" && (INGEST_STAGES as readonly string[]).includes(raw.stage)) {
+    stage = raw.stage as IngestStage;
+  } else {
+    // An unknown stage string — including a non-string, non-null value — has no ladder position.
+    return null;
+  }
+
+  // If stage is null, this row is a duplicate whose original this caller cannot see — duplicate
+  // must be non-null, or a null stage is unaccounted for.
+  if (stage === null && !isRecord(raw.duplicate)) return null;
+
+  if (stage !== null && DETAIL_REQUIRED_STAGES.has(stage) && !isNonEmptyString(raw.detail)) {
+    return null;
+  }
+
+  let duplicate: IngestStatusRow["duplicate"] = null;
+  if (raw.duplicate !== null) {
+    if (!isRecord(raw.duplicate)) return null;
+    if (!isNonEmptyString(raw.duplicate.of_ingest_id) || !isNonEmptyString(raw.duplicate.message)) {
+      return null;
+    }
+    duplicate = { of_ingest_id: raw.duplicate.of_ingest_id, message: raw.duplicate.message };
+  }
+
   if (!isNonEmptyString(raw.created_at)) return null;
   if (!isNonEmptyString(raw.updated_at)) return null;
 
   return {
-    id: raw.id,
+    ingest_id: raw.ingest_id,
     sha256: raw.sha256,
     kind: raw.kind as IngestKind,
-    object_prefix: raw.object_prefix,
-    submitted_by: raw.submitted_by,
-    on_behalf_of: raw.on_behalf_of,
-    source: typeof raw.source === "string" ? raw.source : null,
-    status: raw.status as IngestRowStatus,
-    extracted_count: typeof raw.extracted_count === "number" ? raw.extracted_count : null,
-    extracted_total: typeof raw.extracted_total === "number" ? raw.extracted_total : null,
-    duplicate_of: typeof raw.duplicate_of === "string" ? raw.duplicate_of : null,
+    stage,
     detail: typeof raw.detail === "string" ? raw.detail : null,
+    duplicate,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
   };
 }
 
-/** `POST /ingest`'s two response shapes (`{id, status, object_prefix}` new, or
- *  `{id, status:"duplicate", detail, duplicate_of}`) share only `id` — everything else this
- *  client needs comes from the immediate follow-up `GET /ingest/{id}/status` fetch, so this is
- *  deliberately the only field read here. */
+/** `POST /ingest`'s two response shapes (`{ingest_id, stage, detail, object_prefix,
+ *  duplicate: null}` new, or `{ingest_id, stage, detail, duplicate: {of_ingest_id, message}}`
+ *  duplicate) share `ingest_id` — everything else this client needs comes from the immediate
+ *  follow-up `GET /ingest/{id}/status` fetch, so this is deliberately the only field read here. */
 export function readIngestUploadId(raw: unknown): string | null {
   if (!isRecord(raw)) return null;
-  return isNonEmptyString(raw.id) ? raw.id : null;
+  return isNonEmptyString(raw.ingest_id) && /^sha256:[0-9a-f]{64}$/.test(raw.ingest_id)
+    ? raw.ingest_id
+    : null;
 }
 
-// ── Errors — 400/403/413 on upload, 503 (etc.) on act, 404 on status ──────────────────────
+// ── Errors — 400/403/413/422 on upload, 409/503 on act, 404 on status ──────────────────────
 
 /**
- * The server's own message, off an axios error — either a plain string `detail` (upload route's
- * `HTTPException(status_code=400/403/413, detail="...")`) or a `{message: "..."}` object nested
- * under `detail` (the act route's `PromotionRefused` → `HTTPException(detail={"error", "task_id",
- * "message"})`). `null` when neither shape is present, so a caller can fall back to a generic
- * message rather than render `undefined`.
+ * The server's own message, off an axios error. Three shapes:
+ *   - a plain string `detail` (upload route's `HTTPException(status_code=400/403/413,
+ *     detail="...")`);
+ *   - a `{message: "..."}` object nested under `detail` (the act route's `PromotionRefused` →
+ *     `HTTPException(detail={"error", "task_id", "message"})`);
+ *   - a FastAPI 422 validation array, `detail: [{loc, msg, type}, ...]` — each item's `msg`,
+ *     prefixed with the last `loc` element when present, joined with "; " (e.g.
+ *     "kind: field required").
+ * `null` when none of these is present, so a caller can fall back to a generic message rather
+ * than render `undefined`.
  */
 export function readIngestErrorMessage(err: unknown): string | null {
   if (!isRecord(err)) return null;
@@ -233,8 +252,21 @@ export function readIngestErrorMessage(err: unknown): string | null {
   if (!isRecord(response)) return null;
   const data = response.data;
   if (!isRecord(data)) return null;
-  if (typeof data.detail === "string") return data.detail;
-  if (isRecord(data.detail) && typeof data.detail.message === "string") return data.detail.message;
+  const detail = data.detail;
+  if (typeof detail === "string") return detail;
+  if (isRecord(detail) && typeof detail.message === "string") return detail.message;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const parts = detail
+      .filter((item): item is Record<string, unknown> => isRecord(item) && typeof item.msg === "string")
+      .map((item) => {
+        const loc = item.loc;
+        const last = Array.isArray(loc) && loc.length > 0 ? loc[loc.length - 1] : null;
+        return typeof last === "string" || typeof last === "number"
+          ? `${last}: ${item.msg as string}`
+          : (item.msg as string);
+      });
+    return parts.length > 0 ? parts.join("; ") : null;
+  }
   return null;
 }
 
@@ -248,18 +280,40 @@ export function isIngestNotFoundError(err: unknown): boolean {
   return isRecord(err) && isRecord(err.response) && err.response.status === 404;
 }
 
-// ── The promotion id bridge ─────────────────────────────────────────────────────────────────
+/**
+ * The act route's refusal — `POST /human_tasks/{task_id}/act` on a `document_promotion` task
+ * raises `HTTPException(status, detail={"error", "task_id", "message"})` (`promotion.py`'s
+ * `PromotionRefused`, e.g. `ingest_node_absent` → 409, `promotion_store_unavailable` → 503, both
+ * messages ending "Nothing was written"). `null` unless both `error` and `message` are strings —
+ * this is a STRICTER read than `readIngestErrorMessage` (which accepts a bare `{message}`
+ * without an `error`), because a caller drawing `data-ingest-act-refusal="<error>"` needs the
+ * error code, not just the message.
+ */
+export function readActRefusal(err: unknown): { status: number; error: string; message: string } | null {
+  if (!isRecord(err)) return null;
+  const response = err.response;
+  if (!isRecord(response) || typeof response.status !== "number") return null;
+  const data = response.data;
+  if (!isRecord(data)) return null;
+  const detail = data.detail;
+  if (!isRecord(detail)) return null;
+  if (typeof detail.error !== "string" || typeof detail.message !== "string") return null;
+  return { status: response.status, error: detail.error, message: detail.message };
+}
+
+// ── The promotion id ─────────────────────────────────────────────────────────────────────────
 
 /**
- * THE ID BRIDGE. `ingest_status_projection.sha256` is bare hex; `promotion.py`'s
- * `INGEST_ID_RE` requires the task payload's `ingest_id` to be spelled `sha256:<64 hex>`
- * (`promotion.py` lines 52-56). The two are never compared directly — a bare-vs-prefixed
- * comparison always fails to match, silently, which is worse than a thrown error because it
- * reads as "no review task for you" rather than "the bridge is missing". This is the ONE place
- * that spells the prefix.
+ * THE BRIDGE IS GONE. The 12d3ca6f wire's row carried bare-hex `sha256` while
+ * `promotion.py`'s `INGEST_ID_RE` required the task payload's `ingest_id` to be spelled
+ * `sha256:<64 hex>` — this function used to be the one place that spelled the prefix onto a bare
+ * value. The 0f48fe2f wire's row already carries `ingest_id` in that exact spelling (the route's
+ * own "ONE NAME PER FIELD" renaming), so there is no bridging left to do: this is now an
+ * identity, kept as a named function so every caller still reads the row's ingest_id through the
+ * one place that would change if that ever stopped being true.
  */
-export function promotionIngestId(row: Pick<IngestStatusRow, "sha256">): string {
-  return `sha256:${row.sha256}`;
+export function promotionIngestId(row: Pick<IngestStatusRow, "ingest_id">): string {
+  return row.ingest_id;
 }
 
 /** Whether a HumanTask's `payload.ingest_id` names this row, via the bridge above. Malformed or
@@ -270,37 +324,43 @@ export function payloadMatchesIngestId(payload: unknown, wanted: string): boolea
 
 // ── Stage ladder ─────────────────────────────────────────────────────────────────────────
 
-const MAIN_STATUSES: readonly IngestStatusValue[] = [
-  "received",
-  "classified",
-  "extracting",
-  "extracted",
-  "review",
-  "promoted",
-];
+const MAIN_STAGES: readonly IngestStage[] = ["received", "extracting", "awaiting_disposition", "promoted"];
 
 export interface StageRung {
-  stage: IngestStatusValue;
+  stage: IngestStage;
   state: "done" | "current" | "pending";
 }
 
 /**
- * The closed `STATUSES` vocabulary laid out as a ladder for one row's current `status`. Callers
- * must not pass `"duplicate"` here — a duplicate is out-of-band and draws no ladder at all (see
- * `IngestStatusCard`).
+ * The closed `STAGES` vocabulary laid out as a ladder for one row's current `stage`. Callers
+ * must not pass `null` here — a duplicate (or a duplicate whose original is invisible) draws no
+ * ladder at all (see `IngestStatusCard`).
  *
- * `rejected` is drawn as a TERMINAL BRANCH off `review`, never as progress past `promoted` — a
- * rejected ingest did not get promoted, so `promoted` stays `pending` rather than being marked
- * `done`/`current` just because the row reached a later-numbered status in the tuple. The
- * main-track statuses up to and including `review` ARE marked `done`, because they did happen
- * before the branch.
+ * `rejected` is drawn as a TERMINAL BRANCH off `awaiting_disposition`: the main-track stages up
+ * to and including `awaiting_disposition` are marked `done` (they did happen before the branch),
+ * `promoted` stays `pending` (a rejected ingest did not get promoted), and `rejected` itself is
+ * the current rung.
+ *
+ * `failed` is a DIFFERENT kind of terminal branch: the row carries no "failed at" field, so this
+ * client cannot say HOW FAR the ingest got before failing — only `received` is known to have
+ * happened. Marking `extracting`/`awaiting_disposition` done would be a claim this row does not
+ * support, so they stay `pending` and `failed` is the current rung on its own.
  */
-export function ingestStageLadder(status: IngestStatusValue): StageRung[] {
-  const isTerminalBranch = status === "rejected";
-  const branchPoint = MAIN_STATUSES.indexOf("review");
-  const currentIndex = isTerminalBranch ? branchPoint : MAIN_STATUSES.indexOf(status);
+export function ingestStageLadder(stage: IngestStage): StageRung[] {
+  if (stage === "failed") {
+    const rungs: StageRung[] = MAIN_STAGES.map((s) => ({
+      stage: s,
+      state: s === "received" ? "done" : "pending",
+    }));
+    rungs.push({ stage: "failed", state: "current" });
+    return rungs;
+  }
 
-  const rungs: StageRung[] = MAIN_STATUSES.map((s, i) => {
+  const isTerminalBranch = stage === "rejected";
+  const branchPoint = MAIN_STAGES.indexOf("awaiting_disposition");
+  const currentIndex = isTerminalBranch ? branchPoint : MAIN_STAGES.indexOf(stage);
+
+  const rungs: StageRung[] = MAIN_STAGES.map((s, i) => {
     let state: StageRung["state"];
     if (isTerminalBranch) {
       state = i <= currentIndex ? "done" : "pending";
@@ -314,14 +374,17 @@ export function ingestStageLadder(status: IngestStatusValue): StageRung[] {
     return { stage: s, state };
   });
 
-  if (isTerminalBranch) rungs.push({ stage: status, state: "current" });
+  if (isTerminalBranch) rungs.push({ stage, state: "current" });
   return rungs;
 }
 
 // ── Polling ──────────────────────────────────────────────────────────────────────────────
 
-/** Whether a card polling this row should stop: `promoted`, `rejected` or `duplicate`. Every
- *  other status (including `review` — a viewer may still be about to act) keeps polling. */
-export function ingestPollingDone(row: Pick<IngestStatusRow, "status">): boolean {
-  return row.status === "promoted" || row.status === "rejected" || row.status === "duplicate";
+/** Whether a card polling this row should stop: a duplicate (any row whose `duplicate` is
+ *  non-null, including one whose original is invisible — `stage === null`), or a row that has
+ *  reached `promoted`, `rejected` or `failed`. `awaiting_disposition` keeps polling — a viewer
+ *  may still be about to act. */
+export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicate">): boolean {
+  if (row.duplicate !== null) return true;
+  return row.stage === "promoted" || row.stage === "rejected" || row.stage === "failed";
 }

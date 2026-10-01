@@ -1,7 +1,7 @@
 /**
  * KindPicker — pick a kind from the closed, deterministic `INGEST_KINDS` set.
  *
- * `POST /ingest` (invincible-agent origin/master, 12d3ca6f) requires `kind` as an ORDINARY
+ * `POST /ingest` (invincible-agent origin/master, 0f48fe2f, live on helm rev 162) requires `kind` as an ORDINARY
  * REQUIRED multipart field — there is no `GET /ingest/kinds` route and no classifier
  * suggestion; `ingest_status.py`'s `KINDS` tuple is the whole menu, ADR-0021's precedence
  * ("never LLM-classified") holds exactly as it did for the proposed wire, just with a smaller,

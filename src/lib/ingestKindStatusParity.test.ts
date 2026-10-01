@@ -1,6 +1,7 @@
 /**
- * THE KIND/STATUS PARITY SEAL — cortex's closed `INGEST_KINDS`/`INGEST_STATUSES`/
- * `INGEST_DUPLICATE_STATUS` against `ingest_status.py`'s own `KINDS`/`STATUSES`/`DUPLICATE`.
+ * THE KIND/STATUS PARITY SEAL — cortex's closed `INGEST_KINDS`/`INGEST_STAGES`/
+ * `INGEST_DUPLICATE_STATUS` against `ingest_status.py`'s own `KINDS`/`STAGES`/`DUPLICATE`.
+ * Every arm below reads `src/iagent/ingest_status.py` — none of them reads `gateway.py`.
  *
  * ⚠ RUN WITH `npm run test`, NEVER BARE `npx vitest run` — same false-red reason as
  * `src/lib/taskKindParity.test.tsx`'s header: under vitest 4 a bare invocation loads none of
@@ -24,7 +25,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { INGEST_KINDS, INGEST_STATUSES, INGEST_DUPLICATE_STATUS } from "./ingestWire";
+import { INGEST_KINDS, INGEST_STAGES, INGEST_DUPLICATE_STATUS } from "./ingestWire";
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ const PRODUCER_AT = PRODUCER_REF
   : "producer at the local checkout (UNPINNED — this is CI-pinned only)";
 
 describe.skipIf(!HAVE_PRODUCER)(
-  "INGEST_KINDS / INGEST_STATUSES / INGEST_DUPLICATE_STATUS against ingest_status.py",
+  "INGEST_KINDS / INGEST_STAGES / INGEST_DUPLICATE_STATUS against ingest_status.py",
   () => {
     const src = () => readFileSync(PRODUCERS[0].file, "utf8");
 
@@ -140,8 +141,8 @@ describe.skipIf(!HAVE_PRODUCER)(
       expect([...INGEST_KINDS], PRODUCER_AT).toEqual(resolveTuple(src(), "KINDS"));
     });
 
-    it("INGEST_STATUSES matches STATUSES, resolved by name", () => {
-      expect([...INGEST_STATUSES], PRODUCER_AT).toEqual(resolveTuple(src(), "STATUSES"));
+    it("INGEST_STAGES matches STAGES, resolved by name", () => {
+      expect([...INGEST_STAGES], PRODUCER_AT).toEqual(resolveTuple(src(), "STAGES"));
     });
 
     it("INGEST_DUPLICATE_STATUS matches DUPLICATE", () => {

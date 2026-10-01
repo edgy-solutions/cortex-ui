@@ -2,7 +2,7 @@
  * IngestPanel — composes drop → pick kind → upload → status for one ingest at a time.
  *
  * `kind` is a REQUIRED multipart field on `POST /ingest` (invincible-agent origin/master,
- * 12d3ca6f) — there is no "awaiting kind" server state to branch on, so the flow here always
+ * 0f48fe2f, live on helm rev 162) — there is no "awaiting kind" server state to branch on, so the flow here always
  * visits the kind picker before ever calling `uploadIngest`, rather than uploading first and
  * asking afterward the way the proposed wire did.
  *
