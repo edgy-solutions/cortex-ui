@@ -9,6 +9,12 @@
  * the flag stays until a live capture against the real gateway seals it, the same bar every
  * other flagged adapter in this repo clears before going unconditional.
  *
+ * Lane 1's live capture, `sessions/2026-10-01-payload-export-package-roll-11.json`, seals the
+ * REFUSAL half only — `GET /export/package/recipients`, the 409 `recipient_required` shape, and
+ * a `status: "failed"` response carrying the new `outcome` field (the live engine cannot import
+ * `agent_fleet`, so every observed POST has failed). No `"exists"` response has been witnessed
+ * from this client yet; that arm stays as it was, unsealed.
+ *
  * No React here on purpose — same split as `cardExport.ts`: the decisions are pure and sealed,
  * the DOM/network is thin and lives in the component.
  */
@@ -18,6 +24,44 @@ import { isFeatureEnabled } from "@/lib/featureFlags";
 export interface ExportRecipient {
   value: string;
   label: string;
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/**
+ * `GET /export/package/recipients`'s `recipients` array, and the 409 `recipient_required`
+ * body's `options` — both `{value, label}` pairs, both non-empty strings (roll-11 capture
+ * exchange [0]). `null` on a non-array OR any malformed element: a partial list must not be
+ * drawn as though it were the whole list.
+ */
+export function readExportRecipients(raw: unknown): ExportRecipient[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: ExportRecipient[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || !isNonEmptyString(item.value) || !isNonEmptyString(item.label)) {
+      return null;
+    }
+    out.push({ value: item.value, label: item.label });
+  }
+  return out;
+}
+
+/**
+ * `POST /export/package`'s 409 body's `detail` (roll-11 capture exchange [1]) — non-null ONLY
+ * when `reason === "recipient_required"` AND `options` itself passes `readExportRecipients`. A
+ * malformed 409 (the reason present but garbage options, or anything else) must not seed the
+ * picker with an empty or partial list — see `CanvasExportButton.tsx`'s 409 arm, which falls
+ * through to the generic error text on a `null` here instead.
+ */
+export function readRecipientRequired(detail: unknown): ExportRecipient[] | null {
+  if (!isRecord(detail) || detail.reason !== "recipient_required") return null;
+  return readExportRecipients(detail.options);
 }
 
 // `"producing"` is kept as a legal value of the type and of `readCanvasExport` — a value this
@@ -38,6 +82,10 @@ export interface CanvasExport {
   artifact_filename?: string;
   algorithm_sha?: string;
   reason?: string;
+  /** Present on a `status: "failed"` response — the engine's own refusal category (e.g.
+   *  `"unavailable"` when the package builder could not be imported; roll-11 capture
+   *  exchange [2]). Copied through verbatim, never inferred. */
+  outcome?: string;
   /** Which lots were included in the package, when the engine reports it; `null` when it
    *  doesn't apply to this recipient/canvas. */
   lots_disclosed?: number[] | null;
@@ -73,6 +121,7 @@ export function readCanvasExport(raw: unknown): CanvasExport | null {
   if (typeof r.artifact_filename === "string") out.artifact_filename = r.artifact_filename;
   if (typeof r.algorithm_sha === "string") out.algorithm_sha = r.algorithm_sha;
   if (typeof r.reason === "string") out.reason = r.reason;
+  if (typeof r.outcome === "string") out.outcome = r.outcome;
   if (r.lots_disclosed === null) out.lots_disclosed = null;
   else if (Array.isArray(r.lots_disclosed) && r.lots_disclosed.every((v) => typeof v === "number")) {
     out.lots_disclosed = r.lots_disclosed as number[];

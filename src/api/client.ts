@@ -5,7 +5,8 @@ import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
-import type { ExportRecipient } from "@/lib/canvasExport";
+import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
+import { ingestStatusPath } from "@/lib/ingestWire";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -842,10 +843,18 @@ export async function fetchTaskKinds(): Promise<unknown[] | null> {
  * until a live capture against this route seals it.
  */
 export async function fetchExportRecipients(): Promise<ExportRecipient[]> {
-  const { data } = await api.get<{ recipients: ExportRecipient[] }>(
-    "/export/package/recipients",
+  const { data } = await api.get<unknown>("/export/package/recipients");
+  const recipients = readExportRecipients(
+    isRecord(data) ? data.recipients : undefined,
   );
-  return data.recipients ?? [];
+  if (!recipients) {
+    throw new Error("malformed /export/package/recipients response");
+  }
+  return recipients;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
 export async function startCanvasExport(body: {
@@ -922,6 +931,6 @@ export async function uploadIngest(file: File, kind: string, onBehalfOf: string)
  * at a reason the server deliberately did not give.
  */
 export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
-  const { data } = await api.get<unknown>(`/ingest/${encodeURIComponent(ingestId)}/status`);
+  const { data } = await api.get<unknown>(ingestStatusPath(ingestId));
   return data;
 }

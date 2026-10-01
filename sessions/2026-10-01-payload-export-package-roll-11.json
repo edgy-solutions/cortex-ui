@@ -1,0 +1,96 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "bff": "cortex-bff via port-forward",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/export/package/recipients",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>",
+          "Content-Type": "application/json"
+        },
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "body": {
+          "recipients": [
+            {
+              "value": "notional-customer-alpha",
+              "label": "notional-customer-alpha"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/export/package",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "answers": [
+            {
+              "artifact_id": "urn:li:answerArtifact:capture-roll11-71820bba370b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 409,
+        "content_type": "application/json",
+        "body": {
+          "detail": {
+            "reason": "recipient_required",
+            "options": [
+              {
+                "value": "notional-customer-alpha",
+                "label": "notional-customer-alpha"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/export/package",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "answers": [
+            {
+              "artifact_id": "urn:li:answerArtifact:capture-roll11-71820bba370b"
+            }
+          ],
+          "recipient_scope": "notional-customer-alpha"
+        }
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "body": {
+          "export_id": null,
+          "status": "failed",
+          "recipient_scope": "notional-customer-alpha",
+          "reason": "the package builder is not importable here: No module named 'agent_fleet'",
+          "outcome": "unavailable"
+        }
+      }
+    }
+  ],
+  "orchestrate": {
+    "census_row": "cost-supplier-concentration-lot-4",
+    "artifact_id_sent": "urn:li:answerArtifact:capture-roll11-71820bba370b",
+    "final_payload_present": true
+  },
+  "export_attempts_before_resolve": 0
+}

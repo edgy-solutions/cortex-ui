@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const fetchExportRecipients = vi.fn();
 const startCanvasExport = vi.fn();
@@ -37,6 +39,25 @@ async function openAndPickLegal() {
   fireEvent.click(document.querySelector("[data-canvas-export]")!);
   await waitFor(() => expect(document.querySelector("[data-export-recipient]")).not.toBeNull());
   fireEvent.click(document.querySelector('[data-export-recipient="legal"]')!);
+}
+
+async function openAndPick(value: string) {
+  fireEvent.click(document.querySelector("[data-canvas-export]")!);
+  await waitFor(() => expect(document.querySelector(`[data-export-recipient="${value}"]`)).not.toBeNull());
+  fireEvent.click(document.querySelector(`[data-export-recipient="${value}"]`)!);
+}
+
+// ── Lane 1's live capture, roll #11 ─────────────────────────────────────────────────────────
+// sessions/2026-10-01-payload-export-package-roll-11.json. Loaded, never inlined.
+
+interface ExportExchange {
+  request: { method: string; path: string };
+  response: { status: number; body: unknown };
+}
+
+function loadExportCapture(): { exchanges: ExportExchange[] } {
+  const file = path.join(__dirname, "../../../sessions/2026-10-01-payload-export-package-roll-11.json");
+  return JSON.parse(readFileSync(file, "utf8")) as { exchanges: ExportExchange[] };
 }
 
 beforeEach(() => {
@@ -234,6 +255,21 @@ describe("flag on", () => {
     expect(document.querySelector("[data-export-artifact]")).toBeNull();
   });
 
+  it("a 409 recipient_required with malformed options (missing label) shows the generic error, NOT a picker", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockRejectedValue(
+      axiosError(409, { reason: "recipient_required", options: [{ value: "finance" }] }),
+    );
+    render(<CanvasExportButton />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
+    expect(document.querySelector("[data-export-error]")?.textContent).not.toBe("Pick a recipient.");
+    // the picker is untouched by the malformed response — still only "legal", never "finance"
+    expect(document.querySelectorAll("[data-export-recipient]").length).toBe(1);
+    expect(document.querySelector('[data-export-recipient="finance"]')).toBeNull();
+  });
+
   it("a download failure shows an error and never a downloaded claim", async () => {
     fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
     startCanvasExport.mockResolvedValue({
@@ -251,5 +287,42 @@ describe("flag on", () => {
     fireEvent.click(document.querySelector("[data-export-artifact]")!);
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
     expect(document.querySelector("[data-export-error]")?.textContent).toContain("Download failed");
+  });
+});
+
+describe("roll-11 capture — drives the button through the captured bodies", () => {
+  beforeEach(() => window.localStorage.setItem(FLAG_KEY, "1"));
+  const capture = loadExportCapture();
+
+  it("first start → 409 → the picker shows alpha; pick it, start again → 200 failed, outcome drawn, no link", async () => {
+    const recipientsBody = capture.exchanges[0].response.body as {
+      recipients: { value: string; label: string }[];
+    };
+    const conflictDetail = (capture.exchanges[1].response.body as { detail: unknown }).detail;
+    const failedBody = capture.exchanges[2].response.body;
+
+    fetchExportRecipients.mockResolvedValue(recipientsBody.recipients);
+    startCanvasExport
+      .mockRejectedValueOnce(axiosError(409, conflictDetail))
+      .mockResolvedValueOnce(failedBody);
+
+    render(<CanvasExportButton />);
+    await openAndPick("notional-customer-alpha");
+    fireEvent.click(screen.getByText("Start export"));
+
+    // the 409 re-seeds the picker from the server's own options — still alpha
+    await waitFor(() =>
+      expect(document.querySelector("[data-export-error]")?.textContent).toBe("Pick a recipient."),
+    );
+    expect(document.querySelector('[data-export-recipient="notional-customer-alpha"]')).not.toBeNull();
+
+    fireEvent.click(document.querySelector('[data-export-recipient="notional-customer-alpha"]')!);
+    fireEvent.click(screen.getByText("Start export"));
+
+    await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
+    expect(document.querySelector("[data-export-status]")?.textContent).toContain("failed");
+    expect(document.querySelector("[data-export-status]")?.textContent).toContain("agent_fleet");
+    expect(document.querySelector("[data-export-outcome]")?.textContent).toBe("unavailable");
+    expect(document.querySelector("[data-export-artifact]")).toBeNull();
   });
 });

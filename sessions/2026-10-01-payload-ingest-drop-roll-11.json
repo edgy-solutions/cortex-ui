@@ -1,0 +1,108 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "file": {
+    "name": "roll11-capture.pdf",
+    "bytes": 179
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/ingest",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "kind": "pdf",
+          "on_behalf_of": "alice@example.com",
+          "file": "roll11-capture.pdf (application/pdf)"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+          "stage": "received",
+          "detail": null,
+          "object_prefix": "ingress-user/pdf/736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9/",
+          "duplicate": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+          "stage": "received",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+          "created_at": 1790870019897,
+          "updated_at": 1790870019897
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/ingest",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "kind": "pdf",
+          "on_behalf_of": "alice@example.com",
+          "file": "roll11-capture.pdf (application/pdf)"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "7288a292-7642-4cca-bb77-fb77fa7f2689",
+          "stage": "received",
+          "detail": "already processed on 2026-10-01 from roll11-capture.pdf",
+          "duplicate": {
+            "of_ingest_id": "sha256:736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+            "message": "already processed on 2026-10-01 from roll11-capture.pdf"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/ingest/7288a292-7642-4cca-bb77-fb77fa7f2689/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "7288a292-7642-4cca-bb77-fb77fa7f2689",
+          "stage": "received",
+          "detail": "already processed on 2026-10-01 from roll11-capture.pdf",
+          "duplicate": {
+            "of_ingest_id": "sha256:736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+            "message": "already processed on 2026-10-01 from roll11-capture.pdf"
+          },
+          "kind": "pdf",
+          "sha256": "736499f2eebb7dece392ad285e1a5b03e49e50a88a069cb0cc820b91dc4149d9",
+          "created_at": 1790870020529,
+          "updated_at": 1790870020529
+        }
+      }
+    }
+  ]
+}

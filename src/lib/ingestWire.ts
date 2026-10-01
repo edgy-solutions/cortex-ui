@@ -23,6 +23,12 @@
  *   - the 2026-09-30 dispatch — renamed the component-level label field to `provenance_floor`
  *     (unrelated to the ingest row above; a component-level field read off rendered capability
  *     components, not off an ingest status row). Unchanged by this revision.
+ *   - Lane 1's live capture, `sessions/2026-10-01-payload-ingest-drop-roll-11.json` (four
+ *     exchanges against the deployed gateway) — THE SEAL INPUT for this revision. It broke two
+ *     coincidence defects that every earlier fixture, hand-built to the sha256 shape, could not
+ *     reach: `ingest_id` is a UUID on a duplicate row (exchanges [2]/[3]), not always
+ *     `sha256:<64 hex>`; and `created_at`/`updated_at` are epoch-ms NUMBERS on the wire, not
+ *     strings. See the two readers below for what changed and why.
  *
  * `provenance_floor`'s shape is RULED (2026-09-30) as `{obtained_via, ingest_ids[], unidentified}`,
  * built at invincible-agent lane/74-provenance-floor `ead2f80d` (`src/iagent/provenance_floor.py`,
@@ -161,8 +167,10 @@ export interface IngestStatusRow {
   stage: IngestStage | null;
   detail: string | null;
   duplicate: { of_ingest_id: string; message: string } | null;
-  created_at: string;
-  updated_at: string;
+  /** Epoch milliseconds — a NUMBER on the live wire (roll-11 capture exchanges [1]/[3]), never a
+   *  string. See `readIngestStatusRow` below. */
+  created_at: number;
+  updated_at: number;
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -173,7 +181,14 @@ const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "f
  */
 export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   if (!isRecord(raw)) return null;
-  if (!isNonEmptyString(raw.ingest_id) || !/^sha256:[0-9a-f]{64}$/.test(raw.ingest_id)) return null;
+  // `ingest_id` has TWO forms on the live wire, not one: a new arrival's is `sha256:<64 hex>`,
+  // but a duplicate's is a UUID — its own row id, never the original's hash
+  // (sessions/2026-10-01-payload-ingest-drop-roll-11.json exchanges [2]/[3]). The old
+  // `/^sha256:[0-9a-f]{64}$/` test refused EVERY duplicate; nothing caught it because every
+  // fixture this reader was built against used the sha form. `ingest_id` is opaque to this
+  // client — used only as an encoded path segment and an equality key — so this is deliberately
+  // not replaced with a uuid regex either.
+  if (!isNonEmptyString(raw.ingest_id)) return null;
   if (!isNonEmptyString(raw.sha256)) return null;
   if (typeof raw.kind !== "string" || !(INGEST_KINDS as readonly string[]).includes(raw.kind)) {
     return null;
@@ -206,8 +221,11 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     duplicate = { of_ingest_id: raw.duplicate.of_ingest_id, message: raw.duplicate.message };
   }
 
-  if (!isNonEmptyString(raw.created_at)) return null;
-  if (!isNonEmptyString(raw.updated_at)) return null;
+  // The old rule (`isNonEmptyString`) refused EVERY live status row — the wire sends epoch-ms
+  // NUMBERS (roll-11 capture exchanges [1]/[3]), never a string. A string is now itself refused:
+  // accepting both would hide the drift rather than name it.
+  if (typeof raw.created_at !== "number" || !Number.isFinite(raw.created_at)) return null;
+  if (typeof raw.updated_at !== "number" || !Number.isFinite(raw.updated_at)) return null;
 
   return {
     ingest_id: raw.ingest_id,
@@ -227,9 +245,21 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
  *  follow-up `GET /ingest/{id}/status` fetch, so this is deliberately the only field read here. */
 export function readIngestUploadId(raw: unknown): string | null {
   if (!isRecord(raw)) return null;
-  return isNonEmptyString(raw.ingest_id) && /^sha256:[0-9a-f]{64}$/.test(raw.ingest_id)
-    ? raw.ingest_id
-    : null;
+  // Same opaque-string rule as `readIngestStatusRow` above, for the same reason: a duplicate
+  // arrival's `ingest_id` is a UUID, not a sha256 digest (roll-11 capture exchange [2]).
+  return isNonEmptyString(raw.ingest_id) ? raw.ingest_id : null;
+}
+
+/**
+ * Pure path builder for `GET /ingest/{id}/status`, shared with `src/api/client.ts`'s
+ * `fetchIngestStatus` so the encoding is asserted in one place and is importable from a test
+ * without pulling in the axios instance. `encodeURIComponent` turns a sha-form id's `:` into
+ * `%3A`. The capture (sessions/2026-10-01-payload-ingest-drop-roll-11.json exchange [1]) shows
+ * the colon UNencoded, as devtools displays it; that the gateway also answers 200 for `%3A` is
+ * Lane 1's measurement in its roll-11 packet to cortex, not something the capture shows.
+ */
+export function ingestStatusPath(id: string): string {
+  return `/ingest/${encodeURIComponent(id)}/status`;
 }
 
 // ── Errors — 400/403/413/422 on upload, 409/503 on act, 404 on status ──────────────────────

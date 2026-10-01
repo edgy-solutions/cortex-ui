@@ -12,6 +12,7 @@ import {
   canvasAnswerIds,
   isCanvasExportEnabled,
   readCanvasExport,
+  readRecipientRequired,
   type CanvasExport,
   type ExportRecipient,
 } from "@/lib/canvasExport";
@@ -39,6 +40,14 @@ import {
  * The canvas carries no template binding to read (packet §C is the ingest half, not this one;
  * slice 1 of the export route itself takes `template_id` only to echo it back — see 3f27c7cb's
  * `ExportPackageRequest`). Nothing here has a value to send, so the field is omitted.
+ *
+ * ── LANE 1'S LIVE CAPTURE SEALS THE REFUSAL HALF ONLY ─────────────────────────────────────
+ *
+ * `sessions/2026-10-01-payload-export-package-roll-11.json` witnessed the recipients list, the
+ * 409 `recipient_required` shape, and a `status: "failed"` response carrying the new `outcome`
+ * field (drawn below as `data-export-outcome`) — the live engine cannot import `agent_fleet`, so
+ * every observed POST has failed. No `"exists"` response has been witnessed; the flag
+ * (`isCanvasExportEnabled()`) stays until one is.
  */
 export function CanvasExportButton() {
   const artifacts = useCanvasStore((s) => s.artifacts);
@@ -88,9 +97,12 @@ export function CanvasExportButton() {
       if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;
         const status = err.response?.status;
-        if (status === 409 && isRecord(detail) && detail.reason === "recipient_required") {
-          const options = (detail as { options?: unknown }).options;
-          setRecipients(Array.isArray(options) ? (options as ExportRecipient[]) : []);
+        // `readRecipientRequired` is `null` on a malformed 409 (the reason present but garbage
+        // options, or anything else) — that falls through to the generic error text below
+        // instead of seeding the picker with an empty or garbage list.
+        const required = status === 409 ? readRecipientRequired(detail) : null;
+        if (required) {
+          setRecipients(required);
           setSelected(null);
           setErrorText("Pick a recipient.");
         } else if (status === 403 && isRecord(detail) && typeof detail.recipient_scope === "string") {
@@ -229,6 +241,11 @@ export function CanvasExportButton() {
                 {exportRow.status}
                 {exportRow.status === "failed" && exportRow.reason ? ` — ${exportRow.reason}` : ""}
               </div>
+              {exportRow.status === "failed" && exportRow.outcome && (
+                <div data-export-outcome className="text-[8px] font-mono text-slate-500">
+                  {exportRow.outcome}
+                </div>
+              )}
               {exportRow.lots_disclosed && exportRow.lots_disclosed.length > 0 && (
                 <div data-export-lots className="text-[8px] font-mono text-slate-500">
                   Lots: {exportRow.lots_disclosed.join(", ")}

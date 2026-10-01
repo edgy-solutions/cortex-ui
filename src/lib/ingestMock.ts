@@ -38,16 +38,12 @@ interface MockRow {
   stage: IngestStage | null;
   detail: string | null;
   duplicate: { of_ingest_id: string; message: string } | null;
-  created_at: string;
-  updated_at: string;
+  created_at: number;
+  updated_at: number;
 }
 
 const STORE = new Map<string, MockRow>();
 let counter = 0;
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
 
 function sha256For(n: number): string {
   // Not a real digest — a deterministic, fixed-length hex string is enough for the mock's own
@@ -55,23 +51,35 @@ function sha256For(n: number): string {
   return n.toString(16).padStart(8, "0").repeat(8).slice(0, 64);
 }
 
+/** A duplicate's `ingest_id` is its OWN row id on the live wire, never the sha256 form
+ *  (roll-11 capture exchanges [2]/[3]) — a real uuid where available, else a deterministic
+ *  fallback so the mock stays usable in an environment with no `crypto.randomUUID`. */
+function uuidFor(n: number): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+}
+
 export function uploadIngest(file: File, kind: string, onBehalfOf: string): Promise<unknown> {
   void onBehalfOf;
   counter += 1;
   const sha256 = sha256For(counter);
-  const ingestId = `sha256:${sha256}`;
   const isDuplicate = /dup/i.test(file.name);
-  const now = nowIso();
+  const now = Date.now();
 
   if (isDuplicate) {
     // Mirrors `record_duplicate_arrival`: the ORIGINAL (first upload) is always row #1 here, a
     // fixed stand-in since the mock has no real find_primary_by_sha dedupe index.
     const original = STORE.get(`sha256:${sha256For(1)}`) ?? null;
-    const detail = `already processed on ${now.slice(0, 10)} from ${file.name}`;
+    const ingestId = uuidFor(counter);
+    const detail = `already processed on ${new Date(now).toISOString().slice(0, 10)} from ${file.name}`;
     const row: MockRow = {
       ingest_id: ingestId,
       sha256,
       kind,
+      // The duplicate's own row does NOT advance — it is the ORIGINAL's stage as observed at
+      // upload time, frozen (see `fetchIngestStatus` below, which never ticks a duplicate row).
       stage: original?.stage ?? "received",
       detail,
       duplicate: { of_ingest_id: original?.ingest_id ?? `sha256:${sha256For(1)}`, message: detail },
@@ -87,6 +95,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
     });
   }
 
+  const ingestId = `sha256:${sha256}`;
   const row: MockRow = {
     ingest_id: ingestId,
     sha256,
@@ -114,11 +123,13 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
     return Promise.reject(err);
   }
 
-  if (row.stage !== null) {
+  // A duplicate row never advances — it is out-of-band on the real wire too (DUPLICATE is never
+  // in the STAGES ladder), and returning it as-is on every fetch mirrors that.
+  if (row.duplicate === null && row.stage !== null) {
     const next = ADVANCE[row.stage];
     if (next) {
       row.stage = next;
-      row.updated_at = nowIso();
+      row.updated_at = Date.now();
       if (next === "awaiting_disposition") {
         seedReviewTask(row);
       }

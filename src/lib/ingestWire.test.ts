@@ -27,8 +27,8 @@ const row = (over: Record<string, unknown> = {}) => ({
   stage: "received",
   detail: null,
   duplicate: null,
-  created_at: "2026-09-30T00:00:00Z",
-  updated_at: "2026-09-30T00:00:00Z",
+  created_at: 1790860800000,
+  updated_at: 1790860800000,
   ...over,
 });
 
@@ -46,10 +46,20 @@ describe("readIngestStatusRow", () => {
   });
 
   // one rejecting case per rule, that rule the only thing wrong in its fixture
-  it("rejects an ingest_id that does not match sha256:<64 hex>", () => {
-    expect(readIngestStatusRow(row({ ingest_id: "not-a-sha" }))).toBeNull();
-    expect(readIngestStatusRow(row({ ingest_id: `sha256:${SHA_A.slice(0, 63)}` }))).toBeNull();
+  //
+  // `ingest_id` is opaque to this client, not sha256-shaped — a duplicate's own row id is a
+  // uuid (roll-11 capture exchanges [2]/[3]). Only "non-empty string" is required now.
+  it("accepts a non-sha ingest_id, e.g. a uuid — opaque to this client", () => {
+    expect(readIngestStatusRow(row({ ingest_id: "not-a-sha" }))?.ingest_id).toBe("not-a-sha");
+    expect(
+      readIngestStatusRow(row({ ingest_id: "7288a292-7642-4cca-bb77-fb77fa7f2689" }))?.ingest_id,
+    ).toBe("7288a292-7642-4cca-bb77-fb77fa7f2689");
+  });
+
+  it("rejects an empty, absent, or non-string ingest_id", () => {
+    expect(readIngestStatusRow(row({ ingest_id: "" }))).toBeNull();
     expect(readIngestStatusRow(row({ ingest_id: undefined }))).toBeNull();
+    expect(readIngestStatusRow(row({ ingest_id: 42 }))).toBeNull();
   });
 
   it("rejects a blank sha256", () => {
@@ -80,9 +90,13 @@ describe("readIngestStatusRow", () => {
     expect(readIngestStatusRow(row({ duplicate: { of_ingest_id: `sha256:${SHA_B}`, message: "" } }))).toBeNull();
   });
 
-  it("rejects a blank or absent created_at/updated_at", () => {
+  it("rejects a non-numeric, absent, or non-finite created_at/updated_at", () => {
     expect(readIngestStatusRow(row({ created_at: "" }))).toBeNull();
     expect(readIngestStatusRow(row({ updated_at: undefined }))).toBeNull();
+    // a string timestamp is refused — the only thing wrong in this fixture, since the wire sends
+    // epoch-ms numbers, never ISO strings (roll-11 capture exchanges [1]/[3])
+    expect(readIngestStatusRow(row({ created_at: "2026-09-30T00:00:00Z" }))).toBeNull();
+    expect(readIngestStatusRow(row({ created_at: NaN }))).toBeNull();
   });
 
   // the near side
@@ -112,12 +126,17 @@ describe("readIngestUploadId", () => {
     expect(readIngestUploadId({ ingest_id: `sha256:${SHA_A}`, stage: "received" })).toBe(`sha256:${SHA_A}`);
   });
 
+  it("reads an opaque uuid ingest_id too — a duplicate's own row id, not a content hash (roll-11 capture exchange [2])", () => {
+    expect(readIngestUploadId({ ingest_id: "7288a292-7642-4cca-bb77-fb77fa7f2689" })).toBe(
+      "7288a292-7642-4cca-bb77-fb77fa7f2689",
+    );
+  });
+
   it("rejects malformed input, including a bare id field", () => {
     expect(readIngestUploadId(null)).toBeNull();
     expect(readIngestUploadId({})).toBeNull();
     expect(readIngestUploadId({ ingest_id: "" })).toBeNull();
     expect(readIngestUploadId({ id: `sha256:${SHA_A}` })).toBeNull();
-    expect(readIngestUploadId({ ingest_id: "not-a-sha" })).toBeNull();
   });
 });
 

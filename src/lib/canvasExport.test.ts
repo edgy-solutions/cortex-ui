@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   readCanvasExport,
   artifactLink,
   canvasAnswerIds,
+  readExportRecipients,
+  readRecipientRequired,
   type CanvasExport,
 } from "./canvasExport";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
@@ -121,6 +125,139 @@ describe("readCanvasExport", () => {
     });
     expect(got?.lots_disclosed).toBeNull();
     expect(got?.sections).toBeNull();
+  });
+});
+
+describe("readExportRecipients", () => {
+  it("accepts a well-formed array", () => {
+    expect(readExportRecipients([{ value: "legal", label: "Legal" }])).toEqual([
+      { value: "legal", label: "Legal" },
+    ]);
+  });
+
+  it("is null on a non-array", () => {
+    expect(readExportRecipients({ recipients: [] })).toBeNull();
+    expect(readExportRecipients(null)).toBeNull();
+    expect(readExportRecipients(undefined)).toBeNull();
+  });
+
+  it("is null when any element is missing a label — a partial list must not be drawn as the list", () => {
+    expect(
+      readExportRecipients([{ value: "legal", label: "Legal" }, { value: "finance" }]),
+    ).toBeNull();
+  });
+
+  it("is null when any element is missing a value, or carries a blank one", () => {
+    expect(readExportRecipients([{ label: "Legal" }])).toBeNull();
+    expect(readExportRecipients([{ value: "", label: "Legal" }])).toBeNull();
+  });
+});
+
+describe("readRecipientRequired", () => {
+  it("is non-null only when reason is recipient_required and options read", () => {
+    expect(
+      readRecipientRequired({
+        reason: "recipient_required",
+        options: [{ value: "legal", label: "Legal" }],
+      }),
+    ).toEqual([{ value: "legal", label: "Legal" }]);
+  });
+
+  it("is null on a reason other than recipient_required", () => {
+    expect(
+      readRecipientRequired({
+        reason: "not_a_recipient_you_may_export_to",
+        options: [{ value: "legal", label: "Legal" }],
+      }),
+    ).toBeNull();
+  });
+
+  it("is null when options is malformed even though the reason matches", () => {
+    expect(
+      readRecipientRequired({ reason: "recipient_required", options: [{ value: "legal" }] }),
+    ).toBeNull();
+    expect(readRecipientRequired({ reason: "recipient_required", options: "not-an-array" })).toBeNull();
+  });
+
+  it("is null on non-record input", () => {
+    expect(readRecipientRequired(null)).toBeNull();
+    expect(readRecipientRequired("recipient_required")).toBeNull();
+  });
+});
+
+describe("readCanvasExport — outcome", () => {
+  it("copies a string outcome through", () => {
+    const got = readCanvasExport({
+      export_id: null,
+      status: "failed",
+      recipient_scope: "notional-customer-alpha",
+      reason: "boom",
+      outcome: "unavailable",
+    });
+    expect(got?.outcome).toBe("unavailable");
+  });
+
+  it("does not copy a non-string outcome", () => {
+    const got = readCanvasExport({
+      export_id: null,
+      status: "failed",
+      recipient_scope: "legal",
+      outcome: 42,
+    });
+    expect(got?.outcome).toBeUndefined();
+  });
+});
+
+// ── Lane 1's live capture, roll #11 ─────────────────────────────────────────────────────────
+// sessions/2026-10-01-payload-export-package-roll-11.json. Loaded, never inlined. Seals the
+// REFUSAL half of the export route only — the live engine cannot import `agent_fleet`, so every
+// POST in this capture failed.
+
+interface ExportExchange {
+  request: { method: string; path: string };
+  response: { status: number; body: unknown };
+}
+
+interface ExportCapture {
+  captured_by: string;
+  bff: string;
+  exchanges: ExportExchange[];
+}
+
+function loadExportCapture(): ExportCapture {
+  const file = path.join(__dirname, "../../sessions/2026-10-01-payload-export-package-roll-11.json");
+  return JSON.parse(readFileSync(file, "utf8")) as ExportCapture;
+}
+
+describe("export roll-11 capture — the deployed gateway's actual wire", () => {
+  const capture = loadExportCapture();
+
+  it("has the three exchanges this seal reads", () => {
+    expect(capture.exchanges).toHaveLength(3);
+  });
+
+  it("[0] GET /export/package/recipients — readExportRecipients reads the one alpha recipient", () => {
+    const body = capture.exchanges[0].response.body as { recipients: unknown };
+    expect(readExportRecipients(body.recipients)).toEqual([
+      { value: "notional-customer-alpha", label: "notional-customer-alpha" },
+    ]);
+  });
+
+  it("[1] POST /export/package 409 — readRecipientRequired reads the options", () => {
+    const body = capture.exchanges[1].response.body as { detail: unknown };
+    expect(readRecipientRequired(body.detail)).toEqual([
+      { value: "notional-customer-alpha", label: "notional-customer-alpha" },
+    ]);
+  });
+
+  it("[2] POST /export/package 200 failed — readCanvasExport reads status/export_id/outcome/reason, artifactLink is null", () => {
+    const row = readCanvasExport(capture.exchanges[2].response.body);
+    expect(row).not.toBeNull();
+    expect(row?.status).toBe("failed");
+    expect(row?.export_id).toBeNull();
+    expect(row?.outcome).toBe("unavailable");
+    expect(row?.reason).toMatch(/agent_fleet/);
+    expect(artifactLink(row!)).toBeNull();
   });
 });
 

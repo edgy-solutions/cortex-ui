@@ -37,8 +37,8 @@ const row = (over: Partial<IngestStatusRow> = {}): IngestStatusRow => ({
   stage: "extracting",
   detail: null,
   duplicate: null,
-  created_at: "2026-09-30T00:00:00Z",
-  updated_at: "2026-09-30T00:00:00Z",
+  created_at: 1790860800000,
+  updated_at: 1790860800000,
   ...over,
 });
 
