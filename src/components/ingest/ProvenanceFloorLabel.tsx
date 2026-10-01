@@ -5,21 +5,27 @@
  * more, so the warning text is fixed here (`PROVENANCE_FLOOR_WARNING_LABEL`), never inferred
  * from anything else.
  *
- * Two draws, decided by `ingest_ids` alone (per the dispatch):
- *   - non-empty ingest_ids → the warning banner (`data-provenance-floor-unverified`).
- *   - empty ingest_ids     → a quiet rung chip (`data-provenance-floor="<rung>"`), no warning —
+ * Two draws, decided by `provenanceFloorIsUnverified` — `ingest_ids` AND `unidentified`, never
+ * ids alone (lane/74 `ead2f80d`: an unidentified drop has no id to list, and must not vanish):
+ *   - unverified → the warning banner (`data-provenance-floor-unverified`), listing each id and
+ *     the unidentified count (`data-provenance-floor-unidentified`).
+ *   - otherwise  → a quiet rung chip (`data-provenance-floor="<rung>"`), no warning —
  *     the floor is known and worth showing, but nothing here is actually unvouched-for.
  *
  * Wired into SemanticInterpreter's render loop above EVERY archetype's own rendering, so the
  * label is archetype-agnostic by construction rather than added case by case.
  */
-import { readProvenanceFloor, PROVENANCE_FLOOR_WARNING_LABEL } from "@/lib/ingestWire";
+import {
+  readProvenanceFloor,
+  provenanceFloorIsUnverified,
+  PROVENANCE_FLOOR_WARNING_LABEL,
+} from "@/lib/ingestWire";
 
 export function ProvenanceFloorLabel({ component }: { component: unknown }) {
   const floor = readProvenanceFloor(component);
   if (!floor) return null;
 
-  if (floor.ingest_ids.length === 0) {
+  if (!provenanceFloorIsUnverified(floor)) {
     return (
       <span
         className="inline-block text-[9px] font-mono uppercase tracking-wider text-slate-400/80 border border-slate-600/30 rounded px-1.5 py-0.5 mb-2"
@@ -49,6 +55,14 @@ export function ProvenanceFloorLabel({ component }: { component: unknown }) {
           </li>
         ))}
       </ul>
+      {floor.unidentified > 0 && (
+        <p
+          className="mt-1 text-[10px] font-mono text-amber-300/80"
+          data-provenance-floor-unidentified={floor.unidentified}
+        >
+          {floor.unidentified} unidentified {floor.unidentified === 1 ? "source" : "sources"} — no ingest id to name
+        </p>
+      )}
     </div>
   );
 }

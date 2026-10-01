@@ -3,6 +3,7 @@ import {
   readIngestStatusRow,
   readIngestUploadId,
   readProvenanceFloor,
+  provenanceFloorIsUnverified,
   readIngestErrorMessage,
   isIngestNotFoundError,
   promotionIngestId,
@@ -98,27 +99,57 @@ describe("readProvenanceFloor — unchanged by the real-wire revision", () => {
   });
 
   it("is non-null with an empty ingest_ids array — a valid floor with nothing to warn about", () => {
-    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "direct", ingest_ids: [] } });
-    expect(result).toEqual({ obtained_via: "direct", ingest_ids: [] });
+    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "direct", ingest_ids: [], unidentified: 0 } });
+    expect(result).toEqual({ obtained_via: "direct", ingest_ids: [], unidentified: 0 });
   });
 
   it("is non-null for a non-empty ingest_ids array", () => {
-    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "user-drop", ingest_ids: ["ing-1"] } });
+    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "user-drop", ingest_ids: ["ing-1"], unidentified: 0 } });
     expect(result?.ingest_ids).toEqual(["ing-1"]);
   });
 
   it("accepts the unstamped rung, which is not one of the SDK's five", () => {
-    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "unstamped", ingest_ids: [] } });
+    const result = readProvenanceFloor({ provenance_floor: { obtained_via: "unstamped", ingest_ids: [], unidentified: 0 } });
     expect(result?.obtained_via).toBe("unstamped");
   });
 
   it("is null for an unknown rung", () => {
-    expect(readProvenanceFloor({ provenance_floor: { obtained_via: "vibes", ingest_ids: [] } })).toBeNull();
+    expect(readProvenanceFloor({ provenance_floor: { obtained_via: "vibes", ingest_ids: [], unidentified: 0 } })).toBeNull();
   });
 
   it("is null when ingest_ids is not a string array", () => {
-    expect(readProvenanceFloor({ provenance_floor: { obtained_via: "direct", ingest_ids: [1, 2] } })).toBeNull();
+    expect(readProvenanceFloor({ provenance_floor: { obtained_via: "direct", ingest_ids: [1, 2], unidentified: 0 } })).toBeNull();
     expect(readProvenanceFloor({ provenance_floor: { obtained_via: "direct" } })).toBeNull();
+  });
+
+  it("reads the unidentified COUNT through", () => {
+    const r = readProvenanceFloor({ provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: 3 } });
+    expect(r?.unidentified).toBe(3);
+  });
+
+  // REQUIRED, never defaulted: a reader that filled a missing count with 0 would turn "we could
+  // not see it" into "there was none", which is the laundering the field exists to prevent.
+  it("is null when unidentified is ABSENT — not defaulted to 0", () => {
+    expect(readProvenanceFloor({ provenance_floor: { obtained_via: "user-drop", ingest_ids: [] } })).toBeNull();
+  });
+
+  it("is null for an unidentified that is not a non-negative integer — including the packet's loose `true`", () => {
+    for (const bad of [true, "1", -1, 1.5, null]) {
+      expect(readProvenanceFloor({ provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: bad } }), String(bad)).toBeNull();
+    }
+  });
+
+  it("is null when obtained_via is the producer's null — the answer drew on nothing", () => {
+    expect(readProvenanceFloor({ provenance_floor: { obtained_via: null, ingest_ids: [], unidentified: 0 } })).toBeNull();
+  });
+});
+
+describe("provenanceFloorIsUnverified — reads ingest_ids AND unidentified", () => {
+  const f = (ingest_ids: string[], unidentified: number) => ({ obtained_via: "user-drop" as const, ingest_ids, unidentified });
+  it("each field alone is enough, and only both empty is calm", () => {
+    expect(provenanceFloorIsUnverified(f(["sha256:aa"], 0))).toBe(true);
+    expect(provenanceFloorIsUnverified(f([], 1))).toBe(true);
+    expect(provenanceFloorIsUnverified(f([], 0))).toBe(false);
   });
 });
 

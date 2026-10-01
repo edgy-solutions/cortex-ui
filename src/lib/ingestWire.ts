@@ -25,10 +25,12 @@
  *     (unrelated to the ingest row above; a component-level field read off rendered capability
  *     components, not off an ingest status row). Unchanged by this revision.
  *
- * `provenance_floor`'s shape is provisional: invincible-agent lane/74, commit 0c957741's
- * `envelope_label()` emits `weakest_obtained_via`/`contributing_ingest_ids`, not
- * `obtained_via`/`ingest_ids`, and has NO PRODUCERS YET. This adapter (`readProvenanceFloor`
- * below) is the one place to change when the names on the two sides settle.
+ * `provenance_floor`'s shape is RULED (2026-09-30) as `{obtained_via, ingest_ids[], unidentified}`,
+ * built at invincible-agent lane/74-provenance-floor `ead2f80d` (`src/iagent/provenance_floor.py`,
+ * not yet on master, and with no production caller). `unidentified` is a COUNT of unpromoted
+ * user-drop sources whose block carries no ingest_id — they cannot be named, so they are counted,
+ * and "a reader deciding 'is anything here unverified' must read `ingest_ids` AND `unidentified`".
+ * `provenanceFloorIsUnverified` below is that reader. This adapter is still the one place to change.
  *
  * Every reader here returns `null` on malformed input rather than throwing, on the same
  * discipline as the rest of this repo's wire readers: a producer that sends something this UI
@@ -64,9 +66,11 @@ export type ProvenanceFloorRung = (typeof PROVENANCE_FLOOR_RUNGS)[number];
 export interface ProvenanceFloor {
   obtained_via: ProvenanceFloorRung;
   ingest_ids: string[];
+  /** Unpromoted user-drop sources with no ingest_id — counted because they cannot be named. */
+  unidentified: number;
 }
 
-/** The banner text — used only when `ingest_ids` is non-empty; never inferred otherwise. */
+/** The banner text — used only when `provenanceFloorIsUnverified`; never inferred otherwise. */
 export const PROVENANCE_FLOOR_WARNING_LABEL = "Includes unverified user-contributed material";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────────────
@@ -89,7 +93,8 @@ function isStringArray(v: unknown): v is string[] {
  * never carried on the wire, never inferred from anything else.
  *
  * `null` unless `provenance_floor` is present, `obtained_via` is one of the five SDK rungs or
- * `"unstamped"`, AND `ingest_ids` is an array of strings (possibly empty — an empty array is a
+ * `"unstamped"` (the producer's `null` — "drew on nothing" — is not a rung, so it draws nothing),
+ * `unidentified` is a non-negative integer, AND `ingest_ids` is an array of strings (possibly empty — an empty array is a
  * valid, non-null floor with nothing to warn about; see `ProvenanceFloorLabel`, which is the
  * caller that decides whether emptiness draws a banner or a quiet chip).
  */
@@ -104,7 +109,23 @@ export function readProvenanceFloor(component: unknown): ProvenanceFloor | null 
     return null;
   }
   if (!isStringArray(pf.ingest_ids)) return null;
-  return { obtained_via: pf.obtained_via as ProvenanceFloorRung, ingest_ids: pf.ingest_ids };
+  // REQUIRED, never defaulted: an absent count read as 0 is exactly how unidentified drops vanish.
+  if (typeof pf.unidentified !== "number" || !Number.isInteger(pf.unidentified) || pf.unidentified < 0) {
+    return null;
+  }
+  return {
+    obtained_via: pf.obtained_via as ProvenanceFloorRung,
+    ingest_ids: pf.ingest_ids,
+    unidentified: pf.unidentified,
+  };
+}
+
+/**
+ * The ONE "is anything here unverified" decision, as the producer's docstring rules it: BOTH
+ * fields. `ingest_ids == []` alone does not mean every drop was promoted.
+ */
+export function provenanceFloorIsUnverified(floor: ProvenanceFloor): boolean {
+  return floor.ingest_ids.length > 0 || floor.unidentified > 0;
 }
 
 // ── The ingest row — ingest_status.py / GET /ingest/{id}/status ───────────────────────────
