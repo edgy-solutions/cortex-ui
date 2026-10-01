@@ -23,6 +23,10 @@ interface RuntimeConfig {
   // Electric is cut off, the propagation probe asserts the store
   // stays empty for Electric-covered fields).
   VITE_ELECTRIC_URL: string;
+  // Comma-separated feature flag names, written by docker-entrypoint.sh from the chart's env
+  // map (deployer sets VITE_FEATURES="canvasExport,ingest"). Parsed by src/lib/featureFlags.ts;
+  // see that module for the registry and how to add the next flag.
+  VITE_FEATURES: string;
 }
 
 declare global {
@@ -51,4 +55,20 @@ export const config: RuntimeConfig = {
   VITE_KEYCLOAK_CLIENT_ID: resolve("VITE_KEYCLOAK_CLIENT_ID", "cortex-ui"),
   VITE_NO_AUTH: resolve("VITE_NO_AUTH", "false"),
   VITE_ELECTRIC_URL: resolve("VITE_ELECTRIC_URL", "http://localhost:3000"),
+  VITE_FEATURES: resolve("VITE_FEATURES", ""),
 };
+
+/**
+ * Live reader for a single runtime config key — unlike `config` above (resolved once at import
+ * time), this re-reads `window.__RUNTIME_CONFIG__` on every call. Flags must be read live: a
+ * test can set `window.__RUNTIME_CONFIG__` after this module has already loaded, and in
+ * production `config.js` is loaded before the bundle but `config` is still only a snapshot.
+ *
+ * Note: `resolve` uses `||`, so an empty runtime string (e.g. `VITE_FEATURES: ""`) falls through
+ * to `import.meta.env` rather than short-circuiting on presence. That's acceptable here — an
+ * empty runtime flag list and an absent one both mean "no flags", and import.meta.env.VITE_*
+ * is not deployable at runtime anyway (see featureFlags.ts).
+ */
+export function readRuntimeConfig(key: keyof RuntimeConfig): string {
+  return resolve(key, "");
+}

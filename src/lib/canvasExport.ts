@@ -13,6 +13,7 @@
  * the DOM/network is thin and lives in the component.
  */
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { isFeatureEnabled } from "@/lib/featureFlags";
 
 export interface ExportRecipient {
   value: string;
@@ -132,19 +133,10 @@ export function canvasAnswerIds(artifacts: { id: string }[]): string[] {
 }
 
 // ── Flag ────────────────────────────────────────────────────────────────
-// Same pattern as `isMockGroundingEnabled` (`mockGroundingEmitter.ts:64`): a localStorage
-// override for local/dev, falling back to a build-time env var. Default OFF — the route is real
-// (`3f27c7cb`) but unwitnessed from this client; the flag stays until a live capture seals it.
-const KEY = "cortex.canvasExport";
-
+// Backed by the runtime feature-flag registry (`src/lib/featureFlags.ts`): a localStorage
+// override for local/dev, falling back to the deployer's `VITE_FEATURES` runtime list. Default
+// OFF — the route is real (`3f27c7cb`) but unwitnessed from this client; the flag stays until a
+// live capture seals it.
 export function isCanvasExportEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    if (window.localStorage.getItem(KEY) === "1") return true;
-  } catch {
-    /* ignore */
-  }
-  const envVal = (import.meta as unknown as { env?: Record<string, string> }).env
-    ?.VITE_CANVAS_EXPORT;
-  return envVal === "true";
+  return isFeatureEnabled("canvasExport");
 }

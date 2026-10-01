@@ -1,9 +1,8 @@
 /**
  * ingestFlag — the two ADR-0041 ingest UI flags.
  *
- * Same pattern as `isMockGroundingEnabled` (src/lib/mockGroundingEmitter.ts): a localStorage
- * override checked first, falling back to a Vite env var, defaulting OFF, every storage access
- * wrapped in try/catch because a private window or blocked site data must not crash the read.
+ * Backed by the runtime feature-flag registry (`src/lib/featureFlags.ts`): a localStorage
+ * override checked first, falling back to the deployer's `VITE_FEATURES` runtime list.
  *
  * Two independent flags, not one:
  *   - `isIngestUiEnabled()`   gates whether the ingest panel exists at all.
@@ -11,35 +10,17 @@
  *     matters once the UI is on — the routes it would otherwise hit do not exist yet.
  */
 
+import { isFeatureEnabled } from "@/lib/featureFlags";
+
 const UI_KEY = "cortex.ingest";
 const MOCK_KEY = "cortex.ingestMock";
 
-function envVar(name: string): string | undefined {
-  return (import.meta as unknown as { env?: Record<string, string> }).env?.[name];
-}
-
 export function isIngestUiEnabled(): boolean {
-  if (typeof window !== "undefined") {
-    try {
-      if (window.localStorage.getItem(UI_KEY) === "1") return true;
-    } catch {
-      /* ignore */
-    }
-  }
-  const envVal = envVar("VITE_INGEST_UI");
-  return envVal === "true";
+  return isFeatureEnabled("ingest");
 }
 
 export function isIngestMockEnabled(): boolean {
-  if (typeof window !== "undefined") {
-    try {
-      if (window.localStorage.getItem(MOCK_KEY) === "1") return true;
-    } catch {
-      /* ignore */
-    }
-  }
-  const envVal = envVar("VITE_INGEST_MOCK");
-  return envVal === "true";
+  return isFeatureEnabled("ingestMock");
 }
 
 export function setIngestUiEnabled(on: boolean) {
