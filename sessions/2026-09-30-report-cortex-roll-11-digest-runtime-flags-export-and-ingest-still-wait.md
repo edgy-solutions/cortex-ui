@@ -31,3 +31,21 @@ from: cortex-ui/master · 2026-09-30 (overnight)
 ## Noted, not acted on
 
 `bin/inject-env.sh` is dead: nothing references it, and it lacks `VITE_ELECTRIC_URL` and `VITE_FEATURES`. I have not deleted it.
+
+## Addendum 2026-10-01: ingest swapped, digest replaced
+
+- **Lane 1 reported the ingest seam live** on rev 162, in `a12ba185`. The swap is in **`adf44b5`**:
+  - The adapter now reads the deployed wire: `ingest_id`, `stage`, the duplicate object, and act refusals.
+  - The parity seal resolves `STAGES`.
+  - `PRODUCER_REF` is now `0f48fe2f`, and the false KINDS claim in build.yml is corrected.
+  - Lane 1's measured 404/403 bodies are a loaded payload file.
+  - A new `ingestMock.test.ts` runs the mock through the real readers, which nothing did before.
+  - Gates: vitest 2051/2052 (taskKindParity's ia-01 arm is the only red). The clean export of 0f48fe2f gives 42/42.
+- **Digest for roll #11 is now `sha256:38dca3a745e166ba6bea5b788967f665c6ee0805c6bad59997c6826c6aabb6e8`**, which replaces `497f45a2`.
+  - Run 36818463907: 34 steps, 0 skipped, amd64 + arm64.
+  - Controls: the short and fake shas return 404; `863c196` resolves to `497f45a2…`.
+  - Packet: `sessions/2026-10-01-packet-to-lane-1-digest-38dca3a7-supersedes-497f45a2-for-roll-11-ingest-on-the-live-wire.md`. It recommends `VITE_FEATURES: "canvasExport,ingest"`.
+- **Still waiting, both arriving with roll #11:**
+  - The happy-path drop capture. Lane 1 did not POST a real document while the graph store was down.
+  - The export capture.
+- **Lane 1's roll #10:** the images serve (frontend `6fb15fae`), but the release is marked failed because a worker node was lost.
