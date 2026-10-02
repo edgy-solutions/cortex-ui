@@ -48,6 +48,7 @@ import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
 import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
+import { OriginUnresolvedBanner } from "@/components/ingest/OriginUnresolvedBanner";
 
 /**
  * SupplyTable — ASSET_STATE_METRIC render.
@@ -1030,6 +1031,11 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 when `comp.provenance_floor` is absent or unreadable (field renamed by the
                 2026-09-30 dispatch — see ingestWire.ts for the prior name). */}
             <ProvenanceFloorLabel component={comp} />
+            {/* CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — same mount site as
+                `ProvenanceFloorLabel` immediately above: archetype-agnostic by construction.
+                `OriginUnresolvedBanner` self-guards and draws nothing when
+                `comp.origin` is absent, malformed, or resolved. */}
+            <OriginUnresolvedBanner component={comp} />
             {renderComponent(comp, handlePublish, previewRows, artifactId)}
           </div>
         );

@@ -312,6 +312,18 @@ describe("taskToArtifact — the card species, keyed on ARCHETYPE not on the kin
     });
   });
 
+  it("the APPROVAL_TASK body carries the row's own payload through untouched (CORTEX-PROPOSED §5)", () => {
+    // The ONE mapping point — `taskComponents`'s `base` — passes `task.payload` through as-is,
+    // so `ApprovalTaskCard`'s generic suggestion/evidence reads see whatever the row serves,
+    // with no second, duplicate mapper to drift from this one.
+    const payload = { suggestion: { document_type: "work instruction" }, evidence: [{ source: "x" }] };
+    expect(comp(taskToArtifact(task({ payload }))).task).toMatchObject({ payload });
+  });
+
+  it("a task with NO payload carries payload: undefined — absent, not a stand-in object", () => {
+    expect(comp(taskToArtifact(task())).task).toHaveProperty("payload", undefined);
+  });
+
   it("the TRIAGE_TASK body adds warnings / reason_code / pages ON TOP of the same base fields", () => {
     // The third species: an unprocessable input, not a decision. The warnings are the WHY that
     // makes a refusal actionable and the pages are the failed extraction itself — threaded

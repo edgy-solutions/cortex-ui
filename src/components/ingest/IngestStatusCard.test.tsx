@@ -5,10 +5,13 @@ import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { promotionIngestId, type IngestStatusRow } from "@/lib/ingestWire";
+import type { IngestOrigin } from "@/lib/ingestOrigin";
 
 const fetchIngestStatus = vi.fn();
+const disputeIngestOrigin = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...args: unknown[]) => fetchIngestStatus(...args),
+  disputeIngestOrigin: (...args: unknown[]) => disputeIngestOrigin(...args),
 }));
 
 const actOnHumanTask = vi.fn().mockResolvedValue({ task_id: "t", decision: "promoted" });
@@ -19,6 +22,7 @@ vi.mock("@/api/client", () => ({
 afterEach(() => {
   cleanup();
   fetchIngestStatus.mockReset();
+  disputeIngestOrigin.mockReset();
   actOnHumanTask.mockReset();
   actOnHumanTask.mockResolvedValue({ task_id: "t", decision: "promoted" });
   useHumanTaskStore.setState({ tasks: [] });
@@ -39,6 +43,7 @@ const row = (over: Partial<IngestStatusRow> = {}): IngestStatusRow => ({
   duplicate: null,
   created_at: 1790860800000,
   updated_at: 1790860800000,
+  origin: null,
   ...over,
 });
 
@@ -234,5 +239,122 @@ describe("IngestStatusCard — not found", () => {
       expect(document.querySelector("[data-ingest-not-found]")?.textContent).toMatch(/Not found, or not visible to you\./),
     );
     expect(fetchIngestStatus).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * CORTEX-PROPOSED ORIGIN — Section 3. `row.origin === null` (today's real server) is drawn on
+ * ITS OWN attribute, `data-ingest-origin-unreported`, never as a value of `data-ingest-origin` —
+ * the absent≠unresolved invariant, checked at the selector level: a test (or a future caller)
+ * keyed on `[data-ingest-origin]` alone can never pick up the absent case by accident.
+ */
+describe("IngestStatusCard — origin (CORTEX-PROPOSED)", () => {
+  const resolvedOrigin: IngestOrigin = {
+    status: "resolved",
+    document_type: "work instruction",
+    program: "Line 4 retrofit",
+    evidence_label: undefined,
+  } as IngestOrigin;
+
+  const unresolvedOrigin: IngestOrigin = { status: "unresolved" };
+
+  it("origin absent (today's real server) draws data-ingest-origin-unreported, no data-ingest-origin, no action", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ origin: null })} pollIntervalMs={100000} />);
+    const el = document.querySelector("[data-ingest-origin-unreported]");
+    expect(el?.textContent).toBe("Origin: not reported by this server");
+    expect(document.querySelector("[data-ingest-origin]")).toBeNull();
+    expect(document.querySelector("[data-ingest-origin-dispute]")).toBeNull();
+  });
+
+  it("resolved origin draws data-ingest-origin=\"resolved\", the summary, and ONE dispute button", () => {
+    render(
+      <IngestStatusCard
+        ingestId={INGEST_ID}
+        initialRow={row({ origin: resolvedOrigin })}
+        pollIntervalMs={100000}
+        onBehalfOf="steward@example.com"
+      />,
+    );
+    expect(document.querySelector('[data-ingest-origin="resolved"]')).toBeTruthy();
+    expect(document.querySelector('[data-ingest-origin="resolved"]')?.textContent).toMatch(
+      /work instruction, Line 4 retrofit/,
+    );
+    expect(document.querySelectorAll("[data-ingest-origin-dispute]")).toHaveLength(1);
+    expect(document.querySelector("[data-ingest-origin-unreported]")).toBeNull();
+  });
+
+  it("unresolved origin draws data-ingest-origin=\"unresolved\", the summary and the visibility note, and NO dispute button", () => {
+    render(
+      <IngestStatusCard ingestId={INGEST_ID} initialRow={row({ origin: unresolvedOrigin })} pollIntervalMs={100000} />,
+    );
+    const section = document.querySelector('[data-ingest-origin="unresolved"]');
+    expect(section?.textContent).toMatch(/origin unresolved — awaiting steward/);
+    expect(document.querySelector("[data-ingest-origin-visibility]")?.textContent).toBe(
+      "Visible only to you until a steward resolves its origin.",
+    );
+    expect(document.querySelector("[data-ingest-origin-dispute]")).toBeNull();
+  });
+
+  it("a successful dispute replaces the button with data-ingest-origin-disputed, naming the task id", async () => {
+    disputeIngestOrigin.mockResolvedValue({ steward_task_id: "task-77" });
+    render(
+      <IngestStatusCard
+        ingestId={INGEST_ID}
+        initialRow={row({ origin: resolvedOrigin })}
+        pollIntervalMs={100000}
+        onBehalfOf="steward@example.com"
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-ingest-origin-dispute]")!);
+    await waitFor(() => expect(document.querySelector("[data-ingest-origin-disputed]")).toBeTruthy());
+    expect(document.querySelector("[data-ingest-origin-disputed]")?.textContent).toMatch(/Sent to the steward/);
+    expect(document.querySelector("[data-ingest-origin-disputed]")?.textContent).toMatch(/task-77/);
+    expect(document.querySelector("[data-ingest-origin-dispute]")).toBeNull();
+    expect(disputeIngestOrigin).toHaveBeenCalledWith(INGEST_ID, "steward@example.com");
+  });
+
+  it("a 404 refusal shows 'does not accept origin disputes yet', and the button stays enabled", async () => {
+    disputeIngestOrigin.mockRejectedValue({ response: { status: 404, data: { detail: "not found" } } });
+    render(
+      <IngestStatusCard
+        ingestId={INGEST_ID}
+        initialRow={row({ origin: resolvedOrigin })}
+        pollIntervalMs={100000}
+        onBehalfOf="steward@example.com"
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-ingest-origin-dispute]")!);
+    await waitFor(() =>
+      expect(document.querySelector("[data-ingest-origin-dispute-refusal]")?.textContent).toBe(
+        "This server does not accept origin disputes yet.",
+      ),
+    );
+    const button = document.querySelector("[data-ingest-origin-dispute]") as HTMLButtonElement;
+    expect(button).toBeTruthy();
+    expect(button.disabled).toBe(false);
+  });
+
+  it("a named-error refusal is shown via readActRefusal's shape, button stays enabled, task NOT rendered disputed", async () => {
+    disputeIngestOrigin.mockRejectedValue({
+      response: { status: 503, data: { detail: { error: "steward_queue_unavailable", message: "Nothing was written." } } },
+    });
+    render(
+      <IngestStatusCard
+        ingestId={INGEST_ID}
+        initialRow={row({ origin: resolvedOrigin })}
+        pollIntervalMs={100000}
+        onBehalfOf="steward@example.com"
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-ingest-origin-dispute]")!);
+    await waitFor(() =>
+      expect(document.querySelector("[data-ingest-origin-dispute-refusal]")?.textContent).toBe("Nothing was written."),
+    );
+    expect(document.querySelector("[data-ingest-origin-dispute-refusal]")?.getAttribute("data-ingest-origin-dispute-refusal")).toBe(
+      "steward_queue_unavailable",
+    );
+    expect(document.querySelector("[data-ingest-origin-disputed]")).toBeNull();
+    const button = document.querySelector("[data-ingest-origin-dispute]") as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
   });
 });

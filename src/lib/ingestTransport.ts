@@ -12,10 +12,12 @@
 import {
   uploadIngest as realUploadIngest,
   fetchIngestStatus as realFetchIngestStatus,
+  disputeIngestOrigin as realDisputeIngestOrigin,
 } from "@/api/client";
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
+  disputeIngestOrigin as mockDisputeIngestOrigin,
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
@@ -27,4 +29,11 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
 
 export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   return isIngestMockEnabled() ? mockFetchIngestStatus(ingestId) : realFetchIngestStatus(ingestId);
+}
+
+/** CORTEX-PROPOSED — see `src/api/client.ts`'s `disputeIngestOrigin` doc comment. */
+export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promise<{ steward_task_id: string }> {
+  return isIngestMockEnabled()
+    ? mockDisputeIngestOrigin(ingestId, onBehalfOf)
+    : realDisputeIngestOrigin(ingestId, onBehalfOf);
 }

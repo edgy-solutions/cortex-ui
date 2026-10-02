@@ -53,6 +53,7 @@
  * see `IngestStatusCard`'s header for the full reasoning.) `ingestStageLadder` stays a bespoke
  * list, now drawn from the REAL `STAGES` tuple rather than the old `STATUSES`.
  */
+import { readIngestOrigin, type IngestOrigin } from "./ingestOrigin";
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
 
@@ -171,6 +172,13 @@ export interface IngestStatusRow {
    *  string. See `readIngestStatusRow` below. */
   created_at: number;
   updated_at: number;
+  /**
+   * CORTEX-PROPOSED (`src/lib/ingestOrigin.ts`) — the real route (invincible-agent origin/master
+   * `41647787`) serves no `origin` field today. `null` means "the server reports no origin",
+   * read via `readIngestOrigin`, which is a THIRD state, distinct from `{status:"unresolved"}` —
+   * never conflate a server that has not been asked with a resolver that tried and missed.
+   */
+  origin: IngestOrigin | null;
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -236,6 +244,9 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     duplicate,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
+    // Absent on today's real wire — `readIngestOrigin` returns null for exactly that, never a
+    // fabricated unresolved/resolved state. See `IngestStatusRow.origin`'s own doc comment.
+    origin: readIngestOrigin(raw.origin),
   };
 }
 

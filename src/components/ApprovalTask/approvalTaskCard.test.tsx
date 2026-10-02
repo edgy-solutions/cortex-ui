@@ -28,6 +28,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({
@@ -960,5 +962,110 @@ describe("roll #12's resume refusals", () => {
       expect(note!.textContent).toContain("accepted requires a reason");
     });
     expect(verbs()).toEqual(["accepted", "rejected", "returned_for_rework"]);
+  });
+});
+
+/**
+ * CORTEX-PROPOSED — Section 5. `payload.suggestion` / `payload.evidence` are two FIXED, generic
+ * shapes this card draws regardless of kind; see `ApprovalTaskCard.tsx`'s own doc comments on
+ * `readSuggestionEntries`/`readEvidenceItems`. Computed independent of `contradiction` /
+ * `declared` / `done`, so these assert against the undeclared-kind branch (the simplest state to
+ * reach) rather than threading through a declaration fixture unrelated to what is under test.
+ */
+describe("ApprovalTaskCard — generic suggestion/evidence sections (CORTEX-PROPOSED)", () => {
+  it("no payload draws neither section", () => {
+    render(<ApprovalTaskCard task={task("undeclared_kind")} />);
+    expect(document.querySelector("[data-task-suggestion]")).toBeNull();
+    expect(document.querySelector("[data-task-evidence]")).toBeNull();
+  });
+
+  it("payload with no suggestion/evidence keys draws neither section", () => {
+    render(<ApprovalTaskCard task={task("undeclared_kind", { payload: { ingest_id: "sha256:abc" } })} />);
+    expect(document.querySelector("[data-task-suggestion]")).toBeNull();
+    expect(document.querySelector("[data-task-evidence]")).toBeNull();
+  });
+
+  it("a flat suggestion object draws data-task-suggestion with each key/value pair, in key order", () => {
+    render(
+      <ApprovalTaskCard
+        task={task("undeclared_kind", {
+          payload: { suggestion: { document_type: "work instruction", confidence: 0.82, flagged: false } },
+        })}
+      />,
+    );
+    const section = document.querySelector("[data-task-suggestion]");
+    expect(section).not.toBeNull();
+    expect(section!.hasAttribute("data-task-suggestion-skipped")).toBe(false);
+    const text = section!.textContent ?? "";
+    const iDocType = text.indexOf("document_type");
+    const iConfidence = text.indexOf("confidence");
+    const iFlagged = text.indexOf("flagged");
+    expect(iDocType).toBeGreaterThanOrEqual(0);
+    expect(iConfidence).toBeGreaterThan(iDocType);
+    expect(iFlagged).toBeGreaterThan(iConfidence);
+    expect(text).toContain("work instruction");
+    expect(text).toContain("0.82");
+    expect(text).toContain("false");
+  });
+
+  it("a non-scalar suggestion value is skipped from entries and COUNTED in data-task-suggestion-skipped", () => {
+    render(
+      <ApprovalTaskCard
+        task={task("undeclared_kind", {
+          payload: {
+            suggestion: {
+              document_type: "work instruction",
+              nested: { a: 1 },
+              list: [1, 2],
+            },
+          },
+        })}
+      />,
+    );
+    const section = document.querySelector("[data-task-suggestion]");
+    expect(section!.getAttribute("data-task-suggestion-skipped")).toBe("2");
+    expect(section!.textContent).not.toContain("nested");
+    expect(section!.textContent).not.toContain("list");
+  });
+
+  it("an empty object under payload.suggestion still draws the section with no entries and no skipped attribute", () => {
+    render(<ApprovalTaskCard task={task("undeclared_kind", { payload: { suggestion: {} } })} />);
+    const section = document.querySelector("[data-task-suggestion]");
+    expect(section).not.toBeNull();
+    expect(section!.hasAttribute("data-task-suggestion-skipped")).toBe(false);
+  });
+
+  it("a non-empty evidence array draws data-task-evidence with one data-task-evidence-item per entry", () => {
+    render(
+      <ApprovalTaskCard
+        task={task("undeclared_kind", {
+          payload: {
+            evidence: [
+              { source: "registry:line-4", excerpt: "owner recorded as Line 4" },
+              { source: "directory:engineering" },
+            ],
+          },
+        })}
+      />,
+    );
+    const items = document.querySelectorAll("[data-task-evidence-item]");
+    expect(items).toHaveLength(2);
+    expect(items[0].textContent).toContain("registry:line-4");
+    expect(items[0].textContent).toContain("owner recorded as Line 4");
+    expect(items[1].textContent).toContain("directory:engineering");
+  });
+
+  it("an empty evidence array draws neither section", () => {
+    render(<ApprovalTaskCard task={task("undeclared_kind", { payload: { evidence: [] } })} />);
+    expect(document.querySelector("[data-task-evidence]")).toBeNull();
+  });
+
+  it("names no species-specific vocabulary in its own source — not even in a comment", () => {
+    // RAW source, comments INCLUDED — see `workflow-case/fixtures.test.tsx`'s identical guard;
+    // stripping comments first would make a word leaked into one invisible to this check.
+    const src = readFileSync(join(__dirname, "ApprovalTaskCard.tsx"), "utf8");
+    const FORBIDDEN = /origin|steward|program|title block/i;
+    const matches = [...src.matchAll(new RegExp(FORBIDDEN.source, "gi"))].map((m) => m[0]);
+    expect(matches, `ApprovalTaskCard.tsx contains forbidden word(s): ${JSON.stringify(matches)}`).toEqual([]);
   });
 });

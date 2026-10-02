@@ -939,3 +939,25 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
   const { data } = await api.get<unknown>(ingestStatusPath(ingestId));
   return data;
 }
+
+/**
+ * CORTEX-PROPOSED — `POST /ingest/{ingest_id}/origin/dispute`. Nothing on the real producer
+ * (invincible-agent origin/master `41647787`) serves origin at all yet (see
+ * `src/lib/ingestOrigin.ts`'s header), so this route, its body shape and its response are this
+ * client's own proposal, not a measured wire — built the same way as `uploadIngest` above (same
+ * `api` instance, so the caller's bearer + trace headers attach the same way) so it needs no
+ * `check:transport` declaration of its own; it rides the wrapper like every other call here.
+ *
+ * No note UI exists (the dispute is a single action, "this looks wrong" — see
+ * `IngestStatusCard`), so `note` is always sent absent rather than as an empty string.
+ */
+export async function disputeIngestOrigin(
+  ingestId: string,
+  onBehalfOf: string,
+): Promise<{ steward_task_id: string }> {
+  const { data } = await api.post<{ steward_task_id: string }>(
+    `/ingest/${encodeURIComponent(ingestId)}/origin/dispute`,
+    { on_behalf_of: onBehalfOf },
+  );
+  return data;
+}

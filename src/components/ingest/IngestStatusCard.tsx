@@ -39,12 +39,13 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { actOnHumanTask } from "@/api/client";
-import { fetchIngestStatus } from "@/lib/ingestTransport";
+import { fetchIngestStatus, disputeIngestOrigin } from "@/lib/ingestTransport";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import {
   readIngestStatusRow,
   readActRefusal,
+  readIngestErrorMessage,
   isIngestNotFoundError,
   ingestStageLadder,
   ingestPollingDone,
@@ -53,6 +54,7 @@ import {
   type IngestStatusRow,
   type IngestStage,
 } from "@/lib/ingestWire";
+import { originSummary } from "@/lib/ingestOrigin";
 
 const RUNG_GLYPH: Record<string, string> = {
   done: "●",
@@ -72,9 +74,21 @@ export interface IngestStatusCardProps {
   /** Seed row — avoids a redundant first fetch right after upload, and lets tests render a
    *  specific status synchronously. */
   initialRow?: IngestStatusRow;
+  /**
+   * CORTEX-PROPOSED — the dispute route's own `on_behalf_of`. Threaded down from `IngestPanel`
+   * (which already resolves it from the OIDC profile email for the upload itself — see its doc
+   * comment) rather than this card calling `useAuth()` a second time, so a standalone render of
+   * this card — every existing test here — needs no `<AuthProvider>` just to show a status row.
+   */
+  onBehalfOf?: string | null;
 }
 
-export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }: IngestStatusCardProps) {
+export function IngestStatusCard({
+  ingestId,
+  pollIntervalMs = 2000,
+  initialRow,
+  onBehalfOf = null,
+}: IngestStatusCardProps) {
   const [row, setRow] = useState<IngestStatusRow | null>(initialRow ?? null);
   const [notFound, setNotFound] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
@@ -85,6 +99,40 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
 
   const tasks = useHumanTaskStore((s) => s.tasks);
   const declarationFor = useTaskKindStore((s) => s.declarationFor);
+
+  // CORTEX-PROPOSED — see `src/lib/ingestOrigin.ts`. `onBehalfOf` arrives as a prop; see its doc
+  // comment above.
+  const [disputing, setDisputing] = useState(false);
+  const [disputeResult, setDisputeResult] = useState<{ stewardTaskId: string | null } | null>(null);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [disputeErrorCode, setDisputeErrorCode] = useState<string | null>(null);
+
+  const handleDispute = async (disputeIngestId: string) => {
+    if (!onBehalfOf) return;
+    setDisputing(true);
+    setDisputeError(null);
+    setDisputeErrorCode(null);
+    try {
+      const result = await disputeIngestOrigin(disputeIngestId, onBehalfOf);
+      setDisputeResult({ stewardTaskId: result?.steward_task_id ?? null });
+    } catch (err) {
+      // This route does not exist on the real wire yet (CORTEX-PROPOSED) — a 404/405 there is
+      // "not built", not a refusal of THIS dispute, so it gets its own message rather than
+      // whatever generic text a bare 404 would otherwise read as.
+      const status = (err as { response?: { status?: number } } | null | undefined)?.response?.status;
+      if (status === 404 || status === 405) {
+        setDisputeError("This server does not accept origin disputes yet.");
+        setDisputeErrorCode(null);
+      } else {
+        const refusal = readActRefusal(err);
+        setDisputeError(refusal?.message ?? readIngestErrorMessage(err) ?? "Dispute failed.");
+        setDisputeErrorCode(refusal?.error ?? null);
+      }
+      // Never rendered as disputed on a refusal — the button stays enabled for a deliberate retry.
+    } finally {
+      setDisputing(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -192,6 +240,57 @@ export function IngestStatusCard({ ingestId, pollIntervalMs = 2000, initialRow }
           </span>
         )}
       </div>
+
+      {/*
+       * CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — `row.origin === null` is the real,
+       * unbuilt producer today: a THIRD state, kept on its OWN attribute name
+       * (`data-ingest-origin-unreported`) rather than a value of `data-ingest-origin`, so a
+       * selector keyed on the latter can never pick it up as "resolved" or "unresolved" by
+       * accident.
+       */}
+      {row.origin === null ? (
+        <p className="mt-2 text-[10px] font-mono text-slate-500" data-ingest-origin-unreported>
+          Origin: not reported by this server
+        </p>
+      ) : row.origin.status === "resolved" ? (
+        <div className="mt-2" data-ingest-origin="resolved">
+          <p className="text-[10px] font-mono text-slate-300">{originSummary(row.origin)}</p>
+          {disputeResult ? (
+            <p className="text-[10px] font-mono text-cyan-300" data-ingest-origin-disputed>
+              Sent to the steward
+              {disputeResult.stewardTaskId ? ` (task ${disputeResult.stewardTaskId})` : ""}
+            </p>
+          ) : (
+            <>
+              <button
+                type="button"
+                data-ingest-origin-dispute
+                disabled={disputing || !onBehalfOf}
+                title={!onBehalfOf ? "No verified email available" : undefined}
+                className="mt-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-amber-600/30 text-amber-200 disabled:opacity-40"
+                onClick={() => void handleDispute(row.ingest_id)}
+              >
+                This looks wrong
+              </button>
+              {disputeError && (
+                <p
+                  className="mt-1 text-[10px] font-mono text-rose-400"
+                  data-ingest-origin-dispute-refusal={disputeErrorCode ?? ""}
+                >
+                  {disputeError}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2" data-ingest-origin="unresolved">
+          <p className="text-[10px] font-mono text-slate-300">{originSummary(row.origin)}</p>
+          <p className="text-[10px] font-mono text-slate-500" data-ingest-origin-visibility>
+            Visible only to you until a steward resolves its origin.
+          </p>
+        </div>
+      )}
 
       {isDuplicate ? (
         <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-duplicate>

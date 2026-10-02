@@ -22,9 +22,18 @@
  *                               (mirrors `record_duplicate_arrival` actually writing a row
  *                               server-side — see `ingest_status.py` — so `fetchIngestStatus`
  *                               stays consistent for a duplicate id too).
+ *
+ * CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — no row here ever gets an `origin` from
+ * upload; `MockRow.origin` is undefined by default, which `fetchIngestStatus` returns as the
+ * row's own absence of the key, read by `readIngestOrigin` as `null` — the same "absent" state
+ * the real, unbuilt producer route is in today. The ONLY way a mock row carries one is
+ * `__seedMockOriginFixture`, a named, hand-built test fixture — never sniffed from the filename.
+ * `disputeIngestOrigin` is mocked alongside it, resolving with a fake steward task id and
+ * mutating nothing.
  */
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { promotionIngestId, type IngestStage } from "./ingestWire";
+import type { IngestOrigin } from "./ingestOrigin";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
   received: "extracting",
@@ -40,6 +49,14 @@ interface MockRow {
   duplicate: { of_ingest_id: string; message: string } | null;
   created_at: number;
   updated_at: number;
+  /**
+   * CORTEX-PROPOSED, and absent by default — the real producer serves no origin, and
+   * `uploadIngest` below never sets this. It is populated ONLY through
+   * `__seedMockOriginFixture` below, a named, hand-built test fixture, never derived from the
+   * filename the way `duplicate` is — origin is not something a dropper's filename could ever
+   * carry, so it would be dishonest to sniff it the same way.
+   */
+  origin?: IngestOrigin | null;
 }
 
 const STORE = new Map<string, MockRow>();
@@ -155,6 +172,30 @@ function seedReviewTask(row: MockRow): void {
     createdAt: Date.now(),
   };
   useHumanTaskStore.getState().upsertTask(task);
+}
+
+/**
+ * CORTEX-PROPOSED — `POST /ingest/{ingest_id}/origin/dispute`'s mock. Resolves with a fake
+ * steward task id; does not mutate the row at all (the "Sent to the steward" state the card
+ * draws afterward is the card's own local state, not a re-fetch of this row — see
+ * `IngestStatusCard`'s dispute handling).
+ */
+export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promise<{ steward_task_id: string }> {
+  void onBehalfOf;
+  return Promise.resolve({ steward_task_id: `mock-steward-task-${ingestId}` });
+}
+
+/**
+ * THE NAMED, HAND-BUILT FIXTURE for origin — see `MockRow.origin`'s doc comment. Sets a row's
+ * `origin` directly for a test to exercise `IngestStatusCard`'s origin section against the mock
+ * transport end to end; nothing else in this module ever populates it. Throws if the row does
+ * not exist, rather than silently creating one, since the fixture is meant to decorate an
+ * upload that already happened.
+ */
+export function __seedMockOriginFixture(ingestId: string, origin: IngestOrigin | null): void {
+  const row = STORE.get(ingestId);
+  if (!row) throw new Error(`__seedMockOriginFixture: no mock row for ${ingestId}`);
+  row.origin = origin;
 }
 
 /** Test/dev-only reset — the module is a singleton store across the session otherwise. */

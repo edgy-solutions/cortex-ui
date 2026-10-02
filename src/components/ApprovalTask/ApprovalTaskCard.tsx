@@ -74,6 +74,62 @@ export interface ApprovalTaskPayload {
    * window, for no reason a reader could see.
    */
   declaration?: unknown;
+  /**
+   * The row's own served payload, passed through untouched (`taskArtifact.ts`'s single mapping
+   * point). This card stays KIND-AGNOSTIC — it draws only two FIXED, generic shapes off it
+   * (`suggestion`: a flat key/value object; `evidence`: a `{source, excerpt?}` array) and names
+   * no species-specific field by spelling. Absent, or not an object, draws neither section.
+   */
+  payload?: unknown;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+type Scalar = string | number | boolean | null;
+
+function isScalar(v: unknown): v is Scalar {
+  return v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+}
+
+/**
+ * The generic suggestion read — null unless `payload.suggestion` is itself a non-null,
+ * non-array object. A value under a key that is NOT a scalar is dropped from `entries` but still
+ * counted in `skipped`, so a reader can see that something was withheld without this card having
+ * to know what that something was.
+ */
+function readSuggestionEntries(
+  payload: unknown,
+): { entries: Array<{ key: string; value: Scalar }>; skipped: number } | null {
+  if (!isPlainObject(payload) || !isPlainObject(payload.suggestion)) return null;
+  const suggestion = payload.suggestion;
+  const entries: Array<{ key: string; value: Scalar }> = [];
+  let skipped = 0;
+  for (const key of Object.keys(suggestion)) {
+    const value = suggestion[key];
+    if (isScalar(value)) entries.push({ key, value });
+    else skipped += 1;
+  }
+  return { entries, skipped };
+}
+
+/**
+ * The generic evidence read — null unless `payload.evidence` is a non-empty array with at least
+ * one well-shaped `{source: string, excerpt?: string}` entry. A malformed entry (no string
+ * `source`) is dropped rather than rendered half-filled; it is never counted, unlike a skipped
+ * suggestion value, because the spec names only the latter.
+ */
+function readEvidenceItems(payload: unknown): Array<{ source: string; excerpt: string | null }> | null {
+  if (!isPlainObject(payload) || !Array.isArray(payload.evidence) || payload.evidence.length === 0) {
+    return null;
+  }
+  const items: Array<{ source: string; excerpt: string | null }> = [];
+  for (const raw of payload.evidence) {
+    if (!isPlainObject(raw) || typeof raw.source !== "string") continue;
+    items.push({ source: raw.source, excerpt: typeof raw.excerpt === "string" ? raw.excerpt : null });
+  }
+  return items.length > 0 ? items : null;
 }
 
 /**
@@ -141,6 +197,12 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
    * false for everything, so neither makes a claim. See `audienceKindContradiction`.
    */
   const contradiction = audienceKindContradiction(task.audience, task.kind, isDeclaredKind);
+
+  // THE TWO GENERIC, KIND-AGNOSTIC SECTIONS — see the readers' doc comments above. Computed
+  // unconditionally, independent of `contradiction`/`declared`/`done`, so a reader sees them for
+  // any task carrying them regardless of what decision state the rest of the card is in.
+  const suggestion = readSuggestionEntries(task.payload);
+  const evidenceItems = readEvidenceItems(task.payload);
 
   /**
    * The verbs to offer, IN THE DECLARATION'S ORDER.
@@ -307,6 +369,31 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         {task.requested_by && <p>requested by · {formatRequestedBy(task.requested_by)}</p>}
         {task.subject_ref && <p className="break-all">subject · {task.subject_ref}</p>}
       </div>
+
+      {suggestion && (
+        <div
+          className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 mb-4"
+          data-task-suggestion
+          {...(suggestion.skipped > 0 ? { "data-task-suggestion-skipped": suggestion.skipped } : {})}
+        >
+          {suggestion.entries.map(({ key, value }) => (
+            <p key={key} className="text-[11px] font-mono text-slate-300">
+              <span className="text-slate-500">{key}:</span> {String(value)}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {evidenceItems && (
+        <div className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 mb-4" data-task-evidence>
+          {evidenceItems.map((item, i) => (
+            <p key={i} className="text-[11px] font-mono text-slate-300" data-task-evidence-item>
+              <span className="text-slate-500">{item.source}</span>
+              {item.excerpt ? `: ${item.excerpt}` : ""}
+            </p>
+          ))}
+        </div>
+      )}
 
       {contradiction ? (
         /*

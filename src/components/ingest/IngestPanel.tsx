@@ -84,7 +84,7 @@ export function IngestPanel() {
           )}
         </>
       )}
-      {phase.step === "status" && <IngestStatusCard ingestId={phase.id} />}
+      {phase.step === "status" && <IngestStatusCard ingestId={phase.id} onBehalfOf={email} />}
     </div>
   );
 }
