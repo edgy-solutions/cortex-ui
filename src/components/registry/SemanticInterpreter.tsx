@@ -760,6 +760,22 @@ const renderComponent = (
       );
     }
 
+    case "WORKFLOW_CASE": {
+      // ADR-0055's second package. Same data-driven dispatch as COMPETING_MEASURES, same reason
+      // for the local PascalCase binding below (assembleCapabilities.test.ts's JSX-tag scan).
+      const pkg = archetypePackage("WORKFLOW_CASE");
+      if (!pkg) break;
+      const WorkflowCase = pkg.Card;
+      return (
+        <WorkflowCase
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
+        />
+      );
+    }
+
     case "CONTRIBUTION_RANKING":
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -935,7 +951,10 @@ const isFullWidth = (archetype: string) =>
   archetype === "APPROVAL_TASK" ||
   // Same reasoning as APPROVAL_TASK above: a sparse card must fill its frame rather
   // than inherit a corner postage-stamp by omission.
-  archetype === "TRIAGE_TASK";
+  archetype === "TRIAGE_TASK" ||
+  // WORKFLOW_CASE's multi-section layout (header, stages, history, options, approval
+  // chain, artifact) needs the full row on a narrow viewport, same as COMPETING_MEASURES.
+  archetype === "WORKFLOW_CASE";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();

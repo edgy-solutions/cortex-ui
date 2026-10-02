@@ -27,6 +27,7 @@ import {
   Lock,
   Layers,
   BookOpenCheck,
+  GitBranch,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -152,6 +153,11 @@ export function glyphFor(t: AnswerArchetype): {
       return { Icon: Inbox, color: "text-amber-400/90" };
     case "GROUPED_REVIEW":
       return { Icon: ClipboardCheck, color: "text-neon-purple/80" };
+    case "WORKFLOW_CASE":
+      // A chain of acts under one subject, not any single step — distinct from APPROVAL_TASK's
+      // checkmark (one decision) and VARIANCE_TREE's branch-of-causes Workflow glyph (already
+      // taken) by being the only one that reads as a SEQUENCE of linked instances.
+      return { Icon: GitBranch, color: "text-neon-cyan/80" };
     default:
       return { Icon: HelpCircle, color: "text-slate-500" };
   }

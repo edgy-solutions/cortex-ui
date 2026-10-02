@@ -66,6 +66,10 @@ export type AnswerArchetype =
   | "APPROVAL_TASK"
   | "TRIAGE_TASK"
   | "GROUPED_REVIEW"
+  // ADR-0055's second registry package (roll #14). Added WITH its dispatch, its glyph and its
+  // label in one change — the file's own header above names exactly this failure mode once
+  // already (the planning family dispatched for weeks before this union heard of it).
+  | "WORKFLOW_CASE"
   | "UNKNOWN";
 
 /**
@@ -102,6 +106,7 @@ export const DISPLAY_ARCHETYPES = [
   "APPROVAL_TASK",
   "TRIAGE_TASK",
   "GROUPED_REVIEW",
+  "WORKFLOW_CASE",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
 /** SPO provenance the card carries forward (ADR-0028 Decision 2). */
@@ -245,6 +250,10 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Triage";
     case "GROUPED_REVIEW":
       return "Review";
+    case "WORKFLOW_CASE":
+      // NOT "Approval" or "Review" — a case can chain several workflow instances and never
+      // resolves to one verb; "Case" names the chain itself, not any one step in it.
+      return "Case";
     default:
       return "Answer";
   }

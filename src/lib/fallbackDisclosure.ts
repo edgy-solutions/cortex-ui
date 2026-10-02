@@ -69,6 +69,16 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
   WORKFLOW_OBSERVATION: true,
   GROUPED_REVIEW: true,
   /**
+   * JUDGMENT CALL (ADR-0055's second package, roll #14): a case is a STATUS record — stages,
+   * history, options, a decided approval's reason — that happens to embed a pending
+   * ApprovalTaskCard as one section among several, the same relationship GROUPED_REVIEW has to
+   * the task rows it batches. It is not itself a bare request the way APPROVAL_TASK/TRIAGE_TASK
+   * are: most of what it draws asserts something about the world, so it is classified like
+   * GROUPED_REVIEW rather than like the task archetypes. Flagged for review, not inferred from
+   * a rule already stated — this map has no clause this case clearly falls under.
+   */
+  WORKFLOW_CASE: true,
+  /**
    * A DECLARED ABSENCE, AND IT IS STILL A CLAIM. `NAMED_HOLE` says "this exists and is empty",
    * which is a statement about the world a generalist is in no position to make — it is the
    * honest-absence archetype, not a request, and under a fallback nobody asked it for.
