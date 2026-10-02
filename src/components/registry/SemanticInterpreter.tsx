@@ -13,6 +13,7 @@ import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
 import { archetypePackage } from "@/archetypes/registry";
 import { pick } from "@/archetypes/defineArchetype";
+import { carriesItsRequest } from "@/lib/fallbackDisclosure";
 import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
@@ -764,7 +765,9 @@ const renderComponent = (
       // ADR-0055's second package. Same data-driven dispatch as COMPETING_MEASURES, same reason
       // for the local PascalCase binding below (assembleCapabilities.test.ts's JSX-tag scan).
       const pkg = archetypePackage("WORKFLOW_CASE");
-      if (!pkg) break;
+      // No case object, nothing to decide and nothing to draw — the card would read
+      // `subject_ref` off undefined. Same rule the fallback split applies (`carriesItsRequest`).
+      if (!pkg || !carriesItsRequest(comp, pkg.id)) break;
       const WorkflowCase = pkg.Card;
       return (
         <WorkflowCase

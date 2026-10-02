@@ -1,4 +1,5 @@
 import type { AnswerArchetype } from "./answerDisplay";
+import { WORKFLOW_CASE_ROW } from "@/archetypes/workflow-case/row";
 import { presentFallbackReason, type FallbackReason, type RouteSeverity } from "./routing";
 
 /**
@@ -69,16 +70,6 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
   WORKFLOW_OBSERVATION: true,
   GROUPED_REVIEW: true,
   /**
-   * JUDGMENT CALL (ADR-0055's second package, roll #14): a case is a STATUS record — stages,
-   * history, options, a decided approval's reason — that happens to embed a pending
-   * ApprovalTaskCard as one section among several, the same relationship GROUPED_REVIEW has to
-   * the task rows it batches. It is not itself a bare request the way APPROVAL_TASK/TRIAGE_TASK
-   * are: most of what it draws asserts something about the world, so it is classified like
-   * GROUPED_REVIEW rather than like the task archetypes. Flagged for review, not inferred from
-   * a rule already stated — this map has no clause this case clearly falls under.
-   */
-  WORKFLOW_CASE: true,
-  /**
    * A DECLARED ABSENCE, AND IT IS STILL A CLAIM. `NAMED_HOLE` says "this exists and is empty",
    * which is a statement about the world a generalist is in no position to make — it is the
    * honest-absence archetype, not a request, and under a fallback nobody asked it for.
@@ -91,6 +82,14 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
   ELICITATION: false,
   APPROVAL_TASK: false,
   TRIAGE_TASK: false,
+  /**
+   * RULED 2026-10-02 (Chris): a case is a PENDING HUMAN DECISION, not an answer. Hiding one because
+   * the routing fell back is the wrong side of cautious — the decision is still owed whatever the
+   * router did. It renders whenever its case object is present (see `carriesItsRequest`), with the
+   * disclosure beside it. This reverses the package's first classification, which grouped it with
+   * GROUPED_REVIEW as a status record.
+   */
+  WORKFLOW_CASE: false,
 };
 
 /** Whether a component's archetype asserts something, rather than asking for something. */
@@ -99,6 +98,23 @@ export function claimsAnAnswer(archetype: string): boolean {
   // An archetype this table has never heard of is a claim, for the same reason UNKNOWN is: it
   // has not said it is a request, and under a fallback the strict treatment is the safe one.
   return known === undefined ? true : known;
+}
+
+/**
+ * A request is shown only when it CARRIES the thing it asks about. A WORKFLOW_CASE with no case
+ * object has nothing to decide and its card has nothing to draw, so it is counted as withheld like
+ * any other component the body does not draw — never dropped silently. The key is read from the
+ * package's declared row, not spelled here, so a renamed payload key cannot leave this behind.
+ */
+const REQUEST_PAYLOAD_KEY: Partial<Record<string, string>> = {
+  [WORKFLOW_CASE_ROW.archetype]: WORKFLOW_CASE_ROW.payload_key,
+};
+
+export function carriesItsRequest(component: unknown, archetype: string): boolean {
+  const key = REQUEST_PAYLOAD_KEY[archetype];
+  if (key === undefined) return true;
+  const value = (component as Record<string, unknown>)[key];
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export interface FallbackDisclosure {
@@ -175,7 +191,7 @@ export function splitFallbackComponents(
       typeof c === "object" && c !== null
         ? String((c as { archetype?: unknown }).archetype ?? "")
         : "";
-    if (claimsAnAnswer(archetype)) withheld += 1;
+    if (claimsAnAnswer(archetype) || !carriesItsRequest(c, archetype)) withheld += 1;
     else shown.push(c);
   }
   return { shown, withheld };

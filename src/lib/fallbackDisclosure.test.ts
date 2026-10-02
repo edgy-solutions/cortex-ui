@@ -19,6 +19,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  carriesItsRequest,
   claimsAnAnswer,
   readFallbackDisclosure,
   splitFallbackComponents,
@@ -107,12 +108,14 @@ describe("what claims an answer, and what merely asks", () => {
     }
   });
 
-  it("the requests are the three that ask the reader for something", () => {
-    // Named individually rather than counted, because "three are false" holds just as well if
-    // the wrong three are.
+  it("the requests are the four that ask the reader for something", () => {
+    // Named individually rather than counted, because "four are false" holds just as well if
+    // the wrong four are.
     expect(claimsAnAnswer("ELICITATION")).toBe(false);
     expect(claimsAnAnswer("APPROVAL_TASK")).toBe(false);
     expect(claimsAnAnswer("TRIAGE_TASK")).toBe(false);
+    // RULED 2026-10-02: a case is a pending human decision, not an answer.
+    expect(claimsAnAnswer("WORKFLOW_CASE")).toBe(false);
   });
 
   it("and the answers are answers, including the two that look like exceptions", () => {
@@ -194,6 +197,27 @@ describe("the split withholds claims, keeps requests, and never loses a componen
     expect(splitFallbackComponents(FALLBACK, [])).toEqual({ shown: [], withheld: 0 });
   });
 
+  it("keeps a WORKFLOW_CASE that carries its case object, beside the disclosure", () => {
+    const kase = { archetype: "WORKFLOW_CASE", case: { subject_ref: "X-1", instances: [] } };
+    const claim = comp("CHART_WIDGET");
+    const out = splitFallbackComponents(FALLBACK, [claim, kase]);
+    expect(out.shown).toEqual([kase]);
+    expect(out.withheld).toBe(1);
+  });
+
+  it("COUNTS a WORKFLOW_CASE with no case object — nothing to decide, never dropped silently", () => {
+    for (const missing of [undefined, null, [], "a string"]) {
+      const out = splitFallbackComponents(FALLBACK, [{ archetype: "WORKFLOW_CASE", case: missing }]);
+      expect(out, `case: ${JSON.stringify(missing)}`).toEqual({ shown: [], withheld: 1 });
+    }
+  });
+
+  it("the presence rule reads the package row's key, so other requests are untouched by it", () => {
+    expect(carriesItsRequest({ archetype: "WORKFLOW_CASE", case: {} }, "WORKFLOW_CASE")).toBe(true);
+    expect(carriesItsRequest({ archetype: "WORKFLOW_CASE", rows: {} }, "WORKFLOW_CASE")).toBe(false);
+    expect(carriesItsRequest(comp("ELICITATION"), "ELICITATION")).toBe(true);
+  });
+
   it("agrees with the classification for EVERY displayable archetype, one at a time", () => {
     /*
       The table decides; this proves the split consults it, member by member, so a hardcoded
@@ -203,7 +227,10 @@ describe("the split withholds claims, keeps requests, and never loses a componen
     let withheldSeen = 0;
     let shownSeen = 0;
     for (const a of DISPLAY_ARCHETYPES) {
-      const out = splitFallbackComponents(FALLBACK, [comp(a)]);
+      // A WELL-FORMED component per archetype: a request is kept only when it carries what it asks
+      // about (`carriesItsRequest`), and that rule has its own arms above — this one is about the table.
+      const c = a === "WORKFLOW_CASE" ? { ...comp(a), case: {} } : comp(a);
+      const out = splitFallbackComponents(FALLBACK, [c]);
       if (claimsAnAnswer(a)) {
         expect(out, a).toMatchObject({ withheld: 1 });
         expect(out.shown, a).toEqual([]);
