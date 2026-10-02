@@ -9,7 +9,6 @@
  * this file) because the facts they transcribe genuinely carry it — a definition's own `name`
  * and a task's own `kind` are not something a fixture gets to launder.
  */
-import { readFileSync } from "node:fs";
 import tasksCapture from "../../../../sessions/2026-10-02-payload-me-human-tasks-rev-165-bob.json";
 import taskKindsCapture from "../../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
 import { taskToArtifact } from "@/lib/taskArtifact";
@@ -436,10 +435,8 @@ export const WORKFLOW_CASE_FIXTURES: WorkflowCaseFixture[] = [
   },
 ];
 
-// `readFileSync` is imported for the one static-analysis reason this file needs it stated: this
-// module is bundled into the production registry (via `index.ts`), and the capture reads above
-// use a plain ES `import` of the JSON files rather than `node:fs`, specifically so this file
-// never asks a browser bundle to resolve a Node builtin. This binding exists only so a future
-// edit that reaches for `readFileSync` here finds this note instead of relearning it the hard
-// way; it is never called.
-void readFileSync;
+// This module is bundled into the production registry (via `index.ts`), so the captures above are
+// plain ES `import`s of the JSON, never `node:fs`: a browser bundle cannot resolve a Node builtin.
+// An earlier version imported `readFileSync` here, unused, "so a future edit finds this note"; that
+// import alone broke `vite build` for every push from 2915e36 to 77506a1, while tsc and the whole
+// suite stayed green. `src/lib/noNodeBuiltinsInTheBundle.test.ts` now fails on it in the suite.
