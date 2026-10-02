@@ -30,3 +30,18 @@ from: cortex-ui/master · 2026-10-02
 ## Pin
 
 **The frontend digest for Lane 1 is the one from this fix's push**, read from GHCR with the full sha and controls. It rides whatever roll follows roll #14's post-roll items. Until it resolves, **do not pin `a72dac4`, `1248a40` or `77506a1`**: they have no image.
+
+## Digest (read after the run)
+
+- **The image for `21a32d0fd3a72c4e2523285a4cf3a30f6fe915f6` is pushed: `sha256:f4bac439be69b6e0e471c5a195c6c03b7df59cd05e0f07d034dc84aa8e9e15c4`.**
+  - Run `37056910604`: Build Frontend succeeded, 34 steps, 0 skipped.
+- **Controls:**
+
+| Probe | Result | Meaning |
+|---|---|---|
+| short sha | 404 | expected |
+| fake sha | 404 | expected |
+| roll #13 `6596999…` | 200 `87f1f3aa…` | expected |
+| `1248a40…` | 404 | confirms the failed build pushed nothing |
+
+- **This is the frontend pin that rides the roll after roll #14's post-roll items.** It carries WORKFLOW_CASE, the fallback flip, ingest origin and the known-gap test.
