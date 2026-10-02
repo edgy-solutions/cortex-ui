@@ -1,0 +1,552 @@
+{
+  "captured_at": "2026-10-02T05:29:10.997654+00:00",
+  "helm_rev": 165,
+  "fleet": "3a024b2784e80e8a6f18bd43c3fd5d5888c200cb",
+  "caller": "bob",
+  "request": "GET /me/human_tasks",
+  "status": 200,
+  "body": {
+    "email": "bob@example.com",
+    "tasks": [
+      {
+        "id": "73371687-c2c4-43de-9551-89f0e906d75e",
+        "kind": "risk_acceptance_medium",
+        "task_id": "acceptance",
+        "workflow_id": "risk-acceptance-HAZ-1003-medium",
+        "audience": "risk_acceptance_medium:SUSTAINMENT",
+        "status": "pending",
+        "title": "Accept Medium risk \u2014 HAZ-1003",
+        "summary": "Residual risk acceptance by the authority the ratified matrix names for this level. Both dispositions are reason-required on the task kind's own row: an acceptance with no stated rationale erases the record that IS the artifact, and a bare rejection erases the same thing.",
+        "requested_by": "",
+        "subject_ref": "HAZ-1003",
+        "payload": {},
+        "created_at": 1790882237545,
+        "workflow_service": "SafetyAcceptance",
+        "promise_name": "approval_acceptance",
+        "declaration": {
+          "kind": "risk_acceptance_medium",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "ACCEPT-M",
+          "title": "Medium risk acceptance",
+          "accepts": [
+            "accepted",
+            "rejected",
+            "returned_for_rework"
+          ],
+          "reason_required": [
+            "accepted",
+            "rejected"
+          ]
+        }
+      },
+      {
+        "id": "cdc9e9df-3de7-4f6b-8ffa-fd5f14c61f62",
+        "kind": "extraction_refusal",
+        "task_id": "dispatch-failure:EFFECTFAIL05:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "dispatch_failure:SUSTAINMENT",
+        "status": "pending",
+        "title": "Dispatch failed after approval \u2014 NSR01L30NXT5G",
+        "summary": "A human approved this disposition and the dispatch then failed terminally, so the decision is recorded as settled but its effects never landed. Part: NSR01L30NXT5G. Queue: sourcing. Disposition: dispatchAltSourcing. Approved by: alice@example.com. Review started by: svc:review-starter. Cause: cortex-bff register of pcn dispatch task 'EFFECTFAIL05:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+        "requested_by": "svc:review-starter",
+        "subject_ref": "NSR01L30NXT5G",
+        "payload": {
+          "mpn": "NSR01L30NXT5G",
+          "cause": "cortex-bff register of pcn dispatch task 'EFFECTFAIL05:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+          "domain": "SUSTAINMENT",
+          "approved_by": "alice@example.com",
+          "disposition": "dispatchAltSourcing",
+          "reason_code": "DISPATCH_FAILED_AFTER_APPROVAL",
+          "idempotency_key": "EFFECTFAIL05:NSR01L30NXT5G",
+          "target_audience": "sourcing",
+          "review_started_by": "svc:review-starter",
+          "notice_fingerprint": "EFFECTFAIL05"
+        },
+        "created_at": 1785951148254,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "extraction_refusal",
+          "declared": true,
+          "archetype": "TRIAGE_TASK",
+          "badge": "TRIAGE",
+          "title": "Unprocessable notice",
+          "accepts": [
+            "acknowledged",
+            "redriven"
+          ],
+          "reason_required": [
+            "acknowledged"
+          ]
+        }
+      },
+      {
+        "id": "680b9923-33b9-4af1-b554-e303cbdfe494",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL05:NSR05F20NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR05F20NXT5G",
+        "summary": "Part NSR05F20NXT5G from notice EFFECTFAIL05 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {
+          "approved_by": "alice@example.com"
+        },
+        "created_at": 1785951147108,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "bba376dd-6507-422b-9c4c-bccec5021511",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL05:NSR02F30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR02F30NXT5G",
+        "summary": "Part NSR02F30NXT5G from notice EFFECTFAIL05 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {
+          "approved_by": "alice@example.com"
+        },
+        "created_at": 1785951146609,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "77f80d65-d200-4d24-8d10-08c1ff11cbf6",
+        "kind": "extraction_refusal",
+        "task_id": "dispatch-failure:EFFECTFAIL04:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "dispatch_failure:SUSTAINMENT",
+        "status": "pending",
+        "title": "Dispatch failed after approval \u2014 NSR01L30NXT5G",
+        "summary": "A human approved this disposition and the dispatch then failed terminally, so the decision is recorded as settled but its effects never landed. Part: NSR01L30NXT5G. Queue: sourcing. Disposition: dispatchAltSourcing. Approved by: alice@example.com. Review started by: svc:review-starter. Cause: cortex-bff register of pcn dispatch task 'EFFECTFAIL04:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+        "requested_by": "svc:review-starter",
+        "subject_ref": "NSR01L30NXT5G",
+        "payload": {
+          "mpn": "NSR01L30NXT5G",
+          "cause": "cortex-bff register of pcn dispatch task 'EFFECTFAIL04:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+          "domain": "SUSTAINMENT",
+          "approved_by": "alice@example.com",
+          "disposition": "dispatchAltSourcing",
+          "reason_code": "DISPATCH_FAILED_AFTER_APPROVAL",
+          "idempotency_key": "EFFECTFAIL04:NSR01L30NXT5G",
+          "target_audience": "sourcing",
+          "review_started_by": "svc:review-starter",
+          "notice_fingerprint": "EFFECTFAIL04"
+        },
+        "created_at": 1785950995860,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "extraction_refusal",
+          "declared": true,
+          "archetype": "TRIAGE_TASK",
+          "badge": "TRIAGE",
+          "title": "Unprocessable notice",
+          "accepts": [
+            "acknowledged",
+            "redriven"
+          ],
+          "reason_required": [
+            "acknowledged"
+          ]
+        }
+      },
+      {
+        "id": "befa1742-7061-4798-8902-4e3cc60ae1ba",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL04:NSR02F30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR02F30NXT5G",
+        "summary": "Part NSR02F30NXT5G from notice EFFECTFAIL04 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {
+          "approved_by": "alice@example.com"
+        },
+        "created_at": 1785950994615,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "14c53bf5-0b57-4c74-8fb3-7439e02f5cff",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL04:NSR05F20NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR05F20NXT5G",
+        "summary": "Part NSR05F20NXT5G from notice EFFECTFAIL04 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {
+          "approved_by": "alice@example.com"
+        },
+        "created_at": 1785950994611,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "7a43be96-b8ce-4e77-85da-ed96aa63a64f",
+        "kind": "extraction_refusal",
+        "task_id": "dispatch-failure:EFFECTFAIL03:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "dispatch_failure:SUSTAINMENT",
+        "status": "pending",
+        "title": "Dispatch failed after approval \u2014 NSR01L30NXT5G",
+        "summary": "A human approved this disposition and the dispatch then failed terminally, so the decision is recorded as settled but its effects never landed. Part: NSR01L30NXT5G. Queue: sourcing. Disposition: dispatchAltSourcing. Review started by: svc:review-starter \u2014 the APPROVING human is the grouped review's acted_by for notice EFFECTFAIL03, which this row cannot see. Cause: cortex-bff register of pcn dispatch task 'EFFECTFAIL03:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+        "requested_by": "svc:review-starter",
+        "subject_ref": "NSR01L30NXT5G",
+        "payload": {
+          "mpn": "NSR01L30NXT5G",
+          "cause": "cortex-bff register of pcn dispatch task 'EFFECTFAIL03:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+          "domain": "SUSTAINMENT",
+          "disposition": "dispatchAltSourcing",
+          "reason_code": "DISPATCH_FAILED_AFTER_APPROVAL",
+          "approver_note": "not carried into the dispatch payload; read acted_by on the grouped review row",
+          "idempotency_key": "EFFECTFAIL03:NSR01L30NXT5G",
+          "target_audience": "sourcing",
+          "review_started_by": "svc:review-starter",
+          "notice_fingerprint": "EFFECTFAIL03"
+        },
+        "created_at": 1785920890228,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "extraction_refusal",
+          "declared": true,
+          "archetype": "TRIAGE_TASK",
+          "badge": "TRIAGE",
+          "title": "Unprocessable notice",
+          "accepts": [
+            "acknowledged",
+            "redriven"
+          ],
+          "reason_required": [
+            "acknowledged"
+          ]
+        }
+      },
+      {
+        "id": "4b7db6b1-3561-40ad-895e-6d3df5add4dc",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL03:NSR05F20NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR05F20NXT5G",
+        "summary": "Part NSR05F20NXT5G from notice EFFECTFAIL03 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785920888826,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "8e5631ac-b37a-4542-8d7a-9e3770a86f94",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL03:NSR02F30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR02F30NXT5G",
+        "summary": "Part NSR02F30NXT5G from notice EFFECTFAIL03 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785920888525,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "e4b2c9ea-837a-473e-ac02-da47026fb056",
+        "kind": "extraction_refusal",
+        "task_id": "dispatch-failure:EFFECTFAIL02:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "dispatch_failure:SUSTAINMENT",
+        "status": "pending",
+        "title": "Dispatch failed after approval \u2014 NSR01L30NXT5G",
+        "summary": "A human approved this disposition and the dispatch then failed terminally, so the decision is recorded as settled but its effects never landed. Part: NSR01L30NXT5G. Queue: sourcing. Disposition: dispatchAltSourcing. Approved by: svc:review-starter. Cause: cortex-bff register of pcn dispatch task 'EFFECTFAIL02:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+        "requested_by": "svc:review-starter",
+        "subject_ref": "NSR01L30NXT5G",
+        "payload": {
+          "mpn": "NSR01L30NXT5G",
+          "cause": "cortex-bff register of pcn dispatch task 'EFFECTFAIL02:NSR01L30NXT5G' rejected (422) \u2014 malformed/unprocessable, won't heal on retry; failing TERMINALLY (release), not retry-park",
+          "domain": "SUSTAINMENT",
+          "approved_by": "svc:review-starter",
+          "disposition": "dispatchAltSourcing",
+          "reason_code": "DISPATCH_FAILED_AFTER_APPROVAL",
+          "idempotency_key": "EFFECTFAIL02:NSR01L30NXT5G",
+          "target_audience": "sourcing",
+          "notice_fingerprint": "EFFECTFAIL02"
+        },
+        "created_at": 1785919910560,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "extraction_refusal",
+          "declared": true,
+          "archetype": "TRIAGE_TASK",
+          "badge": "TRIAGE",
+          "title": "Unprocessable notice",
+          "accepts": [
+            "acknowledged",
+            "redriven"
+          ],
+          "reason_required": [
+            "acknowledged"
+          ]
+        }
+      },
+      {
+        "id": "b49c8ed3-8082-47f2-9a3a-7bfd4ab65504",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL02:NSR02F30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR02F30NXT5G",
+        "summary": "Part NSR02F30NXT5G from notice EFFECTFAIL02 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785919909036,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "ac3adb69-db46-4f98-b208-a69eae685213",
+        "kind": "pcn_disposition",
+        "task_id": "EFFECTFAIL02:NSR05F20NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR05F20NXT5G",
+        "summary": "Part NSR05F20NXT5G from notice EFFECTFAIL02 was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785919909013,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "0b2aeb64-b223-4856-ad31-b244be9a09db",
+        "kind": "pcn_disposition",
+        "task_id": "M32-A-WITNESS:MPN-NEEDSREVIEW",
+        "workflow_id": null,
+        "audience": "procurement",
+        "status": "pending",
+        "title": "dispatchLTB: MPN-NEEDSREVIEW",
+        "summary": "Part MPN-NEEDSREVIEW from notice M32-A-WITNESS was dispositioned 'dispatchLTB' [MPN extraction UNVERIFIED] [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785886349955,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "4b669c2b-182f-4ba0-8816-4080ffb98cc8",
+        "kind": "pcn_disposition",
+        "task_id": "M32-A-WITNESS:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR01L30NXT5G",
+        "summary": "Part NSR01L30NXT5G from notice M32-A-WITNESS was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785883906559,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "609d6c3b-3668-45ae-a7b6-2e188eaa95af",
+        "kind": "pcn_disposition",
+        "task_id": "IPCN25300X:NSR01F30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR01F30NXT5G",
+        "summary": "Part NSR01F30NXT5G from notice IPCN25300X was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785256445512,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      },
+      {
+        "id": "e07b361f-2fb6-49be-86a6-5b00383413da",
+        "kind": "pcn_disposition",
+        "task_id": "IPCN25300X:NSR01L30NXT5G",
+        "workflow_id": null,
+        "audience": "qualification",
+        "status": "pending",
+        "title": "dispatchQualification: NSR01L30NXT5G",
+        "summary": "Part NSR01L30NXT5G from notice IPCN25300X was dispositioned 'dispatchQualification' [subject UNRESOLVED \u2014 state pending re-link]",
+        "requested_by": "svc:review-starter",
+        "subject_ref": null,
+        "payload": {},
+        "created_at": 1785256445320,
+        "workflow_service": null,
+        "promise_name": null,
+        "declaration": {
+          "kind": "pcn_disposition",
+          "declared": true,
+          "archetype": "APPROVAL_TASK",
+          "badge": "DISPOSE",
+          "title": "PCN disposition",
+          "accepts": [
+            "approved",
+            "rejected"
+          ],
+          "reason_required": []
+        }
+      }
+    ]
+  }
+}

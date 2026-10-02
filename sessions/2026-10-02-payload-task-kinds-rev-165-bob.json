@@ -1,0 +1,216 @@
+{
+  "captured_at": "2026-10-02T05:29:10.997654+00:00",
+  "helm_rev": 165,
+  "fleet": "3a024b2784e80e8a6f18bd43c3fd5d5888c200cb",
+  "caller": "bob",
+  "request": "GET /task_kinds",
+  "status": 200,
+  "body": {
+    "composed": true,
+    "kinds": {
+      "access_request": {
+        "kind": "access_request",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCESS",
+        "title": "Access request",
+        "accepts": [
+          "approved",
+          "rejected"
+        ],
+        "reason_required": []
+      },
+      "document_promotion": {
+        "kind": "document_promotion",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "PROMOTE",
+        "title": "Contributed document",
+        "accepts": [
+          "promoted",
+          "rejected"
+        ],
+        "reason_required": [
+          "rejected"
+        ]
+      },
+      "extraction_refusal": {
+        "kind": "extraction_refusal",
+        "declared": true,
+        "archetype": "TRIAGE_TASK",
+        "badge": "TRIAGE",
+        "title": "Unprocessable notice",
+        "accepts": [
+          "acknowledged",
+          "redriven"
+        ],
+        "reason_required": [
+          "acknowledged"
+        ]
+      },
+      "grouped_review": {
+        "kind": "grouped_review",
+        "declared": true,
+        "archetype": "GROUPED_REVIEW",
+        "badge": "REVIEW",
+        "title": "Disposition review",
+        "accepts": [
+          "approved",
+          "rejected"
+        ],
+        "reason_required": []
+      },
+      "hazard_link_review": {
+        "kind": "hazard_link_review",
+        "declared": true,
+        "archetype": "GROUPED_REVIEW",
+        "badge": "LINK",
+        "title": "Hazard link review",
+        "accepts": [
+          "linked",
+          "new_hazard",
+          "dismissed"
+        ],
+        "reason_required": [
+          "dismissed",
+          "new_hazard"
+        ]
+      },
+      "pcn_disposition": {
+        "kind": "pcn_disposition",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "DISPOSE",
+        "title": "PCN disposition",
+        "accepts": [
+          "approved",
+          "rejected"
+        ],
+        "reason_required": []
+      },
+      "risk_acceptance_concurrence_high": {
+        "kind": "risk_acceptance_concurrence_high",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "CONCUR-H",
+        "title": "High risk concurrence",
+        "accepts": [
+          "concurred",
+          "not_concurred",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "concurred",
+          "not_concurred"
+        ]
+      },
+      "risk_acceptance_concurrence_serious": {
+        "kind": "risk_acceptance_concurrence_serious",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "CONCUR-S",
+        "title": "Serious risk concurrence",
+        "accepts": [
+          "concurred",
+          "not_concurred",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "concurred",
+          "not_concurred"
+        ]
+      },
+      "risk_acceptance_high": {
+        "kind": "risk_acceptance_high",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-H",
+        "title": "High risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      },
+      "risk_acceptance_low": {
+        "kind": "risk_acceptance_low",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-L",
+        "title": "Low risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      },
+      "risk_acceptance_medium": {
+        "kind": "risk_acceptance_medium",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-M",
+        "title": "Medium risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      },
+      "risk_acceptance_serious": {
+        "kind": "risk_acceptance_serious",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-S",
+        "title": "Serious risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      },
+      "safety_redraft": {
+        "kind": "safety_redraft",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "REDRAFT",
+        "title": "Assessment returned",
+        "accepts": [
+          "redrafted",
+          "withdrawn"
+        ],
+        "reason_required": [
+          "redrafted",
+          "withdrawn"
+        ]
+      },
+      "workflow_ack": {
+        "kind": "workflow_ack",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "APPROVE",
+        "title": "Workflow approval",
+        "accepts": [
+          "approved",
+          "rejected"
+        ],
+        "reason_required": []
+      }
+    }
+  }
+}

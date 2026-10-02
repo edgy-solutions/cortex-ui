@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-10-02T05:28:02.006073+00:00",
+  "helm_rev": 165,
+  "fleet": "3a024b2784e80e8a6f18bd43c3fd5d5888c200cb",
+  "caller": "alice",
+  "answer": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-015f8a79-47053071",
+  "request": {
+    "method": "POST",
+    "path": "/export/package",
+    "json": {
+      "answers": [
+        {
+          "artifact_id": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-015f8a79-47053071"
+        }
+      ],
+      "recipient_scope": "notional-customer-alpha"
+    }
+  },
+  "status": 200,
+  "headers": {
+    "date": "Fri, 02 Oct 2026 05:28:01 GMT",
+    "server": "uvicorn",
+    "content-length": "353",
+    "content-type": "application/json",
+    "cache-control": "no-store"
+  },
+  "body": {
+    "export_id": null,
+    "status": "failed",
+    "recipient_scope": "notional-customer-alpha",
+    "reason": "this deployment cannot build the .duckdb half: the `duckdb` package is not installed, and it is not among engine-cost's declared dependencies. A canvas export is the dataset page, so it needs duckdb; export where the dataset is authored.",
+    "outcome": "unavailable"
+  }
+}
