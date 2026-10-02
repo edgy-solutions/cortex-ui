@@ -207,15 +207,51 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
       // correction would blank the buttons with no way to act at all, strictly worse than the
       // toast it replaces, and it is a DIFFERENT case from the one below: the server named the
       // right kind of problem, it just sent nothing usable to adopt.
-      if (status === 422 && errorCode !== "invalid_decision_for_kind") {
+      //
+      // THE ROW STAYS PENDING: roll #12's gateway (`/human_tasks/{id}/act`) answers a failed
+      // resume with an error rather than a 200 carrying `workflow_resumed:false` — the task is
+      // NOT resolved, so the person can read why and retry.
+      if (status === 409 && errorCode === "task_already_resolved") {
         /**
-         * A 422 NAMING NO MENU — i.e. not `invalid_decision_for_kind` at all. This is how the
-         * gateway's coming `reason_required` 422 will draw — its exact body is not known yet, so
-         * only `error`/`message` are read, never a field invented ahead of the capture. Drawn
-         * INLINE (`data-act-refusal`), not a toast: the buttons and the typed reason stay exactly
-         * as the person left them, so they correct and retry deliberately. No automatic retry —
-         * this card never re-sends on their behalf.
+         * NOT ACTIONABLE ANY MORE — a member of the same audience resolved it first. Mark it
+         * resolved here too, same side effect as the success path below, so this card (and
+         * anything reading the store) stops treating it as pending.
+         *
+         * THE OUTCOME SHOWN IS THE SERVER'S, NOT THE PERSON'S OWN VERB: this press never landed,
+         * so `decision` (the verb the person just tried) is not what happened — `d.decision` and
+         * `d.acted_by`, the settled row's own fields, are.
          */
+        markTaskResolvedByTaskId(task.task_id);
+        const settledDecision = typeof d?.decision === "string" ? d.decision : undefined;
+        const settledBy = typeof d?.acted_by === "string" ? d.acted_by : undefined;
+        const base =
+          typeof d?.message === "string" ? d.message : "This task was already resolved.";
+        toast.error(settledDecision && settledBy ? `${base} (${settledDecision} by ${settledBy})` : base);
+        return;
+      }
+      /**
+       * A 422 NAMING NO MENU — i.e. not `invalid_decision_for_kind` — drawn INLINE
+       * (`data-act-refusal`), not a toast: the buttons and the typed reason stay exactly as the
+       * person left them, so they correct and retry deliberately. No automatic retry — this card
+       * never re-sends on their behalf.
+       *
+       * THE BLANK-REASON REFUSAL IS NOT A SEPARATE CODE: a reason-required verb submitted empty
+       * comes back as `422 {detail:{error:"invalid_decision_for_kind", kind, allowed, message}}`
+       * — the same shape as a wrong verb — so the corrected-menu arm above is what draws it, by
+       * adopting the (unchanged) `allowed` list and showing the server's `message`.
+       *
+       * THIS ARM NOW ALSO COVERS ROLL #12's RESUME REFUSALS — `task_unresumable` (409) and
+       * `workflow_resume_failed` (502) — and, generally, any 409/502/503 whose `detail` is an
+       * object carrying a string `message`: the row stays pending either way, so the honest
+       * thing is to let the person read why and retry, not to toast "Action failed" and drop the
+       * reason the gateway gave.
+       */
+      if (
+        (status === 422 && errorCode !== "invalid_decision_for_kind") ||
+        ((status === 409 || status === 502 || status === 503) &&
+          d !== null &&
+          typeof d.message === "string")
+      ) {
         const message =
           typeof d?.message === "string"
             ? d.message
@@ -223,7 +259,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
               ? errorCode
               : typeof detail === "string"
                 ? detail
-                : "Refused (422)";
+                : `Refused (${status})`;
         setRefusal({ message, code: errorCode });
         return;
       }

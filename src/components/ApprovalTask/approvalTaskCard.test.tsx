@@ -834,3 +834,131 @@ describe("honest act outcomes", () => {
     expect(document.querySelectorAll("[data-verb]").length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * ROLL #12's `/act` REFUSALS — invincible-agent `src/iagent/gateway.py`, about lines 3157–3230
+ * at origin/master `f0eb7729`. A failed resume no longer answers 200 with
+ * `workflow_resumed:false`; it answers with an error and the row stays pending. These fixtures
+ * are SHAPED FROM gateway.py AT f0eb7729 — NOT a capture.
+ */
+describe("roll #12's resume refusals", () => {
+  it("502 workflow_resume_failed is drawn inline, with its code, and the buttons stay", async () => {
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 502"), {
+        response: {
+          status: 502,
+          data: {
+            detail: {
+              error: "workflow_resume_failed",
+              task_id: "t1",
+              workflow_id: "wf-1",
+              workflow_service: "BPMNWorkflowRunner",
+              status_code: 500,
+              reason: null,
+              message:
+                "the workflow did not confirm the resume; the task stays pending rather than " +
+                "being resolved against a definition that is still suspended",
+            },
+          },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    await waitFor(() => {
+      const refusal = document.querySelector("[data-act-refusal]");
+      expect(refusal).not.toBeNull();
+      expect(refusal!.textContent).toContain("did not confirm the resume");
+      expect(refusal!.textContent).toContain("workflow_resume_failed");
+    });
+    expect(document.querySelectorAll("[data-verb]").length).toBeGreaterThan(0);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("409 task_unresumable is drawn inline, with its code, and the buttons stay", async () => {
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 409"), {
+        response: {
+          status: 409,
+          data: {
+            detail: {
+              error: "task_unresumable",
+              task_id: "t1",
+              workflow_id: "wf-1",
+              workflow_service: "some_other_service",
+              message:
+                "workflow_service 'some_other_service' is not a resumable Restate service; " +
+                "the task stays pending rather than being resolved against it",
+            },
+          },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    await waitFor(() => {
+      const refusal = document.querySelector("[data-act-refusal]");
+      expect(refusal).not.toBeNull();
+      expect(refusal!.textContent).toContain("not a resumable Restate service");
+      expect(refusal!.textContent).toContain("task_unresumable");
+    });
+    expect(document.querySelectorAll("[data-verb]").length).toBeGreaterThan(0);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("409 task_already_resolved marks the row resolved and toasts who actually acted", async () => {
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 409"), {
+        response: {
+          status: 409,
+          data: {
+            detail: {
+              error: "task_already_resolved",
+              task_id: "t1",
+              status: "resolved",
+              decision: "rejected",
+              acted_by: "bob@example.com",
+              acted_at: "2026-10-01T00:00:00Z",
+              message: "This task was already resolved by a member of its audience.",
+            },
+          },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    await waitFor(() => expect(markTaskResolvedByTaskId).toHaveBeenCalledWith("t1"));
+    expect(toast.error).toHaveBeenCalled();
+    const [message] = vi.mocked(toast.error).mock.calls[0];
+    expect(message).toContain("already resolved");
+    expect(message).toContain("bob@example.com");
+    // NOT the person's own verb ("approved" was pressed; "rejected" is what actually landed).
+    expect(message).toContain("rejected");
+  });
+
+  it("422 invalid_decision_for_kind (the blank-reason shape) draws through the corrected menu", async () => {
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 422"), {
+        response: {
+          status: 422,
+          data: {
+            detail: {
+              error: "invalid_decision_for_kind",
+              kind: "risk_acceptance_high",
+              allowed: ["accepted", "rejected", "returned_for_rework"],
+              message: "accepted requires a reason",
+            },
+          },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+    await waitFor(() => {
+      const note = document.querySelector("[data-decision-corrected]");
+      expect(note).not.toBeNull();
+      expect(note!.textContent).toContain("accepted requires a reason");
+    });
+    expect(verbs()).toEqual(["accepted", "rejected", "returned_for_rework"]);
+  });
+});
