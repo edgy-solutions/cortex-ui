@@ -19,7 +19,7 @@ producer read: invincible-agent origin/master `65462a42`
 - **Stage:** an unknown `current_stage` draws "stage unknown". The card never guesses the first stage.
 - **Approval entries:** a decided approval with an empty reason draws `data-reason-absent`, never a blank. A pending approval with no actionable task draws text only, with no buttons.
 - **Artifact:** drawn only with both `uri` and `released_at`.
-- **`fallbackDisclosure`: `WORKFLOW_CASE` claims an answer.** This is the strict, withhold-under-fallback side, like GROUPED_REVIEW and WORKFLOW_OBSERVATION. Revisit it if the operator must see a pending decision even under a fallback.
+- **`fallbackDisclosure`: `WORKFLOW_CASE` is a REQUEST** (ruled by Chris 2026-10-02; the first classification said it claimed an answer). It is shown under a fallback whenever its `case` object is present, with the disclosure beside it. With no object, it is counted as withheld. The interpreter uses the same presence rule on the specialist path, so the card is never handed `undefined`. Mutants FM1–FM3 were each RED on their arm.
 - **Completeness gates forced edits to** `answerDisplay.ts` (label "Case") and `ArchetypeGlyph.tsx` (GitBranch).
 - **No capability-catalog row.** It would need ontology URIs the producer has not minted.
 

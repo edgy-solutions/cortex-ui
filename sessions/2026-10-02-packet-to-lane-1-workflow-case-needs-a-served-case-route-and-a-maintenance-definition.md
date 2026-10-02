@@ -31,7 +31,12 @@ dispatched through the derived registry, like COMPETING_MEASURES.
 So the card is sealed on one real thing, the task row. Everything else in its fixtures is hand-built
 against the wire below, and the fixtures say so. **The maintenance case is an `it.todo`.**
 
-## Ask 1 — a case route. The shape cortex consumes:
+## Who defines the wire (ruled by Chris, 2026-10-02)
+
+- **The served shape is the worker's to define** (the runner's instance state) **and Lane 1's to route**, as a generic `GET /cases/{id}`.
+- **Cortex's shape below is the opening bid.** The worker reconciles to it where that costs nothing, and reports where it can't. Cortex moves to match whatever is served.
+
+## Ask 1 — a case route (`GET /cases/{id}`). Cortex's opening bid for the shape:
 
 ```ts
 WorkflowCasePayload {
@@ -74,6 +79,17 @@ Put them in `cortex-ui/sessions/` as `*payload*.json`, with bearers scrubbed:
 - **(iii)** HAZ-1003's case, decided or pending.
 
 When they arrive, the hand-built fixtures are replaced, not kept beside them.
+
+## Under a fallback, a case is SHOWN (ruled 2026-10-02)
+
+- A case is a pending human decision, not an answer, so a fallback routing never hides it.
+- It renders whenever its `case` object is present, with the fallback disclosure beside it.
+- A `WORKFLOW_CASE` component with no `case` object is counted as withheld, never dropped silently.
+
+## Export: one more capture, after roll #14
+
+- Your rev-165 attempt predates roll #14, which carries `duckdb` in the cost image.
+- **One `POST /export/package` capture after the roll settles, plus the `GET` on its `artifact_uri`,** decides the card export either way. `status: "exists"` → cortex seals the link and retires the card export. Anything else → cortex reports the body.
 
 ## Not asked
 
