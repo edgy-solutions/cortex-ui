@@ -41,6 +41,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 
 const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTaskPayload => ({
   task_id: "t1",
@@ -694,5 +695,142 @@ describe("a refused decision offers what the server accepts", () => {
     return waitFor(() => expect(markTaskResolvedByTaskId).toHaveBeenCalled()).then(() => {
       expect(document.querySelector("[data-decision-corrected]")).toBeNull();
     });
+  });
+});
+
+/**
+ * HAZ-1003: THE AUDIENCE SAID ONE SPECIES, THE TASK SAID ANOTHER.
+ *
+ * The row as seen on screen 2026-10-01 (to be replaced by Lane 1's capture): `kind:
+ * "workflow_ack"` (a worker bug; Lane 1's fix rides roll #12), `audience:
+ * "risk_acceptance_medium:SUSTAINMENT"`, `subject_ref: "HAZ-1003"`. Deciding it would record a
+ * `workflow_ack` decision on what the audience says is a `risk_acceptance_medium` question.
+ *
+ * The prefix before `audience`'s first `:` is a task-kind name ONLY for this one producer
+ * (`<task_kind>:<compartment>` for risk acceptance). `access_grant:<domain>` (access_request) and
+ * `promotion:<X>` (document_promotion, in the ingest mock) use the identical `prefix:` shape with
+ * a prefix that is NOT a kind, so this can only be a claim when the served menu confirms the
+ * prefix really is a declared kind — which is why it goes false for everything while the menu is
+ * unloaded, not true by default.
+ */
+describe("the audience and the kind contradict each other", () => {
+  afterEach(() => {
+    useTaskKindStore.setState({ status: "idle", byKind: {} });
+  });
+
+  const declareKind = (kind: string) =>
+    readTaskDeclaration({
+      kind,
+      declared: true,
+      archetype: "APPROVAL_TASK",
+      badge: "X",
+      title: "X",
+      accepts: ["approved", "rejected"],
+      reason_required: [],
+    })!;
+
+  const loadMenu = (...kinds: string[]) => {
+    const byKind: Record<string, ReturnType<typeof declareKind>> = {};
+    for (const k of kinds) byKind[k] = declareKind(k);
+    useTaskKindStore.setState({ status: "loaded", byKind });
+  };
+
+  const hazRow = (over: Partial<ApprovalTaskPayload> = {}) =>
+    task("workflow_ack", {
+      audience: "risk_acceptance_medium:SUSTAINMENT",
+      subject_ref: "HAZ-1003",
+      ...over,
+    });
+
+  it("the HAZ-1003 shape draws the contradiction and offers no verb buttons", () => {
+    loadMenu("workflow_ack", "risk_acceptance_medium");
+    render(<ApprovalTaskCard task={hazRow()} />);
+    expect(document.querySelector("[data-kind-contradiction]")).not.toBeNull();
+    expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+  });
+
+  it("near side: no contradiction when the task's own kind matches the audience prefix", () => {
+    loadMenu("workflow_ack", "risk_acceptance_medium");
+    render(<ApprovalTaskCard task={hazRow({ kind: "risk_acceptance_medium" })} />);
+    expect(document.querySelector("[data-kind-contradiction]")).toBeNull();
+    expect(document.querySelectorAll("[data-verb]").length).toBeGreaterThan(0);
+  });
+
+  it("near side: a prefix that is not a declared kind makes no claim — access_grant", () => {
+    loadMenu("access_request");
+    render(<ApprovalTaskCard task={task("access_request", { audience: "access_grant:finance" })} />);
+    expect(document.querySelector("[data-kind-contradiction]")).toBeNull();
+  });
+
+  it("near side: an unloaded menu makes no claim, even for the HAZ-1003 shape", () => {
+    render(<ApprovalTaskCard task={hazRow()} />);
+    expect(document.querySelector("[data-kind-contradiction]")).toBeNull();
+  });
+
+  it("near side: an audience with no colon makes no claim", () => {
+    loadMenu("workflow_ack");
+    render(<ApprovalTaskCard task={task("workflow_ack", { audience: "stewards" })} />);
+    expect(document.querySelector("[data-kind-contradiction]")).toBeNull();
+  });
+});
+
+/**
+ * HONEST ACT OUTCOMES.
+ *
+ * A 200 from `/act` is not the claim "the workflow moved on" — `workflow_resumed` carries that,
+ * separately, and can come back `false` or absent. Showing the bare verb either way would archive
+ * -adjacent text asserting a resume the gateway itself did not make.
+ */
+describe("honest act outcomes", () => {
+  const ACCEPT = {
+    kind: "risk_acceptance_medium",
+    declared: true,
+    archetype: "APPROVAL_TASK",
+    badge: "ACCEPT-M",
+    title: "Medium risk acceptance",
+    accepts: ["accepted", "rejected"],
+    reason_required: [],
+  };
+
+  it("workflow_resumed: true shows the verb", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_medium"), declaration: ACCEPT }} />);
+    fireEvent.click(document.querySelector('[data-verb="accepted"]')!);
+    await waitFor(() => {
+      const outcome = document.querySelector('[data-act-outcome="resumed"]');
+      expect(outcome).not.toBeNull();
+      expect(outcome!.textContent).toBe("Accepted");
+    });
+  });
+
+  it("workflow_resumed: false shows Recorded, NOT a bare Accepted", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_medium"), declaration: ACCEPT }} />);
+    fireEvent.click(document.querySelector('[data-verb="accepted"]')!);
+    await waitFor(() => {
+      const outcome = document.querySelector('[data-act-outcome="recorded"]');
+      expect(outcome).not.toBeNull();
+      expect(outcome!.textContent).not.toBe("Accepted");
+      expect(outcome!.textContent).toMatch(/Recorded/);
+    });
+  });
+
+  it("a 422 reason_required refusal is drawn inline — buttons and reason stay", async () => {
+    actOnHumanTask.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 422"), {
+        response: {
+          status: 422,
+          data: { detail: { error: "reason_required", message: "accepted requires a reason" } },
+        },
+      }),
+    );
+    render(<ApprovalTaskCard task={{ ...task("risk_acceptance_medium"), declaration: ACCEPT }} />);
+    fireEvent.click(document.querySelector('[data-verb="accepted"]')!);
+    await waitFor(() => {
+      const refusal = document.querySelector("[data-act-refusal]");
+      expect(refusal).not.toBeNull();
+      expect(refusal!.textContent).toContain("accepted requires a reason");
+    });
+    expect(document.querySelectorAll("[data-verb]").length).toBeGreaterThan(0);
   });
 });

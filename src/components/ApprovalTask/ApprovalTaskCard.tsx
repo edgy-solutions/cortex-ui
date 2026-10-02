@@ -6,7 +6,7 @@ import type { TaskState } from "@/api/types";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
-import { readTaskDeclaration, verbLabel } from "@/lib/taskDeclaration";
+import { readTaskDeclaration, verbLabel, audienceKindContradiction } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 
 /**
@@ -88,8 +88,17 @@ const AFFIRMING = new Set(["approved", "accepted", "acknowledged", "concurred", 
 
 export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const [acting, setActing] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
+  /** The decision that landed, and whether the workflow actually resumed — see `act()` below for
+   *  why the verb alone is not an honest thing to show. */
+  const [done, setDone] = useState<{ decision: string; resumed: boolean } | null>(null);
   const [reason, setReason] = useState("");
+  /**
+   * A 422 that is NOT `invalid_decision_for_kind` — a refusal with no menu to adopt, drawn
+   * inline rather than as a toast so the person can read it, correct the reason, and retry
+   * deliberately. See `act()` for the three-field precedence (`message`, `error`, the bare
+   * string) and why this never auto-retries.
+   */
+  const [refusal, setRefusal] = useState<{ message: string; code?: string } | null>(null);
 
   /**
    * WHAT THE SERVER SAID IT ACTUALLY ACCEPTS, after refusing what we offered.
@@ -115,6 +124,24 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const decl = readTaskDeclaration(task.declaration) ?? fromKinds;
   const declared = decl ? decl.declared : isRegisteredKind(task.kind);
 
+  // THE SERVED MENU, keyed, for `audienceKindContradiction` below — it needs to ask about an
+  // arbitrary PREFIX (e.g. `risk_acceptance_medium` out of `risk_acceptance_medium:SUSTAINMENT`),
+  // not just this row's own kind, so `declarationFor` alone will not do.
+  const byKind = useTaskKindStore((s) => s.byKind);
+  const isDeclaredKind = (k: string): boolean =>
+    Object.hasOwn(byKind, k) && byKind[k].declared === true;
+  /**
+   * THE AUDIENCE SAYS ONE SPECIES, THE TASK SAYS ANOTHER.
+   *
+   * `risk_acceptance_medium:SUSTAINMENT` on a row whose `kind` is `workflow_ack` is not a
+   * labelling quirk: deciding it would record a `workflow_ack` decision on what the audience
+   * says is a risk-acceptance question. This is only a claim while the served menu confirms the
+   * prefix IS a declared kind — `access_grant:finance` and `promotion:X` use the same `prefix:`
+   * shape with a prefix that is not a kind at all, and an unloaded menu makes `isDeclaredKind`
+   * false for everything, so neither makes a claim. See `audienceKindContradiction`.
+   */
+  const contradiction = audienceKindContradiction(task.audience, task.kind, isDeclaredKind);
+
   /**
    * The verbs to offer, IN THE DECLARATION'S ORDER.
    *
@@ -135,12 +162,24 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
     // cannot act on.
     if (needsReason(decision) && !reason.trim()) return;
     setActing(true);
+    // A FRESH ATTEMPT CLEARS THE LAST REFUSAL. Left stale, an old inline refusal would sit next
+    // to a decision that has not been retried yet and could be misread as describing this press.
+    setRefusal(null);
     try {
       const res = await actOnHumanTask(task.task_id, decision, reason.trim());
-      setDone(decision);
+      /**
+       * HONEST ON SUCCESS: the verb is shown ONLY when `workflow_resumed === true`.
+       *
+       * A 200 from `/act` is not the same claim as "the workflow moved on" — `rows_resolved`,
+       * `accepted`, `status` can all come back without a resume, and a card that printed
+       * "Approved" regardless would archive-adjacent text the gateway itself did not assert.
+       * `=== true` rather than truthy: `undefined` is not a resume either.
+       */
+      const resumed = res.workflow_resumed === true;
+      setDone({ decision, resumed });
       markTaskResolvedByTaskId(task.task_id);
       toast.success(
-        res.workflow_resumed ? `${verbLabel(decision)} — workflow resumed` : verbLabel(decision),
+        resumed ? verbLabel(decision) : `Recorded: ${verbLabel(decision)} — workflow not resumed`,
       );
     } catch (err) {
       const res = (err as { response?: { status?: number; data?: unknown } })?.response;
@@ -151,8 +190,9 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
       // leaving the reader to guess at exactly the thing the server just told them.
       const detail = (res?.data as { detail?: unknown } | undefined)?.detail;
       const d = typeof detail === "object" && detail !== null ? (detail as Record<string, unknown>) : null;
+      const errorCode = typeof d?.error === "string" ? d.error : undefined;
       const allowed =
-        d && d.error === "invalid_decision_for_kind" && Array.isArray(d.allowed)
+        d && errorCode === "invalid_decision_for_kind" && Array.isArray(d.allowed)
           ? d.allowed.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
           : null;
       if (allowed && allowed.length > 0) {
@@ -160,6 +200,31 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
           allowed,
           message: typeof d?.message === "string" ? d.message : "That decision was refused.",
         });
+        return;
+      }
+      // A 422 whose error code IS `invalid_decision_for_kind` but whose `allowed` list came back
+      // empty or junk falls through to the toast below, same as before this change — an empty
+      // correction would blank the buttons with no way to act at all, strictly worse than the
+      // toast it replaces, and it is a DIFFERENT case from the one below: the server named the
+      // right kind of problem, it just sent nothing usable to adopt.
+      if (status === 422 && errorCode !== "invalid_decision_for_kind") {
+        /**
+         * A 422 NAMING NO MENU — i.e. not `invalid_decision_for_kind` at all. This is how the
+         * gateway's coming `reason_required` 422 will draw — its exact body is not known yet, so
+         * only `error`/`message` are read, never a field invented ahead of the capture. Drawn
+         * INLINE (`data-act-refusal`), not a toast: the buttons and the typed reason stay exactly
+         * as the person left them, so they correct and retry deliberately. No automatic retry —
+         * this card never re-sends on their behalf.
+         */
+        const message =
+          typeof d?.message === "string"
+            ? d.message
+            : errorCode !== undefined
+              ? errorCode
+              : typeof detail === "string"
+                ? detail
+                : "Refused (422)";
+        setRefusal({ message, code: errorCode });
         return;
       }
       toast.error(
@@ -189,7 +254,8 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
                 : "text-pink-300 border-pink-500/40 bg-pink-500/10"
             }`}
           >
-            {done ?? task.task_state ?? "pending"}
+            {/* NOT THE BARE VERB when the workflow did not resume — see `act()`. */}
+            {done ? (done.resumed ? verbLabel(done.decision) : "Recorded") : (task.task_state ?? "pending")}
           </span>
         </div>
         <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold">
@@ -206,7 +272,32 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
         {task.subject_ref && <p className="break-all">subject · {task.subject_ref}</p>}
       </div>
 
-      {declared && decl && decl.accepts.length === 0 ? (
+      {contradiction ? (
+        /*
+         * THE AUDIENCE AND THE KIND DISAGREE, AND THE MENU CONFIRMS THE AUDIENCE SIDE IS A REAL
+         * SPECIES. Takes precedence over every other state below — the declared-no-verbs block,
+         * the undeclared-kind block, a corrected menu, even a completed `done` — because none of
+         * those render once this one is showing: no button here ever reaches `act()`, so `done`
+         * cannot become true for this contradiction in the first place.
+         */
+        <div
+          className="rounded border border-red-500/30 bg-red-500/5 px-3 py-2.5"
+          data-kind-contradiction
+        >
+          <p className="text-[11px] font-mono uppercase tracking-widest text-red-400/90">
+            audience and kind disagree
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+            This task's audience is for{" "}
+            <span className="font-mono text-slate-300">{contradiction.audienceKind}</span> but the
+            task says it is <span className="font-mono text-slate-300">{contradiction.taskKind}</span>.
+            No decision is offered: deciding would record a{" "}
+            <span className="font-mono text-slate-300">{contradiction.taskKind}</span> decision on
+            a <span className="font-mono text-slate-300">{contradiction.audienceKind}</span>{" "}
+            question.
+          </p>
+        </div>
+      ) : declared && decl && decl.accepts.length === 0 ? (
         /*
          * DECLARED, AND TAKES NOTHING. A different fact from an undeclared species, and the
          * reason `declared` is read rather than inferred from an empty list: one says the mesh
@@ -249,8 +340,17 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
           </p>
         </div>
       ) : done ? (
-        <div className="text-[11px] font-mono uppercase tracking-widest text-neon-green">
-          {verbLabel(done)}
+        /**
+         * HONEST ON SUCCESS. The verb reads as itself ONLY when the workflow actually resumed —
+         * otherwise this says so, with `data-act-outcome` carrying which: a record that landed
+         * but did not move the workflow on is a different fact from one that did, and the bare
+         * verb would claim the resume regardless.
+         */
+        <div
+          className="text-[11px] font-mono uppercase tracking-widest text-neon-green"
+          data-act-outcome={done.resumed ? "resumed" : "recorded"}
+        >
+          {done.resumed ? verbLabel(done.decision) : `Recorded: ${verbLabel(done.decision)} — workflow not resumed`}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -271,6 +371,24 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
               <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
                 {corrected.message} These are the decisions this task accepts.
               </p>
+            </div>
+          )}
+          {/*
+            A 422 NAMING NO MENU — see `act()`. Inline, not a toast, and the buttons and the
+            typed reason below are untouched: the person corrects and retries deliberately, and
+            nothing here retries on their behalf.
+          */}
+          {refusal && (
+            <div
+              className="rounded border border-red-500/30 bg-red-500/5 px-3 py-2"
+              data-act-refusal
+            >
+              <p className="text-[11px] text-slate-300 leading-relaxed">{refusal.message}</p>
+              {refusal.code && (
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-red-400/70">
+                  {refusal.code}
+                </p>
+              )}
             </div>
           )}
           {/*

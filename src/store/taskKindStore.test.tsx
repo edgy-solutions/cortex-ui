@@ -34,7 +34,13 @@ vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() 
 import { useTaskKindStore } from "./useTaskKindStore";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "@/components/ApprovalTask/ApprovalTaskCard";
 
-/** Captured from `declaration_for(...)` in the serving cortex-bff pod. */
+/**
+ * `declaration_for(...)` output — the VALUES of the route's `kinds` object, not the route
+ * envelope itself (`{composed, kinds: {<kind>: <these>}}`). `fetchTaskKinds` is what turns the
+ * envelope into this shape now (`readTaskKindsResponse`, `src/lib/taskDeclaration.ts`); the store
+ * below is mocked past that seam, so this fixture never exercised the envelope reader. See
+ * `src/lib/taskKindsResponse.test.tsx` for the route-shaped body run through both.
+ */
 const LIVE = [
   {
     kind: "risk_acceptance_high",

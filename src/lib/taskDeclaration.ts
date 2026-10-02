@@ -102,6 +102,70 @@ export function readTaskDeclaration(raw: unknown): TaskDeclaration | null {
   };
 }
 
+/**
+ * Read `GET /task_kinds`'s response ENVELOPE — not the by-hand array forms this reader used to
+ * accept.
+ *
+ * `kinds` is an OBJECT keyed by kind name (`gateway.py` ~line 840, identical at deployed fleet
+ * `700f0bc4` and origin/master). `composed: false` (with `kinds: {}`) means the registry could
+ * not be composed — per the docstring, that is NOT an empty menu. So `composed:false`, a missing
+ * `composed` flag, and a `kinds` that is not a plain record all have to read as UNREACHABLE
+ * (null), never as an empty menu — the same reason `declared: false` has to be READ rather than
+ * guessed in `readTaskDeclaration` above.
+ *
+ * Returns the VALUES of `kinds` whose own `kind` field agrees with the key it is filed under. An
+ * entry whose inner `kind` disagrees with its key is DROPPED, not trusted under either name: a
+ * declaration filed under another species' name is not that species' declaration.
+ *
+ * The OLD array forms (`fetchTaskKinds` used to accept a bare array, or `{kinds: [...]}`) are
+ * gone on purpose. Nothing serves them, and an accepted shape nobody sends is a hole: the live
+ * wire never matched either form, which is why no reason-required gate had ever fired.
+ */
+export function readTaskKindsResponse(data: unknown): unknown[] | null {
+  if (!isRecord(data)) return null;
+  if (data.composed !== true) return null;
+  if (!isRecord(data.kinds)) return null;
+  const out: unknown[] = [];
+  for (const [key, value] of Object.entries(data.kinds)) {
+    if (!isRecord(value)) continue;
+    if (str(value.kind) !== key) continue;
+    out.push(value);
+  }
+  return out;
+}
+
+/**
+ * Does this task's AUDIENCE contradict its KIND?
+ *
+ * Audience forms seen on the producer: `<task_kind>:<compartment>` for risk acceptance,
+ * `access_grant:<domain>` for access_request, `promotion:<X>` in the ingest mock for
+ * document_promotion. The prefix before the first `:` is a task-kind name ONLY for the first
+ * form — `access_grant` and `promotion` are not kinds, and treating every prefix as one would
+ * make every access_request and document_promotion row misreport itself.
+ *
+ * So a prefix only COUNTS as a claim when the served menu says it is a declared kind. That is
+ * the ONLY thing that can tell `risk_acceptance_medium` (a real kind, so the row above genuinely
+ * contradicts) apart from `access_grant` or `stewards` (not kinds, so no claim is being made).
+ * `isDeclaredKind` is the caller's `declarationFor(prefix)?.declared === true`, which is why this
+ * stays pure here and takes the predicate rather than the store.
+ *
+ * WHILE THE MENU IS NOT LOADED, `isDeclaredKind` is false for everything a caller can reasonably
+ * supply, so this reports no contradiction at all during that window — the check is only as live
+ * as the menu, which is why the response reader above has to land first.
+ */
+export function audienceKindContradiction(
+  audience: string,
+  kind: string,
+  isDeclaredKind: (k: string) => boolean,
+): { audienceKind: string; taskKind: string } | null {
+  const i = audience.indexOf(":");
+  if (i < 0) return null;
+  const prefix = audience.slice(0, i);
+  if (!prefix || prefix === kind) return null;
+  if (!isDeclaredKind(prefix)) return null;
+  return { audienceKind: prefix, taskKind: kind };
+}
+
 /** A verb's button label — the producer's verb, made readable without being renamed. */
 export function verbLabel(verb: string): string {
   // UNDERSCORES TO SPACES AND NOTHING ELSE. `returned_for_rework` reads as "returned for

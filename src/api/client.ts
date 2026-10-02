@@ -7,6 +7,7 @@ import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
 import { ingestStatusPath } from "@/lib/ingestWire";
+import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -820,13 +821,17 @@ export async function fetchTemplates(): Promise<unknown | null> {
  *
  * Returns null rather than throwing. An unreachable menu is not an empty menu — the card falls
  * back to its interim table, which is the honest behaviour while the two are still both present.
+ *
+ * THE RESPONSE IS AN ENVELOPE (`{composed, kinds}`), `kinds` keyed by kind — not a bare array and
+ * not `{kinds: [...]}`. This used to accept only those two array forms, so on the live wire it
+ * always returned null: `readTaskKindsResponse` (`src/lib/taskDeclaration.ts`) is the one reader
+ * that actually matches what `/task_kinds` sends, including the `composed: false` ("could not be
+ * composed", not "no species exist") case. See that file for why.
  */
 export async function fetchTaskKinds(): Promise<unknown[] | null> {
   try {
     const { data } = await api.get<unknown>("/task_kinds");
-    if (Array.isArray(data)) return data;
-    const rows = (data as { kinds?: unknown } | null)?.kinds;
-    return Array.isArray(rows) ? rows : null;
+    return readTaskKindsResponse(data);
   } catch {
     return null;
   }
