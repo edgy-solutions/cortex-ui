@@ -8,7 +8,7 @@
  * fact, which is why the refusal fixture names the refusal explicitly rather than declaring
  * nothing.
  */
-import type { CompetingMeasureRow } from "../CompetingMeasures.contract";
+import type { CompetingMeasureRow } from "../contract";
 
 export const COMPETING_MEASURES_ABSENCES = [
   "data-refused",

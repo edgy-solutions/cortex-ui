@@ -18,7 +18,7 @@ import { describe, it, expect } from "vitest";
 import { assembleCapabilities, assembleDerivedCapabilities } from "./assembleCapabilities";
 import { CORTEX_UI_CAPABILITIES } from "./frontendCapabilities";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
-import { COMPETING_MEASURES_CONTRACT } from "../components/planning/CompetingMeasures.contract";
+import { COMPETING_MEASURES_CONTRACT } from "../archetypes/competing-measures/contract";
 
 const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
 const row = sent.find((c) => c.archetype === "ELICITATION");

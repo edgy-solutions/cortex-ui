@@ -12,11 +12,12 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CompetingMeasures } from "./CompetingMeasures";
+import { CompetingMeasures } from "./Card";
+import { readDeclaredAbsences } from "../defineArchetype";
 import {
   COMPETING_MEASURES_ABSENCES,
   COMPETING_MEASURES_FIXTURES,
-} from "./fixtures/competingMeasures";
+} from "./fixtures";
 
 afterEach(cleanup);
 
@@ -70,12 +71,15 @@ describe("COMPETING_MEASURES fixtures discriminate", () => {
   it.each(COMPETING_MEASURES_FIXTURES.map((f) => [f.name, f] as const))(
     "%s — declares exactly what it names",
     (_name, f) => {
-      draw(f);
+      const { container } = draw(f);
+      // Scoped to this render's container, per ADR-0055 §2's collision rule — see
+      // `readDeclaredAbsences.test.ts` for the seal that proves `document` is never consulted.
+      const declared = readDeclaredAbsences(container, COMPETING_MEASURES_ABSENCES);
       for (const absence of COMPETING_MEASURES_ABSENCES) {
-        const present = document.querySelector(`[${absence}]`) !== null;
-        expect(present, `${absence} expected ${f.declares.includes(absence) ? "present" : "ABSENT"}`).toBe(
-          f.declares.includes(absence),
-        );
+        expect(
+          declared.includes(absence),
+          `${absence} expected ${f.declares.includes(absence) ? "present" : "ABSENT"}`,
+        ).toBe(f.declares.includes(absence));
       }
     },
   );
@@ -98,12 +102,11 @@ describe("COMPETING_MEASURES fixtures discriminate", () => {
     expect(quiet.length, "no fixture exercises a payload the card draws completely").toBeGreaterThan(0);
     for (const f of quiet) {
       cleanup();
-      draw(f);
-      for (const absence of COMPETING_MEASURES_ABSENCES) {
-        expect(document.querySelector(`[${absence}]`), `${f.name} declared ${absence}`).toBeNull();
-      }
+      const { container } = draw(f);
+      const declared = readDeclaredAbsences(container, COMPETING_MEASURES_ABSENCES);
+      expect(declared, `${f.name} declared ${JSON.stringify(declared)}`).toEqual([]);
       // And it really drew — the proof that quiet is not refusal wearing its clothes.
-      expect(document.querySelector("[data-competing-measures]"), "quiet but nothing drawn").not.toBeNull();
+      expect(container.querySelector("[data-competing-measures]"), "quiet but nothing drawn").not.toBeNull();
     }
   });
 
@@ -112,13 +115,13 @@ describe("COMPETING_MEASURES fixtures discriminate", () => {
     expect(refusals.length, "no fixture reaches the refusal branch").toBeGreaterThan(0);
     for (const f of refusals) {
       cleanup();
-      draw(f);
-      expect(document.querySelector("[data-competing-measures]"), "refused and still drew").toBeNull();
+      const { container } = draw(f);
+      expect(container.querySelector("[data-competing-measures]"), "refused and still drew").toBeNull();
     }
   });
 
   it("the absence list matches the CARD, not a memory of it", () => {
-    const unique = renderedAttributes(join(__dirname, "CompetingMeasures.tsx"));
+    const unique = renderedAttributes(join(__dirname, "Card.tsx"));
     // Structural, not absences: the container, the per-method key, the spread and range values
     // themselves. Named rather than silently excluded — an exclusion nobody recorded is
     // indistinguishable from a branch nobody looked at.

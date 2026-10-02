@@ -40,6 +40,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readMethod } from "@/lib/cardExport";
 import { LOT4_CONTRIBUTION_RANKING_PAYLOAD } from "@/lib/cardExport.fixture";
+import { COMPETING_MEASURES_ROW } from "@/archetypes/competing-measures/row";
 
 /** Both names the producer checkout goes by — see the disposition parity seal for why two. */
 const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
@@ -85,6 +86,19 @@ function declaredFieldsFor(src: string, archetype: string): string[] {
  */
 function declaredEnvelopeFields(src: string): string[] {
   return declaredFieldsFor(src, "CONTRIBUTION_RANKING");
+}
+
+/**
+ * The tuple's FIRST element — the payload key the projector binds this archetype's rows under.
+ * `declaredFieldsFor` above assumes that element is literally `"rows"` and only extracts the
+ * second; this is its counterpart for ADR-0055's `row.payload_key`, which must be read rather
+ * than assumed so a producer that ever renamed the key would turn this red instead of silent.
+ */
+function declaredPayloadKeyFor(src: string, archetype: string): string {
+  const re = new RegExp('"' + archetype + '":\\s*\\(\\s*"([a-z_]+)"\\s*,');
+  const m = src.match(re);
+  expect(m, `no _PROJECTED_ARCHETYPES entry for ${archetype} found in main.py`).toBeTruthy();
+  return m![1];
 }
 
 describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it", () => {
@@ -527,5 +541,34 @@ describe("the withheld-count rule and the counts the allowlist carries anyway", 
     expect(exportButton).toContain("readMethod(componentLevel?.method)");
     expect(exportButton).toContain("readMethod(envelopeLevel?.method)");
     expect(exportButton).not.toMatch(/readMethod\([^)]*row/);
+  });
+});
+
+/**
+ * ADR-0055's ROW MIRRORS THE PRODUCER — `COMPETING_MEASURES_ROW` in `row.ts` is cortex's copy of
+ * a backend declaration (`policy/archetypes/competing_measures.yaml`) that does not exist yet.
+ * Until it lands, this is the one thing standing between that copy and silent drift: it reads the
+ * producer's own tuple, the same way the rest of this file does for CONTRIBUTION_RANKING, and
+ * asserts the copy matches it FIELD FOR FIELD, IN ORDER, plus the payload key the tuple's first
+ * element names.
+ */
+describe("COMPETING_MEASURES_ROW mirrors the producer's own tuple", () => {
+  it.skipIf(FOUND.length === 0)(
+    "passthrough equals the producer's declared fields, in the producer's order",
+    () => {
+      const projector = readFileSync(FOUND[0], "utf8");
+      const declared = declaredFieldsFor(projector, "COMPETING_MEASURES");
+      // The control first — same discipline as the CONTRIBUTION_RANKING arm above: an empty
+      // extraction would make the equality below vacuous.
+      expect(declared.length).toBeGreaterThan(5);
+      expect(COMPETING_MEASURES_ROW.passthrough).toEqual(declared);
+    },
+  );
+
+  it.skipIf(FOUND.length === 0)("payload_key equals the tuple's first element", () => {
+    const projector = readFileSync(FOUND[0], "utf8");
+    expect(COMPETING_MEASURES_ROW.payload_key).toBe(
+      declaredPayloadKeyFor(projector, "COMPETING_MEASURES"),
+    );
   });
 });

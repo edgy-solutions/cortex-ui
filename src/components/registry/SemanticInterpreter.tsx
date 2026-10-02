@@ -11,7 +11,8 @@ import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { ContributionRanking } from "../planning/ContributionRanking";
-import { CompetingMeasures } from "../planning/CompetingMeasures";
+import { archetypePackage } from "@/archetypes/registry";
+import { pick } from "@/archetypes/defineArchetype";
 import { VarianceTree } from "../planning/VarianceTree";
 import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
@@ -728,30 +729,36 @@ const renderComponent = (
         />
       );
 
-    case "COMPETING_MEASURES":
+    case "COMPETING_MEASURES": {
       // N METHODS MEASURING ONE QUANTITY, where the SPREAD is the finding. The plural of
       // FORECAST_MEASURE — whose own contract says "a list of them is a series, which is a
       // different archetype" and whose header names this exact three-way disagreement as its
       // reason to exist. Not MATRIX_GRID, which is the closest fit and would draw every figure
       // while withholding the finding: a spread spans ROWS and a matrix renders cells.
       //
-      // Envelope facts are read from the component, never recomputed from the rows — see the
-      // contract's `spreadIsUpstream`.
+      // ADR-0055 — the first package. Dispatch is data-driven off the registry rather than a
+      // hand-written prop list: `pkg.row.payload_key` names the rows prop and `pkg.reads` is
+      // exactly the envelope fields this archetype is given (never the whole `comp`, and never
+      // the wider `row.passthrough` the wire declares but this card does not consume — see the
+      // package's `index.ts`). Envelope facts are read from the component, never recomputed from
+      // the rows — see the contract's `spreadIsUpstream`.
+      const pkg = archetypePackage("COMPETING_MEASURES");
+      if (!pkg) break; // Should not happen outside a test that stubs the registry — falls to the
+      // "UI COMPONENT NOT FOUND" panel below, same as any other unregistered archetype.
+      // Bound to the package's own component name, not a generic placeholder — not only for
+      // readability: `assembleCapabilities.test.ts` derives "what the interpreter dispatches" by
+      // scanning this file's source for the JSX tag opened after each `case`, and a shared
+      // placeholder name would read as every registry-backed archetype dispatching one component.
+      const CompetingMeasures = pkg.Card;
       return (
         <CompetingMeasures
-          rows={comp.rows}
-          spread={comp.spread}
-          spread_percent_of_bac={comp.spread_percent_of_bac}
-          lowest_value={comp.lowest_value}
-          highest_value={comp.highest_value}
-          methods_compared={comp.methods_compared}
-          methods_answered={comp.methods_answered}
-          all_methods_answered={comp.all_methods_answered}
-          reference_value={comp.reference_value}
-          value_unit={comp.value_unit}
-          scope_label={comp.scope_label}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
         />
       );
+    }
 
     case "CONTRIBUTION_RANKING":
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with

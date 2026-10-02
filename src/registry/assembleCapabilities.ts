@@ -43,7 +43,7 @@ import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
 import { SOURCE_LEDGER_CONTRACT } from "../components/ledger/SourceLedger.contract";
-import { COMPETING_MEASURES_CONTRACT } from "../components/planning/CompetingMeasures.contract";
+import { COMPETING_MEASURES_CONTRACT } from "../archetypes/competing-measures/contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
 import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";

@@ -53,7 +53,7 @@
 import { SUPPLY_TABLE_CONTRACT } from "@/components/registry/SupplyTable.contract";
 import { CANVAS_SEED_CONTRACT } from "@/components/registry/CanvasSeed.contract";
 import { CHART_WIDGET_CONTRACT } from "@/components/mesh/ChartWidget.contract";
-import { COMPETING_MEASURES_CONTRACT } from "@/components/planning/CompetingMeasures.contract";
+import { COMPETING_MEASURES_CONTRACT } from "@/archetypes/competing-measures/contract";
 import { CONTRIBUTION_RANKING_CONTRACT } from "@/components/planning/ContributionRanking.contract";
 import { DECISION_RECORD_CONTRACT } from "@/components/planning/DecisionRecord.contract";
 import { DELTA_SET_CONTRACT } from "@/components/planning/DeltaSet.contract";

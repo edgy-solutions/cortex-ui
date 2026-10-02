@@ -3,7 +3,7 @@ import {
   validateCompetingMeasures,
   readField,
   type CompetingMeasureRow,
-} from "./CompetingMeasures.contract";
+} from "./contract";
 
 /**
  * COMPETING_MEASURES — N methods measuring one quantity, with the SPREAD as the finding.

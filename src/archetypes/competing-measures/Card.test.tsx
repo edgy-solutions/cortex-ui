@@ -28,17 +28,18 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { CompetingMeasures } from "./CompetingMeasures";
+import { CompetingMeasures } from "./Card";
+import { SemanticInterpreter } from "../../components/registry/SemanticInterpreter";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   validateCompetingMeasures,
   COMPETING_MEASURES_CONTRACT,
-} from "./CompetingMeasures.contract";
+} from "./contract";
 import {
   COMPETING_MEASURES_FIXTURES,
   COMPETING_MEASURES_ABSENCES,
-} from "./fixtures/competingMeasures";
+} from "./fixtures";
 
 afterEach(cleanup);
 
@@ -378,7 +379,7 @@ describe("the first consumer's field names are read, and named", () => {
     // for a reason with nothing to do with the behaviour — a test whose subject is "this
     // happens exactly once" has to control the thing that remembers.
     vi.resetModules();
-    const fresh = await import("./CompetingMeasures.contract");
+    const fresh = await import("./contract");
     const seen: string[] = [];
     const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
       seen.push(a.join(" "));
@@ -397,7 +398,7 @@ describe("the first consumer's field names are read, and named", () => {
 
   it("says NOTHING when the structural name is used, and returns IT", async () => {
     vi.resetModules();
-    const fresh = await import("./CompetingMeasures.contract");
+    const fresh = await import("./contract");
     const seen: string[] = [];
     const spy = vi.spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
       seen.push(a.join(" "));
@@ -440,18 +441,36 @@ describe("the payload arrives under the key the projector registers", () => {
   it("the interpreter reads `comp.rows` for this archetype", () => {
     // The hop a component test cannot see: which key the dispatch pulls out of the payload.
     // Every node verified and the connection unasserted is how the first one survived.
-    const src = readFileSync(path.join(__dirname, "../registry/SemanticInterpreter.tsx"), "utf8");
-    const dispatch = src.slice(src.indexOf('case "COMPETING_MEASURES":'));
-    const block = dispatch.slice(0, dispatch.indexOf("case \"CONTRIBUTION_RANKING\""));
-    expect(block).toContain("rows={comp.rows}");
-    // WORD-BOUNDED, because `comp.methods_compared` and `comp.methods_answered` are legitimate
-    // envelope reads two lines below and both CONTAIN the substring `comp.methods`. The plain
-    // containment assertion failed against a correct dispatch — the fourth time tonight a check
-    // has matched a neighbour instead of its subject, and the first time inside a test written
-    // to catch exactly that. A substring is not a name.
-    expect(block).not.toMatch(/comp\.methods\b/);
-    // Positive control: the bounded pattern really does match the thing it forbids.
-    expect("methods={comp.methods}").toMatch(/comp\.methods\b/);
+    //
+    // ⛔ REWRITTEN under ADR-0055's registry dispatch (roll #13). The old version of this test
+    // scanned SemanticInterpreter.tsx's source text for a literal `rows={comp.rows}` inside the
+    // `case "COMPETING_MEASURES":` block. That block is now data-driven —
+    // `{ [pkg.row.payload_key]: comp[pkg.row.payload_key], ...pick(comp, pkg.reads) }` — so the
+    // literal text this test looked for no longer exists anywhere in the file, for ANY archetype,
+    // correct or not. A source-text seal cannot tell "the wiring changed shape" from "the wiring
+    // broke"; only rendering through the real dispatch can, so this is now a behavioral test:
+    // a payload keyed `rows` reaches the card's rows, through `SemanticInterpreter`, for real.
+    render(
+      <SemanticInterpreter
+        payload={{
+          components: [
+            {
+              archetype: "COMPETING_MEASURES",
+              rows: [
+                { method: "CPI-based", formula: "BAC / CPI", value: 100, unavailable_reason: null },
+                { method: "SPI-based", formula: "BAC / SPI", value: 200, unavailable_reason: null },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("CPI-based")).toBeTruthy();
+    expect(screen.getByText("SPI-based")).toBeTruthy();
+    // And the "not found" fallback — what a wrong or absent payload key would fall to — is not
+    // what rendered. Rules out the dispatch silently missing and the default panel reading as a
+    // false positive on `getByText` alone.
+    expect(screen.queryByText(/UI COMPONENT NOT FOUND/)).toBeNull();
   });
 });
 
@@ -514,7 +533,7 @@ describe("the absences that were only punctuation", () => {
  *             without these the card cannot say that three rows are not three answers. Dropping
  *             a row would turn a comparison of three into a comparison of two without appearing
  *             to."
- *   consumer  this file's own header, and `CompetingMeasures.contract.ts` — "DROPPING IT WOULD
+ *   consumer  this file's own header, and `contract.ts` — "DROPPING IT WOULD
  *             TURN A COMPARISON OF THREE INTO A COMPARISON OF TWO WITHOUT APPEARING TO."
  *
  * So the discriminator is NOT "derivable from the rows". It is derivable from rows THAT COULD
@@ -608,7 +627,7 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     // Asserted on the contract's own text rather than by exercising the validator, because the
     // finding is the DECLARATION. If someone makes them required, this goes red and should.
     const contract = readFileSync(
-      path.join(__dirname, "CompetingMeasures.contract.ts"),
+      path.join(__dirname, "contract.ts"),
       "utf8",
     );
     for (const f of ["methods_compared", "methods_answered", "all_methods_answered"]) {
@@ -747,7 +766,7 @@ describe("⛔ the completeness pair as a truncation detector", () => {
    * claim that every method answered.
    */
   it("says EVERY absent envelope figure including this one — rows present, no claim made", () => {
-    const component = readFileSync(path.join(__dirname, "CompetingMeasures.tsx"), "utf8");
+    const component = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
 
     // THE RULE, IN THE CARD'S OWN WORDS — the sentence the fix was argued from. Kept asserted
     // because the fallback is the sort of thing a later reader re-adds as an improvement, and
