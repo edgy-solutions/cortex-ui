@@ -103,3 +103,64 @@ describe("ingest roll-11 capture — the deployed gateway's actual wire", () => 
     });
   });
 });
+
+/**
+ * Lane 1's END-TO-END capture at helm rev 164 / fleet d602d490:
+ * `sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json`. One fresh drop, polled for
+ * 603 s. It never left `received`, and no document_promotion task named it on either queue — the
+ * capture's own `stopped_at` says so. So the hops that exist are sealed here, and the promote
+ * response and the label are `todo`, NOT green: there is nothing on the wire yet for them to read.
+ * When Lane 1 replaces this with a capture that progresses, the stall arm below goes red and says so.
+ */
+interface E2eHop {
+  request?: { method?: string; path?: string };
+  response?: { status?: number; body?: unknown };
+}
+interface E2eCapture {
+  release: string;
+  hops: E2eHop[];
+  ingest_id: string;
+  stages_seen: string[];
+  stopped_at: string;
+}
+
+describe("ingest rev-164 end-to-end capture — what the live pipeline did with one drop", () => {
+  const e2e = JSON.parse(
+    readFileSync(
+      path.join(__dirname, "../../sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json"),
+      "utf8",
+    ),
+  ) as E2eCapture;
+  const statusHops = e2e.hops.filter(
+    (h) => h.request?.method === "GET" && /^\/ingest\/.+\/status$/.test(h.request?.path ?? ""),
+  );
+
+  it("the upload hop reads through readIngestUploadId as the capture's ingest_id", () => {
+    const upload = e2e.hops.find((h) => h.request?.method === "POST" && h.request?.path === "/ingest");
+    expect(upload, "no POST /ingest hop in the capture").toBeTruthy();
+    expect(readIngestUploadId(upload!.response?.body)).toBe(e2e.ingest_id);
+  });
+
+  it("EVERY status hop reads through readIngestStatusRow, and ingestStatusPath reproduces its path", () => {
+    expect(statusHops.length).toBeGreaterThanOrEqual(2);
+    for (const h of statusHops) {
+      const row = readIngestStatusRow(h.response?.body);
+      expect(row, `status row refused: ${JSON.stringify(h.response?.body).slice(0, 200)}`).not.toBeNull();
+      expect(row!.ingest_id).toBe(e2e.ingest_id);
+      expect(decodeURIComponent(ingestStatusPath(row!.ingest_id))).toBe(h.request!.path);
+    }
+  });
+
+  it("the stall, as captured: every stage seen is `received`, and the card keeps polling rather than calling it done", () => {
+    expect(e2e.stages_seen).toEqual(["received"]);
+    for (const h of statusHops) {
+      const row = readIngestStatusRow(h.response?.body)!;
+      expect(row.stage).toBe("received");
+      expect(ingestPollingDone(row)).toBe(false);
+    }
+    expect(e2e.stopped_at).toContain("no document_promotion task");
+  });
+
+  it.todo("promote response — awaits a capture where a document_promotion task names the drop");
+  it.todo("label — awaits a capture past promotion");
+});

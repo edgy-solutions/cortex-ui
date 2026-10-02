@@ -1,0 +1,24 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "release": "helm rev 164, fleet d602d490 (cortex-bff image d602d490)",
+  "hop": "1b-graph-node",
+  "how": "read-only Cypher from inside the cortex-bff pod: MATCH (n:IngestArtifact {ingest_id:$i}) OPTIONAL MATCH (n)-[r]-(m) RETURN labels(n), properties(n), collect(type(r))",
+  "written_by": "POST /ingest -> _create_ingest_node -> promotion_stores.Neo4jIngestGraph.create_node (write_node, merged 9481868c, in the d602d490 image); no node-write failure in the bff log",
+  "ingest_artifact_total": 2,
+  "this_drop": [
+    {
+      "labels": [
+        "IngestArtifact"
+      ],
+      "props": {
+        "ingest_id": "sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+        "sha256": "fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+        "ingested_at": "2026-10-02T03:13:54Z",
+        "object_ref": "ingress-user/pdf/fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb/PCN23-002.pdf",
+        "submitted_by": "alice@example.com",
+        "kind": "pdf"
+      },
+      "rels": []
+    }
+  ]
+}

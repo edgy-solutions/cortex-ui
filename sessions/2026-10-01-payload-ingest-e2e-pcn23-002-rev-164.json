@@ -1,0 +1,122 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "release": "helm rev 164, fleet d602d490",
+  "started_at": "2026-10-02T03:13:53Z",
+  "file": {
+    "name": "PCN23-002.pdf",
+    "bytes": 606
+  },
+  "hops": [
+    {
+      "hop": "1-ingest",
+      "as": "alice",
+      "at": "03:13:57Z",
+      "request": {
+        "method": "POST",
+        "path": "/ingest",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "kind": "pdf",
+          "on_behalf_of": "alice@example.com",
+          "file": "PCN23-002.pdf (application/pdf)"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+          "stage": "received",
+          "detail": null,
+          "object_prefix": "ingress-user/pdf/fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb/",
+          "duplicate": null
+        }
+      }
+    },
+    {
+      "hop": "2-status",
+      "as": "alice",
+      "at": "03:13:57Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+          "stage": "received",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+          "created_at": 1790910836648,
+          "updated_at": 1790910836648
+        }
+      }
+    },
+    {
+      "hop": "2-status-final",
+      "as": "alice",
+      "at": "03:24:00Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+          "stage": "received",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+          "created_at": 1790910836648,
+          "updated_at": 1790910836648
+        }
+      }
+    },
+    {
+      "hop": "3-promotion-task",
+      "as": "alice",
+      "request": {
+        "method": "GET",
+        "path": "/me/human_tasks"
+      },
+      "response": {
+        "status": 200,
+        "rows_total": 28,
+        "rows_naming_this_ingest_or_promotion": []
+      }
+    },
+    {
+      "hop": "3-promotion-task",
+      "as": "bob",
+      "request": {
+        "method": "GET",
+        "path": "/me/human_tasks"
+      },
+      "response": {
+        "status": 200,
+        "rows_total": 17,
+        "rows_naming_this_ingest_or_promotion": []
+      }
+    }
+  ],
+  "ingest_id": "sha256:fa231498f527921fc547cb97009a7d98fb45927bdaf7237028ea1cb60305e9bb",
+  "stages_seen": [
+    "received"
+  ],
+  "polled_s": 603,
+  "stopped_at": "3-promotion-task: no document_promotion task names this ingest_id on either queue"
+}
