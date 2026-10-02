@@ -28,7 +28,9 @@ producer read: invincible-agent origin/master `41647787`
 
 ## Limits
 
-- **The banner's population test renders 22 of the 28 display archetypes.** The other 6 throw on a minimal component, for reasons unrelated to origin. They are isolated per archetype, and 22 is the positive-control floor. The mount sits in the loop, above the switch, which is why O5 reddens on a member.
+- **KNOWN GAP: the banner is proven for 22 of the 28 display archetypes, and NOT proven for 6.** APPROVAL_TASK, ELICITATION, GROUPED_REVIEW, INSTANCES_BY_PROPERTY, TRIAGE_TASK and WORKFLOW_OBSERVATION throw on a minimal component (with or without `origin`), so the test asserts nothing about them. The loop mount is a reason to expect the banner there, not a measurement of it.
+  - The test names them in `BANNER_UNPROVEN` and holds that list by EQUALITY with what actually throws. A new thrower reddens it, and so does one that starts rendering. Either way the test says to update the list, so the banner test grows as these cards gain minimal fixtures for other reasons.
+  - Mutants G1 (drop a member) and G2 (add WORKFLOW_CASE, which renders) are each RED on that assertion with its message. Both were restored from a backup.
 - **`IngestStatusCard` takes `onBehalfOf` as a prop from `IngestPanel`.** It does not call `useAuth()`, because every existing test renders it without an auth provider.
 
 ## Gates

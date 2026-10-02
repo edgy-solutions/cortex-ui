@@ -10,9 +10,14 @@
  * a minimal, close-to-empty component takes the WHOLE render down with it — there is no way for
  * one archetype's throw to leave its sibling's banner standing. Each archetype is therefore
  * rendered ALONE, inside its own error boundary: a throw is recorded and skipped (nothing can be
- * asserted about a card that never mounted), never silently counted as a pass. The population
- * total at the end is a POSITIVE CONTROL — this walk is only meaningful if most of the 29
- * archetypes actually tolerate a minimal component.
+ * asserted about a card that never mounted), never silently counted as a pass.
+ *
+ * ⛔ KNOWN GAP, NOT COVERED: the archetypes in `BANNER_UNPROVEN` throw on a minimal component, so
+ * this file proves NOTHING about the banner for them. Do not read the loop mount as covering
+ * them — placement is a reason to expect the banner, not a measurement of it. The list is held
+ * by EQUALITY: a card that starts throwing reddens here (the gap cannot grow silently), and a
+ * card that gains a minimal fixture reddens here too, telling you to take it off the list so the
+ * banner assertions start running for it.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
@@ -48,6 +53,18 @@ function tryRender(comp: Record<string, unknown>): { threw: boolean; hasBanner: 
   };
 }
 
+/** Archetypes this file cannot prove the banner for (see the header). Measured 2026-10-02:
+ *  each needs richer props than `{archetype, origin}` to render at all — the same with no
+ *  `origin` key, so unrelated to the banner. Shrink it as they gain minimal fixtures. */
+const BANNER_UNPROVEN = [
+  "APPROVAL_TASK",
+  "ELICITATION",
+  "GROUPED_REVIEW",
+  "INSTANCES_BY_PROPERTY",
+  "TRIAGE_TASK",
+  "WORKFLOW_OBSERVATION",
+] as const;
+
 describe("OriginUnresolvedBanner, wired through SemanticInterpreter — EVERY DISPLAY_ARCHETYPE", () => {
   it("draws for unresolved, never for resolved or absent, across the whole closed archetype population", () => {
     const threwOnUnresolved: string[] = [];
@@ -73,15 +90,13 @@ describe("OriginUnresolvedBanner, wired through SemanticInterpreter — EVERY DI
       }
     }
 
-    // POSITIVE CONTROL — see the file header. If this ever drops near zero, the walk below it
-    // measured nothing: every archetype threw on a minimal component and every assertion above
-    // was skipped rather than run. As of this writing, 22/28 tolerate a minimal component; the
-    // 6 that do not (ELICITATION, INSTANCES_BY_PROPERTY, WORKFLOW_OBSERVATION, APPROVAL_TASK,
-    // TRIAGE_TASK, GROUPED_REVIEW) need richer props than `{archetype, origin}` to render at
-    // all — unrelated to this banner, since the SAME is true with no `origin` key present.
+    // THE GAP, BY EQUALITY — see the header. Also the positive control: every archetype NOT on
+    // the list was rendered and asserted on above, so the walk cannot pass by skipping.
     expect(
-      tolerated,
-      `only ${tolerated}/${DISPLAY_ARCHETYPES.length} archetypes rendered a minimal component without throwing; threw on: ${JSON.stringify(threwOnUnresolved)}`,
-    ).toBeGreaterThan(DISPLAY_ARCHETYPES.length / 2);
+      [...threwOnUnresolved].sort(),
+      `the archetypes that throw on a minimal component changed. New throwers widen the unproven gap; ` +
+        `ones that now render should come OFF BANNER_UNPROVEN so the banner is asserted for them.`,
+    ).toEqual([...BANNER_UNPROVEN].sort());
+    expect(tolerated).toBe(DISPLAY_ARCHETYPES.length - BANNER_UNPROVEN.length);
   });
 });
