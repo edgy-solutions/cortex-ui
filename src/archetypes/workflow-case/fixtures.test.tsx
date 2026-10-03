@@ -14,9 +14,14 @@ import { cleanup, render } from "@testing-library/react";
 import { WorkflowCase } from "./Card";
 import { archetypePackage } from "../registry";
 import { readDeclaredAbsences } from "../defineArchetype";
+import { readTaskDeclaration } from "@/lib/taskDeclaration";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { WORKFLOW_CASE_ABSENCES, WORKFLOW_CASE_FIXTURES } from "./fixtures";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useTaskKindStore.setState({ status: "idle", byKind: {} });
+});
 
 function stripComments(src: string): string {
   let out = "";
@@ -120,7 +125,70 @@ describe("WORKFLOW_CASE fixtures discriminate", () => {
   });
 
   // Not yet exercisable: no producer route serves either shape today (see `contract.ts`'s
-  // header) — these name the gap rather than letting it go unrecorded.
-  it.todo("the maintenance case, from a served definition and a served instance");
+  // header) — this names the gap rather than letting it go unrecorded.
   it.todo("the safety acceptance case, from a served instance (only the task row is served today)");
+
+  it("the maintenance case, transcribed from the producer's definition, renders through this Card", () => {
+    const maint = WORKFLOW_CASE_FIXTURES.find((f) => f.name.startsWith("maintenance fault"))!;
+    expect(maint, "the maintenance fixture is missing from WORKFLOW_CASE_FIXTURES").toBeTruthy();
+
+    // HAND-BUILT MENU — see fixtures/index.ts's comment on `MAINT_TASK`: the rev-165 task-kinds
+    // capture predates this overlay and carries no `maint_fault_approval` entry, so the menu is
+    // seeded here from the transcribed `task_kinds/maint_fault_approval.yaml` facts directly,
+    // not from that capture (contrast `Card.test.tsx`'s `loadMenuFromCapture`, which fixtures 1
+    // and 2 use because their kinds ARE in the capture).
+    useTaskKindStore.setState({
+      status: "loaded",
+      byKind: {
+        maint_fault_approval: readTaskDeclaration({
+          kind: "maint_fault_approval",
+          declared: true,
+          archetype: "APPROVAL_TASK",
+          badge: "MAINT",
+          title: "Maintenance disposition",
+          accepts: [
+            "replace_now",
+            "replace_after_resupply",
+            "defer_with_restriction",
+            "evacuate_for_depot",
+            "rejected",
+            "deferred",
+          ],
+          reason_required: ["rejected", "deferred"],
+        })!,
+      } as never,
+    });
+
+    const { container } = draw(maint);
+
+    // the definition's name and its stages
+    const instance = maint.payload.instances[0];
+    expect(container.textContent).toContain(instance.definition.name);
+    for (const stage of instance.definition.domain_stages) {
+      expect(container.querySelector(`[data-stage="${stage}"]`), `missing stage ${stage}`).not.toBeNull();
+    }
+
+    // all four options, with their labels
+    const optionEls = container.querySelectorAll("[data-option]");
+    const options = maint.payload.options!;
+    expect(optionEls).toHaveLength(4);
+    expect(options).toHaveLength(4);
+    options.forEach((option, i) => {
+      expect(optionEls[i].querySelector("p")?.textContent).toBe(option.label);
+    });
+
+    // the decision step renders through ApprovalTaskCard, with EXACTLY the transcribed verbs —
+    // an INDEPENDENT literal, not read back off the seeded declaration above, so a mutant that
+    // swaps the seeded menu (e.g. for fixture 1's safety verbs) cannot also swap this expectation.
+    expect(container.querySelector(".glass-panel")).not.toBeNull();
+    const verbs = [...container.querySelectorAll("[data-verb]")].map((el) => el.getAttribute("data-verb"));
+    expect(verbs).toEqual([
+      "replace_now",
+      "replace_after_resupply",
+      "defer_with_restriction",
+      "evacuate_for_depot",
+      "rejected",
+      "deferred",
+    ]);
+  });
 });

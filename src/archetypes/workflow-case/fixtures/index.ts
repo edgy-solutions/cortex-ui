@@ -14,7 +14,14 @@ import taskKindsCapture from "../../../../sessions/2026-10-02-payload-task-kinds
 import { taskToArtifact } from "@/lib/taskArtifact";
 import { parseTaskPayload } from "@/lib/taskPayload";
 import type { HumanTask } from "@/store/useHumanTaskStore";
-import type { ApprovalTaskPayload, CaseArtifact, CaseDefinition, CaseInstance, WorkflowCasePayload } from "../contract";
+import type {
+  ApprovalTaskPayload,
+  CaseArtifact,
+  CaseDefinition,
+  CaseInstance,
+  CaseOption,
+  WorkflowCasePayload,
+} from "../contract";
 
 export const WORKFLOW_CASE_ABSENCES = [
   "data-stage-unknown",
@@ -402,6 +409,153 @@ const FIXTURE_6_PAYLOAD: WorkflowCasePayload = {
   } as unknown as CaseArtifact,
 };
 
+/**
+ * FIXTURE 7 — "maintenance fault — propose a disposition". The DEFINITION (id, name,
+ * participants, domain_stages, all three steps) is transcribed from
+ * `policy/overlays/openddil-lab/workflows/maint_fault_propose.yaml` at `invincible-agent`
+ * origin/master, sha `c914342ccc918dbaa8f6e207666fd41cf1b6de0b` — copied, not composed. No
+ * producer route serves either a definition or an instance for this case (see `contract.ts`'s
+ * header), so the INSTANCE, like fixture 3, is hand-built; unlike fixture 3 it carries producer
+ * vocabulary, because it transcribes a real definition rather than standing in for one (same
+ * carve-out fixtures 1/2 use — see this file's header).
+ */
+
+/**
+ * THE HAND-BUILT TRIGGER the four options below, and the `decide` step's bound title/audience,
+ * are resolved against. Neutral and fictitious — invented for this fixture, not a real fault
+ * report, and not any value the overlay's `triggers/maintenance_fault.yaml` requires beyond
+ * what is used here.
+ */
+const MAINT_TRIGGER = {
+  faultItem: "coolant pump",
+  faultCode: "FLT-0042",
+  assetId: "UNIT-12",
+  owningTier: "TIER-2",
+};
+
+/**
+ * OPTIONS — the render template's four option literals, each resolved against `MAINT_TRIGGER`.
+ * `data` carries only the SCALAR fields `CaseOption.data` can hold (`readiness`, `takes_offline`,
+ * `task`, and `interval` where the template has one) — never `parts`/`spares`/`task_refs`/
+ * `battle_condition`/`nearest_spare`, which are objects or arrays the producer's own walk
+ * citations populate at run time, not scalars this fixture could invent a citation for.
+ */
+const MAINT_OPTIONS: CaseOption[] = [
+  {
+    id: "replace_now",
+    label: "Replace now",
+    data: {
+      readiness: "FMC",
+      takes_offline: true,
+      task: `Remove and replace ${MAINT_TRIGGER.faultItem} from local stock`,
+    },
+  },
+  {
+    id: "replace_after_resupply",
+    label: "Replace after resupply",
+    data: {
+      readiness: "PMC",
+      takes_offline: false,
+      task: `Order ${MAINT_TRIGGER.faultItem} and replace on receipt`,
+    },
+  },
+  {
+    id: "defer_with_restriction",
+    label: "Defer with restriction",
+    data: {
+      readiness: "PMC",
+      takes_offline: false,
+      task: `Operate ${MAINT_TRIGGER.assetId} under restriction until the planning interval`,
+      // HAND-BUILT STAND-IN for `outputs.maint_fault_propose.walk.citations.planning_interval.
+      // interval` — the walk step is STUBBED (the YAML's own comment on `walk`), so no citation
+      // exists yet to resolve this against. A neutral, fictitious interval stands in for it.
+      interval: "P14D",
+    },
+  },
+  {
+    id: "evacuate_for_depot",
+    label: "Evacuate for depot",
+    data: {
+      readiness: "NMC",
+      takes_offline: true,
+      task: `Evacuate ${MAINT_TRIGGER.assetId} to depot for ${MAINT_TRIGGER.faultItem}`,
+    },
+  },
+];
+
+const MAINT_FAULT_PROPOSE_DEFINITION: CaseDefinition = {
+  id: "maint_fault_propose",
+  name: "Maintenance fault -- propose a disposition",
+  participants: [{ role: "initiator" }, { role: "maintainer" }],
+  domain_stages: ["proposed", "awaiting_approval"],
+  steps: [
+    // STUBBED on the producer side too (see the YAML's own comment) — transcribed as a step
+    // with no title/audience, same as the producer declares.
+    { id: "walk", kind: "spo_operation" },
+    { id: "options", kind: "render" },
+    {
+      id: "decide",
+      kind: "human_await",
+      title: `Fault ${MAINT_TRIGGER.faultCode} on ${MAINT_TRIGGER.assetId}: choose a disposition`,
+      audience: `maint_fault_approval:${MAINT_TRIGGER.owningTier}`,
+    },
+  ],
+};
+
+const MAINT_INSTANCE: CaseInstance = {
+  workflow_id: "maint-UNIT-12-FLT-0042",
+  definition: MAINT_FAULT_PROPOSE_DEFINITION,
+  // The definition's own `domain_stages` are `[proposed, awaiting_approval]`; this instance has
+  // walked past `proposed` (the options are already rendered, below) and is sitting at the
+  // `decide` human_await — `awaiting_approval` is the stage the definition itself names for
+  // that moment, not a guess.
+  current_stage: "awaiting_approval",
+  status: "running",
+};
+
+/**
+ * THE PENDING APPROVAL'S TASK — hand-built (no served row backs it). `kind` and its menu are
+ * transcribed from `policy/overlays/openddil-lab/task_kinds/maint_fault_approval.yaml` at the
+ * same sha: `accepts` is the four option verbs above, in order, plus `rejected`/`deferred`;
+ * `reason_required` is exactly those last two. `title`/`summary`/`audience` are the producer
+ * `decide` step's own bound strings, copied.
+ *
+ * THE REV-165 TASK-KINDS CAPTURE (`sessions/2026-10-02-payload-task-kinds-rev-165-bob.json`)
+ * PREDATES THIS OVERLAY and has no `maint_fault_approval` entry — unlike fixture 1/2's kinds,
+ * this menu cannot be loaded from that capture. `fixtures.test.tsx`'s real test for this fixture
+ * seeds the task-kind store by hand from these same transcribed YAML facts instead, and says so.
+ */
+const MAINT_TASK: ApprovalTaskPayload = {
+  task_id: "decide",
+  kind: "maint_fault_approval",
+  task_state: "pending",
+  title: `Fault ${MAINT_TRIGGER.faultCode} on ${MAINT_TRIGGER.assetId}: choose a disposition`,
+  summary:
+    "Four options, each citing the manual and the spares record. Choosing one approves it; " +
+    "reject sends it back for a new proposal, defer parks it until a revisit time. Both need a " +
+    "reason. An unanswered proposal escalates; it is never approved by silence.",
+  audience: `maint_fault_approval:${MAINT_TRIGGER.owningTier}`,
+  requested_by: "",
+  subject_ref: MAINT_TRIGGER.assetId,
+};
+
+const FIXTURE_7_PAYLOAD: WorkflowCasePayload = {
+  subject_ref: MAINT_TRIGGER.assetId,
+  instances: [MAINT_INSTANCE],
+  options: MAINT_OPTIONS,
+  approvals: [
+    {
+      workflow_id: MAINT_INSTANCE.workflow_id,
+      step_id: "decide",
+      status: "pending",
+      task: MAINT_TASK,
+    },
+  ],
+  // history, output_artifact: the definition declares neither a history record nor a release
+  // artifact at this stage — not transcribed because there is nothing in the YAML to transcribe,
+  // same reason fixture 1's header gives for its own missing sections.
+};
+
 export const WORKFLOW_CASE_FIXTURES: WorkflowCaseFixture[] = [
   {
     name: "safety acceptance (Medium), pending — the served HAZ-1003 row",
@@ -432,6 +586,11 @@ export const WORKFLOW_CASE_FIXTURES: WorkflowCaseFixture[] = [
     name: "artifact prepared, not released — no decision yet",
     payload: FIXTURE_6_PAYLOAD,
     declares: ["data-approvals-absent", "data-artifact-unreleased"],
+  },
+  {
+    name: "maintenance fault — propose a disposition, awaiting approval (hand-built instance, transcribed definition)",
+    payload: FIXTURE_7_PAYLOAD,
+    declares: ["data-history-absent", "data-artifact-unreleased"],
   },
 ];
 
