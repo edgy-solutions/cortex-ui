@@ -1,5 +1,6 @@
 import type { AnswerArchetype } from "./answerDisplay";
 import { WORKFLOW_CASE_ROW } from "@/archetypes/workflow-case/row";
+import { ILLUSTRATION_ROW } from "@/archetypes/illustration/row";
 import { presentFallbackReason, type FallbackReason, type RouteSeverity } from "./routing";
 
 /**
@@ -76,6 +77,12 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
    */
   NAMED_HOLE: true,
   UNKNOWN: true,
+  /**
+   * A part's location on a drawing is an assertion, not a question — the card says WHERE
+   * something is (or that the server could not say), never asks the reader to supply it. See
+   * `src/archetypes/illustration/contract.ts`'s header for why the shape is cortex-proposed.
+   */
+  ILLUSTRATION: true,
 
   // ── REQUESTS. These ask the reader for something and claim nothing. ──
   /** The menu. Withholding this strands the reader mid-elicitation — see the header. */
@@ -108,6 +115,10 @@ export function claimsAnAnswer(archetype: string): boolean {
  */
 const REQUEST_PAYLOAD_KEY: Partial<Record<string, string>> = {
   [WORKFLOW_CASE_ROW.archetype]: WORKFLOW_CASE_ROW.payload_key,
+  // Reused for the same presence-gating purpose SemanticInterpreter's own ILLUSTRATION dispatch
+  // needs — this map is "does the component carry its declared payload key", independent of
+  // whether `CLAIMS_AN_ANSWER` above calls that archetype a claim or a request.
+  [ILLUSTRATION_ROW.archetype]: ILLUSTRATION_ROW.payload_key,
 };
 
 export function carriesItsRequest(component: unknown, archetype: string): boolean {

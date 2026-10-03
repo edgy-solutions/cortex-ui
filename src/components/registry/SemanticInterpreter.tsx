@@ -780,6 +780,25 @@ const renderComponent = (
       );
     }
 
+    case "ILLUSTRATION": {
+      // ADR-0055, cortex-proposed (see contract.ts's header). Same data-driven dispatch as
+      // WORKFLOW_CASE, same reason for the local PascalCase binding below
+      // (assembleCapabilities.test.ts's JSX-tag scan).
+      const pkg = archetypePackage("ILLUSTRATION");
+      // No illustration object, nothing to decide and nothing to draw — the card would read
+      // `icn` off undefined. Same presence rule WORKFLOW_CASE applies (`carriesItsRequest`).
+      if (!pkg || !carriesItsRequest(comp, pkg.id)) break;
+      const Illustration = pkg.Card;
+      return (
+        <Illustration
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
+        />
+      );
+    }
+
     case "CONTRIBUTION_RANKING":
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -958,7 +977,10 @@ const isFullWidth = (archetype: string) =>
   archetype === "TRIAGE_TASK" ||
   // WORKFLOW_CASE's multi-section layout (header, stages, history, options, approval
   // chain, artifact) needs the full row on a narrow viewport, same as COMPETING_MEASURES.
-  archetype === "WORKFLOW_CASE";
+  archetype === "WORKFLOW_CASE" ||
+  // ILLUSTRATION's contract declares "full-width" (contract.ts) — a drawn SVG wants the row,
+  // same reasoning as the two above.
+  archetype === "ILLUSTRATION";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();

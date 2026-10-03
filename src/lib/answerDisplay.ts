@@ -70,6 +70,10 @@ export type AnswerArchetype =
   // label in one change — the file's own header above names exactly this failure mode once
   // already (the planning family dispatched for weeks before this union heard of it).
   | "WORKFLOW_CASE"
+  // cortex-proposed (see src/archetypes/illustration/contract.ts's header) — an S1000D
+  // illustration with one hotspot highlighted by id. Added WITH its dispatch, its glyph and
+  // its label in one change, for the same reason WORKFLOW_CASE's own comment above names.
+  | "ILLUSTRATION"
   | "UNKNOWN";
 
 /**
@@ -107,6 +111,7 @@ export const DISPLAY_ARCHETYPES = [
   "TRIAGE_TASK",
   "GROUPED_REVIEW",
   "WORKFLOW_CASE",
+  "ILLUSTRATION",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
 /** SPO provenance the card carries forward (ADR-0028 Decision 2). */
@@ -254,6 +259,8 @@ export function archetypeLabel(t: AnswerArchetype): string {
       // NOT "Approval" or "Review" — a case can chain several workflow instances and never
       // resolves to one verb; "Case" names the chain itself, not any one step in it.
       return "Case";
+    case "ILLUSTRATION":
+      return "Illustration";
     default:
       return "Answer";
   }

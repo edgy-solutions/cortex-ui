@@ -7,6 +7,7 @@ import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
 import { ingestStatusPath } from "@/lib/ingestWire";
+import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
   type StreamEvent,
@@ -959,5 +960,26 @@ export async function disputeIngestOrigin(
     `/ingest/${encodeURIComponent(ingestId)}/origin/dispute`,
     { on_behalf_of: onBehalfOf },
   );
+  return data;
+}
+
+/**
+ * CORTEX-PROPOSED — `src/archetypes/illustration/contract.ts`'s header: no producer route
+ * serves an ICN's bytes today (`GET /artifacts/{id}` returns JSON, not bytes). This fetches
+ * through the same minted `api` instance as every other call here (the bearer attaches via the
+ * request interceptor above), so it needs no `check:transport` exception of its own.
+ *
+ * `gatewayRelativePath` is called FIRST and must pass before axios ever sees `path` — a
+ * producer-supplied `content_path` that is an absolute URL would otherwise get this caller's
+ * bearer sent to whatever host that string names. See `src/lib/illustrationPath.ts`'s header.
+ */
+export async function fetchIllustrationContent(path: string): Promise<string> {
+  if (gatewayRelativePath(path) === null) {
+    throw new Error(`fetchIllustrationContent: refused a non-gateway-relative path: ${path}`);
+  }
+  const { data } = await api.get<string>(path, {
+    responseType: "text",
+    transformResponse: (r) => r,
+  });
   return data;
 }

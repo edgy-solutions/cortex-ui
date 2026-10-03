@@ -127,6 +127,8 @@ describe("what claims an answer, and what merely asks", () => {
     // being a request, and under a fallback the strict reading is the safe one.
     expect(claimsAnAnswer("NAMED_HOLE")).toBe(true);
     expect(claimsAnAnswer("UNKNOWN")).toBe(true);
+    // A part's location on a drawing is an assertion, never a question.
+    expect(claimsAnAnswer("ILLUSTRATION")).toBe(true);
   });
 
   it("an archetype nobody has classified counts as a CLAIM", () => {
