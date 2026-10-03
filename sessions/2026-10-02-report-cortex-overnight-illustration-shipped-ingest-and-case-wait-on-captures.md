@@ -45,3 +45,10 @@ producer read: invincible-agent origin/master `c914342c`
 **`taskKindParity` is red locally against producer master, and green in CI.** CI pins `PRODUCER_REF 0f48fe2`. The local red is `origin_confirmation`, plus the known "two, they AGREE".
 
 Pinning the kind alone would redden CI's stale-pin arm. The bump of `PRODUCER_REF` and the pin go together in one commit, once Lane 1 names the producer sha that the next roll carries.
+
+## Digest for `0fc5051` (the maintenance fixture plus this report)
+
+- CI run 37095992585: success, 34 steps, 0 skipped.
+- GHCR `0fc505192551575dcb50a4519f9f9eae84aab775` resolves to `sha256:d8c652cb0454114c74e9dad88d08edce32923312ea1a35b0ff5b8b1f26be8c44`.
+- Controls: the short sha returns 404, a fake sha returns 404, and the known-good `d3cfff6` resolves to `562c4bb5…`.
+- **This is the latest sha with an image.** Pin it, or `d3cfff6`.
