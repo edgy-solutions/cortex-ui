@@ -82,7 +82,25 @@ env:
   # failed), now matching `iagent_mesh.ingest.INGEST_STAGES` (lane/ca `b68926a`) — the SDK/gateway
   # divergence the previous revision of `src/lib/ingestWire.ts` reported to Lane 1 is closed as of
   # this sha. `ingestKindStatusParity.test.ts`'s renamed "STAGES" arm resolves against this file.
-  PRODUCER_REF: 0f48fe2feb863e2d65b56efc6a4a0528a81f4fb3
+  #
+  # ⛔ BUMPED 2026-10-03 TO `4c3b61a6` — four checks, measured against the deployed fleet, not the
+  # disk sibling:
+  #   check 1: the pods. The deployed fleet is uniform — every invincible-agent image, including
+  #     iagent-cortex-bff and iagent-projector, is `4c3b61a6212300fee395ee2204140bf380e198b2`
+  #     (chart 0.4.28). The live frontend is cortex `21a32d0` (`sha256:f4bac439…`).
+  #   check 2: declaration diff `0f48fe2f..4c3b61a6` over `policy/task_kinds` and
+  #     `policy/overlays/sample/task_kinds` — ONE new file, `policy/task_kinds/origin_confirmation.yaml`.
+  #     The unfiltered control is 239 files.
+  #   check 3: the SDK. The producer's `uv.lock` moved `iagent-mesh` from `v0.9.5` (`ceab07a`) to
+  #     `012a24fb` (lane/ca-0.9.7). `git diff v0.9.5 012a24fb -- iagent_mesh/rows.py` is EMPTY —
+  #     `rows.py` is 196 lines at both — against an unfiltered control of 15 files, so
+  #     `ROW_DISPOSITIONS`/`HOLE_DISPOSITIONS`/`reachable_for` are unchanged.
+  #   check 4: the build, this run.
+  # The rename is why the bump could not wait: producer commit `1c10e28c` (an ancestor of
+  # `4c3b61a6`) renamed the ingest stage `awaiting_disposition` to `review`, and the LIVE BFF
+  # already serves `review` — `src/lib/ingestWire.ts` refused every row at that stage until this
+  # bump landed alongside the rename.
+  PRODUCER_REF: 4c3b61a6212300fee395ee2204140bf380e198b2
 
 permissions:
   contents: read

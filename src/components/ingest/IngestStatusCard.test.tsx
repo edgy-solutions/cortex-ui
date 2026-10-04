@@ -102,16 +102,16 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
       <IngestStatusCard
         ingestId={INGEST_ID}
         initialRow={row({
-          stage: "awaiting_disposition",
+          stage: "review",
           duplicate: { of_ingest_id: OTHER_INGEST_ID, message: "already processed" },
         })}
         pollIntervalMs={100000}
       />,
     );
-    expect(document.querySelector("[data-ingest-duplicate]")?.textContent).toMatch(/awaiting_disposition/);
+    expect(document.querySelector("[data-ingest-duplicate]")?.textContent).toMatch(/review/);
   });
 
-  it("rejected is drawn as a terminal branch off awaiting_disposition, not past promoted, and draws detail", () => {
+  it("rejected is drawn as a terminal branch off review, not past promoted, and draws detail", () => {
     render(
       <IngestStatusCard
         ingestId={INGEST_ID}
@@ -141,7 +141,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
     render(
       <IngestStatusCard
         ingestId={INGEST_ID}
-        initialRow={row({ stage: "awaiting_disposition" })}
+        initialRow={row({ stage: "review" })}
         pollIntervalMs={100000}
       />,
     );
@@ -150,7 +150,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
   });
 
   it("a matching pending document_promotion task renders its verbs — THE BRIDGE IS GONE, ingest_id is read as-is", () => {
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({ tasks: [promotionTask(r)] });
     render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
     expect(document.querySelectorAll("[data-ingest-verb]")).toHaveLength(2);
@@ -159,7 +159,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
   });
 
   it("a payload naming a different ingest_id does NOT match", () => {
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({
       tasks: [promotionTask(r, { payload: { ingest_id: OTHER_INGEST_ID } })],
     });
@@ -168,7 +168,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
   });
 
   it("the rejected button is disabled without a comment, and enables once one is typed", () => {
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({ tasks: [promotionTask(r)] });
     render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
     const rejectBtn = document.querySelector('[data-ingest-verb="rejected"]') as HTMLButtonElement;
@@ -180,7 +180,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
   });
 
   it("clicking promoted calls actOnHumanTask(task.taskId, 'promoted', '')", async () => {
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({ tasks: [promotionTask(r, { taskId: "task-9" })] });
     render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
     fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
@@ -195,7 +195,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
         data: { detail: { error: "ingest_node_absent", task_id: "task-9", message: "ingest node absent. Nothing was written." } },
       },
     });
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({ tasks: [promotionTask(r, { taskId: "task-9" })] });
     render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
     fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
@@ -223,7 +223,7 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
       reason_required: ["rejected"],
     });
     useTaskKindStore.setState({ status: "loaded", byKind: { document_promotion: decl! } });
-    const r = row({ stage: "awaiting_disposition" });
+    const r = row({ stage: "review" });
     useHumanTaskStore.setState({ tasks: [promotionTask(r)] });
     render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
     const rendered = [...document.querySelectorAll("[data-ingest-verb]")].map((b) => b.getAttribute("data-ingest-verb"));

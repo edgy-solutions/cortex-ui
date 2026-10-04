@@ -334,6 +334,10 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
     // `safety_redraft` — the card renders it from the SERVED menu, and a table row would feed
     // what M3.3 deletes. The ingest status card finds it by payload.ingest_id (ingestWire.ts).
     "document_promotion",
+    // ADDED 2026-10-03 WITH THE PIN BUMP TO `4c3b61a6`. Its archetype is APPROVAL_TASK and the
+    // card renders it from the SERVED menu; a table row would feed what M3.3 deletes. It is the
+    // steward's origin confirmation (`policy/workflows/origin_confirm.yaml`).
+    "origin_confirmation",
   ];
 
   it("no declared species is unaccounted for on the cortex side", () => {

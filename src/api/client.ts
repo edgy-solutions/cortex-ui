@@ -897,10 +897,10 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  *     9fdbcc18, not yet pushed to origin/master) — `src/iagent/promotion.py`, the
  *     `document_promotion` HumanTask species acted through `actOnHumanTask` below, never a new
  *     route.
- *   - iagent-mesh-sdk branch lane/ca, commit b68926a — `INGEST_STAGES`' six-value vocabulary
- *     (received/extracting/awaiting_disposition/promoted/rejected/failed) now MATCHES
- *     `ingest_status.py.STAGES` at 0f48fe2f; the previously-reported SDK/gateway divergence
- *     (a different seven-value ladder with no "failed" and an in-band "duplicate") is closed.
+ *   - iagent-mesh-sdk branch lane/ca-0.9.7, commit 012a24fb — `INGEST_STAGES`' six-value
+ *     vocabulary (received/extracting/review/promoted/rejected/failed) mirrors
+ *     `ingest_status.py.STAGES` at producer `4c3b61a6` (renamed in `1c10e28c`). It was
+ *     `awaiting_disposition` until `1c10e28c`.
  *
  * Callers still gate behind `isIngestUiEnabled()` (`src/lib/ingestFlag.ts`), and
  * `src/lib/ingestTransport.ts` still picks this real transport or the in-memory mock by

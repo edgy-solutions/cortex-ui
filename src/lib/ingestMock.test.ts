@@ -13,7 +13,7 @@ const file = (name: string) => new File(["%PDF-1.7"], name, { type: "application
 beforeEach(() => __resetIngestMock());
 
 describe("ingestMock responses are accepted by the ingestWire readers", () => {
-  it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to awaiting_disposition, where it parks for a human", async () => {
+  it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to review, where it parks for a human", async () => {
     const id = readIngestUploadId(await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com"));
     expect(id, "readIngestUploadId refused the mock's upload response").not.toBeNull();
     // The mock advances a stage per fetch. Poll it the way the card does, and refuse any row the
@@ -23,10 +23,10 @@ describe("ingestMock responses are accepted by the ingestWire readers", () => {
       const row = readIngestStatusRow(await fetchIngestStatus(id!));
       expect(row, `readIngestStatusRow refused the mock's row after ${seen.join(" → ") || "the upload"}`).not.toBeNull();
       seen.push(String(row!.stage));
-      if (row!.stage === "awaiting_disposition") break;
+      if (row!.stage === "review") break;
     }
-    expect(seen.at(-1), `the mock never parked at awaiting_disposition: ${seen.join(" → ")}`).toBe("awaiting_disposition");
-    expect(ingestPollingDone(readIngestStatusRow(await fetchIngestStatus(id!))!), "awaiting_disposition must keep polling").toBe(false);
+    expect(seen.at(-1), `the mock never parked at review: ${seen.join(" → ")}`).toBe("review");
+    expect(ingestPollingDone(readIngestStatusRow(await fetchIngestStatus(id!))!), "review must keep polling").toBe(false);
   });
 
   it("a duplicate: both reads accept it, and the row carries the duplicate object", async () => {

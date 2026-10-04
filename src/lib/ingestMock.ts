@@ -6,10 +6,11 @@
  * kind — this module must stay outside `check:transport`'s reach entirely; it is dev fixture
  * data, not the wrapper.
  *
- * Lifecycle, per `ingest_status.py.STAGES` (producer 0f48fe2f):
+ * Lifecycle, per `ingest_status.py.STAGES` (producer 4c3b61a6; `review`, renamed from
+ * `awaiting_disposition` in 1c10e28c):
  *   upload                   → `received`
- *   poll (successive calls)  → `received` → `extracting` → `awaiting_disposition` — at
- *                               `awaiting_disposition`, a synthetic `document_promotion` HumanTask
+ *   poll (successive calls)  → `received` → `extracting` → `review` — at
+ *                               `review`, a synthetic `document_promotion` HumanTask
  *                               is upserted into `useHumanTaskStore`, `payload.ingest_id` set to
  *                               the row's own `ingest_id` (no bridging needed — see
  *                               `promotionIngestId`'s doc comment), so the card's real lookup
@@ -37,7 +38,7 @@ import type { IngestOrigin } from "./ingestOrigin";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
   received: "extracting",
-  extracting: "awaiting_disposition",
+  extracting: "review",
 };
 
 interface MockRow {
@@ -129,7 +130,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
 
 /** Advances the record's lifecycle by one tick (once it has settled past `received`, so the
  *  immediate post-upload fetch is not skipped a step), seeding a review task at
- *  `awaiting_disposition`. */
+ *  `review`. */
 export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   const row = STORE.get(ingestId);
   if (!row) {
@@ -147,7 +148,7 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
     if (next) {
       row.stage = next;
       row.updated_at = Date.now();
-      if (next === "awaiting_disposition") {
+      if (next === "review") {
         seedReviewTask(row);
       }
     }

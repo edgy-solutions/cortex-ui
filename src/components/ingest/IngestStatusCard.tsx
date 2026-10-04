@@ -17,7 +17,7 @@
  * `promotionIngestId` is an identity read now; see its doc comment in `src/lib/ingestWire.ts`.
  *
  * `duplicate` is OUT-OF-BAND: no ladder is drawn for it at all, and no review lookup either — a
- * duplicate never reaches `awaiting_disposition`.
+ * duplicate never reaches `review`.
  *
  * Verbs are drawn from the served `document_promotion` declaration
  * (`useTaskKindStore().declarationFor("document_promotion")`) when the app has one, falling back
@@ -33,7 +33,7 @@
  * deliberate retry only.
  *
  * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed`.
- * `awaiting_disposition` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
+ * `review` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
  * also stops polling, distinctly from a transient transport error, which is tolerated and
  * retried.
  */

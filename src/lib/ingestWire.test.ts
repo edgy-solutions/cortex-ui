@@ -75,6 +75,14 @@ describe("readIngestStatusRow", () => {
     expect(readIngestStatusRow(row({ stage: "made_up_stage" }))).toBeNull();
   });
 
+  it("refuses the retired `awaiting_disposition` name — the vocabulary is closed, not dual", () => {
+    expect(readIngestStatusRow(row({ stage: "awaiting_disposition" }))).toBeNull();
+  });
+
+  it("accepts `review`, the renamed stage", () => {
+    expect(readIngestStatusRow(row({ stage: "review" }))?.stage).toBe("review");
+  });
+
   it("rejects a null stage with no duplicate", () => {
     expect(readIngestStatusRow(row({ stage: null, duplicate: null }))).toBeNull();
   });
@@ -311,7 +319,7 @@ describe("ingestStageLadder", () => {
     expect(ingestStageLadder("extracting")).toEqual([
       { stage: "received", state: "done" },
       { stage: "extracting", state: "current" },
-      { stage: "awaiting_disposition", state: "pending" },
+      { stage: "review", state: "pending" },
       { stage: "promoted", state: "pending" },
     ]);
   });
@@ -322,11 +330,11 @@ describe("ingestStageLadder", () => {
     expect(ladder.slice(1).every((r) => r.state === "pending")).toBe(true);
   });
 
-  it("awaiting_disposition marks received/extracting done and itself current", () => {
-    expect(ingestStageLadder("awaiting_disposition")).toEqual([
+  it("review marks received/extracting done and itself current", () => {
+    expect(ingestStageLadder("review")).toEqual([
       { stage: "received", state: "done" },
       { stage: "extracting", state: "done" },
-      { stage: "awaiting_disposition", state: "current" },
+      { stage: "review", state: "current" },
       { stage: "promoted", state: "pending" },
     ]);
   });
@@ -338,12 +346,12 @@ describe("ingestStageLadder", () => {
     expect(ladder.some((r) => r.stage === "failed")).toBe(false);
   });
 
-  it("rejected is drawn as a terminal branch off awaiting_disposition, NOT past promoted", () => {
+  it("rejected is drawn as a terminal branch off review, NOT past promoted", () => {
     const ladder = ingestStageLadder("rejected");
     expect(ladder).toEqual([
       { stage: "received", state: "done" },
       { stage: "extracting", state: "done" },
-      { stage: "awaiting_disposition", state: "done" },
+      { stage: "review", state: "done" },
       { stage: "promoted", state: "pending" },
       { stage: "rejected", state: "current" },
     ]);
@@ -356,7 +364,7 @@ describe("ingestStageLadder", () => {
     expect(ladder).toEqual([
       { stage: "received", state: "done" },
       { stage: "extracting", state: "pending" },
-      { stage: "awaiting_disposition", state: "pending" },
+      { stage: "review", state: "pending" },
       { stage: "promoted", state: "pending" },
       { stage: "failed", state: "current" },
     ]);
@@ -376,8 +384,8 @@ describe("ingestPollingDone", () => {
     expect(ingestPollingDone({ stage: "extracting", duplicate: dup })).toBe(true);
   });
 
-  it("keeps polling through received/extracting/awaiting_disposition", () => {
-    for (const stage of ["received", "extracting", "awaiting_disposition"] as const) {
+  it("keeps polling through received/extracting/review", () => {
+    for (const stage of ["received", "extracting", "review"] as const) {
       expect(ingestPollingDone({ stage, duplicate: null })).toBe(false);
     }
   });
@@ -394,7 +402,7 @@ describe("INGEST_STAGES", () => {
     expect([...INGEST_STAGES]).toEqual([
       "received",
       "extracting",
-      "awaiting_disposition",
+      "review",
       "promoted",
       "rejected",
       "failed",

@@ -15,11 +15,10 @@
  *     `policy/task_kinds/document_promotion.yaml` (`accepts: [promoted, rejected]`,
  *     `reason_required: [rejected]` — the fallback this file uses when no served declaration
  *     has reached the app yet).
- *   - iagent-mesh-sdk, branch lane/ca, commit b68926a — `iagent_mesh/ingest.py`'s `INGEST_STAGES`
- *     closed vocabulary (received/extracting/awaiting_disposition/promoted/rejected/failed) is
- *     what the gateway now actually serves (`ingest_status.py.STAGES`, same six values, same
- *     order) — the divergence this file's previous revision reported to Lane 1 is CLOSED as of
- *     0f48fe2f: the SDK's vocabulary and `ingest_status.py`'s own are the same list.
+ *   - iagent-mesh-sdk, branch lane/ca-0.9.7, commit 012a24fb — `iagent_mesh/ingest.py`'s
+ *     `INGEST_STAGES` closed vocabulary (received/extracting/review/promoted/rejected/failed)
+ *     mirrors `ingest_status.py.STAGES` at producer `4c3b61a6` (renamed in `1c10e28c`), same six
+ *     values, same order. It was `awaiting_disposition` until `1c10e28c`.
  *   - the 2026-09-30 dispatch — renamed the component-level label field to `provenance_floor`
  *     (unrelated to the ingest row above; a component-level field read off rendered capability
  *     components, not off an ingest status row). Unchanged by this revision.
@@ -141,13 +140,13 @@ export function provenanceFloorIsUnverified(floor: ProvenanceFloor): boolean {
 export const INGEST_KINDS = ["pdf", "cad"] as const;
 export type IngestKind = (typeof INGEST_KINDS)[number];
 
-/** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. SAME vocabulary as
- *  `iagent_mesh.ingest.INGEST_STAGES` (ca b68926a); the divergence the previous revision of this
- *  file reported is closed as of producer 0f48fe2f. */
+/** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. Mirrors producer
+ *  `4c3b61a6` (renamed in `1c10e28c`) and SDK `iagent_mesh.ingest.INGEST_STAGES` at `012a24fb`
+ *  (lane/ca-0.9.7). It was `awaiting_disposition` until `1c10e28c`. */
 export const INGEST_STAGES = [
   "received",
   "extracting",
-  "awaiting_disposition",
+  "review",
   "promoted",
   "rejected",
   "failed",
@@ -365,7 +364,7 @@ export function payloadMatchesIngestId(payload: unknown, wanted: string): boolea
 
 // ── Stage ladder ─────────────────────────────────────────────────────────────────────────
 
-const MAIN_STAGES: readonly IngestStage[] = ["received", "extracting", "awaiting_disposition", "promoted"];
+const MAIN_STAGES: readonly IngestStage[] = ["received", "extracting", "review", "promoted"];
 
 export interface StageRung {
   stage: IngestStage;
@@ -377,14 +376,14 @@ export interface StageRung {
  * must not pass `null` here — a duplicate (or a duplicate whose original is invisible) draws no
  * ladder at all (see `IngestStatusCard`).
  *
- * `rejected` is drawn as a TERMINAL BRANCH off `awaiting_disposition`: the main-track stages up
- * to and including `awaiting_disposition` are marked `done` (they did happen before the branch),
+ * `rejected` is drawn as a TERMINAL BRANCH off `review`: the main-track stages up
+ * to and including `review` are marked `done` (they did happen before the branch),
  * `promoted` stays `pending` (a rejected ingest did not get promoted), and `rejected` itself is
  * the current rung.
  *
  * `failed` is a DIFFERENT kind of terminal branch: the row carries no "failed at" field, so this
  * client cannot say HOW FAR the ingest got before failing — only `received` is known to have
- * happened. Marking `extracting`/`awaiting_disposition` done would be a claim this row does not
+ * happened. Marking `extracting`/`review` done would be a claim this row does not
  * support, so they stay `pending` and `failed` is the current rung on its own.
  */
 export function ingestStageLadder(stage: IngestStage): StageRung[] {
@@ -398,7 +397,7 @@ export function ingestStageLadder(stage: IngestStage): StageRung[] {
   }
 
   const isTerminalBranch = stage === "rejected";
-  const branchPoint = MAIN_STAGES.indexOf("awaiting_disposition");
+  const branchPoint = MAIN_STAGES.indexOf("review");
   const currentIndex = isTerminalBranch ? branchPoint : MAIN_STAGES.indexOf(stage);
 
   const rungs: StageRung[] = MAIN_STAGES.map((s, i) => {
@@ -423,7 +422,7 @@ export function ingestStageLadder(stage: IngestStage): StageRung[] {
 
 /** Whether a card polling this row should stop: a duplicate (any row whose `duplicate` is
  *  non-null, including one whose original is invisible — `stage === null`), or a row that has
- *  reached `promoted`, `rejected` or `failed`. `awaiting_disposition` keeps polling — a viewer
+ *  reached `promoted`, `rejected` or `failed`. `review` keeps polling — a viewer
  *  may still be about to act. */
 export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicate">): boolean {
   if (row.duplicate !== null) return true;
