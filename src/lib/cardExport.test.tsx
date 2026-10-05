@@ -36,6 +36,7 @@ import {
   buildCardExportHtml,
   exportFileName,
   flattenPayload,
+  readArtifactMethod,
   readExportProvenance,
   readMethod,
   stripExecutable,
@@ -1079,5 +1080,95 @@ describe("the method block's stated states, one case per branch", () => {
     // The union cannot hold an object, so it becomes text — but it is not DROPPED, and `null` and
     // a missing key stay distinguishable, which is `formatLeaf`'s whole reason for existing.
     expect(m?.inputs.map((i) => i.value)).toEqual(['{"a":1}', "null", "undefined"]);
+  });
+});
+
+/**
+ * `readArtifactMethod` — the CARD'S own reader, which must keep "nobody sent a method" and
+ * "something arrived and could not be read" apart. `readMethod` collapses both to `null`
+ * because the export draws the same sentence for either; a card must not, which is the whole
+ * reason this function exists beside it rather than wrapping it.
+ */
+describe("readArtifactMethod — three states, two levels", () => {
+  it("absent: no method key at either level", () => {
+    expect(readArtifactMethod([{ archetype: "CHART_WIDGET" }], { archetype: "CHART_WIDGET" })).toEqual({
+      state: "absent",
+    });
+    expect(readArtifactMethod([], undefined)).toEqual({ state: "absent" });
+  });
+
+  it("unreadable: a method key arrived and readMethod refused it — never absent", () => {
+    // `{formula: "x"}` has no `inputs`, so `readMethod` returns null for it (the row-guard).
+    // That must read as "unreadable", not fold into "absent".
+    expect(readArtifactMethod([{ method: { formula: "x" } }], undefined)).toEqual({
+      state: "unreadable",
+      level: "component",
+    });
+  });
+
+  it("a FALSY method value — null, 0, \"\" — is still a sent key: unreadable, not absent", () => {
+    // The gate is `"method" in obj`, not `obj.method`'s truthiness. A falsy value at a present
+    // key is exactly where the two disagree — an object-typed value (even `{}`) is truthy either
+    // way, so this is the input that actually separates "gated on the key" from "gated on
+    // truthiness".
+    for (const value of [null, 0, ""]) {
+      expect(readArtifactMethod([{ method: value }], undefined)).toEqual({
+        state: "unreadable",
+        level: "component",
+      });
+    }
+  });
+
+  it("envelope-level present, when the component carries none", () => {
+    const envelope = { method: { formula: "f", inputs: [{ name: "x", value: 1 }] } };
+    const result = readArtifactMethod([{ archetype: "CHART_WIDGET" }], envelope);
+    expect(result.state).toBe("present");
+    if (result.state === "present") {
+      expect(result.level).toBe("envelope");
+      expect(result.block.formula).toBe("f");
+    }
+  });
+
+  it("component-level wins over envelope-level", () => {
+    const component = { method: { formula: "component formula", inputs: [{ name: "x", value: 1 }] } };
+    const envelope = { method: { formula: "envelope formula", inputs: [{ name: "y", value: 2 }] } };
+    const result = readArtifactMethod([component], envelope);
+    expect(result.state).toBe("present");
+    if (result.state === "present") {
+      expect(result.level).toBe("component");
+      expect(result.block.formula).toBe("component formula");
+    }
+  });
+
+  it("component unreadable + envelope present falls through to the envelope's block", () => {
+    const component = { method: { formula: "x" } }; // no inputs — readMethod refuses it
+    const envelope = { method: { formula: "envelope formula", inputs: [{ name: "y", value: 2 }] } };
+    const result = readArtifactMethod([component], envelope);
+    expect(result.state).toBe("present");
+    if (result.state === "present") {
+      expect(result.level).toBe("envelope");
+      expect(result.block.formula).toBe("envelope formula");
+    }
+  });
+
+  it("the row-guard still holds: a finance row with formula beside method: \"CPI\" yields no block", () => {
+    const row = { formula: "EAC = BAC / CPI", method: "CPI" };
+    expect(readArtifactMethod([row], undefined)).toEqual({ state: "unreadable", level: "component" });
+  });
+
+  it("the component level is read ONLY when there is exactly one component", () => {
+    const envelope = { method: { formula: "envelope formula", inputs: [{ name: "y", value: 2 }] } };
+    const component = { method: { formula: "component formula", inputs: [{ name: "x", value: 1 }] } };
+    // Two components: the single-component gate skips the component level entirely and falls
+    // straight through to the envelope, even though one of the two carries a readable method.
+    const result = readArtifactMethod([component, { archetype: "OTHER" }], envelope);
+    expect(result.state).toBe("present");
+    if (result.state === "present") expect(result.level).toBe("envelope");
+    // Zero components: same fall-through.
+    expect(readArtifactMethod([], envelope)).toEqual({
+      state: "present",
+      level: "envelope",
+      block: expect.objectContaining({ formula: "envelope formula" }),
+    });
   });
 });

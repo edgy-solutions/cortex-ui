@@ -372,6 +372,67 @@ export function readMethod(raw: unknown): MethodBlock | null {
 }
 
 /**
+ * The three states a CARD (not the export) must tell apart when it looks for a method block.
+ *
+ * `MethodBlock | null` collapses two different facts into one `null`: "nobody sent a `method`
+ * key" and "a `method` key arrived and `readMethod` refused it". The export can afford that
+ * collapse — both draw `METHOD_ABSENT_SENTENCE` there — but a reader who sent SOMETHING under
+ * `method` and sees nothing render needs to be told it arrived and could not be read, not told
+ * the producer said nothing. So the card's own reader (`readArtifactMethod`) keeps the two
+ * apart and this is the type that carries the distinction past the point where `MethodBlock |
+ * null` would have erased it again.
+ */
+export type ArtifactMethod =
+  | { state: "present"; block: MethodBlock; level: "component" | "envelope" }
+  /** A `method` KEY was sent at this level and `readMethod` refused it. Never "absent". */
+  | { state: "unreadable"; level: "component" | "envelope" }
+  /** No `method` key at either level — the producer stated none. */
+  | { state: "absent" };
+
+/** One level's reading: whether a `method` key was there, and if so whether it read. */
+function readLevel(
+  obj: unknown,
+): { state: "present"; block: MethodBlock } | { state: "unreadable" } | { state: "absent" } {
+  // Gate on the KEY, not on truthiness — `method: {}` is a key the producer sent, and it must
+  // read as "unreadable", never as "absent", even though `{}` and "no key" are equally falsy.
+  if (!isRecord(obj) || !("method" in obj)) return { state: "absent" };
+  const block = readMethod(obj.method);
+  return block ? { state: "present", block } : { state: "unreadable" };
+}
+
+/**
+ * Where a card looks for its method block — the two levels `CardExportButton.tsx` read before it
+ * retired (`dbf67f4`), kept in the same order: the component first, then the envelope.
+ *
+ * `components[0]` is read ONLY when there is exactly one component, as the retired reader's own
+ * payload choice already implied (`components.length === 1 ? components[0] : components`) — a
+ * multi-component answer has no single "the" component, and attributing one of several
+ * components' method to the whole answer would be inventing an attribution, not reading one.
+ * With zero or more-than-one components, the component level is "absent" by construction and
+ * this falls straight through to the envelope.
+ */
+export function readArtifactMethod(components: unknown[], envelope: unknown): ArtifactMethod {
+  const component = components.length === 1 ? readLevel(components[0]) : { state: "absent" as const };
+  if (component.state === "present") {
+    return { state: "present", block: component.block, level: "component" };
+  }
+
+  const atEnvelope = readLevel(envelope);
+
+  // The component sent a `method` key this side could not read. Before reporting THAT, check
+  // whether the envelope has a readable block of its own — a producer that could not shape the
+  // component-level block may still have stated one at the envelope, and that one is drawable.
+  // Only when the envelope has nothing either does the component's "unreadable" stand.
+  if (component.state === "unreadable" && atEnvelope.state !== "present") {
+    return { state: "unreadable", level: "component" };
+  }
+
+  if (atEnvelope.state === "present") return { state: "present", block: atEnvelope.block, level: "envelope" };
+  if (atEnvelope.state === "unreadable") return { state: "unreadable", level: "envelope" };
+  return { state: "absent" };
+}
+
+/**
  * Every leaf of the payload, at its dotted path, in document order.
  *
  * AN EMPTY OBJECT OR ARRAY IS ITSELF A LEAF. `rows: []` recurses into nothing, so a naive walk

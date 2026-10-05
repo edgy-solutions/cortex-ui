@@ -1,7 +1,9 @@
 import { AlertTriangle } from "lucide-react";
 import type { Artifact } from "@/api/types";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
+import { MethodBlockView } from "./MethodBlockView";
 import { answerSummary, hasCapturedSummary } from "@/lib/answerDisplay";
+import { readArtifactMethod } from "@/lib/cardExport";
 import { readFallbackDisclosure, splitFallbackComponents } from "@/lib/fallbackDisclosure";
 import type { RouteSeverity } from "@/lib/routing";
 
@@ -54,9 +56,37 @@ export function AnswerBody({ artifact, components, hidePersona, previewRows }: A
     />
   );
 
+  /**
+   * THE METHOD IS PROVENANCE OF A FIGURE THAT MAY NOT BE ON SCREEN.
+   *
+   * `readArtifactMethod` is read from the FULL `components` (not `shown`) because its own
+   * component-level lookup already gates on `components.length === 1` — see `cardExport.ts` —
+   * so whichever single component it attributes a method to is exactly the one `withheld` counts
+   * when it is not drawn. One check covers both of section 3's rules:
+   *
+   *   - a component-level method is attributable to only ONE component (by the gate above), so
+   *     `withheld > 0` there means that component — the one the method is about — is the one
+   *     that did not render;
+   *   - an envelope-level method is about the answer as a whole, and section 3 says it must not
+   *     draw when ANY component was withheld, which `withheld > 0` already states directly.
+   *
+   * So `withheld > 0` suppresses the method at EITHER level, with no separate branch needed.
+   */
+  const method = readArtifactMethod(components, artifact.rendered_output);
+  const methodView = withheld === 0 ? <MethodBlockView method={method} /> : null;
+
   // Routing reached a specialist. Byte-for-byte the previous behaviour — a non-fallback answer
-  // must not acquire so much as a wrapper, or every card in the app pays for this.
-  if (!disclosure) return interpreter;
+  // must not acquire so much as a wrapper, or every card in the app pays for this. A Fragment
+  // adds no DOM node, so a card with no method (the common case — see `MethodBlockView`) still
+  // renders byte-for-byte what `interpreter` alone rendered.
+  if (!disclosure) {
+    return (
+      <>
+        {interpreter}
+        {methodView}
+      </>
+    );
+  }
 
   return (
     <div data-answer-body="disclosed" className="flex flex-col gap-2">
@@ -115,6 +145,7 @@ export function AnswerBody({ artifact, components, hidePersona, previewRows }: A
       {/* What the split kept: requests, which ask rather than assert. Nothing is rendered when
           there are none, because an empty interpreter draws its own chrome around nothing. */}
       {shown.length > 0 && interpreter}
+      {methodView}
     </div>
   );
 }

@@ -73,6 +73,8 @@ function collectNonTestSrcFiles(dir: string): string[] {
 
 const NON_TEST_SRC_FILES = collectNonTestSrcFiles(SRC_ROOT);
 const CARD_EXPORT_LIB = path.join(SRC_ROOT, "lib", "cardExport.ts");
+/** Restored 2026-10-05 — the one surface `readArtifactMethod(` is now called from. */
+const ANSWER_BODY_FILE = path.join(SRC_ROOT, "components", "AgenticCanvas", "AnswerBody.tsx");
 
 function resolveProducer(relative: string): string[] {
   const found: string[] = [];
@@ -314,13 +316,28 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
 
     expect(src).not.toContain("method={comp.method}");
 
-    // ⚠ KNOWN GAP, dated 2026-10-04 — not a pass. `CardExportButton.tsx` (the only surface that
-    // ever read `method`, component-level first and envelope-level second) retired with rev-171.
-    // The truth today is the negative: `method` is consumed by NO cortex surface. The server-built
-    // export package (`CanvasExportButton.tsx` / `canvasExport.ts`) is now the export, and it never
-    // reads `method` — this field has no reader left in this repo. Guarded against an empty scan
-    // below so a broken walker cannot report this gap as "fixed" by finding nothing.
+    // restored 2026-10-05 — the KNOWN GAP dated 2026-10-04 is now FALSE, and this is the flip
+    // from the negative ("method is consumed by NO cortex surface") to the positive it measures
+    // today. `CardExportButton.tsx` retired with rev-171 and took the export's own `method`
+    // reading with it, but the order that retired it ("retiring the card export was not meant to
+    // retire the reader") restored a reader on the CARD — `readArtifactMethod`, called from
+    // `AnswerBody.tsx` and nowhere else, over `MethodBlockView.tsx`. `readMethod(` itself is
+    // still called only from `cardExport.ts` (by `readArtifactMethod` AND, unchanged, by the
+    // export path) — this census is a claim about the REPO, kept over the >50-file floor and the
+    // same repo-wide non-test sweep as before, not about a filename it happened to know.
     expect(NON_TEST_SRC_FILES.length, `scan found ${NON_TEST_SRC_FILES.length} non-test src files`).toBeGreaterThan(50);
+
+    // Excludes `cardExport.ts` the same way the next scan does: its own `export function
+    // readArtifactMethod(` declaration contains the substring too, and that is the definition,
+    // not a call site.
+    const readArtifactMethodHits = NON_TEST_SRC_FILES.filter(
+      (f) => f !== CARD_EXPORT_LIB && readFileSync(f, "utf8").includes("readArtifactMethod("),
+    );
+    expect(
+      readArtifactMethodHits,
+      `readArtifactMethod( called from: ${readArtifactMethodHits.join(", ")}`,
+    ).toEqual([ANSWER_BODY_FILE]);
+
     const readMethodHits = NON_TEST_SRC_FILES.filter(
       (f) => f !== CARD_EXPORT_LIB && readFileSync(f, "utf8").includes("readMethod("),
     );
