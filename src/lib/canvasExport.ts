@@ -9,11 +9,16 @@
  * the flag stays until a live capture against the real gateway seals it, the same bar every
  * other flagged adapter in this repo clears before going unconditional.
  *
- * Lane 1's live capture, `sessions/2026-10-01-payload-export-package-roll-11.json`, seals the
+ * Lane 1's live capture, `sessions/2026-10-01-payload-export-package-roll-11.json`, sealed the
  * REFUSAL half only — `GET /export/package/recipients`, the 409 `recipient_required` shape, and
- * a `status: "failed"` response carrying the new `outcome` field (the live engine cannot import
- * `agent_fleet`, so every observed POST has failed). No `"exists"` response has been witnessed
- * from this client yet; that arm stays as it was, unsealed.
+ * a `status: "failed"` response carrying the new `outcome` field (the live engine could not import
+ * `agent_fleet`, so every observed POST had failed).
+ *
+ * The first witnessed `"exists"` response is Lane 1's rev-171 capture (helm rev 171, fleet
+ * `4c3b61a6`): `sessions/2026-10-04-payload-export-package-rev-171-{1-recipients,2-post,
+ * 3-get-artifact,4-get-artifact-no-token}.json` — a full round trip, recipients through a served
+ * artifact GET (200, `content-length` matching `artifact_bytes`) and the same GET with no bearer
+ * (401, `www-authenticate: Bearer`). Sealed in `canvasExport.test.ts`.
  *
  * No React here on purpose — same split as `cardExport.ts`: the decisions are pure and sealed,
  * the DOM/network is thin and lives in the component.

@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-10-04T04:28:27.239127+00:00",
+  "helm_rev": 171,
+  "fleet": "4c3b61a6212300fee395ee2204140bf380e198b2",
+  "caller": "alice",
+  "answer": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-095ae339-74411628",
+  "request": "GET /export/package/artifact/cost-validation-notional-customer-alpha.html (no Authorization)",
+  "status": 401,
+  "headers": {
+    "date": "Sun, 04 Oct 2026 04:28:29 GMT",
+    "server": "uvicorn",
+    "www-authenticate": "Bearer",
+    "content-length": "30",
+    "content-type": "application/json",
+    "cache-control": "no-store"
+  }
+}

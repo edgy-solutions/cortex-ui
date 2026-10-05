@@ -1,0 +1,20 @@
+{
+  "captured_at": "2026-10-04T04:28:27.239127+00:00",
+  "helm_rev": 171,
+  "fleet": "4c3b61a6212300fee395ee2204140bf380e198b2",
+  "caller": "alice",
+  "answer": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-095ae339-74411628",
+  "request": "GET /export/package/artifact/cost-validation-notional-customer-alpha.html",
+  "status": 200,
+  "headers": {
+    "date": "Sun, 04 Oct 2026 04:28:28 GMT",
+    "server": "uvicorn",
+    "content-disposition": "attachment; filename=\"cost-validation-notional-customer-alpha.html\"",
+    "etag": "\"2ab279fc4354160a15f5c2672bd0ba76\"",
+    "content-length": "18471265",
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store"
+  },
+  "body_bytes": 18471265,
+  "body_head": "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n<title>Cost validation package - notional-customer-alpha</title>\n<style>\n body{font:14px/1.55 system-ui,sans-serif;margin:0;background:#faf"
+}

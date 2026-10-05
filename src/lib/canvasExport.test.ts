@@ -261,6 +261,103 @@ describe("export roll-11 capture — the deployed gateway's actual wire", () => 
   });
 });
 
+// ── Lane 1's live capture, rev-171 — the first witnessed "exists" ──────────────────────────
+// sessions/2026-10-04-payload-export-package-rev-171-{1-recipients,2-post,3-get-artifact,
+// 4-get-artifact-no-token}.json. helm rev 171, fleet 4c3b61a6. Loaded, never inlined, never
+// prints a token (bearers are already scrubbed in the files).
+
+interface Rev171Post {
+  request: { method: string; path: string; json: Record<string, unknown> };
+  status: number;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
+
+function loadRev171(name: string): unknown {
+  const file = path.join(
+    __dirname,
+    "../../sessions",
+    `2026-10-04-payload-export-package-rev-171-${name}.json`,
+  );
+  return JSON.parse(readFileSync(file, "utf8"));
+}
+
+/**
+ * The body CanvasExportButton.tsx actually sends — read from its own source rather than
+ * duplicated here, so a future change to the fields it sends fails this test instead of
+ * silently drifting from what it claims to send. Extracts the top-level keys of the object
+ * literal passed to `startCanvasExport({...})`.
+ */
+function exportButtonBodyKeys(): string[] {
+  const file = path.join(__dirname, "../components/AgenticCanvas/CanvasExportButton.tsx");
+  const src = readFileSync(file, "utf8");
+  const marker = "startCanvasExport({";
+  const open = src.indexOf(marker);
+  if (open === -1) throw new Error("startCanvasExport({ call not found in CanvasExportButton.tsx");
+  const openIdx = open + marker.length;
+  const closeIdx = src.indexOf("});", openIdx);
+  const block = src.slice(openIdx, closeIdx);
+  const keys: string[] = [];
+  for (const line of block.split("\n")) {
+    const m = line.trim().match(/^(\w+):/);
+    if (m) keys.push(m[1]);
+  }
+  return keys;
+}
+
+describe("rev-171 capture — the first witnessed 'exists', helm rev 171 / fleet 4c3b61a6", () => {
+  it("[1 recipients] readExportRecipients reads the served list, including cardinality", () => {
+    const capture = loadRev171("1-recipients") as { body: { recipients: unknown } };
+    const read = readExportRecipients(capture.body.recipients);
+    expect(read).toEqual([{ value: "notional-customer-alpha", label: "notional-customer-alpha" }]);
+  });
+
+  it("[2 post] artifactLink(readCanvasExport(body)) reads the 'exists' row, and the request body matches the body builder's key set", () => {
+    const capture = loadRev171("2-post") as Rev171Post;
+    const row = readCanvasExport(capture.body);
+    expect(row).not.toBeNull();
+    const link = artifactLink(row!);
+    expect(link).not.toBeNull();
+    expect(link!.href).toBe(capture.body.artifact_uri);
+    expect(link!.sha256).toBe(capture.body.artifact_sha256);
+    expect(link!.filename).toBe(capture.body.artifact_filename);
+    expect(link!.bytes).toBe(capture.body.artifact_bytes);
+
+    // The captured request is what cortex would send: same key set as the body builder in
+    // CanvasExportButton.tsx, independent of this test's own knowledge of the shape.
+    expect(exportButtonBodyKeys().sort()).toEqual(Object.keys(capture.request.json).sort());
+  });
+
+  it("[3 get-artifact] the artifact GET: path matches the POST's artifact_uri, served size matches the advertised size, text/html", () => {
+    const post = loadRev171("2-post") as Rev171Post;
+    const get = loadRev171("3-get-artifact") as {
+      request: string;
+      status: number;
+      headers: Record<string, string>;
+    };
+    const [, requestedPath] = get.request.split(" ");
+    expect(requestedPath).toBe(post.body.artifact_uri);
+    expect(get.status).toBe(200);
+    // The link's advertised size (POST's artifact_bytes) equals the served size (GET's
+    // content-length) — the proof that the hash-bearing link points at the real artifact.
+    expect(get.headers["content-length"]).toBe(String(post.body.artifact_bytes));
+    expect(get.headers["content-type"]).toMatch(/^text\/html/);
+  });
+
+  it("[4 no-token] the same GET without a bearer is 401 with a www-authenticate: Bearer header — why the link must go through the minted api wrapper", () => {
+    const get = loadRev171("4-get-artifact-no-token") as {
+      status: number;
+      headers: Record<string, string>;
+    };
+    expect(get.status).toBe(401);
+    expect(get.headers["www-authenticate"]).toBe("Bearer");
+    // CanvasExportButton.tsx's artifact link is NOT a bare `<a href>` to the gated path — its
+    // onClick preventDefaults and calls `onDownload`, which goes through `downloadExportArtifact`
+    // (the minted wrapper, src/api/client.ts), exactly because a bare anchor would hit this 401.
+    // Checked by hand against CanvasExportButton.tsx:261-271; no finding to report here.
+  });
+});
+
 describe("canvasAnswerIds", () => {
   it("excludes task artifacts, keeps order, dedups", () => {
     const artifacts = [

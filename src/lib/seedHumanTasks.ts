@@ -16,26 +16,44 @@ import { fetchMyHumanTasks } from "@/api/client";
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { parseTaskPayload } from "@/lib/taskPayload";
 
+/**
+ * The per-row mapping from a raw `/me/human_tasks` row to a `HumanTask` — exported so a seal can
+ * call the SAME function the live seed runs, rather than hand-build a row. `null` where the row
+ * lacks an id/task_id, the same refusal this always applied, inline.
+ *
+ * `declaration` is carried ONLY when the row HAS the key (`"declaration" in t`) — a row that
+ * never mentions it stays without the field, distinguishable from one that mentions it as
+ * null/undefined. `ApprovalTaskCard`'s `readTaskDeclaration(task.declaration)` falls back to the
+ * `/task_kinds` registry on anything it cannot read, so this distinction has nowhere else to go
+ * once it is lost here.
+ */
+export function humanTaskFromRow(t: Record<string, unknown>): HumanTask | null {
+  if (t.id == null || t.task_id == null) return null;
+  const task: HumanTask = {
+    id: String(t.id),
+    taskId: String(t.task_id),
+    workflowId: (t.workflow_id as string | null) ?? null,
+    audience: String(t.audience ?? ""),
+    kind: String(t.kind ?? "workflow_ack"),
+    status: (t.status as HumanTask["status"]) ?? "pending",
+    title: String(t.title ?? ""),
+    summary: String(t.summary ?? ""),
+    requestedBy: String(t.requested_by ?? ""),
+    subjectRef: (t.subject_ref as string | null) ?? null,
+    payload: parseTaskPayload(t.payload),
+    createdAt: Number(t.created_at ?? 0),
+  };
+  if ("declaration" in t) task.declaration = t.declaration;
+  return task;
+}
+
 export function seedFromRest() {
   fetchMyHumanTasks()
     .then((resp) => {
       const tasks: HumanTask[] = [];
       for (const t of resp.tasks) {
-        if (t.id == null || t.task_id == null) continue;
-        tasks.push({
-          id: String(t.id),
-          taskId: String(t.task_id),
-          workflowId: (t.workflow_id as string | null) ?? null,
-          audience: String(t.audience ?? ""),
-          kind: String(t.kind ?? "workflow_ack"),
-          status: (t.status as HumanTask["status"]) ?? "pending",
-          title: String(t.title ?? ""),
-          summary: String(t.summary ?? ""),
-          requestedBy: String(t.requested_by ?? ""),
-          subjectRef: (t.subject_ref as string | null) ?? null,
-          payload: parseTaskPayload(t.payload),
-          createdAt: Number(t.created_at ?? 0),
-        });
+        const task = humanTaskFromRow(t);
+        if (task) tasks.push(task);
       }
       useHumanTaskStore.getState().replacePending(tasks);
     })

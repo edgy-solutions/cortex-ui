@@ -60,6 +60,12 @@ function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
     // tomorrow's proposed `suggestion`/`evidence` for an origin-dispute steward task) reaches
     // ApprovalTaskCard generically, kind-agnostic, with no second fetch and no per-kind mapping.
     payload: task.payload,
+    // The row's own served declaration, when `humanTaskFromRow` carried one through — the fix
+    // for the gap `useTaskKindStore.ts`'s header names ("NOTHING EVER SUPPLIED ONE"). Only
+    // APPROVAL_TASK reads `declaration` (`ApprovalTaskCard.tsx`'s `readTaskDeclaration(task.
+    // declaration) ?? fromKinds`); GROUPED_REVIEW returns before `base` exists, and TRIAGE_TASK
+    // below inherits the field through `...base` but its card has no use for it.
+    declaration: task.declaration,
   };
   // TRIAGE_TASK is a THIRD SPECIES — an unprocessable input, not a decision. It carries the
   // extraction warnings (the WHY that makes the refusal actionable) and the reason code, both

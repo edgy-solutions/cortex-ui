@@ -18,11 +18,10 @@ import {
 } from "@/lib/canvasExport";
 
 /**
- * EXPORT — the canvas-level control, replacing the per-card export as the server route lands
- * (`CardExportButton.tsx`'s header comment). Wired against the REAL route, invincible-agent
- * origin/master `3f27c7cb`: `GET /export/package/recipients`, `POST /export/package`, and the
- * download proxy `GET /export/package/artifact/{filename}`. Still behind `isCanvasExportEnabled()`
- * — the flag stays until a live capture against this route seals it.
+ * EXPORT — the canvas-level control, which replaced the per-card export (`CardExportButton.tsx`,
+ * retired 2026-10-04). Wired against the REAL route, invincible-agent origin/master `3f27c7cb`:
+ * `GET /export/package/recipients`, `POST /export/package`, and the download proxy
+ * `GET /export/package/artifact/{filename}`. Gated behind `isCanvasExportEnabled()`.
  *
  * ── SYNCHRONOUS, NO POLLING ────────────────────────────────────────────────────────────────
  *
@@ -41,13 +40,16 @@ import {
  * slice 1 of the export route itself takes `template_id` only to echo it back — see 3f27c7cb's
  * `ExportPackageRequest`). Nothing here has a value to send, so the field is omitted.
  *
- * ── LANE 1'S LIVE CAPTURE SEALS THE REFUSAL HALF ONLY ─────────────────────────────────────
+ * ── LANE 1'S LIVE CAPTURES ─────────────────────────────────────────────────────────────────
  *
  * `sessions/2026-10-01-payload-export-package-roll-11.json` witnessed the recipients list, the
  * 409 `recipient_required` shape, and a `status: "failed"` response carrying the new `outcome`
- * field (drawn below as `data-export-outcome`) — the live engine cannot import `agent_fleet`, so
- * every observed POST has failed. No `"exists"` response has been witnessed; the flag
- * (`isCanvasExportEnabled()`) stays until one is.
+ * field (drawn below as `data-export-outcome`) — the live engine could not import `agent_fleet`,
+ * so every observed POST had failed.
+ *
+ * The first witnessed `"exists"` response is the rev-171 capture (helm rev 171, fleet
+ * `4c3b61a6`, `sessions/2026-10-04-payload-export-package-rev-171-*.json`): a full round trip
+ * through a served artifact and the gated download proxy, including the no-bearer 401.
  */
 export function CanvasExportButton() {
   const artifacts = useCanvasStore((s) => s.artifacts);

@@ -48,7 +48,31 @@ const PRESENTATION = "agent_fleet/presentation_agent/main.py";
 /** The cost engine, which is what actually EMITS this archetype's envelope. */
 const COST_MEASURES = "agent_fleet/cost_agent/measures.py";
 const INTERPRETER = path.join(__dirname, "SemanticInterpreter.tsx");
-const EXPORT_BUTTON = path.join(__dirname, "..", "AgenticCanvas", "CardExportButton.tsx");
+
+/**
+ * `CardExportButton.tsx` retired 2026-10-04 (rev-171 — the canvas-level export superseded it).
+ * These two scans replace the old "grep the one file that reads `method`" checks with a census
+ * over every non-test `src/**` file, so the claim "nothing else reads `method`" is a property of
+ * the REPO, not of a filename this test happened to know. `SRC_ROOT` is two levels up from
+ * `src/components/registry`.
+ */
+const SRC_ROOT = path.join(__dirname, "..", "..");
+
+function collectNonTestSrcFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectNonTestSrcFiles(full));
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const NON_TEST_SRC_FILES = collectNonTestSrcFiles(SRC_ROOT);
+const CARD_EXPORT_LIB = path.join(SRC_ROOT, "lib", "cardExport.ts");
 
 function resolveProducer(relative: string): string[] {
   const found: string[] = [];
@@ -288,15 +312,19 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     expect(src).toContain("threshold={comp.threshold}");
     expect(src).toContain("threshold_defaulted={comp.threshold_defaulted}");
 
-    // ⚠ `method` IS CONSUMED ON A DIFFERENT SURFACE, and saying so is the point. It is NOT a card
-    // prop — `ContributionRanking` takes none — it is read by the export, component-level first
-    // and envelope-level second. So "does this side read the seventh declared field" is answered
-    // yes, by the export, and a future reader looking for it among the card's props would
-    // correctly conclude the card ignores it.
-    const exportButton = readFileSync(EXPORT_BUTTON, "utf8");
-    expect(exportButton).toContain("readMethod(componentLevel?.method)");
-    expect(exportButton).toContain("readMethod(envelopeLevel?.method)");
     expect(src).not.toContain("method={comp.method}");
+
+    // ⚠ KNOWN GAP, dated 2026-10-04 — not a pass. `CardExportButton.tsx` (the only surface that
+    // ever read `method`, component-level first and envelope-level second) retired with rev-171.
+    // The truth today is the negative: `method` is consumed by NO cortex surface. The server-built
+    // export package (`CanvasExportButton.tsx` / `canvasExport.ts`) is now the export, and it never
+    // reads `method` — this field has no reader left in this repo. Guarded against an empty scan
+    // below so a broken walker cannot report this gap as "fixed" by finding nothing.
+    expect(NON_TEST_SRC_FILES.length, `scan found ${NON_TEST_SRC_FILES.length} non-test src files`).toBeGreaterThan(50);
+    const readMethodHits = NON_TEST_SRC_FILES.filter(
+      (f) => f !== CARD_EXPORT_LIB && readFileSync(f, "utf8").includes("readMethod("),
+    );
+    expect(readMethodHits, `readMethod( called outside cardExport.ts: ${readMethodHits.join(", ")}`).toEqual([]);
   });
 
   it("the bound pair IS observed now — and the filter that said otherwise could not have seen it", () => {
@@ -534,13 +562,13 @@ describe("the withheld-count rule and the counts the allowlist carries anyway", 
       }),
     ).not.toBeNull();
 
-    // AND THE CALL SITE IS STILL ASSERTED, because two guards for one hazard is the point: the
-    // export reads `method` off the component and off the envelope, never off a row. The reader's
-    // refusal makes a mistake here a blank instead of a fabrication; it does not make it correct.
-    const exportButton = readFileSync(EXPORT_BUTTON, "utf8");
-    expect(exportButton).toContain("readMethod(componentLevel?.method)");
-    expect(exportButton).toContain("readMethod(envelopeLevel?.method)");
-    expect(exportButton).not.toMatch(/readMethod\([^)]*row/);
+    // AND THE ROW-GUARD IS STILL ASSERTED, as a repo scan rather than a read of the one file that
+    // used to carry the call site: no non-test src file anywhere calls `readMethod` on a row. The
+    // reader's refusal (above) makes a mistake here a blank instead of a fabrication; this is the
+    // other half — nothing upstream of the reader hands it a row shape in the first place.
+    expect(NON_TEST_SRC_FILES.length, `scan found ${NON_TEST_SRC_FILES.length} non-test src files`).toBeGreaterThan(50);
+    const rowCallHits = NON_TEST_SRC_FILES.filter((f) => /readMethod\([^)]*row/.test(readFileSync(f, "utf8")));
+    expect(rowCallHits, `readMethod(...row...) found in: ${rowCallHits.join(", ")}`).toEqual([]);
   });
 });
 

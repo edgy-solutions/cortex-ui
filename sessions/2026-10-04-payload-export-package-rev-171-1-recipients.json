@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-10-04T04:28:27.239127+00:00",
+  "helm_rev": 171,
+  "fleet": "4c3b61a6212300fee395ee2204140bf380e198b2",
+  "caller": "alice",
+  "answer": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-095ae339-74411628",
+  "request": "GET /export/package/recipients",
+  "status": 200,
+  "body": {
+    "recipients": [
+      {
+        "value": "notional-customer-alpha",
+        "label": "notional-customer-alpha"
+      }
+    ]
+  }
+}

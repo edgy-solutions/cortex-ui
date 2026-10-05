@@ -44,6 +44,8 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { humanTaskFromRow } from "@/lib/seedHumanTasks";
+import { taskToArtifact } from "@/lib/taskArtifact";
 
 const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTaskPayload => ({
   task_id: "t1",
@@ -540,6 +542,135 @@ describe("the live declarations, captured", () => {
       expect(d, name).not.toBeNull();
       expect(d!.kind, name).toBe(name);
     }
+  });
+});
+
+/**
+ * HAZ-1003, AS SERVED AT REV 171 — `sessions/2026-10-04-payload-haz-1003-human-task-row-rev-171.json`
+ * (caller bob, `GET /me/human_tasks`, 2 of 18 total rows). Loaded, never inlined, never prints a
+ * token (the capture is already scrubbed).
+ *
+ * ── THE ROW READER — THROUGH THE PRODUCTION PATH ──────────────────────────────────────────
+ *
+ * `fetchMyHumanTasks` (src/api/client.ts:116, no validation — `Array<Record<string, unknown>>`)
+ * → `humanTaskFromRow` (EXPORTED, src/lib/seedHumanTasks.ts — extracted from `seedFromRest`'s own
+ * inline mapping so this seal calls the same function the live seed runs) → `taskToArtifact`
+ * (exported, src/lib/taskArtifact.ts) → the `APPROVAL_TASK` component `taskComponents` produced →
+ * `SemanticInterpreter.tsx:542`'s `<ApprovalTaskCard task={comp.task}/>`. Every row below goes
+ * through that exact chain; nothing here hand-attaches a declaration.
+ *
+ * FIXED 2026-10-04: `taskComponents`'s `base` (taskArtifact.ts) now carries `declaration:
+ * task.declaration` through, `HumanTask` (useHumanTaskStore.ts) has the slot, and
+ * `humanTaskFromRow` carries the row's `declaration` ONLY when the row has the key. Before this,
+ * the row's own declaration was dropped before the card ever saw it — this seal is what proves
+ * it no longer is.
+ */
+describe("HAZ-1003 human task row, as served (rev 171, caller bob)", () => {
+  interface HazRow {
+    task_id: string;
+    kind: string;
+    status: string;
+    title: string;
+    summary: string;
+    audience: string;
+    requested_by: string;
+    subject_ref: string;
+    payload: Record<string, unknown>;
+    declaration: unknown;
+  }
+  interface HazCapture {
+    caller: string;
+    total_rows: number;
+    haz_1003_rows: HazRow[];
+    note: string;
+  }
+
+  const capture = JSON.parse(
+    readFileSync(
+      join(__dirname, "../../../sessions/2026-10-04-payload-haz-1003-human-task-row-rev-171.json"),
+      "utf8",
+    ),
+  ) as HazCapture;
+
+  // CRITICAL: the registry must hold NO declaration for risk_acceptance_medium here, or
+  // `fromKinds` (the registry fallback) masks whether the ROW's own declaration made it through
+  // `humanTaskFromRow` → `taskComponents` → the card. `"idle"` matches this file's other resets
+  // (e.g. "the audience and the kind contradict each other", above).
+  beforeEach(() => {
+    useTaskKindStore.setState({ status: "idle", byKind: {} });
+  });
+
+  /** The row, through the REAL pipeline: `humanTaskFromRow` → `taskToArtifact` → the
+   *  `APPROVAL_TASK` component's `task`, the same object `SemanticInterpreter` hands the card. */
+  function approvalPayloadFor(row: HazRow): ApprovalTaskPayload {
+    const task = humanTaskFromRow(row as unknown as Record<string, unknown>);
+    expect(task, `humanTaskFromRow refused ${row.task_id}`).not.toBeNull();
+    const artifact = taskToArtifact(task!);
+    const components = (artifact.rendered_output?.components ?? []) as Array<{
+      archetype?: string;
+      task?: unknown;
+    }>;
+    const approval = components.find((c) => c.archetype === "APPROVAL_TASK");
+    expect(approval, `no APPROVAL_TASK component for ${row.task_id}`).toBeTruthy();
+    return approval!.task as ApprovalTaskPayload;
+  }
+
+  it("the capture carries exactly two HAZ-1003 rows, caller bob", () => {
+    expect(capture.caller).toBe("bob");
+    expect(capture.haz_1003_rows).toHaveLength(2);
+  });
+
+  it("BOTH rows render through ApprovalTaskCard: exactly accepted/rejected/returned_for_rework, in order, no 'approved'", () => {
+    for (const row of capture.haz_1003_rows) {
+      const { unmount } = render(<ApprovalTaskCard task={approvalPayloadFor(row)} />);
+      expect(verbs(), row.task_id).toEqual(["accepted", "rejected", "returned_for_rework"]);
+      expect(verbs(), row.task_id).not.toContain("approved");
+      expect(document.querySelectorAll("[data-verb]"), row.task_id).toHaveLength(3);
+      unmount();
+    }
+  });
+
+  it("BOTH rows: accepted and rejected are blocked without a reason, returned_for_rework is not", () => {
+    for (const row of capture.haz_1003_rows) {
+      actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
+      actOnHumanTask.mockClear();
+      const { unmount } = render(<ApprovalTaskCard task={approvalPayloadFor(row)} />);
+      fireEvent.click(document.querySelector('[data-verb="accepted"]')!);
+      expect(actOnHumanTask, row.task_id).not.toHaveBeenCalled();
+      fireEvent.click(document.querySelector('[data-verb="rejected"]')!);
+      expect(actOnHumanTask, row.task_id).not.toHaveBeenCalled();
+      fireEvent.click(document.querySelector('[data-verb="returned_for_rework"]')!);
+      expect(actOnHumanTask, row.task_id).toHaveBeenCalledWith(row.task_id, "returned_for_rework", "");
+      unmount();
+    }
+  });
+
+  it("the card draws no badge at all — ACCEPT-M is never rendered by this component", () => {
+    // Checked, not asserted against a selector that does not exist: no `badge` token anywhere
+    // in ApprovalTaskCard.tsx. If the card ever starts drawing badges, this fails and says so.
+    const src = readFileSync(join(__dirname, "ApprovalTaskCard.tsx"), "utf8");
+    expect(src).not.toMatch(/badge/i);
+  });
+
+  it("BOTH rows: nothing fabricated — payload is {} and both payload-drawn sections are absent", () => {
+    for (const row of capture.haz_1003_rows) {
+      expect(row.payload, row.task_id).toEqual({});
+      const { unmount } = render(<ApprovalTaskCard task={approvalPayloadFor(row)} />);
+      expect(document.querySelector("[data-task-suggestion]"), row.task_id).toBeNull();
+      expect(document.querySelector("[data-task-evidence]"), row.task_id).toBeNull();
+      unmount();
+    }
+  });
+
+  it("the duplicate is the PRODUCER's: two distinct task_ids, both naming HAZ-1003; cortex renders both, no dedupe", () => {
+    const [a, b] = capture.haz_1003_rows;
+    expect(a.task_id).not.toBe(b.task_id);
+    expect(a.subject_ref).toBe("HAZ-1003");
+    expect(b.subject_ref).toBe("HAZ-1003");
+    expect(capture.note).toContain("stranded from the retired SafetyAcceptance path");
+    // Both rows render independently (proven by the per-row cases above, each keyed on its own
+    // task_id). Cortex has no de-duplication by subject_ref, and this capture is the reason it
+    // must not grow one unasked: the duplicate is the PRODUCER's bug, not a rendering defect.
   });
 });
 

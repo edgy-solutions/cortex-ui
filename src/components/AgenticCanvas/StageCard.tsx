@@ -6,7 +6,6 @@ import type { Artifact } from "@/api/types";
 import { AnswerBody } from "./AnswerBody";
 import { FitBox } from "./FitBox";
 import { AnsweredChip } from "./AnsweredChip";
-import { CardExportButton } from "./CardExportButton";
 import { useFlipState } from "./useFlipState";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
@@ -406,14 +405,9 @@ export function StageCard({
               <GripVertical className="w-3.5 h-3.5" />
             </button>
           )}
-          {/* EXPORT. Present on every DRAWN card, not only the custom-canvas ones: carrying an
-              answer out of the app with its payload and provenance intact has nothing to do with
-              whether the card can be moved or removed. Gated on `hasRendered` because an answer
-              still in flight has no payload to export, and a button that writes an empty file is
-              worse than one that is not there yet. Placed before remove so the destructive
-              action stays last. This is the ANSWER face; the provenance face behind it has its
-              own header and no export, because what it draws is not the card. */}
-          {hasRendered && <CardExportButton artifact={artifact} bodyRef={bodyRef} />}
+          {/* The per-card EXPORT button (`CardExportButton`) retired 2026-10-04, rev-171: the
+              canvas-level `CanvasExportButton` (server-built package, witnessed "exists" in the
+              rev-171 capture) is now the export. See src/lib/canvasExport.ts's header. */}
           {onRemove && (
             <button
               // The header is a move handle now, so a press on this button must not also start a

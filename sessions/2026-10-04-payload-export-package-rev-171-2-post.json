@@ -1,0 +1,45 @@
+{
+  "captured_at": "2026-10-04T04:28:27.239127+00:00",
+  "helm_rev": 171,
+  "fleet": "4c3b61a6212300fee395ee2204140bf380e198b2",
+  "caller": "alice",
+  "answer": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-095ae339-74411628",
+  "request": {
+    "method": "POST",
+    "path": "/export/package",
+    "json": {
+      "answers": [
+        {
+          "artifact_id": "urn:li:answerArtifact:census-cost-supplier-concentration-lot-4-095ae339-74411628"
+        }
+      ],
+      "recipient_scope": "notional-customer-alpha"
+    }
+  },
+  "status": 200,
+  "headers": {
+    "date": "Sun, 04 Oct 2026 04:28:26 GMT",
+    "server": "uvicorn",
+    "content-length": "558",
+    "content-type": "application/json",
+    "cache-control": "no-store"
+  },
+  "body": {
+    "export_id": "sha256:eaec90b556cea89278d1b07176316311f98be5cbb0382848e7aa636ee2503102",
+    "status": "exists",
+    "recipient_scope": "notional-customer-alpha",
+    "reason": null,
+    "artifact_uri": "/export/package/artifact/cost-validation-notional-customer-alpha.html",
+    "artifact_sha256": "sha256:eaec90b556cea89278d1b07176316311f98be5cbb0382848e7aa636ee2503102",
+    "artifact_bytes": 18471265,
+    "artifact_filename": "cost-validation-notional-customer-alpha.html",
+    "algorithm_sha": "4c3b61a6212300fee395ee2204140bf380e198b2",
+    "lots_disclosed": [
+      4
+    ],
+    "sections": [
+      "material"
+    ],
+    "template_id": null
+  }
+}

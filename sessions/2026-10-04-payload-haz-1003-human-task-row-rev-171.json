@@ -1,0 +1,76 @@
+{
+  "captured_at": "2026-10-04T04:29:11.003509+00:00",
+  "helm_rev": 171,
+  "fleet": "4c3b61a6",
+  "caller": "bob",
+  "request": "GET /me/human_tasks",
+  "status": 200,
+  "total_rows": 18,
+  "haz_1003_rows": [
+    {
+      "id": "3754750e-39c7-4d39-9123-2cfbed2e1490",
+      "kind": "risk_acceptance_medium",
+      "task_id": "risk-acceptance-HAZ-1003-medium~1:acceptance",
+      "workflow_id": "risk-acceptance-HAZ-1003-medium~1",
+      "audience": "risk_acceptance_medium:SUSTAINMENT",
+      "status": "pending",
+      "title": "Accept Medium risk \u2014 HAZ-1003",
+      "summary": "Residual risk acceptance by the authority the ratified matrix names for this level. Both dispositions are reason-required on the task kind's own row: an acceptance with no stated rationale erases the record that IS the artifact, and a bare rejection erases the same thing.",
+      "requested_by": "",
+      "subject_ref": "HAZ-1003",
+      "payload": {},
+      "created_at": 1791081366222,
+      "workflow_service": "WorkflowRunner",
+      "promise_name": "acceptance",
+      "declaration": {
+        "kind": "risk_acceptance_medium",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-M",
+        "title": "Medium risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      }
+    },
+    {
+      "id": "73371687-c2c4-43de-9551-89f0e906d75e",
+      "kind": "risk_acceptance_medium",
+      "task_id": "acceptance",
+      "workflow_id": "risk-acceptance-HAZ-1003-medium",
+      "audience": "risk_acceptance_medium:SUSTAINMENT",
+      "status": "pending",
+      "title": "Accept Medium risk \u2014 HAZ-1003",
+      "summary": "Residual risk acceptance by the authority the ratified matrix names for this level. Both dispositions are reason-required on the task kind's own row: an acceptance with no stated rationale erases the record that IS the artifact, and a bare rejection erases the same thing.",
+      "requested_by": "",
+      "subject_ref": "HAZ-1003",
+      "payload": {},
+      "created_at": 1790882237545,
+      "workflow_service": "SafetyAcceptance",
+      "promise_name": "approval_acceptance",
+      "declaration": {
+        "kind": "risk_acceptance_medium",
+        "declared": true,
+        "archetype": "APPROVAL_TASK",
+        "badge": "ACCEPT-M",
+        "title": "Medium risk acceptance",
+        "accepts": [
+          "accepted",
+          "rejected",
+          "returned_for_rework"
+        ],
+        "reason_required": [
+          "accepted",
+          "rejected"
+        ]
+      }
+    }
+  ],
+  "note": "two pending: the bare key is stranded from the retired SafetyAcceptance path (pre-9ae5861f); ~1 is the case runner's instance"
+}

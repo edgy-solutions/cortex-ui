@@ -33,6 +33,10 @@ export interface HumanTask {
    *  triage card's `warnings` / `reason_code` — the WHY that makes a refusal actionable. */
   payload?: Record<string, unknown> | null;
   createdAt: number;
+  /** Served on `/me/human_tasks`; the Electric projection does not carry it, so a live upsert
+   *  falls back to the `/task_kinds` registry (`fromKinds`) — which is the same declaration
+   *  source either way. */
+  declaration?: unknown;
 }
 
 interface HumanTaskState {

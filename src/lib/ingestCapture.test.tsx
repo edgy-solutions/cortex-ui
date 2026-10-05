@@ -105,16 +105,26 @@ describe("ingest roll-11 capture — the deployed gateway's actual wire", () => 
 });
 
 /**
- * Lane 1's END-TO-END capture at helm rev 164 / fleet d602d490:
- * `sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json`. One fresh drop, polled for
- * 603 s. It never left `received`, and no document_promotion task named it on either queue — the
- * capture's own `stopped_at` says so. So the hops that exist are sealed here, and the promote
- * response and the label are `todo`, NOT green: there is nothing on the wire yet for them to read.
- * When Lane 1 replaces this with a capture that progresses, the stall arm below goes red and says so.
+ * Lane 1's END-TO-END captures of the live pipeline, generalised over BOTH releases the stall
+ * has now been witnessed at:
+ *   - helm rev 164 / fleet d602d490: `sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json`
+ *   - helm rev 171 / fleet 4c3b61a6: `sessions/2026-10-04-payload-ingest-pcn23-002-stops-at-received-rev-171.json`
+ * Same arms, same `todo`s, run with `describe.each` — THE STALL REPRODUCES AT REV 171 / FLEET
+ * 4c3b61a6, not just at the rev this file originally caught it at. Each: one fresh drop, polled
+ * for 600+ s. Neither left `received`, and no document_promotion task named either drop on
+ * either queue — each capture's own `stopped_at` says so. So the hops that exist are sealed here,
+ * and the promote response and the label are `todo`, NOT green: there is nothing on the wire yet
+ * for them to read. When Lane 1 replaces either capture with one that progresses, the stall arm
+ * below goes red for that release and says so.
  */
 interface E2eHop {
   request?: { method?: string; path?: string };
-  response?: { status?: number; body?: unknown };
+  response?: {
+    status?: number;
+    body?: unknown;
+    rows_total?: number;
+    rows_naming_this_ingest_or_promotion?: unknown;
+  };
 }
 interface E2eCapture {
   release: string;
@@ -124,16 +134,19 @@ interface E2eCapture {
   stopped_at: string;
 }
 
-describe("ingest rev-164 end-to-end capture — what the live pipeline did with one drop", () => {
+const E2E_CAPTURES = [
+  { label: "rev-164 / fleet d602d490", file: "2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json" },
+  { label: "rev-171 / fleet 4c3b61a6", file: "2026-10-04-payload-ingest-pcn23-002-stops-at-received-rev-171.json" },
+];
+
+describe.each(E2E_CAPTURES)("ingest end-to-end capture ($label) — what the live pipeline did with one drop", ({ file }) => {
   const e2e = JSON.parse(
-    readFileSync(
-      path.join(__dirname, "../../sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json"),
-      "utf8",
-    ),
+    readFileSync(path.join(__dirname, "../../sessions", file), "utf8"),
   ) as E2eCapture;
   const statusHops = e2e.hops.filter(
     (h) => h.request?.method === "GET" && /^\/ingest\/.+\/status$/.test(h.request?.path ?? ""),
   );
+  const promotionHops = e2e.hops.filter((h) => h.request?.path === "/me/human_tasks");
 
   it("the upload hop reads through readIngestUploadId as the capture's ingest_id", () => {
     const upload = e2e.hops.find((h) => h.request?.method === "POST" && h.request?.path === "/ingest");
@@ -161,6 +174,52 @@ describe("ingest rev-164 end-to-end capture — what the live pipeline did with 
     expect(e2e.stopped_at).toContain("no document_promotion task");
   });
 
+  it("no /me/human_tasks row names this ingest or its promotion, for every caller polled", () => {
+    // Both hops 3/4 (one per caller) are `/me/human_tasks` summaries,
+    // `{status, rows_total, rows_naming_this_ingest_or_promotion}`, with no row body — inspected
+    // as captured, not assumed. This is the stall itself: zero named rows on either queue.
+    expect(promotionHops.length, "no /me/human_tasks hop in the capture").toBeGreaterThan(0);
+    for (const h of promotionHops) {
+      const rows = h.response?.rows_naming_this_ingest_or_promotion;
+      if (Array.isArray(rows)) {
+        expect(rows.length).toBe(0);
+      } else {
+        expect(rows).toBe(0);
+      }
+    }
+  });
+
   it.todo("promote response — awaits a capture where a document_promotion task names the drop");
   it.todo("label — awaits a capture past promotion");
+});
+
+/**
+ * rev-171 ONLY — fields new at this release. `workflow` and `origin_suggestion` first appear on
+ * the POST /ingest response body here; rev-164's equivalent hop has neither key at all (checked
+ * by hand: `sessions/2026-10-01-payload-ingest-e2e-pcn23-002-rev-164.json` hop "1-ingest"'s body
+ * has no `workflow`/`origin_suggestion` keys, present or null).
+ *
+ * `origin_suggestion` has NO reader anywhere in this repo as of 2026-10-04:
+ * `grep -rni "origin_suggestion|originSuggestion|suggestion"` over `src/lib` and
+ * `src/components/ingest` finds only `KindPicker.tsx`'s unrelated `suggestedKind` prop — a kind
+ * guess `IngestPanel` never actually passes (`KindPicker.tsx:13`), not a reader of this field —
+ * and `taskArtifact.ts`'s task-payload `suggestion`, a different field on a different object.
+ * So per the spec: no arm is added for behavior that does not exist; `workflow`/`origin_suggestion`
+ * are asserted only as values on the wire, not as anything cortex draws.
+ */
+describe("rev-171 POST /ingest response — the new null fields", () => {
+  const e2e = JSON.parse(
+    readFileSync(
+      path.join(__dirname, "../../sessions/2026-10-04-payload-ingest-pcn23-002-stops-at-received-rev-171.json"),
+      "utf8",
+    ),
+  ) as E2eCapture;
+  const upload = e2e.hops.find((h) => h.request?.method === "POST" && h.request?.path === "/ingest")!;
+  const body = upload.response?.body as Record<string, unknown>;
+
+  it("carries workflow: null and origin_suggestion: null, and readIngestUploadId still reads the row", () => {
+    expect(body.workflow).toBeNull();
+    expect(body.origin_suggestion).toBeNull();
+    expect(readIngestUploadId(body)).toBe(e2e.ingest_id);
+  });
 });
