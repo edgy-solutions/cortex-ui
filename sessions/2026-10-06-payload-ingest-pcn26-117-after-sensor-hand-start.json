@@ -1,0 +1,107 @@
+{
+ "captured_by": "ia-01/lane/01",
+ "release": "fleet 06b81540 / helm rev 174; doc-tools 877677c rev 34",
+ "event": "ingress_user_sensor started by hand in the Dagster UI at 15:54 local (architect's order)",
+ "first_stage_not_reached_by_status": "extracting",
+ "hops": [
+  {
+   "hop": "1-sensor",
+   "runs": [
+    {
+     "run": "5b0bbc2c",
+     "object": "736499f2.../roll11-capture.pdf",
+     "status": "FAILURE",
+     "cause": "ADR-0041 guard: sidecar carries no domain_type and no registered content_kind"
+    },
+    {
+     "run": "543cfdea",
+     "object": "fa231498.../PCN23-002.pdf",
+     "status": "FAILURE",
+     "cause": "same guard"
+    },
+    {
+     "run": "d2729ab7",
+     "object": "0096a523.../PCN23-002.pdf (the Oct 4 drop)",
+     "status": "FAILURE",
+     "cause": "same guard"
+    },
+    {
+     "run": "16ebf026",
+     "object": "b58ec2f6.../PCN26-117.pdf",
+     "status": "SUCCESS"
+    }
+   ]
+  },
+  {
+   "hop": "2-doc-tools-pcn26-117",
+   "log": [
+    "Chunk vector indexing for doc PCN26-117: written=1 written_without_vector=0 errors=0",
+    "Wrote extraction to s3://processing-artifacts/ingress-user/pdf/b58ec2f6.../generated/PCN26-117_pdf/doc-tools@877677cd.../extraction.json",
+    "REVIEW REQUIRED for PCN26-117: Wrote review payload to .../review.json"
+   ]
+  },
+  {
+   "hop": "3-stage-callback",
+   "log": [
+    "doc-tools could not mint a token for iagent-doc-tools (KeyError: 'KEYCLOAK_REALM_URL') -- skipping the Lane 1 stage POST",
+    "ADR-0041 ingest status: no token minted for svc:doc-tools -- skipping the POST for ingest_id=sha256:b58ec2f6... stage=extracting"
+   ],
+   "bff_ingest_stage_requests": 0,
+   "pod_env_names_present": [
+    "DOC_TOOLS_CLIENT_ID",
+    "DOC_TOOLS_CLIENT_SECRET",
+    "IAGENT_GATEWAY_URL"
+   ],
+   "pod_env_names_absent": [
+    "KEYCLOAK_REALM_URL"
+   ]
+  },
+  {
+   "hop": "4-status",
+   "polls": [
+    {
+     "t": "20:56:00Z",
+     "notice": "PCN26-117",
+     "as": "alice",
+     "stage": "received",
+     "body": {
+      "ingest_id": "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      "stage": "received",
+      "detail": null,
+      "duplicate": null,
+      "kind": "pdf",
+      "sha256": "b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      "created_at": 1791310971294,
+      "updated_at": 1791310971294,
+      "dropped_by": {
+       "authz_id": "alice@example.com"
+      },
+      "origin_suggestion": null
+     }
+    },
+    {
+     "t": "20:56:00Z",
+     "notice": "PCN23-002",
+     "as": "alice",
+     "stage": "received",
+     "body": {
+      "ingest_id": "sha256:0096a523a94d6d848c939250e17d7892520bb9a6c52ad14b2efc573a30d51c9b",
+      "stage": "received",
+      "detail": null,
+      "duplicate": null,
+      "kind": "pdf",
+      "sha256": "0096a523a94d6d848c939250e17d7892520bb9a6c52ad14b2efc573a30d51c9b",
+      "created_at": 1791088030445,
+      "updated_at": 1791088030445,
+      "dropped_by": {
+       "authz_id": "alice@example.com"
+      },
+      "origin_suggestion": null
+     }
+    }
+   ]
+  }
+ ],
+ "owner": "doc-tools/lane/7f",
+ "one_line_fix": "charts/doc-tools/values-sandbox.yaml env: KEYCLOAK_REALM_URL: \"http://iagent-keycloak:8080/realms/invincible-agent\""
+}
