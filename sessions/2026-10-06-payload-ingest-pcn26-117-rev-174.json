@@ -1,0 +1,110 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "release": "helm rev 174, fleet 06b81540",
+  "started_at": "2026-10-06T18:22:48Z",
+  "file": {
+    "name": "PCN26-117.pdf",
+    "bytes": 650
+  },
+  "hops": [
+    {
+      "hop": "1-ingest",
+      "as": "alice",
+      "at": "18:22:51Z",
+      "request": {
+        "method": "POST",
+        "path": "/ingest",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "kind": "pdf",
+          "on_behalf_of": "alice@example.com",
+          "content_kind": "pcn",
+          "file": "PCN26-117.pdf (application/pdf)"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+          "stage": "received",
+          "detail": null,
+          "object_prefix": "ingress-user/pdf/b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c/",
+          "duplicate": null,
+          "workflow": null,
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "2-status",
+      "as": "alice",
+      "at": "18:22:51Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+          "stage": "received",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+          "created_at": 1791310971294,
+          "updated_at": 1791310971294,
+          "dropped_by": {
+            "authz_id": "alice@example.com"
+          },
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "3-sensor (doc-tools ingress_user_sensor -> user_document_parser_job)",
+      "at": "18:39:34Z",
+      "observed_via": "Dagster GraphQL repositoriesOrError.sensors.sensorState (status, ticks), read inside the dagster webserver pod",
+      "sensor_states": [
+        "dag-tools datahub_sensor RUNNING",
+        "doc-tools datahub_approval_sensor STOPPED",
+        "doc-tools default_automation_condition_sensor STOPPED",
+        "doc-tools design_sensor STOPPED",
+        "doc-tools iads_sensor STOPPED",
+        "doc-tools ingress_user_sensor STOPPED",
+        "doc-tools manufacturing_inbound_s3_sensor STOPPED",
+        "doc-tools ontology_sensor RUNNING",
+        "doc-tools sustainment_sensor RUNNING",
+        "doc-tools xml_sensor STOPPED",
+        "iagent extraction_review_sensor RUNNING",
+        "pub-tools datahub_sensor RUNNING"
+      ],
+      "ingress_user_sensor": {
+        "status": "STOPPED",
+        "ticks": 0
+      },
+      "bff_ingest_route_log_40m": [
+        "1 \"GET /ingest/sha256%3A0096a523a94d6d848c939250e17d7892520bb9a6c52ad14b2efc573a30d51c9b/status HTTP/1.1\" 200 OK",
+        "46 \"GET /ingest/sha256%3Ab58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c/status HTTP/1.1\" 200 OK",
+        "1 \"POST /ingest HTTP/1.1\" 200 OK"
+      ],
+      "stage_callbacks_received": 0,
+      "finding": "no sensor tick, no run, no POST /ingest/{id}/stage: the drop stops at the hop after `received` because the sensor that would pick it up is not running",
+      "owner": "doc-tools/lane/7f",
+      "one_line_fix": "doc_tools/definitions.py ingress_user_sensor: default_status=\"RUNNING\","
+    }
+  ],
+  "ingest_id": "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+  "stages_seen": [
+    "received"
+  ],
+  "polled_s": 905,
+  "stopped_at": "2-status: last stage 'received' after 905s (stages ['received']); never reached 'review'",
+  "first_stage_not_reached": "extracting"
+}
