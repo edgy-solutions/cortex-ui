@@ -41,13 +41,14 @@ import path from "node:path";
 import { readMethod } from "@/lib/cardExport";
 import { LOT4_CONTRIBUTION_RANKING_PAYLOAD } from "@/lib/cardExport.fixture";
 import { COMPETING_MEASURES_ROW } from "@/archetypes/competing-measures/row";
+import { CONTRIBUTION_RANKING_ROW } from "@/archetypes/contribution-ranking/row";
+import { CONTRIBUTION_RANKING_ENVELOPE_FIELDS } from "@/archetypes/contribution-ranking/contract";
 
 /** Both names the producer checkout goes by — see the disposition parity seal for why two. */
 const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
 const PRESENTATION = "agent_fleet/presentation_agent/main.py";
 /** The cost engine, which is what actually EMITS this archetype's envelope. */
 const COST_MEASURES = "agent_fleet/cost_agent/measures.py";
-const INTERPRETER = path.join(__dirname, "SemanticInterpreter.tsx");
 
 /**
  * `CardExportButton.tsx` retired 2026-10-04 (rev-171 — the canvas-level export superseded it).
@@ -310,11 +311,17 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
   it("this side passes both props, so the wire is sufficient end to end", () => {
     // The near half of the join. A projector that carries a field into a card that never reads it
     // is the advertised-unconsumed shape, and it looks identical to a missing field from the UI.
-    const src = readFileSync(INTERPRETER, "utf8");
-    expect(src).toContain("threshold={comp.threshold}");
-    expect(src).toContain("threshold_defaulted={comp.threshold_defaulted}");
+    //
+    // ADR-0055 §2 PACKAGED THIS DISPATCH: `SemanticInterpreter.tsx`'s `case "CONTRIBUTION_RANKING"`
+    // no longer spells `threshold={comp.threshold}` as a literal prop — it passes
+    // `pick(comp, pkg.reads)`, generic across every packaged archetype. Scanning the interpreter's
+    // source text for that literal substring would now find nothing and read as a regression that
+    // never happened. The same two facts — the bound pair IS read, `method` is NOT — are asserted
+    // instead against the package's own declared `reads`, which is what `pick` actually consults.
+    expect(CONTRIBUTION_RANKING_ENVELOPE_FIELDS).toContain("threshold");
+    expect(CONTRIBUTION_RANKING_ENVELOPE_FIELDS).toContain("threshold_defaulted");
 
-    expect(src).not.toContain("method={comp.method}");
+    expect(CONTRIBUTION_RANKING_ENVELOPE_FIELDS).not.toContain("method");
 
     // restored 2026-10-05 — the KNOWN GAP dated 2026-10-04 is now FALSE, and this is the flip
     // from the negative ("method is consumed by NO cortex surface") to the positive it measures
@@ -614,6 +621,32 @@ describe("COMPETING_MEASURES_ROW mirrors the producer's own tuple", () => {
     const projector = readFileSync(FOUND[0], "utf8");
     expect(COMPETING_MEASURES_ROW.payload_key).toBe(
       declaredPayloadKeyFor(projector, "COMPETING_MEASURES"),
+    );
+  });
+});
+
+/**
+ * ADR-0055 §2's SECOND packaged row mirror. `CONTRIBUTION_RANKING_ROW` in
+ * `src/archetypes/contribution-ranking/row.ts` is cortex's copy of the producer's own tuple at
+ * `agent_fleet/presentation_agent/main.py:850` — unlike COMPETING_MEASURES, this producer
+ * declaration already exists, so this seal has a live tuple to mirror from day one.
+ */
+describe("CONTRIBUTION_RANKING_ROW mirrors the producer's own tuple", () => {
+  it.skipIf(FOUND.length === 0)(
+    "passthrough equals the producer's declared fields, in the producer's order",
+    () => {
+      const projector = readFileSync(FOUND[0], "utf8");
+      const declared = declaredFieldsFor(projector, "CONTRIBUTION_RANKING");
+      // The control first — an empty extraction would make the equality below vacuous.
+      expect(declared.length).toBeGreaterThan(5);
+      expect(CONTRIBUTION_RANKING_ROW.passthrough).toEqual(declared);
+    },
+  );
+
+  it.skipIf(FOUND.length === 0)("payload_key equals the tuple's first element", () => {
+    const projector = readFileSync(FOUND[0], "utf8");
+    expect(CONTRIBUTION_RANKING_ROW.payload_key).toBe(
+      declaredPayloadKeyFor(projector, "CONTRIBUTION_RANKING"),
     );
   });
 });

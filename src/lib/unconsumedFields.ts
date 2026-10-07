@@ -54,7 +54,7 @@ import { SUPPLY_TABLE_CONTRACT } from "@/components/registry/SupplyTable.contrac
 import { CANVAS_SEED_CONTRACT } from "@/components/registry/CanvasSeed.contract";
 import { CHART_WIDGET_CONTRACT } from "@/components/mesh/ChartWidget.contract";
 import { COMPETING_MEASURES_CONTRACT } from "@/archetypes/competing-measures/contract";
-import { CONTRIBUTION_RANKING_CONTRACT } from "@/components/planning/ContributionRanking.contract";
+import { CONTRIBUTION_RANKING_CONTRACT } from "@/archetypes/contribution-ranking/contract";
 import { DECISION_RECORD_CONTRACT } from "@/components/planning/DecisionRecord.contract";
 import { DELTA_SET_CONTRACT } from "@/components/planning/DeltaSet.contract";
 import { ELICITATION_CONTRACT } from "@/components/elicitation/Elicitation.contract";
@@ -62,7 +62,7 @@ import { FORECAST_MEASURE_CONTRACT } from "@/components/planning/ForecastMeasure
 import { GROUPED_REVIEW_CONTRACT } from "@/components/GroupedReview/GroupedReviewTable.contract";
 import { WARNING_CARD_CONTRACT } from "@/components/registry/WarningCard.contract";
 import { INTERVAL_TIMELINE_CONTRACT } from "@/components/planning/IntervalTimeline.contract";
-import { MARKDOWN_RENDERER_CONTRACT } from "@/components/registry/MarkdownRenderer.contract";
+import { MARKDOWN_RENDERER_CONTRACT } from "@/archetypes/knowledge-document/contract";
 import { MATRIX_GRID_CONTRACT } from "@/components/planning/MatrixGrid.contract";
 import { MULTI_SERIES_CONTRACT } from "@/components/planning/MultiSeries.contract";
 import { NAMED_HOLE_CONTRACT } from "@/components/registry/NamedHole.contract";

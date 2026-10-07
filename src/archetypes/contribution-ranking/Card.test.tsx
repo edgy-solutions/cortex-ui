@@ -14,7 +14,7 @@ import path from "node:path";
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { ContributionRanking } from "./ContributionRanking";
+import { ContributionRanking } from "./Card";
 
 afterEach(cleanup);
 
@@ -234,7 +234,7 @@ describe("an unjudged ranking says so", () => {
     // component's own user-facing copy — "no direction stated" and the legend label — which is
     // prose ABOUT the field being absent, accused of being a read of it. The instrument and the
     // subject sharing a surface; the fix is to match the shape of a field access instead.
-    const src = readFileSync(path.join(__dirname, "ContributionRanking.tsx"), "utf8")
+    const src = readFileSync(path.join(__dirname, "Card.tsx"), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, "");
     expect(src).not.toMatch(/\.\s*direction\b/);

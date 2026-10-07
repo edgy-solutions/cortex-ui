@@ -1,16 +1,11 @@
 import React from "react";
-import { fallbackSubjectLabel, looksLikeIri } from "@/lib/confidence";
-import { knowledgeDocumentView } from "./knowledgeDocumentView";
-import { AlertCircle, FileText, Zap } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { AlertCircle, Zap } from "lucide-react";
 
 // Lazy-loaded or imported directly for interpretation
 import { WarningCard } from "../NeuralStream/WarningCard";
 import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
-import { ContributionRanking } from "../planning/ContributionRanking";
 import { archetypePackage } from "@/archetypes/registry";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
@@ -22,7 +17,6 @@ import { SourceLedger } from "../ledger/SourceLedger";
 import { StepLadder } from "../planning/StepLadder";
 import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 import { ChartWidget } from "../mesh/ChartWidget";
-import { FederatedImage } from "../mesh/FederatedImage";
 // DigitalTwinWidget is intentionally not imported — the
 // DIGITAL_TWIN_3D archetype dispatch was removed 2026-06-26 (user
 // deferred the digital-twin concept until it gets a proper visual
@@ -158,234 +152,11 @@ const SupplyTable = ({ data, subject }: { data: any[]; subject?: string }) => {
 };
 
 /**
- * MarkdownRenderer — KNOWLEDGE_DOCUMENT archetype render.
- *
- * Rebuilt 2026-06-26 (user feedback iterations):
- *   - v1 was a bare div with `prose-invert prose-slate` defaults
- *     — "looks like it's not even markdown."
- *   - v2 added glass-panel container + cyan-themed `prose-*`
- *     modifiers. Those did NOTHING because `@tailwindcss/typography`
- *     isn't installed in this project (Tailwind v4 setup, no
- *     plugin) — every `prose` class was a no-op. Markdown rendered
- *     as plain unstyled HTML; "everything in bright white, all the
- *     same, hard to read."
- *   - v3 (current) — drop the plugin dependency entirely. Pass a
- *     `components` map to react-markdown so each HTML element gets
- *     its own Tailwind classes directly. Full control, zero plugin
- *     dependency, every element actually styled.
- *
- * Color discipline:
- *   - Headings: white bold; h1/h2 get a cyan-500/20 underline.
- *   - Body paragraphs: slate-200 (calmer than white; easier on eyes).
- *   - Strong: white (lifted from body for visible bold).
- *   - Em: cyan-200 italic (the registry's accent for emphasis).
- *   - Inline code: cyan-300 on cyan-500/10 ground, monospace.
- *   - Code blocks: slate-950/60 with cyan-500/10 border.
- *   - Links: cyan-400, hover cyan-300, medium weight.
- *   - Blockquote: cyan-500/40 left border, slate-300.
- *   - Lists: slate-200 text, cyan bullet markers.
- *   - Tables: cyan-400/80 uppercase tracking-widest headers
- *     (matches SupplyTable language), slate-200 cells, subtle
- *     dividers.
- *
- * The body color is deliberately NOT pure white. White body text on
- * dark backgrounds reads as "yelling" once volume gets above a few
- * lines — slate-200 keeps long-form content scannable.
+ * MarkdownRenderer (KNOWLEDGE_DOCUMENT) moved to `src/archetypes/knowledge-document/Card.tsx`
+ * — ADR-0055 step 2. The dispatch below (`case "KNOWLEDGE_DOCUMENT":`) is the packaged
+ * pattern; see that file for the component itself and `knowledgeDocumentView.ts` (moved
+ * alongside it) for the routing between pages / abstain / plain markdown.
  */
-const MarkdownRenderer = ({
-  content,
-  subject,
-  audience,
-  citedSeals,
-}: {
-  content: string;
-  subject?: string;
-  /** engine-docs `audience_hint`: DISPLAY ROUTING, NOT AUTHZ. Shown, never used to hide. */
-  audience?: string;
-  /** engine-docs `cited_seals`, in the page's own order. */
-  citedSeals?: string[];
-}) => {
-  const wordCount = content
-    ? content.split(/\s+/).filter((w) => w.length > 0).length
-    : 0;
-
-  return (
-    <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
-      {/* Header — matches ChartWidget / topology / table */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-          <h3 className="text-xl font-bold text-white tracking-tight leading-none">
-            {/* AN IRI IS NOT A TITLE. This card is the fallback every unregistered archetype
-                lands on, and what arrives as its subject is whatever the producer had — for a
-                slot elicitation that is the VERB, `mesh:finFundingStatus`, printed raw as the
-                heading. Rendering the local name is a projection of the value the producer
-                sent, not a name invented for it; a subject someone actually wrote is left
-                exactly as written. */}
-            {looksLikeIri(subject) ? fallbackSubjectLabel(subject) : subject || "Knowledge Document"}
-          </h3>
-        </div>
-        <p className="text-[10px] text-cyan-400/70 uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
-          <FileText className="w-3 h-3" />
-          Knowledge Document · {wordCount} {wordCount === 1 ? "word" : "words"}
-          {audience && <span data-doc-audience>· for {audience}</span>}
-        </p>
-      </div>
-
-      {/* Markdown body — each HTML element mapped to a styled component */}
-      <div className="text-sm leading-relaxed">
-        <Markdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            h1: ({ children }) => (
-              <h1 className="text-2xl font-bold text-white tracking-tight border-b border-cyan-500/20 pb-2 mb-4 mt-6 first:mt-0">
-                {children}
-              </h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="text-xl font-bold text-white tracking-tight border-b border-cyan-500/10 pb-1.5 mb-3 mt-6 first:mt-0">
-                {children}
-              </h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="text-lg font-semibold text-cyan-100 tracking-tight mb-2 mt-5 first:mt-0">
-                {children}
-              </h3>
-            ),
-            h4: ({ children }) => (
-              <h4 className="text-base font-semibold text-cyan-200 mb-2 mt-4 first:mt-0">
-                {children}
-              </h4>
-            ),
-            p: ({ children }) => (
-              <p className="text-slate-200 leading-relaxed my-3">{children}</p>
-            ),
-            strong: ({ children }) => (
-              <strong className="text-white font-semibold">{children}</strong>
-            ),
-            em: ({ children }) => (
-              <em className="text-cyan-200 italic">{children}</em>
-            ),
-            a: ({ href, children }) => (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-cyan-400 hover:text-cyan-300 font-medium underline decoration-cyan-500/30 hover:decoration-cyan-400/60 transition-colors"
-              >
-                {children}
-              </a>
-            ),
-            // react-markdown emits <code> for inline. Block code is
-            // wrapped in <pre><code>. We style inline here; the <pre>
-            // wrapper handles block presentation, and we reset the
-            // inline styling when nested inside it.
-            code: ({ className, children, ...rest }) => {
-              const isBlock = (className || "").includes("language-");
-              if (isBlock) {
-                // Inside <pre>; let pre's styling drive the block.
-                return (
-                  <code
-                    className="block font-mono text-[13px] text-cyan-200 leading-relaxed"
-                    {...rest}
-                  >
-                    {children}
-                  </code>
-                );
-              }
-              return (
-                <code className="font-mono text-[0.85em] text-cyan-300 bg-cyan-500/10 px-1.5 py-0.5 rounded">
-                  {children}
-                </code>
-              );
-            },
-            pre: ({ children }) => (
-              <pre className="bg-slate-950/60 border border-cyan-500/10 rounded-lg p-4 my-4 overflow-x-auto">
-                {children}
-              </pre>
-            ),
-            blockquote: ({ children }) => (
-              <blockquote className="border-l-2 border-cyan-500/40 pl-4 my-4 text-slate-300 italic">
-                {children}
-              </blockquote>
-            ),
-            ul: ({ children }) => (
-              <ul className="list-disc pl-6 my-3 text-slate-200 marker:text-cyan-500/60 space-y-1">
-                {children}
-              </ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="list-decimal pl-6 my-3 text-slate-200 marker:text-cyan-500/60 space-y-1">
-                {children}
-              </ol>
-            ),
-            li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-            hr: () => <hr className="border-cyan-500/20 my-6" />,
-            table: ({ children }) => (
-              <div className="overflow-x-auto my-4">
-                <table className="w-full text-left text-sm border-collapse">
-                  {children}
-                </table>
-              </div>
-            ),
-            thead: ({ children }) => (
-              <thead className="border-b border-cyan-500/20">{children}</thead>
-            ),
-            tbody: ({ children }) => (
-              <tbody className="divide-y divide-white/5">{children}</tbody>
-            ),
-            tr: ({ children }) => (
-              <tr className="hover:bg-cyan-500/[0.04] transition-colors">
-                {children}
-              </tr>
-            ),
-            th: ({ children }) => (
-              <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/80">
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="px-3 py-2.5 text-slate-200 align-top">{children}</td>
-            ),
-            img: ({ src, alt }) => (
-              <div className="my-6 rounded-xl overflow-hidden border border-cyan-500/15 bg-black/50 p-2">
-                <FederatedImage
-                  src={src || ""}
-                  alt={alt}
-                  className="w-full max-h-[500px] object-contain rounded-lg opacity-90 hover:opacity-100 transition-opacity"
-                />
-                {alt && (
-                  <p className="text-center mt-2 font-mono text-[10px] text-slate-500 uppercase tracking-widest">
-                    {alt}
-                  </p>
-                )}
-              </div>
-            ),
-          }}
-        >
-          {content}
-        </Markdown>
-      </div>
-
-      {/* Footer — matches chart pattern */}
-      <div className="mt-6 pt-4 border-t border-white/5 flex items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-tighter">
-        <div className="flex items-center gap-1">
-          <span className="text-cyan-500/50">Words:</span>
-          <span>{wordCount}</span>
-        </div>
-      </div>
-      {citedSeals && citedSeals.length > 0 && (
-        <ol data-doc-cited-seals className="mt-3 space-y-0.5 text-[10px] font-mono text-slate-500">
-          {citedSeals.map((seal) => (
-            <li key={seal}>
-              <span className="text-cyan-500/50">Seal:</span> {seal}
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-};
 
 // Re-export the canonical type from api/types
 export type { SemanticUIContainer } from "@/api/types";
@@ -474,38 +245,20 @@ const renderComponent = (
       );
 
     case "KNOWLEDGE_DOCUMENT": {
-      // Three shapes, decided in knowledgeDocumentView.ts: engine-docs pages, an engine-docs
-      // abstain, or the plain markdown string. Structure wins over a placeholder string.
-      const view = knowledgeDocumentView(comp);
-      if (view.kind === "pages") {
-        const short = view.declaredCount !== undefined && view.declaredCount !== view.pages.length;
-        return (
-          <div data-doc-pages={view.pages.length}>
-            {short && (
-              <p data-doc-page-count-mismatch className="text-[10px] font-mono text-amber-400/80 uppercase tracking-widest">
-                {view.pages.length} of {view.declaredCount} pages arrived
-              </p>
-            )}
-            {view.pages.map((p, i) => (
-              <MarkdownRenderer
-                key={`${p.title ?? "page"}-${i}`}
-                content={p.body}
-                subject={p.title ?? view.subject}
-                audience={p.audience}
-                citedSeals={p.citedSeals}
-              />
-            ))}
-          </div>
-        );
-      }
-      if (view.kind === "abstain") {
-        return (
-          <div data-doc-abstained>
-            <MarkdownRenderer content={view.body} subject={view.subject} />
-          </div>
-        );
-      }
-      return <MarkdownRenderer content={view.content} subject={view.subject} />;
+      // ADR-0055 step 2 — packaged. `knowledgeDocumentView`'s three-way routing (pages /
+      // abstain / plain markdown) now lives inside the Card itself; see
+      // `src/archetypes/knowledge-document/Card.tsx`.
+      const pkg = archetypePackage("KNOWLEDGE_DOCUMENT");
+      if (!pkg) break;
+      const MarkdownRenderer = pkg.Card;
+      return (
+        <MarkdownRenderer
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
+        />
+      );
     }
 
     case "CHART_WIDGET":
@@ -799,50 +552,38 @@ const renderComponent = (
       );
     }
 
-    case "CONTRIBUTION_RANKING":
+    case "CONTRIBUTION_RANKING": {
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
       // answer and `share_of_total` has no slot there — see the contract's axis test.
       //
-      // W4-2 — `threshold`/`threshold_defaulted` ARE ENVELOPE FIELDS, which is why they were
-      // missing rather than wrong. Row fields ride inside `rows` and cross the producer's
-      // projector VERBATIM; a card-level scalar is carried ONLY if that projector's
-      // per-archetype tuple names it.
+      // ADR-0055 §2 — packaged. Same data-driven dispatch as COMPETING_MEASURES/WORKFLOW_CASE/
+      // ILLUSTRATION: `pkg.row.payload_key` names the rows prop and `pkg.reads`
+      // (`CONTRIBUTION_RANKING_ENVELOPE_FIELDS`) is exactly the 5 envelope fields this card
+      // reads — never `verdict`/`method`, which the producer's tuple carries
+      // (`agent_fleet/presentation_agent/main.py:850`, mirrored at `row.ts`) but this card does
+      // not consume.
       //
-      // ⛔ CORRECTED 2026-09-25 — THE PROJECTOR NOW NAMES THEM. The sentence that used to sit
-      // here said the tuple "names four fields which do not include these", and it was pointing
-      // every reader at the wrong repo. Read fresh from the producer at
-      // `agent_fleet/presentation_agent/main.py:752`:
-      //
-      //     "CONTRIBUTION_RANKING": ("rows",
-      //                             ("value_label", "value_unit", "scope_label", "verdict",
-      //                              "threshold", "threshold_defaulted")),
-      //
-      // SIX fields, and both of these are among them. The producer added them after the original
-      // note was written and nothing re-read the note — a comment is not checked by anything.
-      //
-      // ⛔ SO THIS HALF OF THE WIRE IS NECESSARY *AND SUFFICIENT*, and what remains is a THIRD
-      // state, distinct from both "not wired" and "arriving": DECLARED AND NEVER OBSERVED. No
-      // capture under `sessions/` carries either key — zero hits, measured against a control that
-      // finds `verdict` in those same files. Both still arrive `undefined` and the header stays
-      // silent, which remains the correct rendering of a payload with no bound.
-      //
-      // What the correction CHANGES is who owes work: a silent header is no longer evidence that
-      // the producer still has something to carry. It is evidence that no ANSWER has yet declared
-      // a bound — a verb-level fact, not a projector-level one. Do not read the quiet header here
-      // as an upstream debt.
+      // `valid_as_of`/`state_version` are passed explicitly, OUTSIDE `pick(reads)` — the
+      // producer carries that pair "for every archetype", never as a per-archetype passthrough
+      // entry (see `main.py`'s own comment at the `state_ref`/`state_version` loop), so they are
+      // not part of this package's declared row either.
+      const pkg = archetypePackage("CONTRIBUTION_RANKING");
+      if (!pkg) break;
+      // Bound to the package's own component name, not a generic placeholder — see the
+      // COMPETING_MEASURES case's note on `assembleCapabilities.test.ts`'s JSX-tag scan.
+      const ContributionRanking = pkg.Card;
       return (
         <ContributionRanking
-          rows={comp.rows}
-          value_label={comp.value_label}
-          value_unit={comp.value_unit}
-          scope_label={comp.scope_label}
-          threshold={comp.threshold}
-          threshold_defaulted={comp.threshold_defaulted}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
       );
+    }
 
     case "FORECAST_MEASURE":
       // ONE forecast, and the METHOD that produced it — rendered together, or not at all.

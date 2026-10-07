@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ContributionRanking } from "@/components/planning/ContributionRanking";
+import { ContributionRanking } from "@/archetypes/contribution-ranking/Card";
 import {
   ABSENT_MARK,
   METHOD_ABSENT_SENTENCE,
@@ -556,9 +556,9 @@ describe("the wire row against the declared row — both directions", () => {
   const CONTRACT_PATH = path.join(
     __dirname,
     "..",
-    "components",
-    "planning",
-    "ContributionRanking.contract.ts",
+    "archetypes",
+    "contribution-ranking",
+    "contract.ts",
   );
 
   /** The field names of `interface ContributionRow`, read off the contract's own text. */

@@ -65,3 +65,25 @@ export const MARKDOWN_RENDERER_CONTRACT = {
 } as const;
 
 export type MarkdownRendererContract = typeof MARKDOWN_RENDERER_CONTRACT;
+
+/**
+ * ADR-0055 §2 — what the interpreter hands the Card today, read fresh off `Card.tsx` /
+ * `knowledgeDocumentView.ts`: every field the view-discriminator inspects to choose between
+ * the three shapes (pages / abstain / markdown) and to render whichever it picks.
+ *
+ * Unlike COMPETING_MEASURES / CONTRIBUTION_RANKING, this is the WHOLE of `row.ts`'s
+ * `passthrough` — nothing declared there is declared-but-unread, because the discriminator
+ * itself needs all seven fields to decide which shape arrived. `source_persona` is excluded on
+ * purpose: it is the universal cross-cutting field read once in `SemanticInterpreter.tsx` for
+ * every archetype's persona badge, never a per-archetype field (same reasoning as
+ * `valid_as_of`/`state_version` on CONTRIBUTION_RANKING).
+ */
+export const KNOWLEDGE_DOCUMENT_ENVELOPE_FIELDS = [
+  "subject_concept",
+  "subject",
+  "pages",
+  "page_count",
+  "abstained",
+  "reason",
+  "body",
+] as const;

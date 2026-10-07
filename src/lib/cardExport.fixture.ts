@@ -97,7 +97,7 @@
  * evidence that any producer has ever sent one.
  */
 
-import type { ContributionRow } from "@/components/planning/ContributionRanking.contract";
+import type { ContributionRow } from "@/archetypes/contribution-ranking/contract";
 import type { ExportProvenance, MethodBlock } from "./cardExport";
 
 /**

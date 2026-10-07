@@ -14,7 +14,7 @@
  * These are payloads, not renderings. They carry no expectations about layout, because the
  * parity seal's subject is the declared facts and not the pixels.
  */
-import type { ContributionRow } from "../ContributionRanking.contract";
+import type { ContributionRow } from "../contract";
 
 /** Every absence this card can declare. The seal derives its coverage from this list. */
 export const CONTRIBUTION_RANKING_ABSENCES = [

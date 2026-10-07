@@ -14,8 +14,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { SemanticInterpreter } from "./SemanticInterpreter";
-import { MARKDOWN_RENDERER_CONTRACT } from "./MarkdownRenderer.contract";
-import { knowledgeDocumentView } from "./knowledgeDocumentView";
+import { MARKDOWN_RENDERER_CONTRACT } from "@/archetypes/knowledge-document/contract";
+import { knowledgeDocumentView } from "@/archetypes/knowledge-document/knowledgeDocumentView";
 
 afterEach(cleanup);
 

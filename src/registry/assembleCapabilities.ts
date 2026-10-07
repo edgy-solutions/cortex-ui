@@ -27,7 +27,7 @@
  */
 import type { FrontendCapability } from "./frontendCapabilities";
 import { CHART_WIDGET_CONTRACT } from "../components/mesh/ChartWidget.contract";
-import { MARKDOWN_RENDERER_CONTRACT } from "../components/registry/MarkdownRenderer.contract";
+import { MARKDOWN_RENDERER_CONTRACT } from "../archetypes/knowledge-document/contract";
 import { PROCESS_TOPOLOGY_CONTRACT } from "../components/registry/ProcessTopologyCard.contract";
 import { SUPPLY_TABLE_CONTRACT } from "../components/registry/SupplyTable.contract";
 import { WARNING_CARD_CONTRACT } from "../components/registry/WarningCard.contract";
@@ -41,7 +41,7 @@ import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.co
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";
-import { CONTRIBUTION_RANKING_CONTRACT } from "../components/planning/ContributionRanking.contract";
+import { CONTRIBUTION_RANKING_CONTRACT } from "../archetypes/contribution-ranking/contract";
 import { SOURCE_LEDGER_CONTRACT } from "../components/ledger/SourceLedger.contract";
 import { COMPETING_MEASURES_CONTRACT } from "../archetypes/competing-measures/contract";
 import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";

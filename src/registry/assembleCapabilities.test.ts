@@ -15,7 +15,7 @@ import {
 } from "./assembleCapabilities";
 import { CORTEX_UI_CAPABILITIES } from "./frontendCapabilities";
 import { CHART_WIDGET_CONTRACT } from "../components/mesh/ChartWidget.contract";
-import { MARKDOWN_RENDERER_CONTRACT } from "../components/registry/MarkdownRenderer.contract";
+import { MARKDOWN_RENDERER_CONTRACT } from "../archetypes/knowledge-document/contract";
 
 describe("assembleCapabilities", () => {
   it("computes expected_fields FROM the contract — never a second list", () => {

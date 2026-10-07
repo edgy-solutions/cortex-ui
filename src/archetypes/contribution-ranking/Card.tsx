@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
 import { showMeasure } from "@/lib/showMeasure";
-import { CellInspector } from "./CellInspector";
+import { CellInspector } from "@/components/planning/CellInspector";
 import {
   validateContributionRanking,
   type ContributionRow,
-} from "./ContributionRanking.contract";
+} from "./contract";
 
 /**
  * CONTRIBUTION_RANKING — N entities ordered by how much each contributes to one total.

@@ -21,11 +21,12 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ContributionRanking } from "./ContributionRanking";
+import { ContributionRanking } from "./Card";
+import { readDeclaredAbsences } from "../defineArchetype";
 import {
   CONTRIBUTION_RANKING_ABSENCES,
   CONTRIBUTION_RANKING_FIXTURES,
-} from "./fixtures/contributionRanking";
+} from "./fixtures";
 
 afterEach(cleanup);
 
@@ -67,7 +68,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
   it.each(CONTRIBUTION_RANKING_FIXTURES.map((f) => [f.name, f] as const))(
     "%s — declares exactly what it names",
     (_name, f) => {
-      render(
+      const { container } = render(
         <ContributionRanking
           rows={f.rows}
           value_unit={f.value_unit}
@@ -75,10 +76,14 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
           threshold_defaulted={f.threshold_defaulted}
         />,
       );
+      // Scoped to this render's container, per ADR-0055 §2's collision rule — see
+      // `readDeclaredAbsences.test.ts` for the seal that proves `document` is never consulted.
+      const declared = readDeclaredAbsences(container, CONTRIBUTION_RANKING_ABSENCES);
       for (const absence of CONTRIBUTION_RANKING_ABSENCES) {
-        const present = document.querySelector(`[${absence}]`) !== null;
         const expected = f.declares.includes(absence);
-        expect(present, `${absence} expected ${expected ? "present" : "ABSENT"}`).toBe(expected);
+        expect(declared.includes(absence), `${absence} expected ${expected ? "present" : "ABSENT"}`).toBe(
+          expected,
+        );
       }
     },
   );
@@ -106,7 +111,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
     expect(quiet.length, "no fixture exercises a payload the card can draw completely").toBeGreaterThan(0);
     for (const f of quiet) {
       cleanup();
-      render(
+      const { container } = render(
         <ContributionRanking
           rows={f.rows}
           value_unit={f.value_unit}
@@ -114,9 +119,8 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
           threshold_defaulted={f.threshold_defaulted}
         />,
       );
-      for (const absence of CONTRIBUTION_RANKING_ABSENCES) {
-        expect(document.querySelector(`[${absence}]`), `${f.name} declared ${absence}`).toBeNull();
-      }
+      const declared = readDeclaredAbsences(container, CONTRIBUTION_RANKING_ABSENCES);
+      expect(declared, `${f.name} declared ${JSON.stringify(declared)}`).toEqual([]);
     }
   });
 
@@ -124,7 +128,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
     // DERIVED, NOT RESTATED. A hand-kept list drifts from the component exactly as the
     // passthrough tuple table drifted from the archetypes — one fact in two places, and the copy
     // is the one that goes stale while continuing to pass.
-    const unique = renderedAttributes(join(__dirname, "ContributionRanking.tsx"));
+    const unique = renderedAttributes(join(__dirname, "Card.tsx"));
     // `data-legend-unjudged` is the legend's rendering of `no-verdict` rather than a separate
     // claim — the same fact said twice on one card, which the fixture set covers through
     // `data-no-verdict`. Named here rather than silently excluded.

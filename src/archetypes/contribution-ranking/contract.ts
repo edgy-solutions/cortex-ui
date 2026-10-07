@@ -98,6 +98,28 @@ export type ContributionRankingContract = typeof CONTRIBUTION_RANKING_CONTRACT;
 export type ContributionRankingRefusal =
   (typeof CONTRIBUTION_RANKING_REFUSAL_REASONS)[number];
 
+/**
+ * ADR-0055 §2 — the envelope fields this CARD reads, as `index.ts`'s `reads`.
+ *
+ * Deliberately narrower than `CONTRIBUTION_RANKING_ROW`'s `passthrough`: the producer's tuple
+ * also carries `verdict` and `method` (`agent_fleet/presentation_agent/main.py:850`), which this
+ * card does not consume — same "declared wider than read" shape as
+ * `COMPETING_MEASURES_ENVELOPE_FIELDS`. `rows` is not here: it rides as `payload_key`, never a
+ * passthrough field.
+ *
+ * `valid_as_of`/`state_version` are NOT here either, and that is the same producer-stated
+ * reason: `main.py` carries that pair "for every archetype" outside any per-archetype
+ * passthrough list, so SemanticInterpreter passes them to this card explicitly, same as it
+ * always has — see the dispatch case.
+ */
+export const CONTRIBUTION_RANKING_ENVELOPE_FIELDS = [
+  "value_label",
+  "value_unit",
+  "scope_label",
+  "threshold",
+  "threshold_defaulted",
+] as const;
+
 export interface ContributionRow {
   entity_id: string;
   entity_name: string;
