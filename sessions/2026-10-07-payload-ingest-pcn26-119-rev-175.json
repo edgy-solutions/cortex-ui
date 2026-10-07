@@ -1,0 +1,297 @@
+{
+  "captured_by": "ia-01/lane/01",
+  "release": "helm rev 175, fleet 914c7faa",
+  "started_at": "2026-10-07T04:02:26Z",
+  "file": {
+    "name": "PCN26-119.pdf",
+    "bytes": 650
+  },
+  "hops": [
+    {
+      "hop": "1-ingest",
+      "as": "alice",
+      "at": "04:02:29Z",
+      "request": {
+        "method": "POST",
+        "path": "/ingest",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "kind": "pdf",
+          "on_behalf_of": "alice@example.com",
+          "content_kind": "pcn",
+          "file": "PCN26-119.pdf (application/pdf)"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "stage": "received",
+          "detail": null,
+          "object_prefix": "ingress-user/pdf/5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/",
+          "duplicate": null,
+          "workflow": null,
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "2-status",
+      "as": "alice",
+      "at": "04:02:29Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "stage": "received",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "created_at": 1791345749382,
+          "updated_at": 1791345749382,
+          "dropped_by": {
+            "authz_id": "alice@example.com"
+          },
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "2-status",
+      "as": "alice",
+      "at": "04:03:09Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "stage": "extracting",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "created_at": 1791345749382,
+          "updated_at": 1791345789373,
+          "dropped_by": {
+            "authz_id": "alice@example.com"
+          },
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "2-status",
+      "as": "alice",
+      "at": "04:04:30Z",
+      "request": {
+        "method": "GET",
+        "path": "/ingest/sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/status",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": null
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "stage": "review",
+          "detail": null,
+          "duplicate": null,
+          "kind": "pdf",
+          "sha256": "5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+          "created_at": 1791345749382,
+          "updated_at": 1791345858282,
+          "dropped_by": {
+            "authz_id": "alice@example.com"
+          },
+          "origin_suggestion": null
+        }
+      }
+    },
+    {
+      "hop": "3-promotion-task",
+      "as": "bob",
+      "request": {
+        "method": "GET",
+        "path": "/me/human_tasks"
+      },
+      "response": {
+        "status": 200,
+        "rows_total": 18,
+        "matching": [
+          {
+            "id": "331b5b8a-09b7-479e-9249-57513b0941c2",
+            "kind": "document_promotion",
+            "task_id": "document_promotion:sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "workflow_id": null,
+            "audience": "document_promotion:SUSTAINMENT",
+            "status": "pending",
+            "title": "Promote document sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "summary": "Review the extracted document sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091 for promotion.",
+            "requested_by": "svc:doc-tools",
+            "subject_ref": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "payload": {
+              "domain": "SUSTAINMENT",
+              "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+              "dropped_by": {
+                "authz_id": "alice@example.com"
+              }
+            },
+            "created_at": 1791345858118,
+            "workflow_service": null,
+            "promise_name": null,
+            "declaration": {
+              "kind": "document_promotion",
+              "declared": true,
+              "archetype": "APPROVAL_TASK",
+              "badge": "PROMOTE",
+              "title": "Contributed document",
+              "accepts": [
+                "promoted",
+                "rejected"
+              ],
+              "reason_required": [
+                "rejected"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "hop": "4-act",
+      "as": "bob",
+      "at": "04:04:30Z",
+      "request": {
+        "method": "POST",
+        "path": "/human_tasks/document_promotion:sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/act",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "decision": "approved",
+          "comment": "roll-18 measurement: PCN26-119 reviewed; parts and change match the notice text"
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "detail": {
+            "error": "invalid_decision_for_kind",
+            "kind": "document_promotion",
+            "allowed": [
+              "promoted",
+              "rejected"
+            ],
+            "message": "'approved' is not a valid action on a 'document_promotion' task \u2014 allowed: ['promoted', 'rejected']. Recording it would write a decision the task's own semantics cannot represent."
+          }
+        }
+      }
+    },
+    {
+      "hop": "3-promotion-task",
+      "as": "bob",
+      "request": {
+        "method": "GET",
+        "path": "/me/human_tasks"
+      },
+      "response": {
+        "status": 200,
+        "rows_total": 18,
+        "matching": [
+          {
+            "id": "331b5b8a-09b7-479e-9249-57513b0941c2",
+            "kind": "document_promotion",
+            "task_id": "document_promotion:sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "workflow_id": null,
+            "audience": "document_promotion:SUSTAINMENT",
+            "status": "pending",
+            "title": "Promote document sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "summary": "Review the extracted document sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091 for promotion.",
+            "requested_by": "svc:doc-tools",
+            "subject_ref": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "payload": {
+              "domain": "SUSTAINMENT",
+              "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+              "dropped_by": {
+                "authz_id": "alice@example.com"
+              }
+            },
+            "created_at": 1791345858118,
+            "workflow_service": null,
+            "promise_name": null,
+            "declaration": {
+              "kind": "document_promotion",
+              "declared": true,
+              "archetype": "APPROVAL_TASK",
+              "badge": "PROMOTE",
+              "title": "Contributed document",
+              "accepts": [
+                "promoted",
+                "rejected"
+              ],
+              "reason_required": [
+                "rejected"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "hop": "4-act",
+      "as": "bob",
+      "at": "04:05:41Z",
+      "request": {
+        "method": "POST",
+        "path": "/human_tasks/document_promotion:sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091/act",
+        "headers": {
+          "Authorization": "Bearer <scrubbed>"
+        },
+        "form": {
+          "decision": "promoted",
+          "comment": "roll-19 measurement: PCN26-119 reviewed; parts and change match the notice text"
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "detail": {
+            "error": "promotion_payload_invalid",
+            "task_id": "document_promotion:sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+            "message": "the task payload is missing ['object_ref', 'content_kind', 'pipeline_version', 'format_fingerprint', 'standing', 'extraction_ref']; each is a field of the decision record, and a record that cannot say what was reviewed is not evidence"
+          }
+        }
+      }
+    }
+  ],
+  "ingest_id": "sha256:5b15f205fc605c240c9ee37215d862bd977940eb26c74d73b739c538afa97091",
+  "stages_seen": [
+    "received",
+    "extracting",
+    "review"
+  ],
+  "polled_s": 120,
+  "resumed_at": "2026-10-07T04:05:38Z",
+  "resume_reason": "hop 4 sent decision 'approved'; document_promotion allows promoted|rejected (422 invalid_decision_for_kind). Resumed from hop 3 with 'promoted'; the row and task were not re-created.",
+  "stopped_at": "4-act: 422"
+}

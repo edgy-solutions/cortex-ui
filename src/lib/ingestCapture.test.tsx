@@ -231,9 +231,11 @@ describe.each(E2E_CAPTURES)("ingest end-to-end capture ($label) — what the liv
   });
 
   it.todo(
-    "promote response — live capture (Thursday) replaces the built PCN26-117 fixture once THIS release's own drop progresses past review",
+    "promote 200 — awaits a live promote, blocked on the 3-key payload (promotion_payload_invalid, witnessed rev 175 hop 7)",
   );
-  it.todo("label — live capture (Thursday) replaces the built PCN26-117 fixture once THIS release's own drop is promoted");
+  it.todo(
+    "label — awaits a live promote, blocked on the 3-key payload (promotion_payload_invalid, witnessed rev 175 hop 7)",
+  );
 });
 
 /**

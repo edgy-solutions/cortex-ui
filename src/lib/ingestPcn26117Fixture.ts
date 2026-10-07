@@ -56,7 +56,10 @@ export const PCN26117_FIXTURE_HEADER =
   "carries `built_from`, a `<path>@06b81540:<line>` citation. Thursday's live capture, once it " +
   "exists, REPLACES every built_from hop here; this fixture does not detect that swap — " +
   "ingestCapture.test.tsx's stall arm does, by going red once a capture's stages_seen moves past " +
-  "received.";
+  "received. " +
+  "UPDATE 2026-10-07: hops 1, 2b, 3 and 4a are now WITNESSED LIVE by Lane 1's PCN26-119 capture " +
+  "at helm rev 175 (sessions/2026-10-07-payload-ingest-pcn26-119-rev-175.json — see " +
+  "src/components/ingest/ingestLiveCapture119.test.tsx); 4b, 5 and 6 remain BUILT, not witnessed.";
 
 /** The record id's own formula, so a reader can recompute it rather than trust the literal.
  *  `record_id_for` — src/iagent/decision_record.py@06b81540:166-168. Computed offline for this
