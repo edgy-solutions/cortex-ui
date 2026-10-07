@@ -192,3 +192,61 @@ export const MAINTENANCE_BRIDGE_UNDRAWN = [
   "action.provenance.workflow_definition_version",
   "action.provenance.manual_nodes_consulted",
 ] as const;
+
+/**
+ * ── THE UNDRAWN PATHS, CARRIED TO THE SCREEN ──────────────────────────────────────────────────
+ * The human's 2026-10-07 ruling (ADR-0055 amendment requested of Lane 1): what the archetype
+ * declares draws, every other key goes in the collapsed raw section. `MAINTENANCE_BRIDGE_UNDRAWN`
+ * is exactly those keys, so they ride the component as extra TOP-LEVEL keys and the generic
+ * \`rawFieldsOf\` finds them — no WORKFLOW_CASE special case anywhere.
+ *
+ * KEY: \`bridge.\` + the dotted census path, verbatim (\`bridge.action.work_order.task\`). The
+ * prefix cannot collide with WORKFLOW_CASE's reads (\`[]\`) or its payload key (\`case\`).
+ *
+ * ARRAY PATHS: the census names an array-of-object leaf with a \`[]\` suffix
+ * (\`event.sources[].row_ref\`). The key keeps that path as spelled, and the value is the ARRAY of
+ * that leaf across the elements that carry it (one entry per element, in order, \`undefined\`
+ * elements skipped) — never the whole parent array, which would re-carry fields that ARE mapped.
+ *
+ * PRESENT = the path resolves to a defined value (\`null\` counts: it is the producer's literal).
+ * A path through a \`null\`/absent parent (e.g. \`nearest_spare: null\`) is absent and omitted.
+ */
+export interface MaintenanceBridgeInput {
+  event: WireMaintenanceEvent;
+  action?: WireActionRecord | null;
+}
+
+function resolvePath(node: unknown, segments: readonly string[]): unknown[] {
+  if (segments.length === 0) return node === undefined ? [] : [node];
+  if (typeof node !== "object" || node === null) return [];
+  const [head, ...rest] = segments;
+  const isArray = head.endsWith("[]");
+  const name = isArray ? head.slice(0, -2) : head;
+  const child = (node as Record<string, unknown>)[name];
+  if (!isArray) return resolvePath(child, rest);
+  if (!Array.isArray(child)) return [];
+  return child.flatMap((el) => resolvePath(el, rest));
+}
+
+export function undrawnFromMaintenanceBridge(bridge: MaintenanceBridgeInput): Record<string, unknown> {
+  const root = { event: bridge.event, action: bridge.action ?? undefined };
+  const out: Record<string, unknown> = {};
+  for (const path of MAINTENANCE_BRIDGE_UNDRAWN) {
+    const found = resolvePath(root, path.split("."));
+    if (found.length === 0) continue;
+    out[`bridge.${path}`] = path.includes("[]") ? found : found[0];
+  }
+  return out;
+}
+
+/** The WORKFLOW_CASE component this bridge yields: the projected case, plus the undrawn paths. */
+export function componentFromMaintenanceBridge(
+  event: WireMaintenanceEvent,
+  action?: WireActionRecord | null,
+): Record<string, unknown> {
+  return {
+    archetype: "WORKFLOW_CASE",
+    case: caseFromMaintenanceBridge(event, action),
+    ...undrawnFromMaintenanceBridge({ event, action }),
+  };
+}

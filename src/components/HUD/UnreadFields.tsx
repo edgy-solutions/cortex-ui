@@ -13,8 +13,10 @@ import { unconsumedFields } from "@/lib/unconsumedFields";
  * while the card rendered the refusal as prose. Establishing why took a four-hop source trace
  * across two repos. With this panel it would have been one line on screen.
  *
- * ⛔ IT REPORTS, IT NEVER RENDERS. Names only, never values — see `unconsumedFields`, whose
- * report type has nowhere to put a value. A key here is a FINDING: something arrived that this
+ * THIS PANEL REPORTS NAMES ONLY, never values — see `unconsumedFields`, whose report type has
+ * nowhere to put a value. (The values themselves are drawn elsewhere, RAW, by the collapsed raw
+ * section on the card — the human's 2026-10-07 ruling; see `unconsumedFields.ts`'s header.) A key
+ * here is a FINDING: something arrived that this
  * UI has no treatment for, and the reader is entitled to know it arrived. What is IN it is a
  * different question and not this panel's to answer.
  *

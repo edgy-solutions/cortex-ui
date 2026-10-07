@@ -9,59 +9,26 @@
  * for itself would only ever agree with whatever the code does today.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { render, cleanup } from "@testing-library/react";
 import { SemanticInterpreter } from "../../components/registry/SemanticInterpreter";
-import { COMPETING_MEASURES_FIXTURES } from "./fixtures";
+import { parityComponents } from "./parityPopulation.testkit";
 import baseline from "./parity.baseline.json";
 
 afterEach(cleanup);
 
-const SESSIONS = path.join(__dirname, "../../../sessions");
+const readCapture = (f: string): unknown =>
+  JSON.parse(readFileSync(path.join(__dirname, "../../../sessions", f), "utf8"));
 
-/**
- * The same 4 files B0 found with `grep -l COMPETING_MEASURES sessions/*payload*.json`. Two never
- * carry a renderable `projected[].payload.rows` for this archetype — the string only appears
- * inside a `presentation_provenance.refusals[]` log entry — and B0 recorded that rather than
- * dropping them silently. Kept in the list here too, so the entries this test fails to find a
- * baseline key for remain an observed zero rather than a file nobody looked at again.
- */
-const CAPTURE_FILES = [
-  "2026-09-19-payload-finance-eac-comparison.json",
-  "2026-09-19-payload-finance-np-meridian-brief.json",
-  "2026-09-29-payload-finance-eac-roll-7-no-longer-refuses.json",
-  "2026-09-30-payload-docs-add-an-engine-roll-8.json",
-];
-
+/** The population lives in `parityPopulation.testkit.ts`, shared with the raw-section seals. */
 function renderFresh(): Record<string, string> {
   const out: Record<string, string> = {};
-
-  for (const f of COMPETING_MEASURES_FIXTURES) {
-    const { container } = render(
-      <SemanticInterpreter
-        payload={{ components: [{ archetype: "COMPETING_MEASURES", rows: f.rows, ...f.envelope }] }}
-      />,
-    );
-    out[`fixture:${f.name}`] = container.innerHTML;
+  for (const [key, component] of Object.entries(parityComponents(readCapture))) {
+    const { container } = render(<SemanticInterpreter payload={{ components: [component] }} />);
+    out[key] = container.innerHTML;
     cleanup();
   }
-
-  for (const file of CAPTURE_FILES) {
-    const data = JSON.parse(readFileSync(path.join(SESSIONS, file), "utf8")) as {
-      projected?: { archetype?: string; payload?: Record<string, unknown> }[];
-    };
-    const projected = Array.isArray(data.projected) ? data.projected : [];
-    const matches = projected
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.archetype === "COMPETING_MEASURES" && Array.isArray(p.payload?.rows));
-    for (const { p, i } of matches) {
-      const { container } = render(<SemanticInterpreter payload={{ components: [p.payload] }} />);
-      out[`capture:${file}#${i}`] = container.innerHTML;
-      cleanup();
-    }
-  }
-
   return out;
 }
 

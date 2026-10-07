@@ -23,17 +23,24 @@
  * detailed mode. The next `available` is visible on screen the day it is emitted instead of
  * after somebody spends four hops on it.
  *
- * ── ⛔ IT REPORTS, IT NEVER RENDERS ───────────────────────────────────────────────────────
+ * ── THE RAW SECTION NOW RENDERS THESE VALUES (the human's 2026-10-07 ruling) ──────────────
  *
- * A listed key is a FINDING, not a value. This module returns NAMES ONLY — the report type has
- * nowhere to put a value, deliberately, so the constraint is structural rather than a rule
- * someone has to remember.
+ * This header used to say "IT REPORTS, IT NEVER RENDERS". That doctrine is OVERRULED by the
+ * human's 2026-10-07 ruling (ADR-0055 amendment requested of Lane 1): what an archetype declares
+ * is what draws, and EVERY OTHER payload key — except the STRUCTURAL ones below — goes in one
+ * collapsed raw section (`src/archetypes/RawFields.tsx`, fed by `src/lib/rawFields.ts`).
  *
- * Two reasons. A value drawn from a field nobody declared a treatment for is a value rendered
- * without units, without a formatter and without anyone having decided what it means — which is
- * how an hours count gets printed as dollars. And an undeclared field may carry something the
- * classification does not permit on this surface; the safe disclosure is that a key exists, not
- * what is in it.
+ * `unconsumedFields()` itself is unchanged and stays NAMES ONLY: the HUD report is the same
+ * finding it always was. The values are drawn by the raw section, not by this module.
+ *
+ * The two reasons the old doctrine gave, and how each is now answered:
+ *
+ * 1. "No formatter is declared, so an hours count gets printed as dollars." ANSWERED. A raw
+ *    value is drawn RAW, as a JSON literal, under a label saying no rendering was declared. No
+ *    units, no formatter, no number formatting — 1234.5 reads `1234.5`, never `$1,234.5`.
+ * 2. "The classification may not permit the value on this surface." NOT ANSWERED BY CORTEX. It
+ *    is a producer obligation: a field not permitted on this surface must not be emitted.
+ *    Cortex draws whatever arrives; it cannot know what the classification permits.
  *
  * ── AN UNDECLARED ARCHETYPE REPORTS AS UNDECLARED, NOT AS ALL-UNREAD ──────────────────────
  *
@@ -74,7 +81,7 @@ import { THRESHOLD_GRID_CONTRACT } from "@/components/planning/ThresholdGrid.con
 import { VARIANCE_TREE_CONTRACT } from "@/components/planning/VarianceTree.contract";
 
 /** Every contract in this repo, keyed by the archetype it declares. */
-const CONTRACTS: Record<string, { archetype: string; fields?: Record<string, unknown> }> = {
+export const CONTRACTS: Record<string, { archetype: string; fields?: Record<string, unknown> }> = {
   [SUPPLY_TABLE_CONTRACT.archetype]: SUPPLY_TABLE_CONTRACT,
   [CANVAS_SEED_CONTRACT.archetype]: CANVAS_SEED_CONTRACT,
   [CHART_WIDGET_CONTRACT.archetype]: CHART_WIDGET_CONTRACT,
@@ -107,7 +114,7 @@ const CONTRACTS: Record<string, { archetype: string; fields?: Record<string, unk
  * key this control stops being able to report, so the list is a denylist of last resort rather
  * than a convenient place to silence noise.
  */
-const STRUCTURAL = new Set([
+export const STRUCTURAL: ReadonlySet<string> = new Set([
   "archetype",
   // ADR-0041 §7: rides any component, on purpose — it is the provenance-floor label's input
   // (see ProvenanceFloorLabel / readProvenanceFloor), not a field any one archetype's contract

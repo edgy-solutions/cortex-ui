@@ -7,6 +7,8 @@ import { isActedOn } from "@/registry/actedOnArchetypes";
 import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { archetypePackage } from "@/archetypes/registry";
+import { RawFields } from "@/archetypes/RawFields";
+import { rawFieldsOf } from "@/lib/rawFields";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
 import { VarianceTree } from "../planning/VarianceTree";
@@ -800,6 +802,14 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 `comp.origin` is absent, malformed, or resolved. */}
             <OriginUnresolvedBanner component={comp} />
             {renderComponent(comp, handlePublish, previewRows, artifactId)}
+            {/* THE RAW SECTION — mounted HERE, at the one place every dispatched component passes
+                through (package cases, switch cases, the acted-on and not-found defaults, and the
+                `break` fall-throughs alike), never per branch. The human's 2026-10-07 ruling
+                (ADR-0055 amendment requested of Lane 1). `no_declaration` draws nothing. */}
+            {(() => {
+              const raw = rawFieldsOf(comp);
+              return raw.status === "raw" ? <RawFields fields={raw.fields} /> : null;
+            })()}
           </div>
         );
       })}

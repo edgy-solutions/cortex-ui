@@ -10,61 +10,26 @@
  * regenerate for itself would only ever agree with whatever the code does today.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { render, cleanup } from "@testing-library/react";
 import { SemanticInterpreter } from "../../components/registry/SemanticInterpreter";
-import { CONTRIBUTION_RANKING_FIXTURES } from "./fixtures";
+import { parityComponents } from "./parityPopulation.testkit";
 import baseline from "./parity.baseline.json";
 
 afterEach(cleanup);
 
-const SESSIONS = path.join(__dirname, "../../../sessions");
+const readCapture = (f: string): unknown =>
+  JSON.parse(readFileSync(path.join(__dirname, "../../../sessions", f), "utf8"));
 
-/**
- * The one capture B0 found with a renderable `final.components[].rows` for this archetype —
- * `sessions/2026-09-26-payload-lot4-contribution-ranking.json`. Unlike COMPETING_MEASURES's
- * captures, this file's final answer sits at `final.components`, not `projected[]`.
- */
-const CAPTURE_FILES = ["2026-09-26-payload-lot4-contribution-ranking.json"];
-
+/** The population lives in `parityPopulation.testkit.ts`, shared with the raw-section seals. */
 function renderFresh(): Record<string, string> {
   const out: Record<string, string> = {};
-
-  for (const f of CONTRIBUTION_RANKING_FIXTURES) {
-    const { container } = render(
-      <SemanticInterpreter
-        payload={{
-          components: [
-            {
-              archetype: "CONTRIBUTION_RANKING",
-              rows: f.rows,
-              value_unit: f.value_unit,
-              threshold: f.threshold,
-              threshold_defaulted: f.threshold_defaulted,
-            },
-          ],
-        }}
-      />,
-    );
-    out[`fixture:${f.name}`] = container.innerHTML;
+  for (const [key, component] of Object.entries(parityComponents(readCapture))) {
+    const { container } = render(<SemanticInterpreter payload={{ components: [component] }} />);
+    out[key] = container.innerHTML;
     cleanup();
   }
-
-  for (const file of CAPTURE_FILES) {
-    const data = JSON.parse(readFileSync(path.join(SESSIONS, file), "utf8")) as {
-      final?: { components?: { archetype?: string; rows?: unknown }[] };
-    };
-    const comps = (data.final?.components ?? []).filter(
-      (c) => c && c.archetype === "CONTRIBUTION_RANKING" && Array.isArray(c.rows),
-    );
-    comps.forEach((c, i) => {
-      const { container } = render(<SemanticInterpreter payload={{ components: [c] }} />);
-      out[`capture:${file}#${i}`] = container.innerHTML;
-      cleanup();
-    });
-  }
-
   return out;
 }
 

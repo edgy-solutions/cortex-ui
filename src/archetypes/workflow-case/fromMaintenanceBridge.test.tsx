@@ -7,10 +7,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { archetypePackage } from "../registry";
+import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { WORKFLOW_CASE_FIXTURES } from "./fixtures";
 import { MAINT_ACTION_APPROVED, MAINT_ACTION_REJECTED, MAINT_EVENT } from "./fixtures/maintenanceBridge";
 import {
   caseFromMaintenanceBridge,
+  componentFromMaintenanceBridge,
+  undrawnFromMaintenanceBridge,
   MAINTENANCE_BRIDGE_MAPPED,
   MAINTENANCE_BRIDGE_UNDRAWN,
 } from "./fromMaintenanceBridge";
@@ -125,6 +128,58 @@ describe("the census — MAPPED ∪ UNDRAWN is the whole field population, mecha
   it("MAPPED ∪ UNDRAWN equals every leaf field MIRRORED_FIELDS actually declares", () => {
     const declared = [...MAINTENANCE_BRIDGE_MAPPED, ...MAINTENANCE_BRIDGE_UNDRAWN].slice().sort();
     expect(declared).toEqual(CENSUS.slice().sort());
+  });
+});
+
+describe("the raw section carries the UNDRAWN paths (the human's 2026-10-07 ruling)", () => {
+  /** An INDEPENDENT presence count — a plain walk of the fixture, not `undrawnFromMaintenanceBridge`'s
+   *  own resolver. An array of objects recurses under a `[]` suffix; anything else is a leaf. */
+  function presentPaths(node: unknown, prefix: string, out: Set<string>): void {
+    if (Array.isArray(node)) {
+      if (node.length > 0 && node.every((e) => typeof e === "object" && e !== null && !Array.isArray(e))) {
+        for (const el of node) presentPaths(el, `${prefix}[]`, out);
+      } else out.add(prefix);
+    } else if (typeof node === "object" && node !== null) {
+      for (const [k, v] of Object.entries(node)) presentPaths(v, `${prefix}.${k}`, out);
+    } else if (node !== undefined) out.add(prefix);
+  }
+  const FIXTURES: [string, Parameters<typeof componentFromMaintenanceBridge>][] = [
+    ["approved", [MAINT_EVENT, MAINT_ACTION_APPROVED]],
+    ["rejected", [MAINT_EVENT, MAINT_ACTION_REJECTED]],
+    ["event alone", [MAINT_EVENT]],
+  ];
+
+  for (const [name, args] of FIXTURES) {
+    it(`census — ${name}: data-raw-field count == the UNDRAWN paths present in the fixture`, () => {
+      const present = new Set<string>();
+      presentPaths(args[0], "event", present);
+      if (args[1]) presentPaths(args[1], "action", present);
+      const expected = (MAINTENANCE_BRIDGE_UNDRAWN as readonly string[]).filter((p) => present.has(p));
+      expect(expected.length).toBeGreaterThan(0);
+      // the probe can tell present from absent: the event-alone fixture lacks every action.* path
+      if (name === "event alone") expect(expected.length).toBeLessThan(MAINTENANCE_BRIDGE_UNDRAWN.length);
+
+      const { container } = render(
+        <SemanticInterpreter payload={{ components: [componentFromMaintenanceBridge(...args)] }} />,
+      );
+      const rendered = [...container.querySelectorAll("[data-raw-field]")].map((e) => e.getAttribute("data-raw-field"));
+      expect(rendered.length).toBe(expected.length);
+      expect(new Set(rendered)).toEqual(new Set(expected.map((p) => `bridge.${p}`)));
+    });
+  }
+
+  it("disjoint — no raw bridge key is in WORKFLOW_CASE's reads or its payload key", () => {
+    const keys = Object.keys(undrawnFromMaintenanceBridge({ event: MAINT_EVENT, action: MAINT_ACTION_APPROVED }));
+    expect(keys.length).toBeGreaterThan(0);
+    const declared = new Set<string>([...pkg.reads, pkg.row.payload_key]);
+    expect(keys.filter((k) => declared.has(k))).toEqual([]);
+    expect(keys.every((k) => k.startsWith("bridge."))).toBe(true);
+  });
+
+  it("an array path carries the leaf across every element that has it, keyed by the census path", () => {
+    const u = undrawnFromMaintenanceBridge({ event: MAINT_EVENT, action: MAINT_ACTION_APPROVED });
+    expect(u["bridge.event.sources[].row_ref"]).toEqual(MAINT_EVENT.sources.map((x) => x.row_ref));
+    expect(u["bridge.event.kind"]).toBe(MAINT_EVENT.kind);
   });
 });
 

@@ -9,67 +9,26 @@
  * test could regenerate for itself would only ever agree with whatever the code does today.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { render, cleanup } from "@testing-library/react";
 import { SemanticInterpreter } from "../../components/registry/SemanticInterpreter";
-import { KNOWLEDGE_DOCUMENT_FIXTURES } from "./fixtures";
+import { parityComponents } from "./parityPopulation.testkit";
 import baseline from "./parity.baseline.json";
 
 afterEach(cleanup);
 
-const SESSIONS = path.join(__dirname, "../../../sessions");
+const readCapture = (f: string): unknown =>
+  JSON.parse(readFileSync(path.join(__dirname, "../../../sessions", f), "utf8"));
 
-/**
- * The only 2 capture files carrying KNOWLEDGE_DOCUMENT (confirmed via
- * `grep -rl "KNOWLEDGE_DOCUMENT" sessions/*.json`), with two different wire shapes: the
- * np-meridian-brief payload lives at `projected[].payload`, the roll-8 payload lives at
- * `raw_events[].event === "final_payload".data.components[]`.
- */
-const PROJECTED_CAPTURE = "2026-09-19-payload-finance-np-meridian-brief.json";
-const FINAL_PAYLOAD_CAPTURE = "2026-09-30-payload-docs-add-an-engine-roll-8.json";
-
+/** The population lives in `parityPopulation.testkit.ts`, shared with the raw-section seals. */
 function renderFresh(): Record<string, string> {
   const out: Record<string, string> = {};
-
-  for (const f of KNOWLEDGE_DOCUMENT_FIXTURES) {
-    const { container } = render(
-      <SemanticInterpreter
-        payload={{ components: [{ archetype: "KNOWLEDGE_DOCUMENT", ...f.payload }] }}
-      />,
-    );
-    out[`fixture:${f.name}`] = container.innerHTML;
+  for (const [key, component] of Object.entries(parityComponents(readCapture))) {
+    const { container } = render(<SemanticInterpreter payload={{ components: [component] }} />);
+    out[key] = container.innerHTML;
     cleanup();
   }
-
-  {
-    const data = JSON.parse(
-      readFileSync(path.join(SESSIONS, PROJECTED_CAPTURE), "utf8"),
-    ) as { projected?: { archetype?: string; payload?: Record<string, unknown> }[] };
-    const projected = Array.isArray(data.projected) ? data.projected : [];
-    const matches = projected
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.archetype === "KNOWLEDGE_DOCUMENT" && p.payload);
-    for (const { p, i } of matches) {
-      const { container } = render(<SemanticInterpreter payload={{ components: [p.payload] }} />);
-      out[`capture:${PROJECTED_CAPTURE}#${i}`] = container.innerHTML;
-      cleanup();
-    }
-  }
-
-  {
-    const data = JSON.parse(
-      readFileSync(path.join(SESSIONS, FINAL_PAYLOAD_CAPTURE), "utf8"),
-    ) as { raw_events: { event?: string; data?: { components?: Record<string, unknown>[] } }[] };
-    const finals = data.raw_events.filter((e) => e.event === "final_payload");
-    const docs = (finals[0]?.data?.components ?? []).filter((c) => c.archetype === "KNOWLEDGE_DOCUMENT");
-    docs.forEach((doc, i) => {
-      const { container } = render(<SemanticInterpreter payload={{ components: [doc] }} />);
-      out[`capture:${FINAL_PAYLOAD_CAPTURE}#${i}`] = container.innerHTML;
-      cleanup();
-    });
-  }
-
   return out;
 }
 
