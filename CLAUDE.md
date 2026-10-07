@@ -122,8 +122,8 @@ Index for the current payload set:
 - `errors.txt`, `helm_template_output.yaml`, `tsconfig.tsbuildinfo` are generated but
   **tracked** — they dirty the tree for every lane. See the proposals in the session log.
 - `.env` is gitignored; `.env.example` is the contract. Env is injected at container
-  start by `docker-entrypoint.sh` (the Dockerfile ENTRYPOINT). `bin/inject-env.sh` is STALE —
-  4 keys, never copied into the image; it injects nothing.
+  start by `docker-entrypoint.sh` (the Dockerfile ENTRYPOINT) — the only injector;
+  the stale `bin/inject-env.sh` (4 keys, never in the image) was deleted 2026-10-07.
 - `caps_dump.json` was once swept in by `git add -A` and had to be removed — never
   `git add -A` here.
 - Rulings/ADRs originate in `invincible-agent`, are mirrored here. Don't number one here.
