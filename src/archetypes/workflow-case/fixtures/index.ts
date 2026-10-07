@@ -418,6 +418,13 @@ const FIXTURE_6_PAYLOAD: WorkflowCasePayload = {
  * header), so the INSTANCE, like fixture 3, is hand-built; unlike fixture 3 it carries producer
  * vocabulary, because it transcribes a real definition rather than standing in for one (same
  * carve-out fixtures 1/2 use — see this file's header).
+ *
+ * A SECOND maintenance case now exists alongside this one, built from the real `maintenance_
+ * bridge` wire types instead of a hand-built instance: `maintenanceBridge.ts` in this directory
+ * (`MAINT_EVENT`, `MAINT_ACTION_APPROVED`, `MAINT_ACTION_REJECTED`), projected through
+ * `../fromMaintenanceBridge.ts`'s `caseFromMaintenanceBridge`. This fixture (7) stays exactly as
+ * it was — its definition is still the only transcribed `maint_fault_propose` definition, reused
+ * by that projector rather than copied — and is unchanged by the addition.
  */
 
 /**
@@ -483,7 +490,7 @@ const MAINT_OPTIONS: CaseOption[] = [
   },
 ];
 
-const MAINT_FAULT_PROPOSE_DEFINITION: CaseDefinition = {
+export const MAINT_FAULT_PROPOSE_DEFINITION: CaseDefinition = {
   id: "maint_fault_propose",
   name: "Maintenance fault -- propose a disposition",
   participants: [{ role: "initiator" }, { role: "maintainer" }],

@@ -1,0 +1,567 @@
+{
+  "provenance": {
+    "sdk_repo": "iagent-mesh-sdk",
+    "sdk_ref": "e7db4752fac33f03fa8e4f0ff082616f3a716dd1",
+    "sdk_sha": "e7db4752fac33f03fa8e4f0ff082616f3a716dd1",
+    "sdk_release": "UNRELEASED BY DESIGN — origin/lane/ca-0.9.8 is a cross-repo integration lane, not slated for a tagged SDK release; the sha is the permanent pin, not a stand-in for one.",
+    "extractor": "scripts/extract-maintenance-bridge-parity.mjs",
+    "sources": [
+      "iagent_mesh/maintenance_bridge.py"
+    ]
+  },
+  "classes": {
+    "ReleasabilityLabel": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "originator_nation",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "releasable_to",
+          "annotation": "tuple[str, ...]",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_originator_nation_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"originator_nation\")",
+          "source": "    @field_validator(\"originator_nation\")\n    @classmethod\n    def _originator_nation_is_present(cls, v: str) -> str:\n        if not v.strip():\n            raise ValueError(\n                \"ReleasabilityLabel.originator_nation='' — required, cannot be blank\"\n            )\n        return v"
+        }
+      ]
+    },
+    "Fault": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "item",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "fault_code",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "observed_at",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"item\", \"fault_code\", \"observed_at\")",
+          "source": "    @field_validator(\"item\", \"fault_code\", \"observed_at\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"Fault.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "EventSource": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "source",
+          "annotation": "EventSourceKind  # type: ignore[valid-type]",
+          "default": null
+        },
+        {
+          "name": "reported_by",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "observed_at",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "row_ref",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"reported_by\", \"observed_at\", \"row_ref\")",
+          "source": "    @field_validator(\"reported_by\", \"observed_at\", \"row_ref\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"EventSource.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "SpareRow": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "site",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "on_hand",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "as_of",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "lead_time_days",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "lead_time_source",
+          "annotation": "LeadTimeSource  # type: ignore[valid-type]",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"site\", \"as_of\")",
+          "source": "    @field_validator(\"site\", \"as_of\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"SpareRow.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        },
+        {
+          "name": "_quantity_is_not_negative",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"on_hand\", \"lead_time_days\")",
+          "source": "    @field_validator(\"on_hand\", \"lead_time_days\")\n    @classmethod\n    def _quantity_is_not_negative(cls, v: int, info) -> int:\n        if v < 0:\n            raise ValueError(f\"SpareRow.{info.field_name}={v} — cannot be negative\")\n        return v"
+        }
+      ]
+    },
+    "BattleConditionBasis": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "rule",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "observed_at",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"rule\", \"observed_at\")",
+          "source": "    @field_validator(\"rule\", \"observed_at\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"BattleConditionBasis.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "BattleCondition": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "mission_essential",
+          "annotation": "bool",
+          "default": null
+        },
+        {
+          "name": "basis",
+          "annotation": "BattleConditionBasis",
+          "default": null
+        }
+      ],
+      "validators": []
+    },
+    "Picture": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "readiness",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "factors",
+          "annotation": "tuple[str, ...]",
+          "default": null
+        },
+        {
+          "name": "lifecycle",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "spares",
+          "annotation": "tuple[SpareRow, ...]",
+          "default": null
+        },
+        {
+          "name": "nearest_spare",
+          "annotation": "Optional[SpareRow]",
+          "default": "None"
+        },
+        {
+          "name": "battle_condition",
+          "annotation": "BattleCondition",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"readiness\", \"lifecycle\")",
+          "source": "    @field_validator(\"readiness\", \"lifecycle\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"Picture.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "EventProvenanceRow": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "row_key",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "observed_at",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"row_key\", \"observed_at\")",
+          "source": "    @field_validator(\"row_key\", \"observed_at\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"EventProvenanceRow.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "MaintenanceEvent": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "event_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "kind",
+          "annotation": "EventKind  # type: ignore[valid-type]",
+          "default": null
+        },
+        {
+          "name": "asset_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "owning_tier",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "fault",
+          "annotation": "Fault",
+          "default": null
+        },
+        {
+          "name": "sources",
+          "annotation": "tuple[EventSource, ...]",
+          "default": null
+        },
+        {
+          "name": "picture",
+          "annotation": "Picture",
+          "default": null
+        },
+        {
+          "name": "label",
+          "annotation": "ReleasabilityLabel",
+          "default": null
+        },
+        {
+          "name": "provenance",
+          "annotation": "tuple[EventProvenanceRow, ...]",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"event_id\", \"asset_id\", \"owning_tier\")",
+          "source": "    @field_validator(\"event_id\", \"asset_id\", \"owning_tier\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"MaintenanceEvent.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        },
+        {
+          "name": "_sources_nonempty",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"sources\")",
+          "source": "    @field_validator(\"sources\")\n    @classmethod\n    def _sources_nonempty(cls, v: tuple[EventSource, ...]) -> tuple[EventSource, ...]:\n        if not v:\n            raise ValueError(\n                \"MaintenanceEvent.sources=() — an episode with no reported source is not an \"\n                \"episode anyone opened\"\n            )\n        return v"
+        }
+      ]
+    },
+    "TaskRef": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "graph_uri",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "data_module_code",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"graph_uri\", \"data_module_code\")",
+          "source": "    @field_validator(\"graph_uri\", \"data_module_code\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"TaskRef.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "PartRow": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "item",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "part_ref",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "quantity",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "source_site",
+          "annotation": "Optional[str]",
+          "default": "None"
+        },
+        {
+          "name": "icn",
+          "annotation": "Optional[str]",
+          "default": "None"
+        },
+        {
+          "name": "hotspot_id",
+          "annotation": "Optional[str]",
+          "default": "None"
+        },
+        {
+          "name": "lead_time_days",
+          "annotation": "Optional[int]",
+          "default": "None"
+        },
+        {
+          "name": "lead_time_source",
+          "annotation": "Optional[LeadTimeSource]",
+          "default": "None  # type: ignore[valid-type]"
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"item\", \"part_ref\")",
+          "source": "    @field_validator(\"item\", \"part_ref\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"PartRow.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        },
+        {
+          "name": "_quantity_is_positive",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"quantity\")",
+          "source": "    @field_validator(\"quantity\")\n    @classmethod\n    def _quantity_is_positive(cls, v: int) -> int:\n        if v <= 0:\n            raise ValueError(f\"PartRow.quantity={v} — a part row recording zero or fewer units \"\n                             f\"is not a row anyone needed\")\n        return v"
+        },
+        {
+          "name": "_lead_time_fields_are_both_or_neither",
+          "kind": "model_validator",
+          "decorator": "@model_validator(mode=\"after\")",
+          "source": "    @model_validator(mode=\"after\")\n    def _lead_time_fields_are_both_or_neither(self) -> \"PartRow\":\n        \"\"\"Not a verbatim packet requirement — the packet rules each field's OWN nullability but\n        does not spell out the pair. Inferred and enforced as a structural invariant from the\n        packet's own framing (\"record what the option was built on... at the time it was built\"):\n        a lead time with no source, or a source with no lead time, names half of a fact the\n        'replace after resupply' option always produces together. Flagged here as an inference,\n        same discipline the week-1 packet itself uses for its own inferred field names, rather than\n        asserted as if ADR-0046 stated it.\"\"\"\n        have_days = self.lead_time_days is not None\n        have_source = self.lead_time_source is not None\n        if have_days != have_source:\n            raise ValueError(\n                f\"PartRow(item={self.item!r}).lead_time_days={self.lead_time_days!r}, \"\n                f\"lead_time_source={self.lead_time_source!r} — set together or not at all; \"\n                f\"the 'replace after resupply' option produces both or neither\"\n            )\n        return self"
+        }
+      ]
+    },
+    "WorkOrder": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "task",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "task_refs",
+          "annotation": "tuple[TaskRef, ...]",
+          "default": null
+        },
+        {
+          "name": "parts",
+          "annotation": "tuple[PartRow, ...]",
+          "default": null
+        },
+        {
+          "name": "outcome",
+          "annotation": "ApprovalOutcome  # type: ignore[valid-type]",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_task_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"task\")",
+          "source": "    @field_validator(\"task\")\n    @classmethod\n    def _task_is_present(cls, v: str) -> str:\n        if not v.strip():\n            raise ValueError(\"WorkOrder.task='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "ApprovalChainEntry": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "step",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "role",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "approver_sub",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "decision",
+          "annotation": "ApprovalOutcome  # type: ignore[valid-type]",
+          "default": null
+        },
+        {
+          "name": "decided_at",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "decision_record_ref",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"role\", \"approver_sub\", \"decided_at\", \"decision_record_ref\")",
+          "source": "    @field_validator(\"role\", \"approver_sub\", \"decided_at\", \"decision_record_ref\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"ApprovalChainEntry.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        },
+        {
+          "name": "_step_is_not_negative",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"step\")",
+          "source": "    @field_validator(\"step\")\n    @classmethod\n    def _step_is_not_negative(cls, v: int) -> int:\n        if v < 0:\n            raise ValueError(f\"ApprovalChainEntry.step={v} — cannot be negative\")\n        return v"
+        }
+      ]
+    },
+    "ActionProvenance": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "workflow_definition_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "workflow_definition_version",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "workflow_instance_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "manual_nodes_consulted",
+          "annotation": "tuple[str, ...]",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"workflow_definition_id\", \"workflow_definition_version\", \"workflow_instance_id\")",
+          "source": "    @field_validator(\"workflow_definition_id\", \"workflow_definition_version\", \"workflow_instance_id\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"ActionProvenance.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    },
+    "ActionRecord": {
+      "file": "iagent_mesh/maintenance_bridge.py",
+      "fields": [
+        {
+          "name": "action_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "event_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "asset_id",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "owning_tier",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "label",
+          "annotation": "ReleasabilityLabel",
+          "default": null
+        },
+        {
+          "name": "work_order",
+          "annotation": "WorkOrder",
+          "default": null
+        },
+        {
+          "name": "approval_chain",
+          "annotation": "tuple[ApprovalChainEntry, ...]",
+          "default": null
+        },
+        {
+          "name": "provenance",
+          "annotation": "ActionProvenance",
+          "default": null
+        }
+      ],
+      "validators": [
+        {
+          "name": "_required_string_is_present",
+          "kind": "field_validator",
+          "decorator": "@field_validator(\"action_id\", \"event_id\", \"asset_id\", \"owning_tier\")",
+          "source": "    @field_validator(\"action_id\", \"event_id\", \"asset_id\", \"owning_tier\")\n    @classmethod\n    def _required_string_is_present(cls, v: str, info) -> str:\n        if not v.strip():\n            raise ValueError(f\"ActionRecord.{info.field_name}='' — required, cannot be blank\")\n        return v"
+        }
+      ]
+    }
+  }
+}
