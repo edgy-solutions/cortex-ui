@@ -46,7 +46,7 @@ afterEach(cleanup);
 /** The engine's own notional seed, field for field. */
 const SEED = () => [
   {
-    method: "CPI",
+    method_label: "CPI",
     formula: "EAC = BAC / CPI",
     value: 14152380.95,
     unavailable_reason: null,
@@ -56,13 +56,13 @@ const SEED = () => [
     ],
   },
   {
-    method: "CPI_SPI",
+    method_label: "CPI_SPI",
     formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
     value: 14792607.71,
     unavailable_reason: null,
   },
   {
-    method: "REMAINING_AT_BUDGET",
+    method_label: "REMAINING_AT_BUDGET",
     formula: "EAC = ACWP + (BAC - BCWP)",
     value: 13130000.0,
     unavailable_reason: null,
@@ -134,8 +134,8 @@ describe("the spread is shown, and never computed here", () => {
     // missing measurement. The control for the test above.
     const rows = [
       SEED()[0],
-      { method: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
-      { method: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
+      { method_label: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
+      { method_label: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
     ];
     render(<CompetingMeasures rows={rows} methods_compared={3} methods_answered={1} />);
     expect(document.querySelector("[data-spread-unreported]")).toBeNull();
@@ -170,8 +170,8 @@ describe("the spread is shown, and never computed here", () => {
     // a spread of a single number.
     const rows = [
       SEED()[0],
-      { method: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
-      { method: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
+      { method_label: "CPI_SPI", formula: "f", value: null, unavailable_reason: "CPI x SPI is zero" },
+      { method_label: "RAB", formula: "g", value: null, unavailable_reason: "no baseline" },
     ];
     render(<CompetingMeasures rows={rows} methods_compared={3} methods_answered={3} />);
     expect(document.querySelector("[data-spread-unreported]")).toBeNull();
@@ -182,7 +182,7 @@ describe("an undefined method keeps its row", () => {
   const withBlank = () => [
     SEED()[0],
     {
-      method: "CPI_SPI",
+      method_label: "CPI_SPI",
       formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
       value: null,
       unavailable_reason: "CPI x SPI is zero — the quotient is undefined",
@@ -262,14 +262,29 @@ describe("it refuses rather than drawing a comparison of nothing", () => {
     expect(reasonOf([SEED()[0]])).toMatch(/needs something to compare/);
   });
 
+  it("A1: a row carrying ONLY `method` (no method_label) is REFUSED — no fallback (ruling 5)", () => {
+    const rows = [
+      { method: "CPI", formula: "f", value: 1, unavailable_reason: null },
+      { method: "RAB", formula: "g", value: 2, unavailable_reason: null },
+    ];
+    expect(reasonOf(rows)).toMatch(/method_label/);
+  });
+
+  it("A3: a row with method_label draws, and the label is in [data-method]", () => {
+    render(<CompetingMeasures rows={SEED()} />);
+    const el = document.querySelector('[data-method="CPI"]');
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toContain("CPI");
+  });
+
   it("a method with no name", () => {
-    expect(reasonOf([{ formula: "f", value: 1 }, SEED()[0]])).toBe("method is missing its name");
+    expect(reasonOf([{ formula: "f", value: 1 }, SEED()[0]])).toBe("method_label is missing its name");
   });
 
   it("a method with NEITHER a figure nor a reason — the forbidden state", () => {
     // The important one. A blank row with no explanation leaves the reader unable to tell
     // undefined from errored from lost.
-    const rows = [SEED()[0], { method: "X", formula: "f", value: null, unavailable_reason: null }];
+    const rows = [SEED()[0], { method_label: "X", formula: "f", value: null, unavailable_reason: null }];
     expect(reasonOf(rows)).toBe("method carries neither a figure nor a reason");
   });
 
@@ -278,13 +293,13 @@ describe("it refuses rather than drawing a comparison of nothing", () => {
     // between reporting a number and qualifying it.
     const rows = [
       SEED()[0],
-      { method: "X", formula: "f", value: 5, unavailable_reason: "index is provisional" },
+      { method_label: "X", formula: "f", value: 5, unavailable_reason: "index is provisional" },
     ];
     expect(reasonOf(rows)).toBeNull();
   });
 
   it("a blank reason is not a reason", () => {
-    const rows = [SEED()[0], { method: "X", formula: "f", value: null, unavailable_reason: "   " }];
+    const rows = [SEED()[0], { method_label: "X", formula: "f", value: null, unavailable_reason: "   " }];
     expect(reasonOf(rows)).toBe("method carries neither a figure nor a reason");
   });
 });
@@ -309,9 +324,9 @@ describe("it refuses rather than drawing a comparison of nothing", () => {
 describe("the first consumer's field names are read, and named", () => {
   /** Exactly what `fin_eac_comparison` emits after the envelope move (854e76d). */
   const PRODUCER_ROWS = () => [
-    { method: "CPI", formula: "EAC = BAC / CPI", eac: 14152380.95, vac: -2152380.95, etc: 6722380.95, unavailable_reason: null },
-    { method: "CPI_SPI", formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)", eac: 14792607.71, vac: -2792607.71, etc: 7362607.71, unavailable_reason: null },
-    { method: "REMAINING_AT_BUDGET", formula: "EAC = ACWP + (BAC - BCWP)", eac: 13130000.0, vac: -1130000.0, etc: 5700000.0, unavailable_reason: null },
+    { method_label: "CPI", formula: "EAC = BAC / CPI", eac: 14152380.95, vac: -2152380.95, etc: 6722380.95, unavailable_reason: null },
+    { method_label: "CPI_SPI", formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)", eac: 14792607.71, vac: -2792607.71, etc: 7362607.71, unavailable_reason: null },
+    { method_label: "REMAINING_AT_BUDGET", formula: "EAC = ACWP + (BAC - BCWP)", eac: 13130000.0, vac: -1130000.0, etc: 5700000.0, unavailable_reason: null },
   ];
   const PRODUCER_ENVELOPE = {
     spread: 1662607.71,
@@ -457,8 +472,8 @@ describe("the payload arrives under the key the projector registers", () => {
             {
               archetype: "COMPETING_MEASURES",
               rows: [
-                { method: "CPI-based", formula: "BAC / CPI", value: 100, unavailable_reason: null },
-                { method: "SPI-based", formula: "BAC / SPI", value: 200, unavailable_reason: null },
+                { method_label: "CPI-based", formula: "BAC / CPI", value: 100, unavailable_reason: null },
+                { method_label: "SPI-based", formula: "BAC / SPI", value: 200, unavailable_reason: null },
               ],
             },
           ],
@@ -593,7 +608,7 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     const rows = [
       SEED()[0],
       {
-        method: "CPI_SPI",
+        method_label: "CPI_SPI",
         formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)",
         value: null,
         unavailable_reason: "CPI x SPI is zero",

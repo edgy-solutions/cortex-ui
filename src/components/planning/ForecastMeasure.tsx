@@ -144,7 +144,7 @@ export function ForecastMeasure({
             className="font-mono text-[11px] uppercase tracking-widest"
             style={{ color: ACCENT }}
           >
-            {row.method} method
+            {row.method_label} method
           </p>
           <p className="font-mono text-[11px] text-slate-400">{row.formula}</p>
         </div>
@@ -234,7 +234,7 @@ export function ForecastMeasure({
       {inspecting && (
         <CellInspector
           onDismiss={() => setInspecting(false)}
-          title={<>{row.program_name || scope_label || "forecast"} · {row.method}</>}
+          title={<>{row.program_name || scope_label || "forecast"} · {row.method_label}</>}
           headline={<>{row.formula}</>}
           lines={[
             <>

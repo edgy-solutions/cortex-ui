@@ -202,7 +202,7 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
 
       <ol className="flex flex-col gap-2">
         {rows.map((r) => (
-          <MethodRow key={r.method} row={r} barMax={barMax} unit={value_unit} />
+          <MethodRow key={r.method_label} row={r} barMax={barMax} unit={value_unit} />
         ))}
       </ol>
     </div>
@@ -222,9 +222,9 @@ function MethodRow({
   const width = value !== null && barMax > 0 ? (Math.abs(value) / barMax) * 100 : 0;
 
   return (
-    <li className="flex flex-col gap-1" data-method={row.method}>
+    <li className="flex flex-col gap-1" data-method={row.method_label}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[11px] text-slate-200">{row.method}</span>
+        <span className="font-mono text-[11px] text-slate-200">{row.method_label}</span>
         {value !== null ? (
           <span className="font-mono text-[12px] text-slate-100 tabular-nums">
             {formatAmount(value, unit)}

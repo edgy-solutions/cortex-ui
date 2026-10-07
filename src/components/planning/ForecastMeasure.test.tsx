@@ -26,7 +26,7 @@ const row = (over: Record<string, unknown> = {}) => [
   {
     program_id: "P1",
     program_name: "Meridian",
-    method: "CPI",
+    method_label: "CPI",
     formula: "EAC = BAC / CPI",
     eac: 14152381,
     vac: -2152381,
@@ -47,12 +47,18 @@ const row = (over: Record<string, unknown> = {}) => [
 
 describe("the method is not optional at the renderer either", () => {
   it("REFUSES to draw the number when the method is missing", () => {
-    const r = validateForecastMeasure(row({ method: undefined }));
+    const r = validateForecastMeasure(row({ method_label: undefined }));
     expect(r.kind).toBe("empty");
-    render(<ForecastMeasure rows={row({ method: undefined })} />);
+    render(<ForecastMeasure rows={row({ method_label: undefined })} />);
     // The figure must not appear in ANY form — not greyed, not captioned "method unknown".
     expect(screen.queryByText(/14,152,381|14\.2M|14\.15M/)).toBeNull();
     expect(screen.getByText(/carries no method/)).toBeTruthy();
+  });
+
+  it("A2: a row carrying ONLY `method` (no method_label) is REFUSED — no fallback (ruling 5)", () => {
+    const r = validateForecastMeasure(row({ method_label: undefined, method: "CPI" }));
+    expect(r.kind).toBe("empty");
+    if (r.kind === "empty") expect(r.reason).toMatch(/method_label/);
   });
 
   it("REFUSES when the formula is missing, even with a method name", () => {
@@ -66,7 +72,7 @@ describe("the method is not optional at the renderer either", () => {
   it("checks the method BEFORE the value — order is the point", () => {
     // A row with neither must refuse for the METHOD, so the message names the thing that makes
     // the number ambiguous rather than the thing that makes it absent.
-    const r = validateForecastMeasure(row({ method: "", eac: undefined }));
+    const r = validateForecastMeasure(row({ method_label: "", eac: undefined }));
     expect(r.kind).toBe("empty");
     if (r.kind === "empty") expect(r.reason).toMatch(/no method/);
   });

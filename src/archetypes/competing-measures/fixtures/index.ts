@@ -36,14 +36,14 @@ export interface CompetingMeasuresFixture {
 /** The complete comparison: three methods, all answered, spread and bounds sent. */
 const COMPLETE: CompetingMeasureRow[] = [
   {
-    method: "CPI",
+    method_label: "CPI",
     formula: "EAC = BAC / CPI",
     value: 14152380.95,
     unavailable_reason: null,
     secondary: [{ label: "VAC", value: -2152380.95 }],
   },
-  { method: "CPI_SPI", formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)", value: 14792607.71, unavailable_reason: null },
-  { method: "Bottom-up", formula: "sum of control accounts", value: 13130000.0, unavailable_reason: null },
+  { method_label: "CPI_SPI", formula: "EAC = ACWP + (BAC - BCWP) / (CPI x SPI)", value: 14792607.71, unavailable_reason: null },
+  { method_label: "Bottom-up", formula: "sum of control accounts", value: 13130000.0, unavailable_reason: null },
 ];
 
 const ENVELOPE = {

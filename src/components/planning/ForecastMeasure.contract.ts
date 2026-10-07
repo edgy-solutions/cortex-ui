@@ -49,7 +49,7 @@ export const FORECAST_MEASURE_ROW_REQUIREMENTS = {
 
 export const FORECAST_MEASURE_REFUSAL_REASONS = [
   "no forecast row recorded",
-  "forecast carries no method — the number alone is ambiguous",
+  "forecast carries no method_label — the number alone is ambiguous",
   "forecast carries no value",
 ] as const;
 
@@ -85,7 +85,7 @@ export interface ForecastRow {
   program_id?: string;
   program_name?: string;
   /** The named method. MANDATORY — see the header. */
-  method: string;
+  method_label: string;
   /** The formula that method applies, stated by the producer beside the number it produced. */
   formula: string;
   /** The forecast itself. */
@@ -123,10 +123,10 @@ export function validateForecastMeasure(
   const row = r as Record<string, unknown>;
   // METHOD FIRST, before the value is even looked at. The order is the point: there is no
   // state in which this renders a number and omits how it was reached.
-  const method = typeof row.method === "string" ? row.method.trim() : "";
+  const method = typeof row.method_label === "string" ? row.method_label.trim() : "";
   const formula = typeof row.formula === "string" ? row.formula.trim() : "";
   if (!method || !formula) {
-    return { kind: "empty", reason: "forecast carries no method — the number alone is ambiguous" };
+    return { kind: "empty", reason: "forecast carries no method_label — the number alone is ambiguous" };
   }
   if (typeof row.eac !== "number" || !Number.isFinite(row.eac)) {
     return { kind: "empty", reason: "forecast carries no value" };

@@ -108,7 +108,7 @@ export const COMPETING_MEASURES_ROW_REQUIREMENTS = {
 export const COMPETING_MEASURES_REFUSAL_REASONS = [
   "no methods recorded",
   "only one method recorded — a comparison needs something to compare",
-  "method is missing its name",
+  "method_label is missing its name",
   "method carries neither a figure nor a reason",
   "method carries no formula — the figure would be unattributed",
 ] as const;
@@ -117,7 +117,7 @@ export type CompetingMeasuresRefusal = (typeof COMPETING_MEASURES_REFUSAL_REASON
 
 export interface CompetingMeasureRow {
   /** The named method. Structural — no domain vocabulary in this contract. */
-  method: string;
+  method_label: string;
   /** What the method computes, verbatim. Half the answer; see the header. */
   formula: string;
   /** The figure, or null when this method could not answer. */
@@ -261,10 +261,10 @@ export function validateCompetingMeasures(
   }
   const objs = rows.filter(isRecord).map(normaliseMeasureRow);
   if (objs.length !== rows.length) {
-    return { kind: "empty", reason: "method is missing its name" };
+    return { kind: "empty", reason: "method_label is missing its name" };
   }
-  if (objs.some((r) => typeof r.method !== "string" || !r.method.trim())) {
-    return { kind: "empty", reason: "method is missing its name" };
+  if (objs.some((r) => typeof r.method_label !== "string" || !r.method_label.trim())) {
+    return { kind: "empty", reason: "method_label is missing its name" };
   }
   if (rows.length < COMPETING_MEASURES_ROW_REQUIREMENTS.minRows) {
     return {
