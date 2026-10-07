@@ -36,7 +36,13 @@ const draw = (f: (typeof ILLUSTRATION_FIXTURES)[number]) =>
 async function settle(container: ParentNode) {
   await waitFor(() => {
     const el = container.querySelector('[data-archetype="ILLUSTRATION"]');
-    expect(el?.getAttribute("data-illustration-state")).not.toBe("loading");
+    const state = el?.getAttribute("data-illustration-state");
+    expect(state).not.toBe("loading");
+    // "drawn" is an attribute committed in RENDER, but the SVG (and the hotspot highlight it
+    // carries) is appended by a PASSIVE effect that runs after that commit. Stopping at "not
+    // loading" raced it: CI on d7d6593 saw hotspot "found" with ZERO highlighted elements. So a
+    // drawn card is settled only once its SVG is actually in the canvas.
+    if (state === "drawn") expect(el?.querySelector("[data-illustration-canvas] svg")).not.toBeNull();
   });
 }
 
