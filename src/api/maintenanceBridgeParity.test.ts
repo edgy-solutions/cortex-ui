@@ -26,7 +26,11 @@ import { MIRRORED_FIELDS, type MirroredField } from "./maintenanceBridgeTypes";
 import SNAPSHOT from "./maintenanceBridgeParity.json";
 
 const SDK = path.join(__dirname, "../../../iagent-mesh-sdk");
-const HAVE_SDK = existsSync(path.join(SDK, "iagent_mesh/maintenance_bridge.py"));
+// Gated on the SDK being a GIT CHECKOUT, not on the module being in its working tree. Both arms
+// read through `git show <PINNED_SHA>:<file>`, never the disk — and CI checks the SDK out at
+// meshSdkParity's release pin (v0.9.x), which predates maintenance_bridge.py. Gated on the file,
+// every arm SKIPPED in CI and check:seals refused the build (run 37569496180, 3d44ee0).
+const HAVE_SDK = existsSync(path.join(SDK, ".git"));
 const PINNED_SHA = "e7db4752fac33f03fa8e4f0ff082616f3a716dd1";
 
 type PyField = { name: string; annotation: string; default: string | null };
@@ -206,8 +210,9 @@ describe("the maintenance-bridge snapshot still matches the live Python at the p
     // that the pinned commit is still real history on that branch, not an orphan or a typo.
     const git = (...a: string[]) => execFileSync("git", ["-C", SDK, ...a], { encoding: "utf8" }).trim();
     expect(() => git("cat-file", "-e", `${PINNED_SHA}^{commit}`)).not.toThrow();
-    expect(() =>
-      git("merge-base", "--is-ancestor", PINNED_SHA, "origin/lane/ca-0.9.8"),
-    ).not.toThrow();
+    // Contained in SOME remote branch — not named `origin/lane/ca-0.9.8`, which a merge-and-delete
+    // would turn red for a reason unrelated to the mirror. CI fetches every branch (fetch-depth: 0).
+    const containing = git("branch", "-r", "--contains", PINNED_SHA);
+    expect(containing.length, "no remote branch contains the pinned sha").toBeGreaterThan(0);
   });
 });
