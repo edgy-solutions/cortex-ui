@@ -40,6 +40,8 @@
 import { useEffect, useRef, useState } from "react";
 import { actOnHumanTask } from "@/api/client";
 import { fetchIngestStatus, disputeIngestOrigin } from "@/lib/ingestTransport";
+import { fetchCase, type FetchCaseResult } from "@/lib/cases";
+import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import {
@@ -48,6 +50,8 @@ import {
   readIngestErrorMessage,
   isIngestNotFoundError,
   ingestStageLadder,
+  ingestEventLadder,
+  INGEST_CASE_OPENED_STATUS,
   ingestPollingDone,
   promotionIngestId,
   payloadMatchesIngestId,
@@ -66,6 +70,109 @@ const RUNG_GLYPH: Record<string, string> = {
  *  served menu (`useTaskKindStore`) has nothing for "document_promotion" yet. */
 const FALLBACK_ACCEPTS = ["promoted", "rejected"];
 const FALLBACK_REASON_REQUIRED = new Set(["rejected"]);
+
+/**
+ * An EVENT ingest's case — "event ingests render as cases" (ruling, 2026-10-07).
+ *
+ * The case is fetched (`GET /cases/{case_id}`, `fetchCase`) and drawn THROUGH
+ * `SemanticInterpreter` as a `WORKFLOW_CASE` component, never by importing the workflow-case card:
+ * the interpreter's dispatch is where every WORKFLOW_CASE answer is drawn (and where its raw
+ * fields are disclosed), so a direct import would bypass it. `eventCaseCensus.test.ts` holds that.
+ *
+ * `not_found` is ONE sentence for two facts — an absent case and a case the caller may not read
+ * answer identically BY DESIGN (an existence oracle); this card never splits them.
+ */
+function EventCase({ caseId }: { caseId: string }) {
+  const [result, setResult] = useState<FetchCaseResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResult(null);
+    void fetchCase(caseId).then((r) => {
+      if (!cancelled) setResult(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
+
+  if (result === null) {
+    return (
+      <p className="mt-2 text-[10px] font-mono text-slate-500" data-case-state="loading">
+        loading case…
+      </p>
+    );
+  }
+  if (result.ok) {
+    return (
+      <div className="mt-3" data-case-state="loaded" data-case-id={caseId}>
+        {/* artifactId is deliberately undefined, and SPELLED so askFold's every-element seal can see
+            the choice: the ingest panel is not a canvas artifact, so there is no artifact this case
+            sits ON, and the one component drawn is a WORKFLOW_CASE, which mounts no ask card. */}
+        <SemanticInterpreter
+          payload={{ components: [{ archetype: "WORKFLOW_CASE", case: result.payload }] }}
+          artifactId={undefined}
+        />
+      </div>
+    );
+  }
+  if (result.reason === "not_found") {
+    return (
+      <p className="mt-2 text-[11px] font-mono text-rose-400" data-case-state="not_found">
+        Case not found, or not visible to you
+      </p>
+    );
+  }
+  if (result.reason === "runner_unavailable") {
+    return (
+      <p className="mt-2 text-[11px] font-mono text-amber-400" data-case-state="runner_unavailable">
+        The case runner is unavailable
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-[11px] font-mono text-amber-400" data-case-state="invalid">
+      The case could not be read ({result.reason}
+      {result.reason === "invalid_case_payload" ? `: ${result.detail}` : ""}) — case{" "}
+      <span className="font-mono">{caseId}</span>
+    </p>
+  );
+}
+
+/** An event row's own ladder (received, case_opened — `ingestEventLadder`) and, once the case is
+ *  opened, the case itself. No review step: an event is never promoted. */
+function EventSection({ row }: { row: IngestStatusRow }) {
+  const ladder = ingestEventLadder(row.stage);
+  return (
+    <div className="mt-2" data-ingest-event>
+      {ladder && (
+        <ul className="flex items-center gap-2" data-ingest-event-ladder>
+          {ladder.map((rung) => (
+            <li
+              key={rung.stage}
+              className="flex items-center gap-1 text-[10px] font-mono text-slate-300"
+              data-ingest-ladder-stage={rung.stage}
+              data-ingest-ladder-state={rung.state}
+            >
+              <span>{RUNG_GLYPH[rung.state]}</span>
+              <span>{rung.stage}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {row.stage === INGEST_CASE_OPENED_STATUS &&
+        (row.case_id ? (
+          <EventCase caseId={row.case_id} />
+        ) : (
+          // The producer writes case_id with case_opened (one update_status call); a row at
+          // case_opened without one contradicts it. Say so; there is nothing to fetch.
+          <p className="mt-2 text-[11px] font-mono text-amber-400" data-case-state="no_case_id">
+            This event reports a case was opened but names no case
+          </p>
+        ))}
+    </div>
+  );
+}
 
 export interface IngestStatusCardProps {
   ingestId: string;
@@ -298,6 +405,11 @@ export function IngestStatusCard({
           <span> (duplicate of {row.duplicate!.of_ingest_id})</span>
           {row.stage && <span> — original is at {row.stage}</span>}
         </p>
+      ) : row.kind === "event" ? (
+        // Document rows (pdf/cad) never reach EventSection and so never fetch a case, even if a
+        // case_id is present: Lane 1 says case_id is null on document rows, and a non-null value
+        // there is not cortex's to interpret.
+        <EventSection row={row} />
       ) : (
         <>
           <ul className="flex items-center gap-2" data-ingest-ladder>

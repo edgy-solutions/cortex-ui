@@ -25,7 +25,13 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { INGEST_KINDS, INGEST_STAGES, INGEST_DUPLICATE_STATUS } from "./ingestWire";
+import {
+  INGEST_KINDS,
+  INGEST_STAGES,
+  INGEST_DUPLICATE_STATUS,
+  INGEST_CASE_OPENED_STATUS,
+  INGEST_EVENT_LADDER,
+} from "./ingestWire";
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
 
@@ -107,6 +113,32 @@ describe("resolveTuple — unit-tested on fixtures before it ever touches the re
   });
 });
 
+/** `ALL_STATUSES = STAGES + (NAME, NAME, ...)` → the out-of-band NAMES that follow STAGES, in
+ *  the producer's order. Throws when the line is absent or not of that shape — an out-of-band
+ *  status is only ever added HERE, so a reshaped line must fail loudly, not pass vacuously. */
+function parseOutOfBandNames(src: string): string[] {
+  const pattern =
+    /^ALL_STATUSES\s*=\s*STAGES\s*\+\s*\(\s*([A-Z][A-Z0-9_]*(?:\s*,\s*[A-Z][A-Z0-9_]*)*)\s*,?\s*\)\s*$/;
+  for (const raw of flattenParens(src).split(/\r?\n/)) {
+    const m = pattern.exec(raw.trim());
+    if (m) return m[1].split(",").map((x) => x.trim());
+  }
+  throw new Error('no "ALL_STATUSES = STAGES + (NAME, ...)" line found');
+}
+
+describe("parseOutOfBandNames — unit-tested on fixtures", () => {
+  it("reads the names after STAGES, in order", () => {
+    expect(parseOutOfBandNames("ALL_STATUSES = STAGES + (DUPLICATE, CASE_OPENED, X)\n")).toEqual([
+      "DUPLICATE",
+      "CASE_OPENED",
+      "X",
+    ]);
+  });
+  it("throws on a reshaped line rather than passing vacuously", () => {
+    expect(() => parseOutOfBandNames("ALL_STATUSES = tuple(STAGES)\n")).toThrow(/no "ALL_STATUSES/);
+  });
+});
+
 // ── the live comparand ──────────────────────────────────────────────────────────────────────
 
 const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
@@ -148,6 +180,28 @@ describe.skipIf(!HAVE_PRODUCER)(
     it("INGEST_DUPLICATE_STATUS matches DUPLICATE", () => {
       const assignments = parseNameAssignments(src());
       expect(assignments.get("DUPLICATE"), PRODUCER_AT).toBe(INGEST_DUPLICATE_STATUS);
+    });
+
+    it("INGEST_CASE_OPENED_STATUS matches CASE_OPENED", () => {
+      const assignments = parseNameAssignments(src());
+      expect(assignments.get("CASE_OPENED"), PRODUCER_AT).toBe(INGEST_CASE_OPENED_STATUS);
+    });
+
+    // The out-of-band arm: ALL_STATUSES = STAGES + (the out-of-band names). `case_opened` and
+    // `duplicate` are IN ALL_STATUSES and NOT in STAGES; cortex mirrors them out-of-band too.
+    it("duplicate and case_opened are out-of-band in the producer: in ALL_STATUSES, not in STAGES", () => {
+      const names = parseOutOfBandNames(src());
+      expect(names, PRODUCER_AT).toContain("DUPLICATE");
+      expect(names, PRODUCER_AT).toContain("CASE_OPENED");
+      const stages = resolveTuple(src(), "STAGES");
+      expect(stages, PRODUCER_AT).not.toContain(INGEST_DUPLICATE_STATUS);
+      expect(stages, PRODUCER_AT).not.toContain(INGEST_CASE_OPENED_STATUS);
+    });
+
+    it("the event ladder is stages the producer names: received (in STAGES) then case_opened (out of band)", () => {
+      const stages = resolveTuple(src(), "STAGES");
+      expect(stages, PRODUCER_AT).toContain(INGEST_EVENT_LADDER[0]);
+      expect(parseNameAssignments(src()).get("CASE_OPENED"), PRODUCER_AT).toBe(INGEST_EVENT_LADDER[1]);
     });
   },
 );

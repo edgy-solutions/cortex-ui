@@ -942,6 +942,31 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
 }
 
 /**
+ * `GET /cases/{case_id}` — the producer's own `WorkflowCasePayload` for one case (invincible-agent
+ * `3e6d9e9f`, gateway.py `get_case`). Returns the RAW `Response` and decides nothing: the status
+ * mapping (200 / 404 / 503 / other) and the body check live in `src/lib/cases.ts`, so this file
+ * stays a transport and `cases.ts` stays testable against a stubbed `globalThis.fetch`.
+ *
+ * A 404 here means "absent OR not entitled" — identical BY DESIGN (an existence oracle); callers
+ * must never try to tell them apart.
+ *
+ * transport-exception: raw fetch so the HTTP exchange itself is the seam a test stubs
+ * (`globalThis.fetch`), carrying the caller's OIDC bearer plus the same X-Trace-Id / X-Session-Id
+ * the axios wrapper attaches — nothing about the authorisation path differs from
+ * `fetchIngestStatus`'s, and axios would resolve a 404/503 into a thrown error this caller would
+ * only have to unpick again.
+ */
+export async function fetchCaseResponse(caseId: string): Promise<Response> {
+  const headers: Record<string, string> = {
+    "X-Trace-Id": crypto.randomUUID(),
+    "X-Session-Id": getSessionId(),
+  };
+  const token = getOidcToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetch(`${API_URL}/cases/${encodeURIComponent(caseId)}`, { method: "GET", headers });
+}
+
+/**
  * CORTEX-PROPOSED — `POST /ingest/{ingest_id}/origin/dispute`. Nothing on the real producer
  * (invincible-agent origin/master `41647787`) serves origin at all yet (see
  * `src/lib/ingestOrigin.ts`'s header), so this route, its body shape and its response are this

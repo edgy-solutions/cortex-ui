@@ -100,7 +100,16 @@ env:
   # `4c3b61a6`) renamed the ingest stage `awaiting_disposition` to `review`, and the LIVE BFF
   # already serves `review` — `src/lib/ingestWire.ts` refused every row at that stage until this
   # bump landed alongside the rename.
-  PRODUCER_REF: 4c3b61a6212300fee395ee2204140bf380e198b2
+  # 2026-10-07 BUMP to 3e6d9e9f (the fleet deployed at helm rev 177; roll #20b). Why: EVENT joined
+  #   ingest_status.KINDS and case_opened/case_id joined the status route at a0c2ba18 (roll #20).
+  #   MEASURED, not assumed: git diff a0c2ba18..3e6d9e9f of src/iagent/gateway.py is 27 changed
+  #   lines in 6 hunks (the new _restate_answer, _fetch_case, _fetch_instance1_spec,
+  #   ingest_event: the absent-case 503-to-404 fix); ingest_status.py is UNCHANGED between them.
+  #   None of those lines is read by boundSlots / spokenAnswer / lineageHonoured (grepped for
+  #   None = None, request., lineage_is_honoured, REFUSED_, pre_resolved_route_allowed,
+  #   ownership_ok, spoken_answer, bound_slots and new def names: only _restate_answer hit, which
+  #   no seal names), so a local green at a0c2ba18 measures this pin for those three seals.
+  PRODUCER_REF: 3e6d9e9feac8ba85cda89afc9a8faa59ecfd9d89
 
 permissions:
   contents: read

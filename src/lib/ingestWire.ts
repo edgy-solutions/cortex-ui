@@ -137,8 +137,13 @@ export function provenanceFloorIsUnverified(floor: ProvenanceFloor): boolean {
 
 /** `ingest_status.py.KINDS` — closed, deterministic, declared-at-the-door, never LLM-classified
  *  (ADR-0021's precedence). There is no `GET /ingest/kinds` route; this is the whole menu. */
-export const INGEST_KINDS = ["pdf", "cad"] as const;
+export const INGEST_KINDS = ["pdf", "cad", "event"] as const;
 export type IngestKind = (typeof INGEST_KINDS)[number];
+
+/** The kinds a person can DROP A FILE as (`POST /ingest`, multipart). `event` is in
+ *  `INGEST_KINDS` so its status rows parse, but it is never uploaded: `POST /ingest/events` carries
+ *  no bytes and is not a UI door. The picker draws this list, never `INGEST_KINDS`. */
+export const INGEST_UPLOAD_KINDS = ["pdf", "cad"] as const satisfies readonly IngestKind[];
 
 /** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. Mirrors producer
  *  `4c3b61a6` (renamed in `1c10e28c`) and SDK `iagent_mesh.ingest.INGEST_STAGES` at `012a24fb`
@@ -157,6 +162,23 @@ export type IngestStage = (typeof INGEST_STAGES)[number];
  *  recorded once and done; it never extracts, never awaits disposition. */
 export const INGEST_DUPLICATE_STATUS = "duplicate" as const;
 
+/** `ingest_status.py.CASE_OPENED` (invincible-agent `a0c2ba18`, pinned at `3e6d9e9f`) — OUT-OF-BAND
+ *  like `duplicate`: in the producer's `ALL_STATUSES`, NOT in `STAGES`, so it is never in
+ *  `INGEST_STAGES` and never a rung of the document ladder. It is the EVENT branch's own next
+ *  step after `received` (`POST /ingest/events` opens a case directly; it never extracts, reviews
+ *  or promotes). Only an `event` row can be at it. */
+export const INGEST_CASE_OPENED_STATUS = "case_opened" as const;
+
+/** What a row's `stage` field can carry: the ladder's stages, plus the one out-of-band status
+ *  that arrives in that same field. (`duplicate` does not — a duplicate row carries `stage` of
+ *  its ORIGINAL, or null, and the fact itself is in `duplicate`.) */
+export type IngestRowStage = IngestStage | typeof INGEST_CASE_OPENED_STATUS;
+
+/** The EVENT branch's whole ladder, exactly as `gateway.py`'s `POST /ingest/events` walks it at
+ *  `3e6d9e9f`: `record_received` (status `received`), then `update_status(CASE_OPENED, case_id=…)`
+ *  once the case is opened. No other event stage is written by that route, so none is drawn. */
+export const INGEST_EVENT_LADDER = ["received", INGEST_CASE_OPENED_STATUS] as const;
+export type IngestEventRung = (typeof INGEST_EVENT_LADDER)[number];
 /** `ingest_status_route`'s row — `GET /ingest/{id}/status`'s whole response. `stage` is `null`
  *  ONLY on a duplicate whose original is not visible to this caller (existence-oracle safe — see
  *  `readIngestStatusRow`'s rule below and the route's own comment on `gateway.py`). */
@@ -164,7 +186,7 @@ export interface IngestStatusRow {
   ingest_id: string;
   sha256: string;
   kind: IngestKind;
-  stage: IngestStage | null;
+  stage: IngestRowStage | null;
   detail: string | null;
   duplicate: { of_ingest_id: string; message: string } | null;
   /** Epoch milliseconds — a NUMBER on the live wire (roll-11 capture exchanges [1]/[3]), never a
@@ -178,6 +200,13 @@ export interface IngestStatusRow {
    * never conflate a server that has not been asked with a resolver that tried and missed.
    */
   origin: IngestOrigin | null;
+  /**
+   * `GET /ingest/{id}/status`'s `case_id` (roll #20): the id of the case an EVENT ingest opened,
+   * for `GET /cases/{case_id}`. `null` on document rows (Lane 1: null on document rows) and on an
+   * event row not yet at `case_opened`. Older producers omit the field entirely — absent reads
+   * as `null`, never as a refusal.
+   */
+  case_id: string | null;
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -201,11 +230,14 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     return null;
   }
 
-  let stage: IngestStage | null;
+  let stage: IngestRowStage | null;
   if (raw.stage === null) {
     stage = null;
   } else if (typeof raw.stage === "string" && (INGEST_STAGES as readonly string[]).includes(raw.stage)) {
     stage = raw.stage as IngestStage;
+  } else if (raw.stage === INGEST_CASE_OPENED_STATUS && raw.kind === "event") {
+    // Out-of-band, event-only: a document row at `case_opened` is not a state the producer writes.
+    stage = INGEST_CASE_OPENED_STATUS;
   } else {
     // An unknown stage string — including a non-string, non-null value — has no ladder position.
     return null;
@@ -215,7 +247,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   // must be non-null, or a null stage is unaccounted for.
   if (stage === null && !isRecord(raw.duplicate)) return null;
 
-  if (stage !== null && DETAIL_REQUIRED_STAGES.has(stage) && !isNonEmptyString(raw.detail)) {
+  if (stage !== null && stage !== INGEST_CASE_OPENED_STATUS && DETAIL_REQUIRED_STAGES.has(stage) && !isNonEmptyString(raw.detail)) {
     return null;
   }
 
@@ -234,6 +266,17 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   if (typeof raw.created_at !== "number" || !Number.isFinite(raw.created_at)) return null;
   if (typeof raw.updated_at !== "number" || !Number.isFinite(raw.updated_at)) return null;
 
+  // `case_id`: a non-empty string is the case; null or ABSENT is null (older producers omit the
+  // field — roll #20 added it); any other type, including an empty string, refuses the row.
+  let case_id: string | null;
+  if (raw.case_id === undefined || raw.case_id === null) {
+    case_id = null;
+  } else if (isNonEmptyString(raw.case_id)) {
+    case_id = raw.case_id;
+  } else {
+    return null;
+  }
+
   return {
     ingest_id: raw.ingest_id,
     sha256: raw.sha256,
@@ -246,6 +289,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     // Absent on today's real wire — `readIngestOrigin` returns null for exactly that, never a
     // fabricated unresolved/resolved state. See `IngestStatusRow.origin`'s own doc comment.
     origin: readIngestOrigin(raw.origin),
+    case_id,
   };
 }
 
@@ -418,6 +462,26 @@ export function ingestStageLadder(stage: IngestStage): StageRung[] {
   return rungs;
 }
 
+export interface EventRung {
+  stage: IngestEventRung;
+  state: "done" | "current" | "pending";
+}
+
+/**
+ * The EVENT branch's ladder (`INGEST_EVENT_LADDER`: received, case_opened) for one event row's
+ * stage, or `null` when the stage is not one of the two the event route writes — no rung is
+ * invented for it. Deliberately a separate list from `ingestStageLadder`: `case_opened` is
+ * out-of-band and never a rung of the document ladder.
+ */
+export function ingestEventLadder(stage: IngestRowStage | null): EventRung[] | null {
+  const at = INGEST_EVENT_LADDER.findIndex((s) => s === stage);
+  if (at < 0) return null;
+  return INGEST_EVENT_LADDER.map((s, i) => ({
+    stage: s,
+    state: i < at ? "done" : i === at ? "current" : "pending",
+  }));
+}
+
 // ── Polling ──────────────────────────────────────────────────────────────────────────────
 
 /** Whether a card polling this row should stop: a duplicate (any row whose `duplicate` is
@@ -426,5 +490,11 @@ export function ingestStageLadder(stage: IngestStage): StageRung[] {
  *  may still be about to act. */
 export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicate">): boolean {
   if (row.duplicate !== null) return true;
-  return row.stage === "promoted" || row.stage === "rejected" || row.stage === "failed";
+  // `case_opened` is the event branch's terminal: nothing in this route moves it on.
+  return (
+    row.stage === "promoted" ||
+    row.stage === "rejected" ||
+    row.stage === "failed" ||
+    row.stage === INGEST_CASE_OPENED_STATUS
+  );
 }

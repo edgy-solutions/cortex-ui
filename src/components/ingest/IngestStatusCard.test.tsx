@@ -44,6 +44,7 @@ const row = (over: Partial<IngestStatusRow> = {}): IngestStatusRow => ({
   created_at: 1790860800000,
   updated_at: 1790860800000,
   origin: null,
+  case_id: null,
   ...over,
 });
 

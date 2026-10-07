@@ -14,6 +14,7 @@ import {
   ingestStageLadder,
   ingestPollingDone,
   INGEST_KINDS,
+  INGEST_UPLOAD_KINDS,
   INGEST_STAGES,
 } from "./ingestWire";
 
@@ -392,8 +393,12 @@ describe("ingestPollingDone", () => {
 });
 
 describe("INGEST_KINDS", () => {
-  it("is exactly the closed pdf/cad set — no kinds route to fetch it from", () => {
-    expect([...INGEST_KINDS]).toEqual(["pdf", "cad"]);
+  it("is exactly the closed pdf/cad/event set (producer KINDS at 3e6d9e9f) — no kinds route to fetch it from", () => {
+    expect([...INGEST_KINDS]).toEqual(["pdf", "cad", "event"]);
+  });
+
+  it("event is never an upload kind — POST /ingest/events carries no bytes", () => {
+    expect([...INGEST_UPLOAD_KINDS]).toEqual(["pdf", "cad"]);
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * KindPicker — pick a kind from the closed, deterministic `INGEST_KINDS` set.
+ * KindPicker — pick a kind from the closed, deterministic `INGEST_UPLOAD_KINDS` set (the droppable subset of `INGEST_KINDS`).
  *
  * `POST /ingest` (invincible-agent origin/master, 0f48fe2f, live on helm rev 162) requires `kind` as an ORDINARY
  * REQUIRED multipart field — there is no `GET /ingest/kinds` route and no classifier
@@ -18,7 +18,7 @@
  * wrong rather than merely premature.
  */
 import { useState } from "react";
-import { INGEST_KINDS, type IngestKind } from "@/lib/ingestWire";
+import { INGEST_UPLOAD_KINDS, type IngestKind } from "@/lib/ingestWire";
 
 export interface KindPickerProps {
   suggestedKind?: string | null;
@@ -29,7 +29,7 @@ export interface KindPickerProps {
 
 export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason }: KindPickerProps) {
   const suggestionValid =
-    suggestedKind !== null && (INGEST_KINDS as readonly string[]).includes(suggestedKind);
+    suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind);
   const [selected, setSelected] = useState<IngestKind | null>(
     suggestionValid ? (suggestedKind as IngestKind) : null,
   );
@@ -40,7 +40,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
         What kind of document is this?
       </p>
       <div className="flex flex-col gap-1" role="radiogroup">
-        {INGEST_KINDS.map((k) => (
+        {INGEST_UPLOAD_KINDS.map((k) => (
           <label
             key={k}
             className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer py-1"
