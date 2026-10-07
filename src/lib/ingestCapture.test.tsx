@@ -19,8 +19,12 @@ import {
   readIngestUploadId,
   ingestPollingDone,
   ingestStatusPath,
+  readActRefusal,
+  readProvenanceFloor,
+  provenanceFloorIsUnverified,
 } from "./ingestWire";
 import { IngestStatusCard } from "@/components/ingest/IngestStatusCard";
+import { buildPcn26117Fixture, type Pcn26117Seed } from "./ingestPcn26117Fixture";
 
 interface IngestExchange {
   request: { method: string; path: string };
@@ -189,8 +193,47 @@ describe.each(E2E_CAPTURES)("ingest end-to-end capture ($label) — what the liv
     }
   });
 
-  it.todo("promote response — awaits a capture where a document_promotion task names the drop");
-  it.todo("label — awaits a capture past promotion");
+  // Neither release's OWN capture has a promote response or a label yet — the stall arm above
+  // says so (`stages_seen` never leaves `received`). `src/lib/ingestPcn26117Fixture.ts` builds
+  // both from invincible-agent producer source at fleet 06b81540 (a DIFFERENT ingest, PCN26-117,
+  // not this release's drop) so there is something real to read against in the meantime. These
+  // two arms are real, not todo, but over THAT fixture — see
+  // `src/components/ingest/ingestPromotionFixture.test.tsx` for the full component-level seal.
+  it("promote response — not witnessed by this release's own capture; the built PCN26-117 fixture's refusal/success read as real shapes", () => {
+    const seed: Pcn26117Seed = {
+      ingestId: "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      sha256: "b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      kind: "pdf",
+      droppedBy: { authz_id: "alice@example.com" },
+      createdAt: 1791310971294,
+    };
+    const fixture = buildPcn26117Fixture(seed);
+    const refused = fixture.hops.find((h) => h.id === "4a-act-refused-422")!;
+    const refusal = readActRefusal({ response: { status: 422, data: { detail: refused.response.body } } });
+    expect(refusal?.error).toBe("promotion_payload_invalid");
+    expect(refusal?.message).toBe(fixture.refusalMessage);
+  });
+
+  it("label — not witnessed by this release's own capture; the built PCN26-117 fixture's floor reads unverified before, not after", () => {
+    const seed: Pcn26117Seed = {
+      ingestId: "sha256:b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      sha256: "b58ec2f6e0438479eea35715a060d9686a8e3efa49803202c15f18dde9f0745c",
+      kind: "pdf",
+      droppedBy: { authz_id: "alice@example.com" },
+      createdAt: 1791310971294,
+    };
+    const fixture = buildPcn26117Fixture(seed);
+    const before = readProvenanceFloor(fixture.hops.find((h) => h.id === "6a-provenance-floor-before")!.response.body);
+    const after = readProvenanceFloor(fixture.hops.find((h) => h.id === "6b-provenance-floor-after")!.response.body);
+    expect(before && provenanceFloorIsUnverified(before)).toBe(true);
+    expect(after && provenanceFloorIsUnverified(after)).toBe(false);
+    expect(before?.obtained_via).toBe(after?.obtained_via);
+  });
+
+  it.todo(
+    "promote response — live capture (Thursday) replaces the built PCN26-117 fixture once THIS release's own drop progresses past review",
+  );
+  it.todo("label — live capture (Thursday) replaces the built PCN26-117 fixture once THIS release's own drop is promoted");
 });
 
 /**
