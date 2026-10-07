@@ -1,4 +1,5 @@
 import type { StreamEvent, RouteDecision, Source, GraphTraceNode, DashboardUI } from "@/api/types";
+import { readRuntimeConfig } from "@/config";
 
 /**
  * Mock grounding-event emitter.
@@ -68,9 +69,9 @@ export function isMockGroundingEnabled(): boolean {
   } catch {
     /* ignore */
   }
-  // Vite env var — types are provided by vite/client; safe direct access.
-  const envVal = (import.meta as unknown as { env?: Record<string, string> }).env
-    ?.VITE_MOCK_GROUNDING;
+  // Read live (not a module-level snapshot): a container can set this via config.js, which
+  // loads before the bundle but after this module's top-level code would have already run.
+  const envVal = readRuntimeConfig("VITE_MOCK_GROUNDING");
   return envVal === "1" || envVal === "true";
 }
 

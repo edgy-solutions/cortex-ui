@@ -32,7 +32,7 @@ when the FastAPI backend is absent.
 - `tests/hop3/`, `tests/evidence/` — out-of-vitest `.mts` proofs, run by hand.
 - `docs/rulings/README.md` — MIRROR of the platform register, never an origin.
 - `sessions/` — dated dispatches/handoffs/reports/payload fixtures; the lane's ledger.
-- `helm/`, `Dockerfile`, `nginx.conf`, `bin/inject-env.sh` — runtime env is injected at
+- `helm/`, `Dockerfile`, `nginx.conf`, `docker-entrypoint.sh` — runtime env is injected at
   container start, not baked at build.
 
 ## Commands (do not run unasked)
@@ -122,7 +122,17 @@ Index for the current payload set:
 - `errors.txt`, `helm_template_output.yaml`, `tsconfig.tsbuildinfo` are generated but
   **tracked** — they dirty the tree for every lane. See the proposals in the session log.
 - `.env` is gitignored; `.env.example` is the contract. Env is injected at container
-  start via `bin/inject-env.sh` + `docker-entrypoint.sh`.
+  start by `docker-entrypoint.sh` (the Dockerfile ENTRYPOINT). `bin/inject-env.sh` is STALE —
+  4 keys, never copied into the image; it injects nothing.
 - `caps_dump.json` was once swept in by `git add -A` and had to be removed — never
   `git add -A` here.
 - Rulings/ADRs originate in `invincible-agent`, are mirrored here. Don't number one here.
+
+## Conventions (fleet directive 2026-10-06; text from invincible-agent `2b6fe0f6`)
+
+- **Only the owning lane commits in this repo; packets are placed, never committed, by anyone
+  else.** Another repo's lane drops its packet into `sessions/` and leaves it untracked (or
+  staged); the owning lane reads it and commits it with its own work.
+- **Print a length and a hash prefix, never a secret value.** To show that a token, password
+  or key is present or matches, print `len` and the first 8 hex of its sha256 — never the
+  value, and never decode a Secret's data into the transcript.

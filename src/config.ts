@@ -27,6 +27,9 @@ interface RuntimeConfig {
   // map (deployer sets VITE_FEATURES="canvasExport,ingest"). Parsed by src/lib/featureFlags.ts;
   // see that module for the registry and how to add the next flag.
   VITE_FEATURES: string;
+  // Dev-only mock grounding toggle ("1" or "true" turns it on). Read live via
+  // readRuntimeConfig so a container can set it — see src/lib/mockGroundingEmitter.ts.
+  VITE_MOCK_GROUNDING: string;
 }
 
 declare global {
@@ -56,6 +59,7 @@ export const config: RuntimeConfig = {
   VITE_NO_AUTH: resolve("VITE_NO_AUTH", "false"),
   VITE_ELECTRIC_URL: resolve("VITE_ELECTRIC_URL", "http://localhost:3000"),
   VITE_FEATURES: resolve("VITE_FEATURES", ""),
+  VITE_MOCK_GROUNDING: resolve("VITE_MOCK_GROUNDING", ""),
 };
 
 /**
