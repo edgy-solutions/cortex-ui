@@ -5,11 +5,13 @@ import { KindPicker } from "./KindPicker";
 afterEach(cleanup);
 
 describe("KindPicker — the closed INGEST_KINDS set only", () => {
-  it("renders exactly the two closed kinds — no free-text input anywhere", () => {
+  it("renders exactly the three closed file kinds — no free-text input anywhere", () => {
     render(<KindPicker onConfirm={() => {}} />);
-    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(document.querySelector('[data-ingest-kind="pdf"]')).toBeTruthy();
     expect(document.querySelector('[data-ingest-kind="cad"]')).toBeTruthy();
+    expect(document.querySelector('[data-ingest-kind="xml"]')).toBeTruthy();
+    expect(document.querySelector('[data-ingest-kind="event"]')).toBeNull();
     expect(document.querySelector('input[type="text"]')).toBeNull();
     expect(document.querySelector("textarea")).toBeNull();
   });

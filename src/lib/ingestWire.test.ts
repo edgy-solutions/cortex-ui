@@ -393,12 +393,12 @@ describe("ingestPollingDone", () => {
 });
 
 describe("INGEST_KINDS", () => {
-  it("is exactly the closed pdf/cad/event set (producer KINDS at 3e6d9e9f) — no kinds route to fetch it from", () => {
-    expect([...INGEST_KINDS]).toEqual(["pdf", "cad", "event"]);
+  it("is exactly the closed pdf/cad/xml/event set (producer KINDS at 5cf7d879) — no kinds route to fetch it from", () => {
+    expect([...INGEST_KINDS]).toEqual(["pdf", "cad", "xml", "event"]);
   });
 
-  it("event is never an upload kind — POST /ingest/events carries no bytes", () => {
-    expect([...INGEST_UPLOAD_KINDS]).toEqual(["pdf", "cad"]);
+  it("event is never an upload kind — POST /ingest/events carries no bytes; xml is", () => {
+    expect([...INGEST_UPLOAD_KINDS]).toEqual(["pdf", "cad", "xml"]);
   });
 });
 

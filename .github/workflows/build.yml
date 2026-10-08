@@ -109,7 +109,14 @@ env:
   #   None = None, request., lineage_is_honoured, REFUSED_, pre_resolved_route_allowed,
   #   ownership_ok, spoken_answer, bound_slots and new def names: only _restate_answer hit, which
   #   no seal names), so a local green at a0c2ba18 measures this pin for those three seals.
-  PRODUCER_REF: 3e6d9e9feac8ba85cda89afc9a8faa59ecfd9d89
+  # 2026-10-08 BUMP to 5cf7d879 (invincible-agent master; roll #21's pin of cortex bd782c5).
+  #   Why: XML joined ingest_status.KINDS and FILE_KINDS at 086a9cf0, and cortex's mirror gained
+  #   it, so the kind parity reds against the old pin. Over the files the producer-pinned seals
+  #   open, 3e6d9e9f..5cf7d879 changes three: ingest_status.py (xml), presentation_agent/main.py
+  #   (ILLUSTRATION and WORKFLOW_CASE join _FLAT_ARCHETYPES, 76d84e17) and cost_agent/measures.py.
+  #   MEASURED, not assumed: the suite was run against a git-archive export of 5cf7d879 placed as
+  #   the sibling, because the disk checkout stands on e2207468.
+  PRODUCER_REF: 5cf7d879a845ceb6ec9b89c73fbc06fe6954df0f
 
 permissions:
   contents: read

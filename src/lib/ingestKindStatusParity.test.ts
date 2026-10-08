@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   INGEST_KINDS,
+  INGEST_UPLOAD_KINDS,
   INGEST_STAGES,
   INGEST_DUPLICATE_STATUS,
   INGEST_CASE_OPENED_STATUS,
@@ -171,6 +172,13 @@ describe.skipIf(!HAVE_PRODUCER)(
 
     it("INGEST_KINDS matches KINDS, resolved by name", () => {
       expect([...INGEST_KINDS], PRODUCER_AT).toEqual(resolveTuple(src(), "KINDS"));
+    });
+
+    // The DOOR arm. KINDS is what a status row may carry; FILE_KINDS is what POST /ingest accepts.
+    // Sealing KINDS alone let the picker's menu drift: xml joined both at 086a9cf0, and nothing
+    // here would have noticed a KINDS-only mirror offering no xml to drop.
+    it("INGEST_UPLOAD_KINDS matches FILE_KINDS — the picker offers exactly what the door accepts", () => {
+      expect([...INGEST_UPLOAD_KINDS], PRODUCER_AT).toEqual(resolveTuple(src(), "FILE_KINDS"));
     });
 
     it("INGEST_STAGES matches STAGES, resolved by name", () => {
