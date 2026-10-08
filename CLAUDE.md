@@ -62,12 +62,14 @@ So the rule doc-tools wrote applies here too, and it is the consequence, not the
 > **Pin to the last sha whose build actually PUSHED — not to whatever landed most recently.**
 > Confirm it from GHCR or the run, never from the commit log.
 
-**Cortex is more exposed to this than doc-tools is, measured 2026-09-23.** doc-tools guards
-`values.yaml` with `required`, which refuses an ABSENT tag. This repo has **no such guard** —
-`grep -rn required helm/` is empty — and `helm/cortex-ui/values.yaml:20` defaults to
-**`tag: latest`**. So the chart will not stop anyone: a never-built tag renders perfectly and
-fails minutes later at the kubelet with `ImagePullBackOff`, on a release Helm already called a
-success. Here it is worse still, since the default silently tracks the floating tag.
+**The chart refuses an ABSENT pin, and nothing else.** Since `b7e365e` (2026-09-27),
+`helm/cortex-ui/templates/frontend-deployment.yaml:35` uses `required` on
+`frontend.image.digest` or `.tag`. The `tag: latest` default is gone.
+
+That guard checks that a pin is PRESENT, not that it was ever BUILT. A pin naming a sessions-only
+sha renders perfectly and fails minutes later at the kubelet with `ImagePullBackOff`, on a release
+Helm already called a success. (Until 2026-09-27 this paragraph said there was no guard at all;
+that was true then.)
 
 **`helm/` must never be added to the allowlist.** A values file is not code, it is what *deploys*,
 and it carries the image pin. Same reason doc-tools keeps `charts/` off its list.
@@ -136,3 +138,20 @@ Index for the current payload set:
 - **Print a length and a hash prefix, never a secret value.** To show that a token, password
   or key is present or matches, print `len` and the first 8 hex of its sha256 — never the
   value, and never decode a Secret's data into the transcript.
+
+Three more from the same directive, landed from ia-gov's packet
+`sessions/2026-10-07-packet-to-cortex-60-three-more-claude-md-rules.md`:
+
+- **A stacked PR runs no CI gate.** `build.yml` triggers on `pull_request: branches: [master]`
+  only. A PR based on master is built; a PR stacked on another branch gets nothing. Say so when
+  reporting a stacked PR as ready, and re-read its checks once it is rebased onto master.
+- **Show the values diff before a roll.** Before any `helm upgrade` of cortex-ui:
+  - render the chart (`helm template helm/cortex-ui` with the deployed values);
+  - diff it against the live release (`helm get values` / `helm get manifest`);
+  - show the diff to whoever approves.
+
+  The chart's `required` refuses only an ABSENT pin (see "Pinning the image" above). A wrong or
+  never-built pin renders clean, so the diff is where a human sees it.
+- **Python through this repo's venv only.** This does not apply today: there is no
+  `pyproject.toml`, no tracked `.py`, and no `python3` on the dev box (probes run in `node`). If a
+  Python helper is ever added, it runs via `uv run`, never a bare `python` from PATH.
