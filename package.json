@@ -15,6 +15,7 @@
     "check:chart:redproof": "node scripts/redproof-chart-image-pin.mjs",
     "build": "npm run check:transport && npm run test && tsc && vite build",
     "build:bundle": "tsc && vite build",
+    "e2e:friday": "tsc -p e2e --noEmit && playwright test",
     "start": "serve dist -s -l ${PORT:-8080}",
     "preview": "vite preview",
     "test": "vitest run --reporter=default --reporter=json --outputFile=node_modules/.cache/cortex-vitest-report.json",
@@ -25,6 +26,7 @@
     "check:seals:redproof": "node scripts/redproof-cross-repo-seals.mjs node_modules/.cache/cortex-vitest-report.json"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

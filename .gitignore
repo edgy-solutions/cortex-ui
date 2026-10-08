@@ -45,3 +45,8 @@ coverage/
 # — and a generated probe output in version control is a file every lane will keep dirtying and
 # nobody owns. Kept on disk, out of the index.
 caps_dump.json
+
+# Playwright (e2e/) output
+test-results/
+playwright-report/
+playwright/.cache/
