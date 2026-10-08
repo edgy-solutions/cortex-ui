@@ -18,8 +18,8 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { VarianceTree } from "./VarianceTree";
-import { MAX_RENDER_DEPTH, depthBelow, countBelow } from "./VarianceTree.contract";
+import { VarianceTree } from "./Card";
+import { MAX_RENDER_DEPTH, depthBelow, countBelow } from "./contract";
 
 afterEach(cleanup);
 
@@ -307,7 +307,7 @@ describe("the share bar states no verdict it was not given", () => {
     // the file, which also bans showing the sign at all — and rendering "+1.2K" for a positive
     // number is displaying the sign, not judging it. The ban belongs on the function that
     // decides the VERDICT, not on the whole component.
-    const raw = readFileSync(path.join(__dirname, "VarianceTree.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
     for (const fn of ["function barTone", "function verdictTag"]) {

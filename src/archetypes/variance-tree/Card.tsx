@@ -2,14 +2,14 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { formatAmount } from "@/lib/formatAmount";
 import { showMeasure } from "@/lib/showMeasure";
-import { CellInspector } from "./CellInspector";
+import { CellInspector } from "@/components/planning/CellInspector";
 import {
   validateVarianceTree,
   depthBelow,
   countBelow,
   MAX_RENDER_DEPTH,
   type VarianceNode,
-} from "./VarianceTree.contract";
+} from "./contract";
 
 /**
  * VARIANCE_TREE — a quantity decomposed into what produced it.

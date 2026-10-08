@@ -11,8 +11,6 @@ import { RawFields } from "@/archetypes/RawFields";
 import { rawFieldsOf } from "@/lib/rawFields";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
-import { VarianceTree } from "../planning/VarianceTree";
-import { MultiSeries } from "../planning/MultiSeries";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
 import { NamedHole } from "./NamedHole";
 import { SourceLedger } from "../ledger/SourceLedger";
@@ -454,37 +452,55 @@ const renderComponent = (
       // The component draws no card chrome for the same reason.
       return <AskCardConnected component={comp} answeringArtifactId={artifactId} />;
 
-    case "MULTI_SERIES":
+    case "MULTI_SERIES": {
       // Several DECLARED series over the same periods, no cap. NOT PERIOD_SERIES, which is one
       // producer's cost curve wearing a generic name — seven required keys, hardcoded capex and
-      // expense bars, an "over by" column against a cap. See MultiSeries.contract.ts.
+      // expense bars, an "over by" column against a cap. See the package's contract.ts.
+      //
+      // ADR-0055 §2 — packaged. Same data-driven dispatch as CONTRIBUTION_RANKING:
+      // `valid_as_of`/`state_version` are passed explicitly, OUTSIDE `pick(reads)` — the
+      // producer carries that pair "for every archetype", never in a per-archetype tuple.
+      const pkg = archetypePackage("MULTI_SERIES");
+      if (!pkg) break;
+      // Bound to the package's own component name — see the COMPETING_MEASURES case's note on
+      // `assembleCapabilities.test.ts`'s JSX-tag scan.
+      const MultiSeries = pkg.Card;
       return (
         <MultiSeries
-          rows={comp.rows}
-          series={comp.series}
-          reference={comp.reference}
-          verdict={comp.verdict}
-          value_label={comp.value_label}
-          scope_label={comp.scope_label}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
       );
+    }
 
-    case "VARIANCE_TREE":
+    case "VARIANCE_TREE": {
       // THE FIRST ARCHETYPE WITH DEPTH. Nothing in the projection arm nests, and nesting is not
       // a field that can be added to a series, a grid or a ranking — the producer's own words:
       // "the decomposition is the output type rather than a rendering choice".
+      //
+      // ADR-0055 §2 — packaged. Same data-driven dispatch as CONTRIBUTION_RANKING:
+      // `valid_as_of`/`state_version` are passed explicitly, OUTSIDE `pick(reads)` — the
+      // producer carries that pair "for every archetype", never in a per-archetype tuple.
+      const pkg = archetypePackage("VARIANCE_TREE");
+      if (!pkg) break;
+      // Bound to the package's own component name — see the COMPETING_MEASURES case's note on
+      // `assembleCapabilities.test.ts`'s JSX-tag scan.
+      const VarianceTree = pkg.Card;
       return (
         <VarianceTree
-          rows={comp.rows}
-          value_label={comp.value_label}
-          value_unit={comp.value_unit}
-          scope_label={comp.scope_label}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
       );
+    }
 
     case "COMPETING_MEASURES": {
       // N METHODS MEASURING ONE QUANTITY, where the SPREAD is the finding. The plural of

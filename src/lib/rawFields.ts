@@ -38,6 +38,8 @@ export const INTERPRETER_READS: Readonly<Record<string, readonly string[]>> = {
   // Passed explicitly to the card, outside `pick(comp, pkg.reads)` (the producer carries the pair
   // "for every archetype", not as a per-archetype passthrough entry).
   CONTRIBUTION_RANKING: ["valid_as_of", "state_version"],
+  VARIANCE_TREE: ["valid_as_of", "state_version"],
+  MULTI_SERIES: ["valid_as_of", "state_version"],
 };
 
 export function interpreterReadsOf(archetype: string): Set<string> {

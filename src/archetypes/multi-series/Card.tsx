@@ -23,7 +23,7 @@ import {
   readReference,
   validateMultiSeries,
   type SeriesDecl,
-} from "./MultiSeries.contract";
+} from "./contract";
 
 /**
  * MULTI_SERIES — several DECLARED series over the same periods.

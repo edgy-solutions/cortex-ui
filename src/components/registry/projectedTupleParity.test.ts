@@ -42,6 +42,8 @@ import { readMethod } from "@/lib/cardExport";
 import { LOT4_CONTRIBUTION_RANKING_PAYLOAD } from "@/lib/cardExport.fixture";
 import { COMPETING_MEASURES_ROW } from "@/archetypes/competing-measures/row";
 import { CONTRIBUTION_RANKING_ROW } from "@/archetypes/contribution-ranking/row";
+import { VARIANCE_TREE_ROW } from "@/archetypes/variance-tree/row";
+import { MULTI_SERIES_ROW } from "@/archetypes/multi-series/row";
 import { CONTRIBUTION_RANKING_ENVELOPE_FIELDS } from "@/archetypes/contribution-ranking/contract";
 
 /** Both names the producer checkout goes by — see the disposition parity seal for why two. */
@@ -648,5 +650,31 @@ describe("CONTRIBUTION_RANKING_ROW mirrors the producer's own tuple", () => {
     expect(CONTRIBUTION_RANKING_ROW.payload_key).toBe(
       declaredPayloadKeyFor(projector, "CONTRIBUTION_RANKING"),
     );
+  });
+});
+
+/**
+ * ADR-0055 §2's THIRD and FOURTH row mirrors. `VARIANCE_TREE_ROW` and `MULTI_SERIES_ROW` are
+ * cortex's copies of the producer's own `_PROJECTED_ARCHETYPES` tuples; same discipline as the
+ * CONTRIBUTION_RANKING arm above — field for field, in order, plus the payload key.
+ */
+describe.each([
+  ["VARIANCE_TREE", VARIANCE_TREE_ROW],
+  ["MULTI_SERIES", MULTI_SERIES_ROW],
+] as const)("%s_ROW mirrors the producer's own tuple", (archetype, row) => {
+  it.skipIf(FOUND.length === 0)(
+    "passthrough equals the producer's declared fields, in the producer's order",
+    () => {
+      const projector = readFileSync(FOUND[0], "utf8");
+      const declared = declaredFieldsFor(projector, archetype);
+      // The control first — an empty extraction would make the equality below vacuous.
+      expect(declared.length).toBeGreaterThan(3);
+      expect(row.passthrough).toEqual(declared);
+    },
+  );
+
+  it.skipIf(FOUND.length === 0)("payload_key equals the tuple's first element", () => {
+    const projector = readFileSync(FOUND[0], "utf8");
+    expect(row.payload_key).toBe(declaredPayloadKeyFor(projector, archetype));
   });
 });

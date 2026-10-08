@@ -18,7 +18,7 @@ const read = (p: string) => readFileSync(path.join(__dirname, p), "utf8");
 const FITBOX = read("FitBox.tsx");
 const CARD = read("StageCard.tsx");
 const GRID = read("../planning/ShortfallGrid.tsx");
-const SERIES = read("../planning/MultiSeries.tsx");
+const SERIES = read("../../archetypes/multi-series/Card.tsx");
 
 describe("the funding grid's label column does not claim the row", () => {
   it("labels WRAP — a long one must not demand its full single-line width", () => {

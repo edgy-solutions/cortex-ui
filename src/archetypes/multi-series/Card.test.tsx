@@ -28,12 +28,12 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { MultiSeries } from "./MultiSeries";
+import { MultiSeries } from "./Card";
 import {
   formatSeriesValue,
   readReference,
   validateMultiSeries,
-} from "./MultiSeries.contract";
+} from "./contract";
 import { assembleDerivedCapabilities } from "@/registry/assembleCapabilities";
 
 afterEach(cleanup);
@@ -87,7 +87,7 @@ describe("nothing about which series exist is written in the component", () => {
     // this archetype exists to avoid, and the first version of this assertion matched its own
     // explanation and failed on correct code. Prose defeating a source regex is a defect this
     // repo has hit before; scanning code rather than the whole file is the fix.
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toContain("dataKey={d.key}"); // positive control: driven by the declaration
     expect(src).not.toContain("dataKey=\"capex\""); // and the comment really was stripped
@@ -106,7 +106,7 @@ describe("nothing about which series exist is written in the component", () => {
     // The behaviour matters because the default is the dishonest one: Recharts bridges a
     // missing period with a straight line, drawing a measurement nobody took, and it looks
     // exactly like data.
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toContain("<Line"); // positive control on the stripped source
     expect(src, "gaps are being bridged").toContain("connectNulls={false}");
@@ -116,8 +116,8 @@ describe("nothing about which series exist is written in the component", () => {
   it("carries no cap, threshold or over-limit vocabulary at all", () => {
     // Those belong to PERIOD_SERIES. A burn rate has no cap and an index cannot breach one, so
     // their presence here would be this component drifting back toward the thing it replaced.
-    const src = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
-    const contract = readFileSync(path.join(__dirname, "MultiSeries.contract.ts"), "utf8");
+    const src = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
+    const contract = readFileSync(path.join(__dirname, "contract.ts"), "utf8");
     for (const word of ["over_cap", "overage", "threshold_", "cap:"]) {
       expect(src, `component mentions ${word}`).not.toContain(word);
       // The contract may NAME the absence in prose; it must not declare a field.
@@ -253,7 +253,7 @@ describe("the reference line is declared, never assumed", () => {
   it("the component does not name the line 'target' — that word is the producer's", () => {
     // A card labelling an undeclared line "target" would be asserting what the reference MEANS.
     // The producer's own `label` is used, and a bare value when they sent none.
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toContain("ref.label"); // positive control: the producer's word is read
     // The WORD, not a quoted form of it: the first version of this anchored on quotes and a
@@ -282,7 +282,7 @@ describe("the verdict is stated by the producer, never inferred", () => {
   });
 
   it("the component derives no verdict from the reference at all", () => {
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     // No comparison of a datum against the reference anywhere in the code.
     expect(src).not.toMatch(/<\s*ref\.value|ref\.value\s*[<>]/);
@@ -303,7 +303,7 @@ describe("the verdict is stated by the producer, never inferred", () => {
  */
 describe("stroke style is the producer's declaration", () => {
   it("draws dashed only where the payload asks", () => {
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toContain("d.dashed ? "); // positive control: it is read from the declaration
     // And never from where the series sits in the list.
@@ -372,7 +372,7 @@ describe("dimensionless values are formatted as ratios, not as amounts", () => {
 
   it("the component composes the exported formatter rather than its own", () => {
     // Otherwise the tests above guard a function the card does not use.
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toContain("formatSeriesValue(v, unit)");
     expect(src).not.toContain("formatAmount(");
@@ -380,7 +380,7 @@ describe("dimensionless values are formatted as ratios, not as amounts", () => {
 
   it("the y-axis tick count is bounded, so a tight domain does not fill with fractions", () => {
     // Source-level: the tick count is a Recharts prop and Recharts renders nothing here.
-    const raw = readFileSync(path.join(__dirname, "MultiSeries.tsx"), "utf8");
+    const raw = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
     const src = stripComments(raw);
     expect(src).toMatch(/tickCount=\{\d+\}/);
   });

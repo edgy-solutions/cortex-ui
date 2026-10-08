@@ -71,14 +71,14 @@ import { WARNING_CARD_CONTRACT } from "@/components/registry/WarningCard.contrac
 import { INTERVAL_TIMELINE_CONTRACT } from "@/components/planning/IntervalTimeline.contract";
 import { MARKDOWN_RENDERER_CONTRACT } from "@/archetypes/knowledge-document/contract";
 import { MATRIX_GRID_CONTRACT } from "@/components/planning/MatrixGrid.contract";
-import { MULTI_SERIES_CONTRACT } from "@/components/planning/MultiSeries.contract";
+import { MULTI_SERIES_CONTRACT } from "@/archetypes/multi-series/contract";
 import { NAMED_HOLE_CONTRACT } from "@/components/registry/NamedHole.contract";
 import { PERIOD_SERIES_CONTRACT } from "@/components/planning/PeriodSeries.contract";
 import { PROCESS_TOPOLOGY_CONTRACT } from "@/components/registry/ProcessTopologyCard.contract";
 import { SHORTFALL_GRID_CONTRACT } from "@/components/planning/ShortfallGrid.contract";
 import { STEP_LADDER_CONTRACT } from "@/components/planning/StepLadder.contract";
 import { THRESHOLD_GRID_CONTRACT } from "@/components/planning/ThresholdGrid.contract";
-import { VARIANCE_TREE_CONTRACT } from "@/components/planning/VarianceTree.contract";
+import { VARIANCE_TREE_CONTRACT } from "@/archetypes/variance-tree/contract";
 
 /** Every contract in this repo, keyed by the archetype it declares. */
 export const CONTRACTS: Record<string, { archetype: string; fields?: Record<string, unknown> }> = {

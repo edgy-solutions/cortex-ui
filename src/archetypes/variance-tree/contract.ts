@@ -165,3 +165,14 @@ export function validateVarianceTree(
   }
   return { kind: "ok", root: root as unknown as VarianceNode };
 }
+
+/**
+ * ADR-0055 §2 — the envelope fields this CARD reads, as `index.ts`'s `reads`.
+ *
+ * Deliberately narrower than `VARIANCE_TREE_ROW`'s `passthrough`: the producer's tuple also
+ * carries `verdict`, which this card does not consume (its verdict is per node, `favourable`).
+ * `rows` rides as `payload_key`. `valid_as_of`/`state_version` are NOT here: the producer carries
+ * that pair "for every archetype" outside any per-archetype tuple, so the dispatch passes them
+ * explicitly, same as CONTRIBUTION_RANKING.
+ */
+export const VARIANCE_TREE_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label"] as const;

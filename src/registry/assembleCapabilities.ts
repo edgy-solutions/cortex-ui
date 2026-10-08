@@ -44,8 +44,8 @@ import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasur
 import { CONTRIBUTION_RANKING_CONTRACT } from "../archetypes/contribution-ranking/contract";
 import { SOURCE_LEDGER_CONTRACT } from "../components/ledger/SourceLedger.contract";
 import { COMPETING_MEASURES_CONTRACT } from "../archetypes/competing-measures/contract";
-import { VARIANCE_TREE_CONTRACT } from "../components/planning/VarianceTree.contract";
-import { MULTI_SERIES_CONTRACT } from "../components/planning/MultiSeries.contract";
+import { VARIANCE_TREE_CONTRACT } from "../archetypes/variance-tree/contract";
+import { MULTI_SERIES_CONTRACT } from "../archetypes/multi-series/contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
 import { NAMED_HOLE_CONTRACT } from "../components/registry/NamedHole.contract";
 import { STEP_LADDER_CONTRACT } from "../components/planning/StepLadder.contract";
