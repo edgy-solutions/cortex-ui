@@ -405,6 +405,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
          */
         <div
           className="rounded border border-red-500/30 bg-red-500/5 px-3 py-2.5"
+          role="alert"
           data-kind-contradiction
         >
           <p className="text-[11px] font-mono uppercase tracking-widest text-red-400/90">
@@ -451,6 +452,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
          */
         <div
           className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2.5"
+          role="alert"
           data-undeclared-kind={task.kind}
         >
           <p className="text-[11px] font-mono uppercase tracking-widest text-amber-400/90">
@@ -471,6 +473,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
          */
         <div
           className="text-[11px] font-mono uppercase tracking-widest text-neon-green"
+          role="status"
           data-act-outcome={done.resumed ? "resumed" : "recorded"}
         >
           {done.resumed ? verbLabel(done.decision) : `Recorded: ${verbLabel(done.decision)} — workflow not resumed`}
@@ -486,6 +489,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
           {corrected && (
             <div
               className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2"
+              role="alert"
               data-decision-corrected
             >
               <p className="text-[10px] font-mono uppercase tracking-widest text-amber-400/90">
@@ -504,6 +508,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
           {refusal && (
             <div
               className="rounded border border-red-500/30 bg-red-500/5 px-3 py-2"
+              role="alert"
               data-act-refusal
             >
               <p className="text-[11px] text-slate-300 leading-relaxed">{refusal.message}</p>
@@ -525,6 +530,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="reason — required for some decisions below"
+              aria-label="Reason for decision"
               data-reason-input
               className="w-full px-2 py-1.5 rounded bg-black/30 border border-white/10 text-[11px] font-mono text-slate-200 placeholder:text-slate-600"
             />
@@ -535,6 +541,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
               return (
                 <button
                   key={v}
+                  type="button"
                   onClick={() => act(v)}
                   disabled={acting || blocked}
                   data-verb={v}

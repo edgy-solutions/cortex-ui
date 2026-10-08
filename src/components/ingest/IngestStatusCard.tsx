@@ -341,6 +341,7 @@ export function IngestStatusCard({
         {row.stage && (
           <span
             className="text-[9px] font-mono uppercase tracking-widest text-cyan-400/70"
+            role="status"
             data-ingest-status={row.stage}
           >
             {row.stage}
@@ -382,6 +383,7 @@ export function IngestStatusCard({
               {disputeError && (
                 <p
                   className="mt-1 text-[10px] font-mono text-rose-400"
+                  role="alert"
                   data-ingest-origin-dispute-refusal={disputeErrorCode ?? ""}
                 >
                   {disputeError}
@@ -439,6 +441,7 @@ export function IngestStatusCard({
               {actionError && (
                 <p
                   className="text-[10px] font-mono text-rose-400"
+                  role="alert"
                   data-ingest-act-error
                   data-ingest-act-refusal={actionErrorCode ?? undefined}
                 >
@@ -450,6 +453,7 @@ export function IngestStatusCard({
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="reason — required for some decisions below"
+                  aria-label="Reason for decision"
                   data-ingest-reason-input
                   className="w-full px-2 py-1.5 rounded bg-black/30 border border-white/10 text-[11px] font-mono text-slate-200 placeholder:text-slate-600"
                 />
