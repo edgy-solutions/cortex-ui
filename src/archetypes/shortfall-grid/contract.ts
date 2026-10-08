@@ -144,3 +144,11 @@ export function validateShortfallGrid(
   }
   return { kind: "ok", rows: cells as unknown as ShortfallCell[] };
 }
+
+/**
+ * What the card READS off the envelope — a strict subset of `SHORTFALL_GRID_ROW.passthrough`
+ * (the producer's `verdict` is never consumed: the verdict is per cell, `state`).
+ * `valid_as_of`/`state_version` are passed explicitly by the dispatch case, outside this list,
+ * same as CONTRIBUTION_RANKING.
+ */
+export const SHORTFALL_GRID_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label"] as const;

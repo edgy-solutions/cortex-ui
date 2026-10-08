@@ -19,15 +19,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ThresholdGrid } from "./ThresholdGrid";
 import { MatrixGrid } from "./MatrixGrid";
-import { ShortfallGrid } from "./ShortfallGrid";
+import { ShortfallGrid } from "@/archetypes/shortfall-grid/Card";
 
 afterEach(cleanup);
 
 const HERE = __dirname;
-const SOURCES = ["ThresholdGrid.tsx", "MatrixGrid.tsx", "ShortfallGrid.tsx"].map((f) => [
-  f,
-  readFileSync(path.join(HERE, f), "utf8"),
-]) as [string, string][];
+const SOURCES = [
+  "ThresholdGrid.tsx",
+  "MatrixGrid.tsx",
+  "../../archetypes/shortfall-grid/Card.tsx",
+].map((f) => [f, readFileSync(path.join(HERE, f), "utf8")]) as [string, string][];
 
 const threshold = [
   { subject_id: "S1", subject_label: "Site A", period: "P1", value: 3, threshold: 2, over_threshold: true },

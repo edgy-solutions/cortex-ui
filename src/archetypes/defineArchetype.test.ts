@@ -74,6 +74,48 @@ describe("defineArchetype", () => {
     );
   });
 
+  it("refuses empty absences with no noAbsence — a forgotten field", () => {
+    expect(() => defineArchetype({ ...validInput(), absences: [], fixtures: [] })).toThrow(
+      /absences must not be empty — declare noAbsence: { reason } if the card has none/,
+    );
+  });
+
+  it("accepts empty absences WITH a noAbsence reason, and freezes it onto the package", () => {
+    const pkg = defineArchetype({
+      ...validInput(),
+      absences: [],
+      noAbsence: { reason: "no data-* flips across 3 fixtures" },
+      fixtures: [{ name: "quiet", declares: [] }],
+    });
+    expect(pkg.noAbsence?.reason).toBe("no data-* flips across 3 fixtures");
+    expect(pkg.absences).toEqual([]);
+  });
+
+  it("refuses noAbsence alongside a non-empty absences — a contradiction", () => {
+    expect(() =>
+      defineArchetype({ ...validInput(), noAbsence: { reason: "claims none" } }),
+    ).toThrow(/noAbsence contradicts a non-empty absences/);
+  });
+
+  it("refuses a blank noAbsence.reason", () => {
+    for (const reason of ["", "   "]) {
+      expect(() =>
+        defineArchetype({ ...validInput(), absences: [], noAbsence: { reason }, fixtures: [] }),
+      ).toThrow(/noAbsence.reason must not be empty or whitespace/);
+    }
+  });
+
+  it("under noAbsence a fixture that declares anything is still outside absences", () => {
+    expect(() =>
+      defineArchetype({
+        ...validInput(),
+        absences: [],
+        noAbsence: { reason: "none" },
+        fixtures: [{ name: "stray", declares: ["data-x"] }],
+      }),
+    ).toThrow(/fixture "stray" declares "data-x", which is outside absences/);
+  });
+
   it("refuses a fixture declaring an absence outside the package's absences", () => {
     const input = validInput();
     expect(() =>

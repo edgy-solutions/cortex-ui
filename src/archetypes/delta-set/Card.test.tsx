@@ -12,7 +12,7 @@ import {
   groupByDirection,
   validateDeltaSet,
   type DeltaEffect,
-} from "./DeltaSet.contract";
+} from "./contract";
 
 const effects: DeltaEffect[] = [
   { metric: "plan_cost_curve", direction: "improved",

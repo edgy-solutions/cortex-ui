@@ -44,6 +44,8 @@ import { COMPETING_MEASURES_ROW } from "@/archetypes/competing-measures/row";
 import { CONTRIBUTION_RANKING_ROW } from "@/archetypes/contribution-ranking/row";
 import { VARIANCE_TREE_ROW } from "@/archetypes/variance-tree/row";
 import { MULTI_SERIES_ROW } from "@/archetypes/multi-series/row";
+import { SHORTFALL_GRID_ROW } from "@/archetypes/shortfall-grid/row";
+import { DELTA_SET_ROW } from "@/archetypes/delta-set/row";
 import { CONTRIBUTION_RANKING_ENVELOPE_FIELDS } from "@/archetypes/contribution-ranking/contract";
 
 /** Both names the producer checkout goes by — see the disposition parity seal for why two. */
@@ -99,10 +101,11 @@ const SESSIONS = path.join(__dirname, "../../../sessions");
 /** The tuple's second element — the card-level scalars the projector carries for this archetype. */
 function declaredFieldsFor(src: string, archetype: string): string[] {
   // One occurrence per archetype in the file, verified 2026-09-25, so the match needs no
-  // disambiguation. The tuple is (`"rows"`, ( ...names... )) and spans lines,
+  // disambiguation. The tuple is (`"<payload key>"`, ( ...names... )) — the key is `rows` for most
+  // archetypes but `effects` for DELTA_SET, so it is matched, not assumed — and spans lines,
   // hence the character-class pair that also matches newlines.
   const re = new RegExp(
-    '"' + archetype + '":\\s*\\(\\s*"rows"\\s*,\\s*\\(([\\s\\S]*?)\\)\\s*\\)',
+    '"' + archetype + '":\\s*\\(\\s*"[a-z_]+"\\s*,\\s*\\(([\\s\\S]*?)\\)\\s*\\)',
   );
   const m = src.match(re);
   expect(m, `no _PROJECTED_ARCHETYPES entry for ${archetype} found in main.py`).toBeTruthy();
@@ -119,7 +122,7 @@ function declaredEnvelopeFields(src: string): string[] {
 
 /**
  * The tuple's FIRST element — the payload key the projector binds this archetype's rows under.
- * `declaredFieldsFor` above assumes that element is literally `"rows"` and only extracts the
+ * `declaredFieldsFor` above skips that element (whatever it is) and only extracts the
  * second; this is its counterpart for ADR-0055's `row.payload_key`, which must be read rather
  * than assumed so a producer that ever renamed the key would turn this red instead of silent.
  */
@@ -654,13 +657,16 @@ describe("CONTRIBUTION_RANKING_ROW mirrors the producer's own tuple", () => {
 });
 
 /**
- * ADR-0055 §2's THIRD and FOURTH row mirrors. `VARIANCE_TREE_ROW` and `MULTI_SERIES_ROW` are
+ * ADR-0055 §2's THIRD to SIXTH row mirrors. `VARIANCE_TREE_ROW`, `MULTI_SERIES_ROW`, `SHORTFALL_GRID_ROW`
+ * and `DELTA_SET_ROW` are
  * cortex's copies of the producer's own `_PROJECTED_ARCHETYPES` tuples; same discipline as the
  * CONTRIBUTION_RANKING arm above — field for field, in order, plus the payload key.
  */
 describe.each([
   ["VARIANCE_TREE", VARIANCE_TREE_ROW],
   ["MULTI_SERIES", MULTI_SERIES_ROW],
+  ["SHORTFALL_GRID", SHORTFALL_GRID_ROW],
+  ["DELTA_SET", DELTA_SET_ROW],
 ] as const)("%s_ROW mirrors the producer's own tuple", (archetype, row) => {
   it.skipIf(FOUND.length === 0)(
     "passthrough equals the producer's declared fields, in the producer's order",
@@ -668,7 +674,7 @@ describe.each([
       const projector = readFileSync(FOUND[0], "utf8");
       const declared = declaredFieldsFor(projector, archetype);
       // The control first — an empty extraction would make the equality below vacuous.
-      expect(declared.length).toBeGreaterThan(3);
+      expect(declared.length).toBeGreaterThanOrEqual(3);
       expect(row.passthrough).toEqual(declared);
     },
   );

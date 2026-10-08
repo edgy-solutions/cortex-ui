@@ -40,6 +40,8 @@ export const INTERPRETER_READS: Readonly<Record<string, readonly string[]>> = {
   CONTRIBUTION_RANKING: ["valid_as_of", "state_version"],
   VARIANCE_TREE: ["valid_as_of", "state_version"],
   MULTI_SERIES: ["valid_as_of", "state_version"],
+  SHORTFALL_GRID: ["valid_as_of", "state_version"],
+  DELTA_SET: ["valid_as_of", "state_version"],
 };
 
 export function interpreterReadsOf(archetype: string): Set<string> {

@@ -35,14 +35,14 @@
  * redundant is the evacuated-population error the contract names, so the detail panel shows
  * `secured` always and the cell surfaces it whenever it differs from `committed`.
  */
-import { CellInspector } from "./CellInspector";
+import { CellInspector } from "@/components/planning/CellInspector";
 import { useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
 import {
   validateShortfallGrid,
   type ShortfallCell,
   type ShortfallState,
-} from "./ShortfallGrid.contract";
+} from "./contract";
 
 export interface ShortfallGridProps {
   rows: unknown;

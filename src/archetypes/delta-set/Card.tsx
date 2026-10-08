@@ -16,7 +16,7 @@
  */
 import {
   groupByDirection, validateDeltaSet, type DeltaDirection, type DeltaEffect,
-} from "./DeltaSet.contract";
+} from "./contract";
 
 export interface DeltaSetProps {
   effects: unknown;

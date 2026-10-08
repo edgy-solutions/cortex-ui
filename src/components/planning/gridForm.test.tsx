@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ThresholdGrid } from "./ThresholdGrid";
 import { MatrixGrid } from "./MatrixGrid";
-import { ShortfallGrid } from "./ShortfallGrid";
+import { ShortfallGrid } from "@/archetypes/shortfall-grid/Card";
 
 afterEach(cleanup);
 

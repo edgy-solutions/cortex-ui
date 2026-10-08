@@ -19,11 +19,11 @@ import {
   SHORTFALL_GRID_CONTRACT,
   SHORTFALL_STATES,
   validateShortfallGrid,
-} from "./ShortfallGrid.contract";
+} from "./contract";
 
-const SRC = readFileSync(path.join(__dirname, "ShortfallGrid.tsx"), "utf8");
+const SRC = readFileSync(path.join(__dirname, "Card.tsx"), "utf8");
 const INTERP = readFileSync(
-  path.join(__dirname, "../registry/SemanticInterpreter.tsx"),
+  path.join(__dirname, "../../components/registry/SemanticInterpreter.tsx"),
   "utf8",
 );
 const REGISTRY = readFileSync(

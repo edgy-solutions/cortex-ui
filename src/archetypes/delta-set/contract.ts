@@ -123,3 +123,10 @@ export function groupByDirection(effects: DeltaEffect[]): Array<{
     .map((direction) => ({ direction, effects: effects.filter((e) => e.direction === direction) }))
     .filter((g) => g.effects.length > 0);
 }
+
+/**
+ * What the card READS off the envelope — all of `DELTA_SET_ROW.passthrough`. `valid_as_of`/
+ * `state_version` are passed explicitly by the dispatch case, outside this list, same as
+ * CONTRIBUTION_RANKING.
+ */
+export const DELTA_SET_ENVELOPE_FIELDS = ["scope_label", "baseline_label", "headline"] as const;

@@ -30,10 +30,8 @@ import { InstancesByPropertyView } from "../InstancesByProperty/InstancesByPrope
 import { ApprovalTaskCard } from "../ApprovalTask/ApprovalTaskCard";
 import { TriageTaskCard } from "@/components/TriageTask/TriageTaskCard";
 import { PeriodSeries } from "@/components/planning/PeriodSeries";
-import { ShortfallGrid } from "@/components/planning/ShortfallGrid";
 import { ThresholdGrid } from "@/components/planning/ThresholdGrid";
 import { MatrixGrid } from "@/components/planning/MatrixGrid";
-import { DeltaSet } from "@/components/planning/DeltaSet";
 import { IntervalTimeline } from "@/components/planning/IntervalTimeline";
 import { commitDrag } from "@/lib/planDrag";
 import { DecisionRecord } from "@/components/planning/DecisionRecord";
@@ -381,22 +379,32 @@ const renderComponent = (
         />
       );
 
-    case "SHORTFALL_GRID":
+    case "SHORTFALL_GRID": {
       // A LIVE VIEW (ADR-0042). Subjects x periods, secured against needed. Its colour means
       // DEFICIT -> RISK, which is why it is not THRESHOLD_GRID (breach -> danger, where
       // over_threshold would have to carry true for "under") and not MATRIX_GRID (distance ->
       // progress, which would make money wear level's name). Structural: the payload's first
       // consumer is org funding gaps and nothing here knows that word.
+      //
+      // ADR-0055 §2 — packaged. Same data-driven dispatch as CONTRIBUTION_RANKING:
+      // `valid_as_of`/`state_version` are passed explicitly, OUTSIDE `pick(reads)` — the
+      // producer carries that pair "for every archetype", never in a per-archetype tuple.
+      const pkg = archetypePackage("SHORTFALL_GRID");
+      if (!pkg) break;
+      // Bound to the package's own component name — see the COMPETING_MEASURES case's note on
+      // `assembleCapabilities.test.ts`'s JSX-tag scan.
+      const ShortfallGrid = pkg.Card;
       return (
         <ShortfallGrid
-          rows={comp.rows}
-          value_label={comp.value_label}
-          value_unit={comp.value_unit}
-          scope_label={comp.scope_label}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
       );
+    }
 
     case "THRESHOLD_GRID":
       // A LIVE VIEW (ADR-0042). Subjects x periods against a threshold each subject OWNS —
@@ -618,20 +626,30 @@ const renderComponent = (
         />
       );
 
-    case "DELTA_SET":
+    case "DELTA_SET": {
       // INV-3's card and a LIVE VIEW (ADR-0042). Renders a COMPARISON, never a state: the
       // room sees the price of a change beside its benefit, which a before-and-after leaves
       // the reader to work out. Magnitudes are displayed VERBATIM — one place formats them.
+      //
+      // ADR-0055 §2 — packaged. Same data-driven dispatch as CONTRIBUTION_RANKING:
+      // `valid_as_of`/`state_version` are passed explicitly, OUTSIDE `pick(reads)` — the
+      // producer carries that pair "for every archetype", never in a per-archetype tuple.
+      const pkg = archetypePackage("DELTA_SET");
+      if (!pkg) break;
+      // Bound to the package's own component name — see the COMPETING_MEASURES case's note on
+      // `assembleCapabilities.test.ts`'s JSX-tag scan.
+      const DeltaSet = pkg.Card;
       return (
         <DeltaSet
-          effects={comp.effects}
-          scope_label={comp.scope_label}
-          baseline_label={comp.baseline_label}
-          headline={comp.headline}
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />
       );
+    }
 
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
     // the "UI COMPONENT NOT FOUND" default render (honest: tells the

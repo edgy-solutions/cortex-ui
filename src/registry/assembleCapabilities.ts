@@ -35,9 +35,9 @@ import { GROUPED_REVIEW_CONTRACT } from "../components/GroupedReview/GroupedRevi
 import { PERIOD_SERIES_CONTRACT } from "../components/planning/PeriodSeries.contract";
 import { THRESHOLD_GRID_CONTRACT } from "../components/planning/ThresholdGrid.contract";
 import { MATRIX_GRID_CONTRACT } from "../components/planning/MatrixGrid.contract";
-import { DELTA_SET_CONTRACT } from "../components/planning/DeltaSet.contract";
+import { DELTA_SET_CONTRACT } from "../archetypes/delta-set/contract";
 import { INTERVAL_TIMELINE_CONTRACT } from "../components/planning/IntervalTimeline.contract";
-import { SHORTFALL_GRID_CONTRACT } from "../components/planning/ShortfallGrid.contract";
+import { SHORTFALL_GRID_CONTRACT } from "../archetypes/shortfall-grid/contract";
 import { DECISION_RECORD_CONTRACT } from "../components/planning/DecisionRecord.contract";
 import { CANVAS_SEED_CONTRACT } from "../components/registry/CanvasSeed.contract";
 import { FORECAST_MEASURE_CONTRACT } from "../components/planning/ForecastMeasure.contract";

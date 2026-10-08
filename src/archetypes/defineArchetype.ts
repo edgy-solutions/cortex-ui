@@ -40,6 +40,17 @@ export interface ArchetypePackageInput<
   readonly row: ArchetypeRow;
   readonly reads: readonly string[];
   readonly absences: readonly string[];
+  /**
+   * An EXPLICIT claim that this card has no payload-flippable `data-*` absence to declare — a
+   * package with no absence field is still a package (cortex dispatch 2026-10-08). Required
+   * whenever `absences` is empty; forbidden when it is not. A plain `absences: []` is a
+   * forgotten field and still throws.
+   *
+   * The claim is CHECKED, not trusted: the package's own `noAbsence.test.tsx` renders the whole
+   * parity population and fails if any `data-*` attribute flips across it (interaction-only
+   * attributes excepted), so a payload that later grows one turns this red.
+   */
+  readonly noAbsence?: { readonly reason: string };
   readonly fixtures: readonly TFixture[];
 }
 
@@ -58,7 +69,7 @@ export function defineArchetype<
   TContract extends ArchetypeContractLike,
   TFixture extends ArchetypeFixtureLike,
 >(pkg: ArchetypePackageInput<TContract, TFixture>): ArchetypePackage<TContract, TFixture> {
-  const { id, contract, row, reads, absences, fixtures } = pkg;
+  const { id, contract, row, reads, absences, fixtures, noAbsence } = pkg;
 
   if (!id || !ID_PATTERN.test(id)) {
     fail(id, `id must be non-empty and match ${ID_PATTERN}`);
@@ -81,8 +92,14 @@ export function defineArchetype<
       );
     }
   }
-  if (absences.length === 0) {
-    fail(id, "absences must not be empty");
+  if (absences.length === 0 && !noAbsence) {
+    fail(id, "absences must not be empty — declare noAbsence: { reason } if the card has none");
+  }
+  if (noAbsence && absences.length > 0) {
+    fail(id, "noAbsence contradicts a non-empty absences — a card either has absences or declares none");
+  }
+  if (noAbsence && !noAbsence.reason?.trim()) {
+    fail(id, "noAbsence.reason must not be empty or whitespace — state the measured fact");
   }
   for (const fixture of fixtures) {
     for (const declared of fixture.declares) {
@@ -96,7 +113,16 @@ export function defineArchetype<
     }
   }
 
-  return Object.freeze({ id, contract, Card: pkg.Card, row, reads, absences, fixtures });
+  return Object.freeze({
+    id,
+    contract,
+    Card: pkg.Card,
+    row,
+    reads,
+    absences,
+    ...(noAbsence ? { noAbsence } : {}),
+    fixtures,
+  });
 }
 
 /**
