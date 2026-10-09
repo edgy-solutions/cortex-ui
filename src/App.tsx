@@ -49,6 +49,7 @@ import "@/lib/seedPortfolioCanvas";
 import "@/lib/debugGlobals";
 
 import { Toaster } from "sonner";
+import { useFileDropGuard } from "@/lib/fileDropGuard";
 
 /**
  * Hop 3 of the projector build plan
@@ -356,6 +357,8 @@ export default function App() {
   // artifacts it names. Mounted once — a per-card watcher on a global store is the fan-out
   // species swept for on 2026-08-25.
   useCanvasSeedFromAnswers();
+  // P0 2026-10-08: a file dropped anywhere the app does not take it must not navigate the tab.
+  useFileDropGuard();
   useArtifactSync();
   useHumanTaskSync();
   // Tasks are timeline citizens: mirror the HITL store into task-artifacts so

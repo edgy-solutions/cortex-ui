@@ -920,17 +920,25 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
 /**
  * Multipart upload — `file`, `kind` and `on_behalf_of` are all REQUIRED fields on the real
  * route (`kind` is validated against `ingest_status.py.KINDS`; `on_behalf_of` must equal the
- * caller's own `authz_id` or the gateway answers 403). NOT setting a Content-Type header on
- * purpose — axios's own `isFormData` branch strips the instance's default `application/json`
- * and lets the browser attach `multipart/form-data; boundary=...` itself; overriding it here
- * would supply a Content-Type with no boundary and the server could not parse the body.
+ * caller's own `authz_id` or the gateway answers 403).
+ *
+ * The `multipart/form-data` header is LOAD-BEARING (P0 2026-10-08). The instance default is
+ * `application/json`, and axios 1.x's default `transformRequest` (`defaults/index.js`) answers a
+ * FormData body under a JSON content type with `JSON.stringify(formDataToJSON(data))`: the File
+ * serialises to `{}`, so every upload from this app sent NO FILE. The comment that stood here
+ * said axios strips the JSON default for FormData. It does, but in the adapter, which runs AFTER
+ * transformRequest has already stringified the body. Naming multipart keeps the body a FormData
+ * through transformRequest; the adapter then drops the header and the browser writes it with its
+ * `boundary=`. Sealed by `uploadIngest.multipart.test.ts` and `e2e/ingestDrop.spec.ts`.
  */
 export async function uploadIngest(file: File, kind: string, onBehalfOf: string): Promise<unknown> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kind", kind);
   formData.append("on_behalf_of", onBehalfOf);
-  const { data } = await api.post<unknown>("/ingest", formData);
+  const { data } = await api.post<unknown>("/ingest", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return data;
 }
 
