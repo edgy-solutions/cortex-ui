@@ -20,6 +20,7 @@ import {
   type RegistrationLifecycle,
 } from "@/registry/registrationLifecycle";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { checkBundleFreshness } from "@/lib/bundleFreshness";
 import { useRegistrationStore } from "@/store/useRegistrationStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
@@ -139,7 +140,25 @@ export function useFrontendCapabilityRegistration() {
   // ONE POST, callable twice. Extracted from the effect so the re-assertion sends exactly what
   // the opening registration sent — a second copy of this call would drift from the first, and
   // the drift would show up only after a wipe, which is the least observable moment there is.
-  const post = useRef((reason: "open" | "re-assert") => {
+  const post = useRef(async (reason: "open" | "re-assert") => {
+    // FRESHNESS FIRST. A tab left open across a deploy holds the OLD menu; registering it would
+    // overwrite the new one. Refuse before the attempt is even counted. Undecidable proceeds.
+    const mine = buildVersion().git_sha;
+    const fresh = await checkBundleFreshness(mine);
+    if (fresh.kind === "stale") {
+      useRegistrationStore.getState().reportStale(fresh.mine, fresh.served);
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ADR-0017] registration REFUSED (" + reason + ") — served " + fresh.served.slice(0, 7) +
+          ", this tab " + fresh.mine.slice(0, 7) +
+          ": a newer bundle is deployed; this tab's menu would overwrite it.",
+      );
+      return;
+    }
+    if (fresh.kind === "undecidable") {
+      // eslint-disable-next-line no-console
+      console.info("[ADR-0017] bundle freshness undecidable, registering anyway:", fresh.reason);
+    }
     lifecycle.attemptStarted();
     // Assembled once per attempt, so the log can name what was SENT. Recomputing it inside the
     // handler would report what the assembler produces now rather than what this request

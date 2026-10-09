@@ -29,6 +29,10 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 const registerFrontendCapabilities = vi.fn();
 
+const checkBundleFreshness = vi.fn();
+vi.mock("@/lib/bundleFreshness", () => ({
+  checkBundleFreshness: (...args: unknown[]) => checkBundleFreshness(...args),
+}));
 vi.mock("react-oidc-context", () => ({
   useAuth: () => ({ isAuthenticated: true, user: null }),
 }));
@@ -46,7 +50,9 @@ import { useRegistrationStore } from "@/store/useRegistrationStore";
 
 beforeEach(() => {
   registerFrontendCapabilities.mockReset();
-  useRegistrationStore.setState({ status: "idle", sent: null, accepted: null, reassertions: 0 });
+  checkBundleFreshness.mockReset();
+  checkBundleFreshness.mockResolvedValue({ kind: "current", sha: "x" });
+  useRegistrationStore.setState({ status: "idle", sent: null, accepted: null, reassertions: 0, stale: null });
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -110,5 +116,32 @@ describe("the registration publishes what the server said", () => {
     const payload = registerFrontendCapabilities.mock.calls[0][0] as { frontend_version: string };
     expect(payload.frontend_version).not.toBe("dev");
     expect(payload.frontend_version).toBeTruthy();
+  });
+});
+
+describe("the freshness gate in front of the registration", () => {
+  it("STALE: does not register, and publishes both shas", async () => {
+    checkBundleFreshness.mockResolvedValue({ kind: "stale", mine: "mine1234567", served: "srv7654321" });
+    registerFrontendCapabilities.mockResolvedValue({ accepted: 1, frontend_id: "x" });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    renderHook(() => useFrontendCapabilityRegistration());
+    await waitFor(() => expect(state().stale).toEqual({ mine: "mine1234567", served: "srv7654321" }));
+    expect(registerFrontendCapabilities).not.toHaveBeenCalled();
+    expect(state().status).toBe("idle");
+    expect(warn).toHaveBeenCalled();
+  });
+  it("CURRENT: registers once", async () => {
+    registerFrontendCapabilities.mockResolvedValue({ accepted: 1, frontend_id: "x" });
+    renderHook(() => useFrontendCapabilityRegistration());
+    await waitFor(() => expect(registerFrontendCapabilities).toHaveBeenCalledTimes(1));
+    expect(state().stale).toBeNull();
+  });
+  it("UNDECIDABLE: registers once, as today", async () => {
+    checkBundleFreshness.mockResolvedValue({ kind: "undecidable", reason: "version.json HTTP 404" });
+    registerFrontendCapabilities.mockResolvedValue({ accepted: 1, frontend_id: "x" });
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    renderHook(() => useFrontendCapabilityRegistration());
+    await waitFor(() => expect(registerFrontendCapabilities).toHaveBeenCalledTimes(1));
+    expect(state().stale).toBeNull();
   });
 });

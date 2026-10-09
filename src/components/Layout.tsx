@@ -8,6 +8,7 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { RailStrip } from "@/components/RailStrip";
 import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
 import { UserMenu } from "@/components/UserMenu";
+import { StaleBundleBanner } from "@/components/StaleBundleBanner";
 import { HumanTaskInboxBadge } from "@/components/HumanTaskInbox/HumanTaskInboxBadge";
 
 interface LayoutProps {
@@ -74,6 +75,7 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
             </span>
           </div>
           
+          <StaleBundleBanner />
           <HumanTaskInboxBadge />
 
           <div className="h-8 w-[1px] bg-glass-border" />

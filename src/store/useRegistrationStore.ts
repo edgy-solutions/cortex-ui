@@ -47,6 +47,9 @@ interface RegistrationState {
   reassertions: number;
   report: (r: { sent: number; accepted: number; reassertion: boolean }) => void;
   reportFailure: () => void;
+  /** Set when this tab's bundle is not the one served; registration was refused. */
+  stale: { mine: string; served: string } | null;
+  reportStale: (mine: string, served: string) => void;
 }
 
 export const useRegistrationStore = create<RegistrationState>()((set) => ({
@@ -54,6 +57,8 @@ export const useRegistrationStore = create<RegistrationState>()((set) => ({
   sent: null,
   accepted: null,
   reassertions: 0,
+  stale: null,
+  reportStale: (mine, served) => set({ stale: { mine, served } }),
 
   report: ({ sent, accepted, reassertion }) =>
     set((s) => ({
