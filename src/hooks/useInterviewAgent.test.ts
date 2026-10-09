@@ -22,6 +22,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Artifact, StreamEvent } from "@/api/types";
+import { NOTICE_PARTS_SOURCES_EVENT } from "@/lib/noticePartsSourcesFixture";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCanvasStore, ELECTRIC_COVERED_FIELDS } from "@/store/useCanvasStore";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
@@ -337,6 +338,22 @@ describe("useInterviewAgent — the Hop 3 no-ops (deliberate, not omissions)", (
 
     expect(artifact().sources).toEqual([]);
     expect(provenance(artifact().id).sources).toBe("local:create_pending");
+  });
+
+  it("sources carrying notice-parts provenance writes source_provenance, still NOT sources", async () => {
+    const r = mount();
+    await startTurn(r);
+    emit({
+      type: "sources",
+      sources: NOTICE_PARTS_SOURCES_EVENT.sources as never,
+      provenance_floor: NOTICE_PARTS_SOURCES_EVENT.provenance_floor as never,
+    });
+
+    expect(artifact().sources).toEqual([]);
+    expect(provenance(artifact().id).sources).toBe("local:create_pending");
+    expect(provenance(artifact().id).source_provenance).toBe("sse:sources");
+    expect(artifact().source_provenance?.floor?.obtained_via).toBe("user-drop");
+    expect(Object.keys(artifact().source_provenance!.by_uri)).toHaveLength(2);
   });
 
   it("graph_trace does NOT write graph_trace", async () => {

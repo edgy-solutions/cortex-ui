@@ -6,7 +6,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { ingestStatusPath } from "@/lib/ingestWire";
+import { ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -268,7 +268,8 @@ export async function fetchNoticeProvenance(noticeId: string): Promise<NoticePro
  * silently — verify gateway version >= the Option A roll before
  * upgrading the UI.
  */
-function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
+/** Exported for tests: the pure SSE event parse. */
+export function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
   try {
     const parsed = dataStr ? JSON.parse(dataStr) : {};
     switch (eventType) {
@@ -313,7 +314,11 @@ function parseSSE(eventType: string, dataStr: string): StreamEvent | null {
         return { type: "route_decision", decision: parsed };
       }
       case "sources": {
-        return { type: "sources", sources: parsed.sources ?? parsed };
+        return {
+          type: "sources",
+          sources: parsed.sources ?? parsed,
+          provenance_floor: Array.isArray(parsed) ? null : readProvenanceFloor(parsed),
+        };
       }
       case "graph_trace": {
         return {

@@ -17,6 +17,7 @@ import {
 
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { inScope } from "@/lib/platformDomains";
+import { readSourcesProvenance } from "@/lib/sourceProvenance";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import {
   isMockGroundingEnabled,
@@ -353,6 +354,22 @@ export function useInterviewAgent() {
           // persists each Source as a (:Source) node and (:CITES) edge;
           // the projector denormalizes them into the projection's
           // `sources` JSONB column; Electric delivers it. SSE no-op.
+          // EXCEPTION: notice-parts provenance (floor + dropped_by/promoted_by) is
+          // never persisted by the writer, so Electric cannot carry it. It rides
+          // `source_provenance`, a client-held field; `sources` is still not written.
+          if (artifactId) {
+            const source_provenance = readSourcesProvenance(
+              event.sources,
+              event.provenance_floor ?? null,
+            );
+            if (source_provenance) {
+              useCanvasStore.getState().updateArtifact(
+                artifactId,
+                { source_provenance },
+                "sse:sources",
+              );
+            }
+          }
           // MOCK-MODE OVERRIDE: see route_decision case above.
           if (isMockGroundingEnabled() && artifactId) {
             useCanvasStore.getState().updateArtifact(

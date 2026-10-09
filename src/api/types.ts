@@ -9,6 +9,8 @@ export {
 // The fallback_reason vocabulary + presentation lives in lib/routing so
 // the decision-path visualizer has one source of truth for the enum.
 import type { FallbackReason } from '@/lib/routing';
+import type { ProvenanceFloor } from '@/lib/ingestWire';
+import type { SourcesProvenance } from '@/lib/sourceProvenance';
 
 import type {
   DashboardUI,
@@ -211,12 +213,25 @@ export interface SubjectCandidate {
  * (what the retriever saw), NOT an LLM-summary (synthesis = theater).
  */
 export interface Source {
-  type: "document" | "graph_node" | "catalog_asset";
+  // "graph" is what ontology_service/notice_parts.py emits (one per affected part).
+  type: "document" | "graph_node" | "catalog_asset" | "graph";
   label: string;        // human-readable identifier
   uri: string;          // canonical identifier
   relevance?: number;   // 0..1 if the engine reports it
   snippet?: string;     // first ~120 chars of matched-chunk text
   open_url?: string;    // deep link to viewer (S3 URL / DataHub URL / etc.)
+
+  /**
+   * Notice-parts extras. The gateway's _project_sources keeps ("matched_for", "provenance",
+   * "obtained_via", "ingest_id", "dropped_by", "promoted_by") beyond the base fields; `mpn`
+   * (and `notice_id`) are NOT in that list, so `mpn` MAY BE ABSENT on the wire.
+   * Never derive it from the label.
+   */
+  mpn?: string;
+  obtained_via?: string | null;
+  ingest_id?: string | null;
+  dropped_by?: string | null;
+  promoted_by?: string | null;
 
   /**
    * Access-decision provenance per ADR-0025.
@@ -399,7 +414,7 @@ export type StreamEvent =
       cause?: string;
     }
   | { type: "route_decision"; decision: RouteDecision }
-  | { type: "sources"; sources: Source[] }
+  | { type: "sources"; sources: Source[]; provenance_floor?: ProvenanceFloor | null }
   | { type: "graph_trace"; nodes: GraphTraceNode[]; alternates?: GraphTraceNode[] }
   | {
       /** Bug 2 — a data-plane ACCESS DENIAL. The gateway emits this typed
@@ -533,6 +548,14 @@ export interface Artifact {
    * body carries ids and words, nothing a person merely looked at.
    */
   answered_with?: AnsweredWith | null;
+
+  /**
+   * Notice-parts provenance (floor banner + per-part dropped_by/promoted_by/mpn), CLIENT-HELD
+   * and SSE-ONLY: AnswerArtifactBundle has no provenance_floor and answer_artifact_writer.py
+   * writes only the base Source props, so Electric's `sources` can never carry these. The
+   * SSE `sources` event is the only carrier. Deliberately NOT in ELECTRIC_COVERED_FIELDS.
+   */
+  source_provenance?: SourcesProvenance | null;
 
   /**
    * WHAT THE SYSTEM UNDERSTOOD — the supervisor's `subtask_slots_decision` capture, written at

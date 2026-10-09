@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { FileText, Database, BarChart3, ExternalLink, Quote, Image as ImageIcon } from "lucide-react";
-import { useCurrentSources } from "@/store/useCanvasStore";
+import { useCurrentSources, useCurrentSourceProvenance } from "@/store/useCanvasStore";
+import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
+import type { SourceProvenanceEntry } from "@/lib/sourceProvenance";
 import type { Source } from "@/api/types";
 import { presentConfidence } from "@/lib/confidence";
 import { FiguresSlideIn } from "./FiguresSlideIn";
@@ -22,6 +24,8 @@ export function SourcesTrail() {
   // Per ADR-0023 Phase 1: sources live on the current Artifact, not
   // on a per-turn singleton in useInterviewStore.
   const sources = useCurrentSources();
+  // Notice-parts provenance is SSE-held (the writer persists none of it) — see Artifact.source_provenance.
+  const provenance = useCurrentSourceProvenance();
 
   // Open-source tracking for the FiguresSlideIn panel. A click on a
   // source's "View figures" button opens the panel for that source's
@@ -62,6 +66,12 @@ export function SourcesTrail() {
           )}
         </div>
 
+        {provenance?.floor && (
+          <div data-sources-provenance-floor>
+            <ProvenanceFloorLabel component={{ provenance_floor: provenance.floor }} />
+          </div>
+        )}
+
         {sources.length === 0 ? (
           <p className="text-xs text-slate-600 italic font-mono">
             {/* "No citations YET ... evidence APPEARS as engines return matches" promises
@@ -79,6 +89,7 @@ export function SourcesTrail() {
               <SourceRow
                 key={`${src.uri}-${i}`}
                 source={src}
+                provenance={provenance?.by_uri[src.uri] ?? null}
                 onViewFigures={() => setOpenSource(src)}
               />
             ))}
@@ -96,7 +107,7 @@ export function SourcesTrail() {
 }
 
 function SourceIcon({ type }: { type: Source["type"] }) {
-  if (type === "graph_node") {
+  if (type === "graph_node" || type === "graph") {
     return <Database className="w-3.5 h-3.5 text-neon-cyan/80" />;
   }
   if (type === "catalog_asset") {
@@ -107,9 +118,11 @@ function SourceIcon({ type }: { type: Source["type"] }) {
 
 function SourceRow({
   source,
+  provenance,
   onViewFigures,
 }: {
   source: Source;
+  provenance: SourceProvenanceEntry | null;
   onViewFigures: () => void;
 }) {
   const relevance =
@@ -160,6 +173,43 @@ function SourceRow({
               </a>
             )}
           </div>
+          {source.type === "graph" && (
+            <p
+              className="mt-0.5 text-[10px] font-mono text-slate-500 truncate"
+              data-source-uri={source.uri}
+              title={source.uri}
+            >
+              {source.uri}
+            </p>
+          )}
+          {provenance && (provenance.mpn || provenance.dropped_by || provenance.promoted_by) && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {provenance.mpn && (
+                <span
+                  className="text-[9px] font-mono text-neon-cyan/80 border border-neon-cyan/30 rounded px-1.5 py-0.5"
+                  data-source-mpn={provenance.mpn}
+                >
+                  MPN {provenance.mpn}
+                </span>
+              )}
+              {provenance.dropped_by && (
+                <span
+                  className="text-[9px] font-mono text-slate-400 border border-slate-600/30 rounded px-1.5 py-0.5"
+                  data-source-dropped-by={provenance.dropped_by}
+                >
+                  dropped by {provenance.dropped_by}
+                </span>
+              )}
+              {provenance.promoted_by && (
+                <span
+                  className="text-[9px] font-mono text-neon-green/80 border border-neon-green/30 rounded px-1.5 py-0.5"
+                  data-source-promoted-by={provenance.promoted_by}
+                >
+                  promoted by {provenance.promoted_by}
+                </span>
+              )}
+            </div>
+          )}
           {source.snippet && (
             <p
               className="mt-1 text-[10px] text-slate-500 italic leading-snug line-clamp-3"

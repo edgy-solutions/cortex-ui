@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import type { SourcesProvenance } from "@/lib/sourceProvenance";
 
 /** Do two task-artifacts carry the same displayed content? Compares the fields
  *  that matter for rendering (task_ref + display) and `rendered_output` BY
@@ -740,6 +741,15 @@ export function useCurrentSources(): Source[] {
     if (!id) return EMPTY_SOURCES;
     const found = s.artifacts.find((a) => a.id === id)?.sources;
     return found ?? EMPTY_SOURCES;
+  });
+}
+
+/** The current artifact's notice-parts provenance (SSE-held), or null when absent. */
+export function useCurrentSourceProvenance(): SourcesProvenance | null {
+  return useCanvasStore((s) => {
+    const id = s.currentArtifactId;
+    if (!id) return null;
+    return s.artifacts.find((a) => a.id === id)?.source_provenance ?? null;
   });
 }
 

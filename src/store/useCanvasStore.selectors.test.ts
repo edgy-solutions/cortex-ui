@@ -29,6 +29,7 @@ import {
   useCurrentArtifact,
   useCurrentRouting,
   useCurrentSources,
+  useCurrentSourceProvenance,
   useCurrentGraphTrace,
   useCurrentGraphAlternates,
 } from "./useCanvasStore";
@@ -130,6 +131,7 @@ const SELECTORS: Array<[string, () => unknown]> = [
   ["useCurrentArtifact", useCurrentArtifact],
   ["useCurrentRouting", useCurrentRouting],
   ["useCurrentSources", useCurrentSources],
+  ["useCurrentSourceProvenance", useCurrentSourceProvenance],
   ["useCurrentGraphTrace", useCurrentGraphTrace],
   ["useCurrentGraphAlternates", useCurrentGraphAlternates],
 ];
@@ -151,7 +153,7 @@ describe("useCurrent* — the sweep's population", () => {
       .filter((k) => k.startsWith("useCurrent"))
       .sort();
 
-    expect(exported.length).toBeGreaterThanOrEqual(5);
+    expect(exported.length).toBeGreaterThanOrEqual(6);
     expect(exported).toEqual(SELECTORS.map(([name]) => name).sort());
   });
 });
@@ -188,6 +190,7 @@ describe("useCurrent* — referential stability with no current artifact", () =>
     // the arrays are stable only because someone hoisted them.
     expect(mount(useCurrentArtifact).result.current).toBeNull();
     expect(mount(useCurrentRouting).result.current).toBeNull();
+    expect(mount(useCurrentSourceProvenance).result.current).toBeNull();
     expect(mount(useCurrentSources).result.current).toEqual([]);
     expect(mount(useCurrentGraphTrace).result.current).toEqual([]);
     expect(mount(useCurrentGraphAlternates).result.current).toEqual([]);
@@ -222,6 +225,7 @@ describe("useCurrent* — the empty branch is reached by three different absence
 
     expect(mount(useCurrentArtifact).result.current).toBeNull();
     expect(mount(useCurrentRouting).result.current).toBeNull();
+    expect(mount(useCurrentSourceProvenance).result.current).toBeNull();
     expect(mount(useCurrentSources).result.current).toBe(emptyWithNoCurrent);
   });
 
@@ -245,6 +249,7 @@ describe("useCurrent* — the empty branch is reached by three different absence
     expect(store().currentArtifactId).toBe("a1");
     expect(mount(useCurrentSources).result.current).toBe(emptyWithNoCurrent);
     expect(mount(useCurrentRouting).result.current).toBeNull();
+    expect(mount(useCurrentSourceProvenance).result.current).toBeNull();
     expect(mount(useCurrentGraphTrace).result.current).toEqual([]);
     expect(mount(useCurrentGraphAlternates).result.current).toEqual([]);
   });
