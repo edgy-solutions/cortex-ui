@@ -172,6 +172,18 @@ const DERIVED_BINDINGS = [
     domain_fit: ["DATA_ENGINEERING"],
     contract: INSTANCES_BY_PROPERTY_CONTRACT,
   },
+  // engine-o's `mesh:whichPartsDoesThisNoticeAffect` (invincible-agent rev 181, `cf4a456d`)
+  // declares `mesh:NoticePartSet`; the presentation agent projects it as INSTANCES_BY_PROPERTY
+  // (rows: [{instance: <part IRI>, mpn}], no state_vocabulary). Without this row the selector
+  // fell to KNOWLEDGE_DOCUMENT and showed the verb's JSON. Asked by Lane 1's roll-23 packet,
+  // 2026-10-08; the backend half is its `capabilities.py` row with the same subject and object.
+  {
+    subject_uri: "mesh:NoticePartSet",
+    object_uri: "mesh:InstancesByProperty",
+    persona_fit: ["SAFETY_ENGINEER", "SUSTAINMENT_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: INSTANCES_BY_PROPERTY_CONTRACT,
+  },
   // THE FIRST LIVE-VIEW BINDING (ADR-0042). Engine P's `mesh:planCostCurve` declares
   // `mesh:PeriodCostSeries` as its fixed output type; this row is what makes that type
   // ADDRESSABLE on this frontend's menu.
