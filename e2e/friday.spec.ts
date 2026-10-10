@@ -16,14 +16,13 @@ function ladderState(page: Page, stage: string) {
 async function walkToAct(page: Page, f: Friday) {
   await seedFakeOidcSession(page, f.seed.droppedBy.authz_id);
   await page.goto("/");
-  await page.locator("[data-ingest-trigger]").click();
   await page.locator("[data-ingest-file-input]").setInputFiles({
     name: "PCN26-117.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4 e2e stand-in\n"),
   });
-  await page.locator('[data-ingest-kind="pdf"]').click();
-  await page.locator("[data-ingest-kind-confirm]").click();
+  await page.locator('[data-ingest-kind="pdf"] input').check();
+  await page.getByRole("button", { name: "Send" }).click();
 
   const card = page.locator(`[data-ingest-id="${f.seed.ingestId}"]`);
   await expect(card).toBeVisible();

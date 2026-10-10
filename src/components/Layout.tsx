@@ -167,15 +167,7 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
             onMouseEnter={() => setRightHover(true)}
-            onMouseLeave={(e) => {
-              // P0 2026-10-08: the ingest slide-in lives INSIDE this rail. In full screen, the
-              // pointer leaving the window to fetch a file from Explorer collapsed the rail and
-              // unmounted the slide-in, so the drop landed on nothing and navigated the tab, and a
-              // chosen file's change event reached an unmounted input. While it is open, the rail
-              // stays up; closing it is the slide-in's own act.
-              if (e.currentTarget.querySelector("[data-ingest-slide-in]")) return;
-              setRightHover(false);
-            }}
+            onMouseLeave={() => setRightHover(false)}
             className="w-80 border-l border-glass-border flex flex-col overflow-hidden shrink-0 relative"
           >
             {hud}

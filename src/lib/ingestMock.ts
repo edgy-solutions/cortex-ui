@@ -58,9 +58,14 @@ interface MockRow {
    * carry, so it would be dishonest to sniff it the same way.
    */
   origin?: IngestOrigin | null;
+  /** PROPOSED wire field (see `IngestStatusRow.suggested_content_kind`): set only when a drop reaches
+   *  `review`, from the filename — /pcn/i → "pcn", /pdn/i → "pdn". Absent otherwise. */
+  suggested_content_kind?: string;
 }
 
 const STORE = new Map<string, MockRow>();
+/** Filenames of non-duplicate drops, kept OFF the row so the row's shape is unchanged. */
+const FILE_NAMES = new Map<string, string>();
 let counter = 0;
 
 function sha256For(n: number): string {
@@ -125,6 +130,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
     updated_at: now,
   };
   STORE.set(ingestId, row);
+  FILE_NAMES.set(ingestId, file.name);
   return Promise.resolve({ ingest_id: ingestId, stage: row.stage, detail: null, object_prefix: `ingest/${ingestId}/`, duplicate: null });
 }
 
@@ -149,6 +155,9 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
       row.stage = next;
       row.updated_at = Date.now();
       if (next === "review") {
+        const name = FILE_NAMES.get(row.ingest_id) ?? "";
+        if (/pcn/i.test(name)) row.suggested_content_kind = "pcn";
+        else if (/pdn/i.test(name)) row.suggested_content_kind = "pdn";
         seedReviewTask(row);
       }
     }
@@ -186,6 +195,18 @@ export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promi
   return Promise.resolve({ steward_task_id: `mock-steward-task-${ingestId}` });
 }
 
+/** PROPOSED — `POST /ingest/{id}/content_kind`'s mock: accepts the confirm for a known row, 404 otherwise. */
+export function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
+  if (!STORE.has(ingestId)) {
+    const err = new Error(`mock: unknown ingest id ${ingestId}`) as Error & {
+      response?: { status: number; data: { detail: string } };
+    };
+    err.response = { status: 404, data: { detail: "ingest not found" } };
+    return Promise.reject(err);
+  }
+  return Promise.resolve({ ingest_id: ingestId, content_kind: contentKind });
+}
+
 /**
  * THE NAMED, HAND-BUILT FIXTURE for origin — see `MockRow.origin`'s doc comment. Sets a row's
  * `origin` directly for a test to exercise `IngestStatusCard`'s origin section against the mock
@@ -202,5 +223,6 @@ export function __seedMockOriginFixture(ingestId: string, origin: IngestOrigin |
 /** Test/dev-only reset — the module is a singleton store across the session otherwise. */
 export function __resetIngestMock(): void {
   STORE.clear();
+  FILE_NAMES.clear();
   counter = 0;
 }

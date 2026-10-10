@@ -58,6 +58,8 @@ import {
   type IngestStatusRow,
   type IngestStage,
 } from "@/lib/ingestWire";
+import { IngestKindSuggestion } from "./IngestKindSuggestion";
+import { duplicatePhrase } from "@/lib/ingestWire";
 import { originSummary } from "@/lib/ingestOrigin";
 
 const RUNG_GLYPH: Record<string, string> = {
@@ -188,6 +190,9 @@ export interface IngestStatusCardProps {
    * this card — every existing test here — needs no `<AuthProvider>` just to show a status row.
    */
   onBehalfOf?: string | null;
+  /** The surrounding turn already drew the duplicate phrase (message or label); the card then draws
+   *  only the original's id/stage, so the phrase appears once. */
+  duplicatePhraseDrawn?: boolean;
 }
 
 export function IngestStatusCard({
@@ -195,6 +200,7 @@ export function IngestStatusCard({
   pollIntervalMs = 2000,
   initialRow,
   onBehalfOf = null,
+  duplicatePhraseDrawn = false,
 }: IngestStatusCardProps) {
   const [row, setRow] = useState<IngestStatusRow | null>(initialRow ?? null);
   const [notFound, setNotFound] = useState(false);
@@ -401,10 +407,12 @@ export function IngestStatusCard({
         </div>
       )}
 
+      <IngestKindSuggestion row={row} />
+
       {isDuplicate ? (
-        <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-duplicate>
-          {row.duplicate!.message}
-          <span> (duplicate of {row.duplicate!.of_ingest_id})</span>
+        <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-duplicate>
+          {!duplicatePhraseDrawn && <span>{duplicatePhrase(row.duplicate!.message)}</span>}
+          <span>{duplicatePhraseDrawn ? "" : " "}(duplicate of {row.duplicate!.of_ingest_id})</span>
           {row.stage && <span> — original is at {row.stage}</span>}
         </p>
       ) : row.kind === "event" ? (
