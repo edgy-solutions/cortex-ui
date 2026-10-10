@@ -16,6 +16,8 @@ const PORT = 5179;
 
 export default defineConfig({
   testDir: "e2e",
+  // The live walk targets a deployed sandbox (playwright.walk.config.ts); never run it from here.
+  testIgnore: /pcnWalk.live.spec.ts$/,
   timeout: 60_000,
   workers: 1,
   fullyParallel: false,
