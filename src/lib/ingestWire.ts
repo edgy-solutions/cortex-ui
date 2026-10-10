@@ -295,6 +295,20 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   };
 }
 
+/** The fixed label for a duplicate. Drawn only when the producer's message does not already say it. */
+export const DUPLICATE_LABEL = "Already processed";
+
+/**
+ * The ONE place a duplicate's phrase is chosen, so "already processed" is on screen exactly once.
+ * The producer's message is drawn verbatim; it usually carries the phrase itself ("already
+ * processed on 2026-09-29 from …"), in which case the label would say it twice. The label leads
+ * only when the message is absent/blank or does not contain the phrase (e.g. "same bytes as …").
+ */
+export function duplicatePhrase(message: string | null | undefined): string {
+  if (typeof message !== "string" || message.trim() === "") return DUPLICATE_LABEL;
+  return /already processed/i.test(message) ? message : `${DUPLICATE_LABEL} — ${message}`;
+}
+
 /** `POST /ingest`'s two response shapes (`{ingest_id, stage, detail, object_prefix,
  *  duplicate: null}` new, or `{ingest_id, stage, detail, duplicate: {of_ingest_id, message}}`
  *  duplicate) share `ingest_id` — everything else this client needs comes from the immediate

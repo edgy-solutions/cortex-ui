@@ -282,11 +282,12 @@ describe("ingest turns in the transcript", () => {
     await sendOne({
       ingest_id: "ing-2",
       stage: "received",
-      duplicate: { of_ingest_id: "ing-1", message: "This document was already ingested" },
+      duplicate: { of_ingest_id: "ing-1", message: "already processed on 2026-09-29 from work-instruction.pdf" },
     });
     const r = render(<IngestTurns />);
     const res = r.container.querySelector("[data-ingest-turn-result='duplicate']")!;
-    expect(res.textContent).toMatch(/Already processed/);
+    expect(res.textContent).toBe("already processed on 2026-09-29 from work-instruction.pdf");
+    expect(((r.container.querySelector("[data-ingest-turn]")!.textContent ?? "").match(/already processed/gi) ?? []).length).toBe(1);
     expect(res.className).not.toMatch(/rose|red|amber/);
     expect(r.container.querySelector("[data-ingest-upload-error]")).toBeNull();
   });

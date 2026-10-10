@@ -9,6 +9,7 @@
 import { useAuth } from "react-oidc-context";
 import { FileText } from "lucide-react";
 import { IngestStatusCard } from "./IngestStatusCard";
+import { duplicatePhrase } from "@/lib/ingestWire";
 import { useIngestComposerStore, type IngestTurn } from "@/store/useIngestComposerStore";
 
 export function IngestTurns() {
@@ -52,12 +53,11 @@ function TurnCard({ turn, email }: { turn: IngestTurn; email: string | null }) {
       )}
       {turn.duplicate && (
         <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-turn-result="duplicate">
-          <span className="uppercase tracking-wider text-slate-400">Already processed</span>
-          {turn.duplicate.message ? ` — ${turn.duplicate.message}` : ""}
+          {duplicatePhrase(turn.duplicate.message)}
         </p>
       )}
       {turn.phase === "status" && turn.ingestId && (
-        <IngestStatusCard ingestId={turn.ingestId} onBehalfOf={email} />
+        <IngestStatusCard ingestId={turn.ingestId} onBehalfOf={email} duplicatePhraseDrawn={turn.duplicate !== null} />
       )}
     </div>
   );
