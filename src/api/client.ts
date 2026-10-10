@@ -1002,6 +1002,19 @@ export async function disputeIngestOrigin(
 }
 
 /**
+ * PROPOSED to Lane 1 (packet `sessions/2026-10-09-packet-to-lane-1-leaf-kind-suggestion-and-adr-0041-notes.md`)
+ * — `POST /ingest/{ingest_id}/content_kind` with `{"content_kind": "<kind>"}`: the dropper CONFIRMS the
+ * classifier's suggested leaf kind (ADR-0041 §4). The platform has no such route at invincible-agent
+ * origin/master. Same `api` instance as every call above, so it needs no `check:transport` declaration.
+ */
+export async function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
+  const { data } = await api.post<unknown>(`/ingest/${encodeURIComponent(ingestId)}/content_kind`, {
+    content_kind: contentKind,
+  });
+  return data;
+}
+
+/**
  * CORTEX-PROPOSED — `src/archetypes/illustration/contract.ts`'s header: no producer route
  * serves an ICN's bytes today (`GET /artifacts/{id}` returns JSON, not bytes). This fetches
  * through the same minted `api` instance as every other call here (the bearer attaches via the

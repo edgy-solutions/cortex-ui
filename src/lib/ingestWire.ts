@@ -209,6 +209,15 @@ export interface IngestStatusRow {
    * as `null`, never as a refusal.
    */
   case_id: string | null;
+  /**
+   * PROPOSED to Lane 1 (packet `sessions/2026-10-09-packet-to-lane-1-leaf-kind-suggestion-and-adr-0041-notes.md`);
+ * the platform does NOT emit it at invincible-agent origin/master, so today it is always null.
+   * The classifier's suggested registered LEAF content kind (e.g. `pcn`), for the dropper to
+   * confirm (ADR-0041 §4: the classifier suggests, the human confirms, the manifest declares).
+   * A non-blank string, else null. Optional on the type so fixtures that predate it still compile;
+   * `readIngestStatusRow` always sets it.
+   */
+  suggested_content_kind?: string | null;
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -279,6 +288,10 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     return null;
   }
 
+  // PROPOSED field (see `IngestStatusRow.suggested_content_kind`): non-blank string, else null —
+  // a wrong-typed value is not a refusal of the row, just no suggestion.
+  const suggested_content_kind = isNonEmptyString(raw.suggested_content_kind) ? raw.suggested_content_kind : null;
+
   return {
     ingest_id: raw.ingest_id,
     sha256: raw.sha256,
@@ -292,6 +305,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     // fabricated unresolved/resolved state. See `IngestStatusRow.origin`'s own doc comment.
     origin: readIngestOrigin(raw.origin),
     case_id,
+    suggested_content_kind,
   };
 }
 

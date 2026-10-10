@@ -58,6 +58,7 @@ import {
   type IngestStatusRow,
   type IngestStage,
 } from "@/lib/ingestWire";
+import { IngestKindSuggestion } from "./IngestKindSuggestion";
 import { duplicatePhrase } from "@/lib/ingestWire";
 import { originSummary } from "@/lib/ingestOrigin";
 
@@ -405,6 +406,8 @@ export function IngestStatusCard({
           </p>
         </div>
       )}
+
+      <IngestKindSuggestion row={row} />
 
       {isDuplicate ? (
         <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-duplicate>
