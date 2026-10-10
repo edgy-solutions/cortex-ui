@@ -617,6 +617,24 @@ const DERIVED_BINDINGS = [
     domain_fit: ["SUSTAINMENT"],
     contract: CONTRIBUTION_RANKING_CONTRACT,
   },
+  // FRACAS (ia-saf packet 2026-10-08, final shape). A failure COUNT is a noun unit
+  // ("failures"), not a currency: formatAmount prints it bare. `favourable` is absent upstream.
+  // A refused body ({refused:true, outcome:"source_unavailable"}, no rows) must NEVER be drawn
+  // as an empty card from either of these two subjects.
+  {
+    subject_uri: "http://internal/sustainment/safety#FailureRecordSet",
+    object_uri: "mesh:ContributionRanking",
+    persona_fit: ["SAFETY_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: CONTRIBUTION_RANKING_CONTRACT,
+  },
+  {
+    subject_uri: "http://internal/sustainment/safety#FailureTrend",
+    object_uri: "mesh:MultiSeries",
+    persona_fit: ["SAFETY_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: MULTI_SERIES_CONTRACT,
+  },
   // ── THE TWO BELOW ARE KNOWLEDGE_DOCUMENT BY RULING, NOT BY FIT ────────────────────────
   //
   // Both are single-subject statements rather than rankings or series, and no declared
