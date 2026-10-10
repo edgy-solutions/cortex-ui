@@ -24,6 +24,7 @@ import { checkBundleFreshness } from "@/lib/bundleFreshness";
 import { useRegistrationStore } from "@/store/useRegistrationStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
+import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
 import type { Artifact } from "@/api/types";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
@@ -248,6 +249,11 @@ export function useFrontendCapabilityRegistration() {
       },
     );
   }).current;
+
+  // Resolve frontend_version once at load (flag-gated) so the ask never waits on it.
+  useEffect(() => {
+    if (isSendFrontendVersionEnabled()) void loadFrontendVersion();
+  }, []);
 
   // THE OPENING REGISTRATION — unchanged in cost and in timing.
   useEffect(() => {
