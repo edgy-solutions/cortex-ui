@@ -12,6 +12,7 @@ import {
   type AnswerSortMode,
 } from "@/store/useAnswerPanelStore";
 import { LiveAnswerStrip } from "./LiveAnswerStrip";
+import { IngestTurns } from "@/components/ingest/IngestTurns";
 import { AccessDeniedCard } from "./AccessDeniedCard";
 import { useLiveStages } from "./useLiveStages";
 import { ArchetypeGlyph, glyphFor } from "./ArchetypeGlyph";
@@ -277,6 +278,8 @@ export function AnswersPanel() {
               here (terminal state, replaces the live strip once the spinner
               stops) with the request-access action. */}
           <AccessDeniedCard />
+          {/* Ingest turns from the composer (drop is the prompt): newest-first, ahead of the answers. */}
+          <IngestTurns />
         </div>
 
         {total === 0 && !liveActive && !hasAccessDenial && <EmptyState />}

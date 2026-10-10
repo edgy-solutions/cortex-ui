@@ -25,9 +25,13 @@ export interface KindPickerProps {
   onConfirm: (kind: IngestKind) => void;
   confirming?: boolean;
   blockedReason?: string | null;
+  /** Inline (composer chip) mode: the radio choice itself is reported through `onSelect` and
+   *  there is no Confirm button — the composer's Send is the confirmation. */
+  onSelect?: (kind: IngestKind) => void;
+  inline?: boolean;
 }
 
-export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason }: KindPickerProps) {
+export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline }: KindPickerProps) {
   const suggestionValid =
     suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind);
   const [selected, setSelected] = useState<IngestKind | null>(
@@ -35,11 +39,14 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
   );
 
   return (
-    <div className="glass-panel p-4 my-2 border-cyan-500/20" data-kind-picker>
-      <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/70 mb-2">
+    <div
+      className={inline ? "flex items-center gap-3 flex-wrap" : "glass-panel p-4 my-2 border-cyan-500/20"}
+      data-kind-picker
+    >
+      {!inline && <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/70 mb-2">
         What kind of document is this?
-      </p>
-      <div className="flex flex-col gap-1" role="radiogroup">
+      </p>}
+      <div className={inline ? "flex items-center gap-3" : "flex flex-col gap-1"} role="radiogroup" aria-label="Document kind">
         {INGEST_UPLOAD_KINDS.map((k) => (
           <label
             key={k}
@@ -51,7 +58,10 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
               name="ingest-kind"
               value={k}
               checked={selected === k}
-              onChange={() => setSelected(k)}
+              onChange={() => {
+                setSelected(k);
+                onSelect?.(k);
+              }}
             />
             {k}
           </label>
@@ -62,7 +72,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
           {blockedReason}
         </p>
       )}
-      <button
+      {!inline && <button
         type="button"
         className="mt-3 px-3 py-1 text-xs font-mono uppercase tracking-wider rounded bg-cyan-600/30 text-cyan-200 disabled:opacity-40 disabled:cursor-not-allowed"
         data-ingest-kind-confirm
@@ -70,7 +80,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
         onClick={() => selected && onConfirm(selected)}
       >
         {confirming ? "Confirming…" : "Confirm"}
-      </button>
+      </button>}
     </div>
   );
 }

@@ -402,8 +402,8 @@ export function IngestStatusCard({
       )}
 
       {isDuplicate ? (
-        <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-duplicate>
-          {row.duplicate!.message}
+        <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-duplicate>
+          <span className="uppercase tracking-wider text-slate-400">Already processed</span> — {row.duplicate!.message}
           <span> (duplicate of {row.duplicate!.of_ingest_id})</span>
           {row.stage && <span> — original is at {row.stage}</span>}
         </p>
