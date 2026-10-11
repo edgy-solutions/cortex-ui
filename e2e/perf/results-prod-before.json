@@ -1,0 +1,252 @@
+{
+  "before:N=1000": {
+    "n": 1000,
+    "summaryOnly": false,
+    "rowCount": 1000,
+    "medianRowBytes": 7507,
+    "median": {
+      "ttiMs": 20766,
+      "longTaskMaxMs": 11051,
+      "longTaskCount": 10,
+      "longTaskTotalMs": 20346,
+      "domNodes": 179683,
+      "jsHeapMB": 497,
+      "firstBatchMs": 572,
+      "bodyMs": 509
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 1000,
+      "ttiMs": 36516,
+      "ttiLabel": "36516ms",
+      "rowSeenMs": 11696,
+      "bodyMs": 509,
+      "firstBatchMs": 572,
+      "panelOpenClickMs": null,
+      "longTaskCount": 27,
+      "longTaskTotalMs": 25286,
+      "longTaskMaxMs": 11142,
+      "domNodes": 180807,
+      "jsHeapMB": 497,
+      "registerPosts": 1,
+      "notes": [
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 1000,
+        "ttiMs": 36516,
+        "ttiLabel": "36516ms",
+        "rowSeenMs": 11696,
+        "bodyMs": 509,
+        "firstBatchMs": 572,
+        "panelOpenClickMs": null,
+        "longTaskCount": 27,
+        "longTaskTotalMs": 25286,
+        "longTaskMaxMs": 11142,
+        "domNodes": 180807,
+        "jsHeapMB": 497,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 1000,
+        "ttiMs": 20766,
+        "ttiLabel": "20766ms",
+        "rowSeenMs": 12729,
+        "bodyMs": 472,
+        "firstBatchMs": 554,
+        "panelOpenClickMs": null,
+        "longTaskCount": 10,
+        "longTaskTotalMs": 20346,
+        "longTaskMaxMs": 10867,
+        "domNodes": 179683,
+        "jsHeapMB": 497,
+        "registerPosts": 1,
+        "notes": [
+          "panel not open and no opener found",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 1000,
+        "ttiMs": 13108,
+        "ttiLabel": "13108ms",
+        "rowSeenMs": 12497,
+        "bodyMs": 515,
+        "firstBatchMs": 587,
+        "panelOpenClickMs": null,
+        "longTaskCount": 8,
+        "longTaskTotalMs": 18819,
+        "longTaskMaxMs": 11051,
+        "domNodes": 177931,
+        "jsHeapMB": 1144,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "before:N=10000": {
+    "n": 10000,
+    "summaryOnly": false,
+    "rowCount": 10000,
+    "medianRowBytes": 7513,
+    "median": {
+      "ttiMs": ">90s",
+      "longTaskMaxMs": 0,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "domNodes": ">90s",
+      "jsHeapMB": ">90s",
+      "firstBatchMs": ">90s",
+      "bodyMs": ">90s"
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 10000,
+      "ttiMs": null,
+      "ttiLabel": ">90s",
+      "rowSeenMs": null,
+      "bodyMs": null,
+      "firstBatchMs": null,
+      "panelOpenClickMs": null,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "longTaskMaxMs": 0,
+      "domNodes": null,
+      "jsHeapMB": null,
+      "registerPosts": 0,
+      "notes": [
+        "final evaluate timed out (main thread saturated)",
+        "body: ",
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": null,
+        "ttiLabel": ">90s",
+        "rowSeenMs": null,
+        "bodyMs": null,
+        "firstBatchMs": null,
+        "panelOpenClickMs": null,
+        "longTaskCount": 0,
+        "longTaskTotalMs": 0,
+        "longTaskMaxMs": 0,
+        "domNodes": null,
+        "jsHeapMB": null,
+        "registerPosts": 0,
+        "notes": [
+          "final evaluate timed out (main thread saturated)",
+          "body: ",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "before-summary:N=10000": {
+    "n": 10000,
+    "summaryOnly": true,
+    "rowCount": 10000,
+    "medianRowBytes": 704,
+    "median": {
+      "ttiMs": 34663,
+      "longTaskMaxMs": 25946,
+      "longTaskCount": 11,
+      "longTaskTotalMs": 31651,
+      "domNodes": 530716,
+      "jsHeapMB": 307,
+      "firstBatchMs": 776,
+      "bodyMs": 590
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 10000,
+      "ttiMs": 34663,
+      "ttiLabel": "34663ms",
+      "rowSeenMs": 27607,
+      "bodyMs": 530,
+      "firstBatchMs": 757,
+      "panelOpenClickMs": null,
+      "longTaskCount": 11,
+      "longTaskTotalMs": 30830,
+      "longTaskMaxMs": 25163,
+      "domNodes": 530716,
+      "jsHeapMB": 307,
+      "registerPosts": 1,
+      "notes": [
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": 34663,
+        "ttiLabel": "34663ms",
+        "rowSeenMs": 27607,
+        "bodyMs": 530,
+        "firstBatchMs": 757,
+        "panelOpenClickMs": null,
+        "longTaskCount": 11,
+        "longTaskTotalMs": 30830,
+        "longTaskMaxMs": 25163,
+        "domNodes": 530716,
+        "jsHeapMB": 307,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 10000,
+        "ttiMs": 34295,
+        "ttiLabel": "34295ms",
+        "rowSeenMs": 32171,
+        "bodyMs": 590,
+        "firstBatchMs": 776,
+        "panelOpenClickMs": null,
+        "longTaskCount": 7,
+        "longTaskTotalMs": 33842,
+        "longTaskMaxMs": 29732,
+        "domNodes": 530716,
+        "jsHeapMB": 347,
+        "registerPosts": 1,
+        "notes": [
+          "panel not open and no opener found",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 10000,
+        "ttiMs": 36607,
+        "ttiLabel": "36607ms",
+        "rowSeenMs": 28559,
+        "bodyMs": 621,
+        "firstBatchMs": 810,
+        "panelOpenClickMs": null,
+        "longTaskCount": 12,
+        "longTaskTotalMs": 31651,
+        "longTaskMaxMs": 25946,
+        "domNodes": 530716,
+        "jsHeapMB": 307,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  }
+}

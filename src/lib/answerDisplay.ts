@@ -287,32 +287,16 @@ export function answerTopic(a: Artifact): string {
   return label || "ungrouped";
 }
 
-/** Full-content search text for an answer: the summary + question + topic PLUS
- *  the entire rendered payload (chart data, table rows, document text, facts)
- *  and its sources — so list search finds things that appear INSIDE an answer
- *  (e.g. an email like bob@example.com returned in a table), not just the
- *  headline. Lowercased; JSON-stringifies the components so any field matches.
- *  Compute once per answer and cache (it's a bit heavy) — see AnswersPanel. */
+/** Search text for an answer, built from SUMMARY FIELDS ONLY: headline, question, status and
+ *  the task kind. Never the rendered payload, sources or routing - those are bodies, and a body
+ *  is not on the client when the list is a summary page (and stringifying 1,000 of them was a
+ *  long task on its own). Lowercased; compute once per answer set - see AnswersPanel.
+ *  // LANE-1: the server replaces this with a query over the summary index (the summary route's
+ *  // search param); until it lands this is the client-side stand-in over the same fields. */
 export function answerSearchText(a: Artifact): string {
-  const parts: string[] = [answerSummary(a), a.question_text || "", answerTopic(a)];
-  const comps = a.rendered_output?.components;
-  if (comps) {
-    try {
-      parts.push(JSON.stringify(comps));
-    } catch {
-      /* non-serializable — skip */
-    }
-  }
-  const src = (a as { sources?: unknown }).sources;
-  if (Array.isArray(src)) {
-    for (const s of src) {
-      if (s && typeof s === "object") {
-        const o = s as Record<string, unknown>;
-        parts.push(String(o.label ?? ""), String(o.snippet ?? ""), String(o.uri ?? ""));
-      }
-    }
-  }
-  return parts.join(" ").toLowerCase();
+  return [answerSummary(a), a.question_text || "", a.status || "", a.task_ref?.kind ?? ""]
+    .join(" ")
+    .toLowerCase();
 }
 
 /** The SPO provenance the card carries forward for v2/v3. `subjectLabel`

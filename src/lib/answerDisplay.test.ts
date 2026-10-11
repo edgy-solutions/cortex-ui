@@ -393,82 +393,46 @@ describe("answerTopic — the TOPIC grouping key", () => {
   });
 });
 
-describe("answerSearchText — search reaches INSIDE the answer", () => {
-  it("matches a value buried in the rendered payload, not just the headline", () => {
-    // The reason this function exists: an executive searching an email address expects the
-    // answer whose TABLE contains it, and that string appears nowhere in summary, question
-    // or topic. Losing the JSON.stringify silently narrows search to headlines.
+describe("answerSearchText - summary fields only", () => {
+  it("does NOT match a value that appears only inside rendered_output", () => {
+    // Search runs over the summary index (summary, question, status, kind). A term that lives
+    // only in a body must not match: bodies are not on the client when the list is summaries.
     const a = answer({
       summary: "Ownership of Customer 360",
       rendered_output: { components: [{ rows: [{ owner: "Bob@Example.com" }] }] },
     });
 
-    expect(answerSearchText(a)).toContain("bob@example.com");
+    expect(answerSearchText(a)).not.toContain("bob@example.com");
   });
 
-  it("is entirely lowercased — the caller compares against a lowercased query", () => {
-    // The casefold lives here, once. A caller doing its own toLowerCase on the query while
-    // this returned mixed case would make every capitalised term unsearchable.
-    const text = answerSearchText(answer({ summary: "Customer 360 · Owned By Data Platform" }));
-
-    expect(text).toBe(text.toLowerCase());
-    expect(text).toContain("owned by data platform");
-  });
-
-  it("includes the headline, the question and the topic together", () => {
-    // Three different things a user might remember about the same answer. All three are
-    // searchable, so recall does not depend on which one they type.
-    const text = answerSearchText(
-      answer({ summary: "Ownership resolved", question_text: "who owns alpha?", routing: ROUTING }),
-    );
-
-    expect(text).toContain("ownership resolved");
-    expect(text).toContain("who owns alpha?");
-    expect(text).toContain("dashboard");
-  });
-
-  it("includes each source's label, snippet and uri", () => {
-    // Citations are how people re-find an answer ("the one that cited the runbook"). Sources
-    // are stringified field-by-field rather than wholesale, so a new Source field is NOT
-    // searchable until someone adds it here — worth knowing before filing a search bug.
+  it("does NOT match routing or sources either", () => {
     const text = answerSearchText(
       answer({
-        sources: [
-          {
-            type: "document",
-            label: "Runbook Alpha",
-            uri: "s3://bucket/runbook-alpha.pdf",
-            snippet: "Escalate to the Data Platform rota",
-          },
-        ],
+        summary: "Ownership resolved",
+        question_text: "who is it",
+        routing: ROUTING,
+        sources: [{ type: "document", label: "Runbook Alpha", uri: "s3://b/r.pdf", snippet: "escalate" }],
       }),
     );
 
-    expect(text).toContain("runbook alpha");
-    expect(text).toContain("s3://bucket/runbook-alpha.pdf");
-    expect(text).toContain("escalate to the data platform rota");
+    expect(text).not.toContain("dashboard");
+    expect(text).not.toContain("runbook alpha");
   });
 
-  it("survives a NON-SERIALIZABLE payload instead of throwing into the list render", () => {
-    // A circular component (a payload carrying a back-reference) would make JSON.stringify
-    // throw. This function runs inside the answers list's memo, so an uncaught throw here is
-    // a blank sidebar, not a missed match. The headline still has to come back.
-    const circular: Record<string, unknown> = { name: "loop" };
-    circular.self = circular;
-    const a = answer({ summary: "Still findable", rendered_output: { components: [circular] } });
+  it("matches a term in the summary, the question or the status, lowercased", () => {
+    const text = answerSearchText(
+      answer({ summary: "Customer 360 Owned By Data Platform", question_text: "Who owns Alpha?", status: "complete" }),
+    );
 
-    expect(() => answerSearchText(a)).not.toThrow();
-    expect(answerSearchText(a)).toContain("still findable");
+    expect(text).toBe(text.toLowerCase());
+    expect(text).toContain("owned by data platform");
+    expect(text).toContain("who owns alpha?");
+    expect(text).toContain("complete");
   });
 
   it("leaks the '(untitled answer)' SENTINEL into the searchable text", () => {
-    // Characterized as found, not endorsed. answerSearchText builds on answerSummary, so a
-    // row with neither headline nor question is matched by the query "untitled" — a word no
-    // user typed into the system. Harmless today; it is why search results can include rows
-    // that show no visible match.
-    const text = answerSearchText(answer({ summary: "", question_text: "" }));
-
-    expect(text).toContain("(untitled answer)");
+    // Characterized as found, not endorsed (answerSearchText builds on answerSummary).
+    expect(answerSearchText(answer({ summary: "", question_text: "" }))).toContain("(untitled answer)");
   });
 });
 

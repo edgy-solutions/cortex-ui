@@ -4,7 +4,8 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { foldedAskIds } from "@/lib/askFold";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
-import { computeStageEdges, connectedComponents } from "@/lib/stageEdges";
+import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/stageEdges";
+import { layoutOffsets, visibleRange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
@@ -208,6 +209,23 @@ export function AnswersPanel() {
     return m;
   }, [artifacts]);
 
+  // The scroll container's window, for the virtualised list. A height of 0 (unmeasured) falls
+  // back inside visibleRange rather than rendering nothing.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setViewH(el.clientHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const scrollView = useMemo(() => ({ top: scrollTop, height: viewH }), [scrollTop, viewH]);
+
   const rowCtx: RowCtx = {
     currentArtifactId,
     pinnedIds,
@@ -268,7 +286,10 @@ export function AnswersPanel() {
           selection, so a click-and-sweep to copy a summary never got started — the list was
           uncopyable and the reason looked like a CSS choice rather than a gesture guard. */}
       <div
-        className={`flex-1 min-h-0 overflow-y-auto px-2 py-3 ${
+        ref={scrollRef}
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        data-answers-scroll
+        className={`relative flex-1 min-h-0 overflow-y-auto px-2 py-3 ${
           drag?.moved ? "select-none" : ""
         }`}
       >
@@ -290,11 +311,11 @@ export function AnswersPanel() {
         )}
 
         {sortMode === "TIME" && !q ? (
-          <Timeline items={filtered} ctx={rowCtx} />
+          <Timeline items={filtered} ctx={rowCtx} view={scrollView} />
         ) : sortMode === "GRAPH" && !q ? (
-          <GraphClusters items={filtered} ctx={rowCtx} />
+          <GraphClusters items={filtered} ctx={rowCtx} view={scrollView} />
         ) : (
-          <Clusters items={filtered} mode={q ? "TIME" : sortMode} ctx={rowCtx} />
+          <Clusters items={filtered} mode={q ? "TIME" : sortMode} ctx={rowCtx} view={scrollView} />
         )}
       </div>
 
@@ -348,34 +369,97 @@ function zoomToGroup(id: string) {
   st.setGroup(id);
 }
 
-function Timeline({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
-  const now = Date.now();
-  const days = useMemo(() => {
-    const groups: { key: string; label: string; items: Artifact[] }[] = [];
-    const byKey = new Map<string, Artifact[]>();
-    for (const a of items) {
-      const { key } = dayOf(a.created_at, now);
-      if (!byKey.has(key)) {
-        byKey.set(key, []);
-        groups.push({ key, label: dayOf(a.created_at, now).label, items: byKey.get(key)! });
-      }
-      byKey.get(key)!.push(a);
-    }
-    return groups;
-  }, [items, now]);
+/** FIXED HEIGHTS, one per item kind, because the list is windowed: an item is positioned by
+ *  arithmetic, not measured. Rows clip (overflow hidden) rather than grow. */
+const DAY_H = 28;
+const TIME_ROW_H = 76;
+const CLUSTER_H = 36;
+const CLUSTER_ROW_H = 68;
+const OVERSCAN_PX = 400;
 
+type FlatItem =
+  | { kind: "day"; key: string; label: string; groupId: string }
+  | { kind: "time-row"; key: string; a: Artifact }
+  | { kind: "cluster"; key: string; label: string; count: number; color: string; archetype?: AnswerArchetype; groupId: string | null }
+  | { kind: "cluster-row"; key: string; a: Artifact };
+
+const heightOf = (it: FlatItem): number =>
+  it.kind === "day" ? DAY_H : it.kind === "time-row" ? TIME_ROW_H : it.kind === "cluster" ? CLUSTER_H : CLUSTER_ROW_H;
+
+/** What the scroll container reports: scrollTop and the visible height. */
+interface ScrollView {
+  top: number;
+  height: number;
+}
+
+function renderFlat(it: FlatItem, ctx: RowCtx): React.ReactNode {
+  switch (it.kind) {
+    case "day":
+      return <DayHeader label={it.label} onClick={() => zoomToGroup(it.groupId)} />;
+    case "time-row":
+      return <TimeRow a={it.a} ctx={ctx} />;
+    case "cluster":
+      return (
+        <ClusterHeader
+          label={it.label}
+          count={it.count}
+          color={it.color}
+          archetype={it.archetype}
+          onZoom={it.groupId ? () => zoomToGroup(it.groupId!) : undefined}
+        />
+      );
+    case "cluster-row":
+      return <ClusterRow a={it.a} ctx={ctx} />;
+  }
+}
+
+/** Renders only the window of `flat` that meets the scroll view, plus overscan. */
+function VirtualRows({ flat, ctx, view }: { flat: FlatItem[]; ctx: RowCtx; view: ScrollView }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { offsets, heights, total } = useMemo(() => {
+    const heights = flat.map(heightOf);
+    return { heights, ...layoutOffsets(heights) };
+  }, [flat]);
+  // The list sits below the live strip and friends inside the same scroll container, so the
+  // scroll position is translated into the list's own coordinates.
+  const listTop = rootRef.current?.offsetTop ?? 0;
+  const [start, end] = visibleRange(offsets, heights, view.top - listTop, view.height, OVERSCAN_PX);
   return (
-    <div className="relative">
-      {days.map((g) => (
-        <div key={g.key}>
-          <DayHeader label={g.label} onClick={() => zoomToGroup(`time-${g.key}`)} />
-          {g.items.map((a) => (
-            <TimeRow key={a.id} a={a} ctx={ctx} />
-          ))}
+    <div ref={rootRef} data-virtual-list className="relative" style={{ height: total }}>
+      {flat.slice(start, end).map((it, k) => (
+        <div
+          key={it.key}
+          data-virtual-item
+          className="absolute left-0 right-0 overflow-hidden"
+          style={{ top: offsets[start + k], height: heights[start + k] }}
+        >
+          {renderFlat(it, ctx)}
         </div>
       ))}
     </div>
   );
+}
+
+function Timeline({ items, ctx, view }: { items: Artifact[]; ctx: RowCtx; view: ScrollView }) {
+  // Pinned per list, not per render: a scroll re-renders this, and a fresh Date.now() every time
+  // would rebuild the flat list (O(N)) on every scroll event.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [items]);
+  const flat = useMemo(() => {
+    const out: FlatItem[] = [];
+    let lastKey: string | null = null;
+    for (const a of items) {
+      const { key, label } = dayOf(a.created_at, now);
+      if (key !== lastKey) {
+        // items arrive newest-first, so a day is contiguous
+        out.push({ kind: "day", key: "day:" + key, label, groupId: "time-" + key });
+        lastKey = key;
+      }
+      out.push({ kind: "time-row", key: a.id, a });
+    }
+    return out;
+  }, [items, now]);
+  return <VirtualRows flat={flat} ctx={ctx} view={view} />;
 }
 
 function DayHeader({ label, onClick }: { label: string; onClick?: () => void }) {
@@ -532,48 +616,36 @@ function Clusters({
   items,
   mode,
   ctx,
+  view,
 }: {
   items: Artifact[];
   mode: AnswerSortMode;
   ctx: RowCtx;
+  view: ScrollView;
 }) {
-  const clusters = useMemo(() => buildClusters(items, mode), [items, mode]);
-  return (
-    <div className="space-y-1">
-      {clusters.map((c) => {
-        // Map the list cluster to the canvas group id (stageLayout keys).
-        const groupId =
-          mode === "TYPE"
-            ? c.archetype
-              ? `type-${c.archetype}`
-              : null
-            : `topic-${c.label}`;
-        return (
-        <div key={c.key}>
-          <ClusterHeader
-            label={c.label}
-            count={c.items.length}
-            color={c.color}
-            archetype={c.archetype}
-            onZoom={groupId ? () => zoomToGroup(groupId) : undefined}
-          />
-          {c.items.map((a) => (
-            <ClusterRow key={a.id} a={a} ctx={ctx} />
-          ))}
-        </div>
-        );
-      })}
-    </div>
-  );
+  const flat = useMemo(() => {
+    const out: FlatItem[] = [];
+    for (const c of buildClusters(items, mode)) {
+      // Map the list cluster to the canvas group id (stageLayout keys).
+      const groupId =
+        mode === "TYPE" ? (c.archetype ? "type-" + c.archetype : null) : "topic-" + c.label;
+      out.push({ kind: "cluster", key: "c:" + c.key, label: c.label, count: c.items.length, color: c.color, archetype: c.archetype, groupId });
+      for (const a of c.items) out.push({ kind: "cluster-row", key: a.id, a });
+    }
+    return out;
+  }, [items, mode]);
+  return <VirtualRows flat={flat} ctx={ctx} view={view} />;
 }
 
 // GRAPH — cluster the list by how answers RELATE (connected components over the
 // same-subject edges). Multi-answer clusters (same resolved instance) are named
 // by that instance; unlinked answers collect under "Unlinked". Lineage edges
 // will fold in as a second edge kind later.
-function GraphClusters({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
-  const groups = useMemo(() => {
-    const edges = computeStageEdges(items);
+function GraphClusters({ items, ctx, view }: { items: Artifact[]; ctx: RowCtx; view: ScrollView }) {
+  const flat = useMemo(() => {
+    // One O(N) grouping pass and a spanning chain per subject: the components are what the
+    // clustering reads, and a chain has the same ones as the pairwise edge list at k-1 edges.
+    const edges = subjectChainEdges(indexSubjects(items));
     const comps = connectedComponents(
       items.map((a) => a.id),
       edges,
@@ -581,48 +653,27 @@ function GraphClusters({ items, ctx }: { items: Artifact[]; ctx: RowCtx }) {
     const byId = new Map(items.map((a) => [a.id, a]));
     const multi = comps.filter((c) => c.length > 1).sort((a, b) => b.length - a.length);
     const singles = comps.filter((c) => c.length === 1).map((c) => c[0]);
-    const out: {
-      key: string;
-      label: string;
-      count: number;
-      items: Artifact[];
-      linked: boolean;
-    }[] = multi.map((comp, i) => {
+    const out: FlatItem[] = [];
+    multi.forEach((comp, i) => {
       const first = byId.get(comp[0])!;
       const lbl =
         first.routing?.about?.instance_label || first.routing?.about?.label || "linked";
-      return {
-        key: `g-${i}`,
-        label: lbl,
-        count: comp.length,
-        items: comp.map((id) => byId.get(id)!).filter(Boolean),
-        linked: true,
-      };
+      out.push({ kind: "cluster", key: "g-" + i, label: lbl, count: comp.length, color: TEAL, groupId: null });
+      for (const id of comp) {
+        const a = byId.get(id);
+        if (a) out.push({ kind: "cluster-row", key: a.id, a });
+      }
     });
     if (singles.length) {
-      out.push({
-        key: "g-unlinked",
-        label: "Unlinked",
-        count: singles.length,
-        items: singles.map((id) => byId.get(id)!).filter(Boolean),
-        linked: false,
-      });
+      out.push({ kind: "cluster", key: "g-unlinked", label: "Unlinked", count: singles.length, color: "#4B5563", groupId: null });
+      for (const id of singles) {
+        const a = byId.get(id);
+        if (a) out.push({ kind: "cluster-row", key: a.id, a });
+      }
     }
     return out;
   }, [items]);
-
-  return (
-    <div className="space-y-1">
-      {groups.map((g) => (
-        <div key={g.key}>
-          <ClusterHeader label={g.label} count={g.count} color={g.linked ? TEAL : "#4B5563"} />
-          {g.items.map((a) => (
-            <ClusterRow key={a.id} a={a} ctx={ctx} />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
+  return <VirtualRows flat={flat} ctx={ctx} view={view} />;
 }
 
 interface Cluster {

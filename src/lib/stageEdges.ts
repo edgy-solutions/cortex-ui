@@ -56,6 +56,77 @@ export function computeSameSubjectEdges(items: Artifact[]): StageEdge[] {
   return edges;
 }
 
+/**
+ * THE SUBJECT INDEX, in ONE O(N) pass. Everything lazy below reads it instead of the pairwise
+ * edge list, which is O(sum of group size squared) and was what blocked the first paint at 1,000
+ * answers.
+ */
+export interface SubjectIndex {
+  /** subject key -> member ids in item order (only answers that resolved to an instance). */
+  groups: Map<string, string[]>;
+  /** answer id -> its subject key. */
+  keyById: Map<string, string>;
+  /** answer id -> position inside its group, so an edge keeps the (earlier, later) order. */
+  posById: Map<string, number>;
+}
+
+export function indexSubjects(items: readonly Artifact[]): SubjectIndex {
+  const groups = new Map<string, string[]>();
+  const keyById = new Map<string, string>();
+  const posById = new Map<string, number>();
+  for (const a of items) {
+    const k = subjectInstanceKey(a);
+    if (!k) continue;
+    let g = groups.get(k);
+    if (!g) groups.set(k, (g = []));
+    posById.set(a.id, g.length);
+    g.push(a.id);
+    keyById.set(a.id, k);
+  }
+  return { groups, keyById, posById };
+}
+
+/**
+ * A SPANNING CHAIN per subject group: k-1 edges instead of k(k-1)/2. It has the same connected
+ * components as the full clique, which is all the GRAPH layout and the list's graph clustering
+ * read. It is NOT what is drawn: lines come from `sameSubjectEdgesFor`.
+ */
+export function subjectChainEdges(index: SubjectIndex): StageEdge[] {
+  const edges: StageEdge[] = [];
+  for (const ids of index.groups.values()) {
+    for (let i = 1; i < ids.length; i++) {
+      edges.push({ from: ids[i - 1], to: ids[i], kind: "same-subject", directed: false });
+    }
+  }
+  return edges;
+}
+
+/**
+ * LAZY same-subject edges: only those incident to an OPENED answer, within its subject group.
+ * For one opened node in a group of k that is k-1 edges, the same ones `computeSameSubjectEdges`
+ * gives for that node, with the same (earlier, later) orientation. An edge between two opened
+ * nodes is emitted once.
+ */
+export function sameSubjectEdgesFor(openedIds: Iterable<string>, index: SubjectIndex): StageEdge[] {
+  const edges: StageEdge[] = [];
+  const seen = new Set<string>();
+  for (const id of openedIds) {
+    const k = index.keyById.get(id);
+    if (!k) continue;
+    const ids = index.groups.get(k)!;
+    const me = index.posById.get(id)!;
+    for (let j = 0; j < ids.length; j++) {
+      if (j === me) continue;
+      const [lo, hi] = j < me ? [j, me] : [me, j];
+      const key = lo + ":" + hi + ":" + k;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push({ from: ids[lo], to: ids[hi], kind: "same-subject", directed: false });
+    }
+  }
+  return edges;
+}
+
 /** All edges for the current answer set. Same-subject today; lineage (directed)
  *  slots in here as a second kind when the backend signal lands. */
 export function computeStageEdges(items: Artifact[]): StageEdge[] {

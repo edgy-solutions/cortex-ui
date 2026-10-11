@@ -1,0 +1,173 @@
+{
+  "after:N=1000": {
+    "n": 1000,
+    "summaryOnly": false,
+    "rowCount": 1000,
+    "medianRowBytes": 7507,
+    "median": {
+      "ttiMs": 1337,
+      "longTaskMaxMs": 395,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 571,
+      "domNodes": 969,
+      "jsHeapMB": 65
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 1000,
+        "ttiMs": 7635,
+        "ttiLabel": "7635ms",
+        "rowSeenMs": 7635,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 1069,
+        "longTaskMaxMs": 624,
+        "domNodes": 969,
+        "jsHeapMB": 65,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 1000,
+        "ttiMs": 1337,
+        "ttiLabel": "1337ms",
+        "rowSeenMs": 1337,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 571,
+        "longTaskMaxMs": 395,
+        "domNodes": 969,
+        "jsHeapMB": 51,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 1000,
+        "ttiMs": 1234,
+        "ttiLabel": "1234ms",
+        "rowSeenMs": 1234,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 563,
+        "longTaskMaxMs": 386,
+        "domNodes": 969,
+        "jsHeapMB": 65,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "after:N=10000": {
+    "n": 10000,
+    "summaryOnly": false,
+    "rowCount": 10000,
+    "medianRowBytes": 7513,
+    "median": {
+      "ttiMs": ">90s",
+      "longTaskMaxMs": 0,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "domNodes": ">90s",
+      "jsHeapMB": ">90s"
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": null,
+        "ttiLabel": ">90s",
+        "rowSeenMs": null,
+        "panelOpenClickMs": null,
+        "longTaskCount": 0,
+        "longTaskTotalMs": 0,
+        "longTaskMaxMs": 0,
+        "domNodes": null,
+        "jsHeapMB": null,
+        "registerPosts": 0,
+        "notes": [
+          "final evaluate timed out (main thread saturated)",
+          "body: ",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "after-summary-wire-summary-wire:N=10000": {
+    "n": 10000,
+    "summaryOnly": true,
+    "rowCount": 10000,
+    "medianRowBytes": 704,
+    "median": {
+      "ttiMs": 21389,
+      "longTaskMaxMs": 20438,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 20623,
+      "domNodes": 804,
+      "jsHeapMB": 104
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": 23048,
+        "ttiLabel": "23048ms",
+        "rowSeenMs": 23048,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 20861,
+        "longTaskMaxMs": 20678,
+        "domNodes": 804,
+        "jsHeapMB": 104,
+        "registerPosts": 1,
+        "notes": [
+          "panel not open and no opener found",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 10000,
+        "ttiMs": 19612,
+        "ttiLabel": "19612ms",
+        "rowSeenMs": 19612,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 18951,
+        "longTaskMaxMs": 18791,
+        "domNodes": 804,
+        "jsHeapMB": 104,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 10000,
+        "ttiMs": 21389,
+        "ttiLabel": "21389ms",
+        "rowSeenMs": 21389,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 20623,
+        "longTaskMaxMs": 20438,
+        "domNodes": 804,
+        "jsHeapMB": 104,
+        "registerPosts": 1,
+        "notes": [
+          "panel not open and no opener found",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  }
+}

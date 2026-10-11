@@ -7,7 +7,16 @@ import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
-import { computeStageEdges, subjectInstanceKey, type StageEdge } from "@/lib/stageEdges";
+import {
+  computeStageEdges,
+  indexSubjects,
+  sameSubjectEdgesFor,
+  subjectChainEdges,
+  subjectInstanceKey,
+  type StageEdge,
+} from "@/lib/stageEdges";
+import { cullToViewport } from "@/lib/stageCull";
+import { StageDot } from "./StageDot";
 import { fetchLineageEdges } from "@/api/client";
 import { STAGE_CARD, cardSize } from "@/lib/stageConstants";
 import { PlanningChrome } from "./PlanningChrome";
@@ -30,6 +39,10 @@ import { CanvasExportButton } from "./CanvasExportButton";
  * both. GRAPH mode / relationship-layout are the post-canvas edge arc.
  */
 
+/** Below this on-screen card width (px) an unopened global card is drawn as a StageDot. */
+export const DOT_PX = 56;
+/** A lasso selection mounts card bodies only up to this many cards. */
+export const MAX_SELECTED_BODIES = 12;
 const CAM_MS = 620;
 const EASE = "cubic-bezier(.3,.75,.25,1)";
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -182,13 +195,34 @@ export function GlobalCanvasStage() {
     [artifacts, folded],
   );
 
+  /**
+   * EDGES ARE LAZY. One O(N) pass groups the answers by subject; nothing pairwise runs on load.
+   *   - the LAYOUT (GRAPH only) reads a spanning chain per group, which has the same connected
+   *     components as the full clique at k-1 edges instead of k(k-1)/2;
+   *   - the LINES drawn are only those incident to an opened, focused or selected answer.
+   */
+  const subjectIndex = useMemo(() => indexSubjects(visibleArtifacts), [visibleArtifacts]);
+  const layoutEdges = useMemo(
+    () => (sortMode === "GRAPH" ? [...subjectChainEdges(subjectIndex), ...lineageEdges] : []),
+    [sortMode, subjectIndex, lineageEdges],
+  );
+  /** The cards whose body is mounted: the current answer, the focused one, the lasso selection. */
+  const selSet = useMemo(() => new Set(sel), [sel]);
+  const openedIds = useMemo(() => {
+    // A lasso over the whole overview selects every card; that must not mount every body. Past
+    // the cap the selection still highlights, it just stays summary tiles.
+    const s = new Set<string>(sel.length <= MAX_SELECTED_BODIES ? sel : []);
+    if (focusId) s.add(focusId);
+    if (currentArtifactId) s.add(currentArtifactId);
+    return s;
+  }, [sel, focusId, currentArtifactId]);
   const edges = useMemo(
-    () => [...computeStageEdges(visibleArtifacts), ...lineageEdges],
-    [visibleArtifacts, lineageEdges],
+    () => (isGlobal && sortMode === "GRAPH" ? [...sameSubjectEdgesFor(openedIds, subjectIndex), ...lineageEdges] : []),
+    [isGlobal, sortMode, openedIds, subjectIndex, lineageEdges],
   );
   const globalLayout = useMemo(
-    () => computeStageLayout(visibleArtifacts, sortMode, edges),
-    [visibleArtifacts, sortMode, edges],
+    () => computeStageLayout(visibleArtifacts, sortMode, layoutEdges),
+    [visibleArtifacts, sortMode, layoutEdges],
   );
 
   // The cards to render + their positions, sourced by view.
@@ -313,6 +347,16 @@ export function GlobalCanvasStage() {
     dismissEvidence();
   }, [focusId, dismissEvidence]);
   camRef.current = cam;
+
+  /**
+   * THE DOM HOLDS WHAT IS ON SCREEN. Only cards whose footprint meets the visible world rectangle
+   * (plus one viewport of margin) mount; an opened card always does. Positions come from the
+   * memoised layout above, so this is a filter and not a second layout.
+   */
+  const renderEntries = useMemo(
+    () => cullToViewport(entries, cam, vp, openedIds),
+    [entries, cam, vp, openedIds],
+  );
 
   // Selecting an answer in the LIST jumps to GLOBAL and zooms to it — but an
   // in-canvas card click (which also sets currentArtifactId, so DecisionMap
@@ -744,9 +788,23 @@ export function GlobalCanvasStage() {
           </div>
         )}
 
-        {entries.map(({ a, pos, itemId, size }) => {
+        {renderEntries.map(({ a, pos, itemId, size }) => {
           const isFocused = focusId === a.id;
           const dim = focusId && !isFocused;
+          if (isGlobal && cam.s * size.w < DOT_PX && !openedIds.has(a.id)) {
+            return (
+              <StageDot
+                key={a.id}
+                artifact={a}
+                focused={false}
+                selected={selSet.has(a.id)}
+                onClick={() => onCardClick(a.id)}
+                onDoubleClick={() => onCardDouble(a.id)}
+                style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1 }}
+                size={size}
+              />
+            );
+          }
           return (
             <StageCard
               key={a.id}
@@ -755,8 +813,9 @@ export function GlobalCanvasStage() {
               onClick={() => onCardClick(a.id)}
               onDoubleClick={() => onCardDouble(a.id)}
               style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
-              selected={sel.includes(a.id)}
-              dragIds={sel.includes(a.id) ? sel : [a.id]}
+              selected={selSet.has(a.id)}
+              open={openedIds.has(a.id)}
+              dragIds={selSet.has(a.id) ? sel : [a.id]}
               size={size}
               onDragComplete={() => setSel([])}
               onResizeDown={

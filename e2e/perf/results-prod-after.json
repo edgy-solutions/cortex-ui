@@ -1,0 +1,250 @@
+{
+  "after:N=1000": {
+    "n": 1000,
+    "summaryOnly": false,
+    "rowCount": 1000,
+    "medianRowBytes": 7507,
+    "median": {
+      "ttiMs": 669,
+      "longTaskMaxMs": 140,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 312,
+      "domNodes": 965,
+      "jsHeapMB": 18,
+      "firstBatchMs": 572,
+      "bodyMs": 498
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 1000,
+      "ttiMs": 688,
+      "ttiLabel": "688ms",
+      "rowSeenMs": 688,
+      "bodyMs": 501,
+      "firstBatchMs": 572,
+      "panelOpenClickMs": null,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 313,
+      "longTaskMaxMs": 150,
+      "domNodes": 965,
+      "jsHeapMB": 18,
+      "registerPosts": 1,
+      "notes": [
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 1000,
+        "ttiMs": 688,
+        "ttiLabel": "688ms",
+        "rowSeenMs": 688,
+        "bodyMs": 501,
+        "firstBatchMs": 572,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 313,
+        "longTaskMaxMs": 150,
+        "domNodes": 965,
+        "jsHeapMB": 18,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 1000,
+        "ttiMs": 666,
+        "ttiLabel": "666ms",
+        "rowSeenMs": 666,
+        "bodyMs": 498,
+        "firstBatchMs": 565,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 312,
+        "longTaskMaxMs": 140,
+        "domNodes": 965,
+        "jsHeapMB": 20,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 1000,
+        "ttiMs": 669,
+        "ttiLabel": "669ms",
+        "rowSeenMs": 669,
+        "bodyMs": 494,
+        "firstBatchMs": 572,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 302,
+        "longTaskMaxMs": 139,
+        "domNodes": 965,
+        "jsHeapMB": 18,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "after:N=10000": {
+    "n": 10000,
+    "summaryOnly": false,
+    "rowCount": 10000,
+    "medianRowBytes": 7513,
+    "median": {
+      "ttiMs": ">90s",
+      "longTaskMaxMs": 0,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "domNodes": ">90s",
+      "jsHeapMB": ">90s",
+      "firstBatchMs": ">90s",
+      "bodyMs": ">90s"
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 10000,
+      "ttiMs": null,
+      "ttiLabel": ">90s",
+      "rowSeenMs": null,
+      "bodyMs": null,
+      "firstBatchMs": null,
+      "panelOpenClickMs": null,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "longTaskMaxMs": 0,
+      "domNodes": null,
+      "jsHeapMB": null,
+      "registerPosts": 0,
+      "notes": [
+        "final evaluate timed out (main thread saturated)",
+        "body: ",
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": null,
+        "ttiLabel": ">90s",
+        "rowSeenMs": null,
+        "bodyMs": null,
+        "firstBatchMs": null,
+        "panelOpenClickMs": null,
+        "longTaskCount": 0,
+        "longTaskTotalMs": 0,
+        "longTaskMaxMs": 0,
+        "domNodes": null,
+        "jsHeapMB": null,
+        "registerPosts": 0,
+        "notes": [
+          "final evaluate timed out (main thread saturated)",
+          "body: ",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "after-summary:N=10000": {
+    "n": 10000,
+    "summaryOnly": true,
+    "rowCount": 10000,
+    "medianRowBytes": 704,
+    "median": {
+      "ttiMs": 1071,
+      "longTaskMaxMs": 528,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 713,
+      "domNodes": 800,
+      "jsHeapMB": 28,
+      "firstBatchMs": 722,
+      "bodyMs": 520
+    },
+    "firstRun": {
+      "run": 1,
+      "n": 10000,
+      "ttiMs": 1071,
+      "ttiLabel": "1071ms",
+      "rowSeenMs": 1071,
+      "bodyMs": 497,
+      "firstBatchMs": 722,
+      "panelOpenClickMs": null,
+      "longTaskCount": 3,
+      "longTaskTotalMs": 713,
+      "longTaskMaxMs": 538,
+      "domNodes": 800,
+      "jsHeapMB": 28,
+      "registerPosts": 1,
+      "notes": [
+        "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": 1071,
+        "ttiLabel": "1071ms",
+        "rowSeenMs": 1071,
+        "bodyMs": 497,
+        "firstBatchMs": 722,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 713,
+        "longTaskMaxMs": 538,
+        "domNodes": 800,
+        "jsHeapMB": 28,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 10000,
+        "ttiMs": 1151,
+        "ttiLabel": "1151ms",
+        "rowSeenMs": 1151,
+        "bodyMs": 593,
+        "firstBatchMs": 810,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 731,
+        "longTaskMaxMs": 528,
+        "domNodes": 800,
+        "jsHeapMB": 28,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 10000,
+        "ttiMs": 1048,
+        "ttiLabel": "1048ms",
+        "rowSeenMs": 1048,
+        "bodyMs": 520,
+        "firstBatchMs": 705,
+        "panelOpenClickMs": null,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 665,
+        "longTaskMaxMs": 496,
+        "domNodes": 800,
+        "jsHeapMB": 28,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  }
+}
