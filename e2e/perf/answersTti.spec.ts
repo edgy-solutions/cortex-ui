@@ -272,7 +272,7 @@ async function oneRun(page: Page, n: number, run: number): Promise<RunResult> {
         openTried = true;
         const opener = page.getByRole("button", { name: /answers/i }).first();
         if (await opener.isVisible().catch(() => false)) {
-          panelOpenClickMs = await ev(() => performance.now());
+          panelOpenClickMs = (await ev(() => performance.now())) ?? null;
           await opener.click({ timeout: 2_000 }).catch(() => notes.push("open click failed"));
         } else notes.push("panel not open and no opener found");
       }
