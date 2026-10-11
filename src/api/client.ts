@@ -165,15 +165,31 @@ export type TaskDecision = string;
 /** What the structural seed declares. A HINT for readers — the declaration is the authority. */
 export const SEED_TASK_DECISIONS = ["approved", "rejected", "acknowledged", "redriven"] as const;
 
+/**
+ * grouped_review row edits — a PROPOSAL to Lane 1, NOT a platform contract: `HumanTaskActRequest`
+ * declares no such field today and silently drops it. Sent only behind VITE_REVIEW_ROW_EDITS.
+ */
+export interface RowEdits {
+  deleted: { mpn: string; reason: string }[];
+  added: { mpn: string; disposition: string; reason: string }[];
+  /** `mpn` is the EXTRACTED value (the idempotency key); `corrected_mpn` is the approver's text. */
+  corrected: { mpn: string; corrected_mpn: string; reason?: string }[];
+}
+
 export async function actOnHumanTask(
   taskId: string,
   decision: TaskDecision,
   comment = "",
   // grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
-  overrides?: Record<string, { disposition: string; reason: string }>
+  overrides?: Record<string, { disposition: string; reason: string }>,
+  // grouped_review only, flag-gated PROPOSAL (see RowEdits): sent as `row_edits` only when non-empty.
+  rowEdits?: RowEdits
 ): Promise<ActOnTaskResult> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
+  if (rowEdits && (rowEdits.deleted.length || rowEdits.added.length || rowEdits.corrected.length)) {
+    body.row_edits = rowEdits;
+  }
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
     body
