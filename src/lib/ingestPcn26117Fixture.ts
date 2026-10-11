@@ -42,6 +42,12 @@
  * carry `payload.domain: null` and `audience: "document_promotion:None"` (Python's f-string of
  * `None`, not JSON `null`-as-text) — not a placeholder, a derived fact, cited the same way.
  *
+ * THE KEY IS RENAMED FROM REV 186 (invincible-agent PR #36): the stage route's payload carries
+ * the kind's domain as `review_pool`, not `domain` — a routing hint for the steward pool, never
+ * the document's domain (ruling relayed 2026-10-10, `sessions/2026-10-10-packet-to-lane-1-
+ * confirmed-kind-never-sets-the-domain.md`). `domain` stays below ON PURPOSE: this module is the
+ * 06b81540 wire, and tasks filed before 186 still carry it. No cortex code reads either key.
+ *
  * THURSDAY. Once a live capture reaches past `received`, it REPLACES every `built_from` hop
  * here — this module does not detect that swap itself. `ingestCapture.test.tsx`'s own stall arm
  * (the `stages_seen` equality) is what goes red first, for whichever release's capture
