@@ -21,7 +21,10 @@ The architect ruled on 2026-10-09: "a refused engine renders as a refusal sectio
   ```
   Documents are listed in order of each engine's first card on the board, and answers keep board order.
 - **The `cost` section** has exactly today's single-export shape: `export_id`, `status`, `artifact_uri`, `artifact_sha256`, `artifact_filename`, `lots_disclosed`, `sections`, and the rest. If engine-cost refuses or cannot be reached, the section is `{status: "failed", reason, outcome}` (`outcome: "unavailable"` when unreachable) instead of an HTTP error.
-- **The `fin` section is always a refusal today:** `status: "failed"`, `outcome: "not_in_model"`. Its `reason` names the ratified finance template to export those cards with instead. engine-fin packages templates, not ad-hoc answers; whether that should change is an open architect question.
+- **The `fin` section is always a refusal:** `status: "failed"`, `outcome: "not_in_model"`, `reason: "not a ratified template"`, and `recipient_scope` is the board's own. Ruled 2026-10-10:
+  - ad-hoc finance export is refused; ratified templates only, which is the finance control and not a gap;
+  - the section states "not a ratified template", nothing else;
+  - the refusal lives in the API response and the exporter's view, **never in the customer page**. So render it in the exporter's UI, never in the exported document.
 
 ## What the button does with it today (read from `master` at `4783bec`; I did not run it)
 
