@@ -116,7 +116,14 @@ env:
   #   (ILLUSTRATION and WORKFLOW_CASE join _FLAT_ARCHETYPES, 76d84e17) and cost_agent/measures.py.
   #   MEASURED, not assumed: the suite was run against a git-archive export of 5cf7d879 placed as
   #   the sibling, because the disk checkout stands on e2207468.
-  PRODUCER_REF: 5cf7d879a845ceb6ec9b89c73fbc06fe6954df0f
+  # 2026-10-11 BUMP to 5b2a16a2 (rev 187; read off the sandbox pods, all 18 iagent images
+  #   uniform on it). Why: the mixed-board export seal in canvasExport.test.ts reads the
+  #   `status = ... "partial" ...` line of export_package's per-engine split, which 5cf7d879
+  #   predates, so against the old pin that arm throws "line not found". Check 2: task_kinds diff
+  #   EMPTY (control: 223 files changed). Check 3: uv.lock moves iagent-mesh 012a24fb -> 60e56c97
+  #   (both 0.9.5); iagent_mesh/rows.py diff EMPTY (control: 19 files changed). Gate: full suite
+  #   211 files green against a git-archive export of 5b2a16a2 placed as the sibling.
+  PRODUCER_REF: 5b2a16a2d2c5692e3751f8391b673d7f5e022a6f
 
 permissions:
   contents: read

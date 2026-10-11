@@ -14,6 +14,7 @@ import {
   readCanvasExport,
   readRecipientRequired,
   type CanvasExport,
+  type CanvasExportDocument,
   type ExportRecipient,
 } from "@/lib/canvasExport";
 
@@ -62,7 +63,7 @@ export function CanvasExportButton() {
   const [starting, setStarting] = useState(false);
   const [exportRow, setExportRow] = useState<CanvasExport | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const openPicker = useCallback(async () => {
     setOpen(true);
@@ -129,10 +130,8 @@ export function CanvasExportButton() {
     }
   }, [selected, answerIds]);
 
-  const onDownload = useCallback(async () => {
-    const link = exportRow ? artifactLink(exportRow) : null;
-    if (!link) return;
-    setDownloading(true);
+  const onDownload = useCallback(async (link: { href: string; filename?: string }) => {
+    setDownloading(link.href);
     setErrorText(null);
     try {
       const blob = await downloadExportArtifact(link.href);
@@ -147,14 +146,17 @@ export function CanvasExportButton() {
     } catch {
       setErrorText("Download failed.");
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
-  }, [exportRow]);
+  }, []);
 
   if (!isCanvasExportEnabled()) return null;
 
   const noAnswers = answerIds.length === 0;
-  const link = exportRow ? artifactLink(exportRow) : null;
+  const documents = exportRow?.documents;
+  // A mixed board's links live on the DOCUMENTS; the top level carries none (gateway.py), so the
+  // top-level link/lots/sections are drawn only on the no-documents path.
+  const link = exportRow && !documents ? artifactLink(exportRow) : null;
 
   return (
     <div
@@ -237,7 +239,28 @@ export function CanvasExportButton() {
             </button>
           )}
 
-          {exportRow && (
+          {exportRow && documents && (
+            <div className="mt-1 flex flex-col gap-1.5">
+              <div
+                data-export-summary
+                data-export-top-status={exportRow.status}
+                className="text-[9px] font-mono uppercase tracking-wider text-slate-400"
+              >
+                {exportRow.status}
+                {exportRow.reason ? ` — ${exportRow.reason}` : ""}
+              </div>
+              {documents.map((doc, i) => (
+                <ExportDocumentRow
+                  key={`${doc.engine}-${i}`}
+                  doc={doc}
+                  downloading={downloading}
+                  onDownload={onDownload}
+                />
+              ))}
+            </div>
+          )}
+
+          {exportRow && !documents && (
             <div className="mt-1 flex flex-col gap-1">
               <div data-export-status className="text-[9px] font-mono uppercase tracking-wider text-slate-400">
                 {exportRow.status}
@@ -265,11 +288,11 @@ export function CanvasExportButton() {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      void onDownload();
+                      void onDownload(link);
                     }}
                     className="text-[10px] font-mono text-neon-cyan underline"
                   >
-                    {downloading ? "Downloading…" : (link.filename ?? "Download")}
+                    {downloading === link.href ? "Downloading…" : (link.filename ?? "Download")}
                   </a>
                   <span data-export-sha className="text-[8px] font-mono text-slate-500">
                     {link.sha256}
@@ -286,4 +309,82 @@ export function CanvasExportButton() {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
+}
+
+// The status lives in the `data-export-status` attribute AND drives the colour from the same
+// value, so a test reading the attribute sees exactly what the colour claims.
+const DOC_STATUS_CLASS: Record<string, string> = {
+  exists: "text-emerald-400",
+  failed: "text-rose-400",
+  producing: "text-slate-400",
+};
+
+/**
+ * One engine's section of a mixed board. A `failed` section's `reason`/`outcome` are the
+ * EXPORTER'S view only — drawn here, never sent anywhere or built into a link or filename. An
+ * `exists` section's link is built from THIS document's own fields, never the top level's.
+ * `producing` draws engine + status only, as the top-level producing state does.
+ */
+function ExportDocumentRow({
+  doc,
+  downloading,
+  onDownload,
+}: {
+  doc: CanvasExportDocument;
+  downloading: string | null;
+  onDownload: (link: { href: string; filename?: string }) => Promise<void>;
+}) {
+  const link = artifactLink(doc);
+  return (
+    <div
+      data-export-document
+      data-export-engine={doc.engine}
+      data-export-status={doc.status}
+      className="rounded-md border border-slate-700/50 px-2 py-1 flex flex-col gap-0.5"
+    >
+      <div className="text-[9px] font-mono uppercase tracking-wider text-slate-300">
+        {doc.engine}{" "}
+        <span className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}>{doc.status}</span>
+      </div>
+      {doc.status === "failed" && doc.reason && (
+        <div data-export-reason className="text-[8px] font-mono text-slate-400">
+          {doc.reason}
+        </div>
+      )}
+      {doc.status === "failed" && doc.outcome && (
+        <div data-export-outcome className="text-[8px] font-mono text-slate-500">
+          {doc.outcome}
+        </div>
+      )}
+      {doc.status === "exists" && doc.lots_disclosed && doc.lots_disclosed.length > 0 && (
+        <div data-export-lots className="text-[8px] font-mono text-slate-500">
+          Lots: {doc.lots_disclosed.join(", ")}
+        </div>
+      )}
+      {doc.status === "exists" && doc.sections && doc.sections.length > 0 && (
+        <div data-export-sections className="text-[8px] font-mono text-slate-500">
+          Sections: {doc.sections.join(", ")}
+        </div>
+      )}
+      {link && (
+        <div className="flex items-center gap-2">
+          <a
+            data-export-artifact
+            data-export-href={link.href}
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              void onDownload(link);
+            }}
+            className="text-[10px] font-mono text-neon-cyan underline"
+          >
+            {downloading === link.href ? "Downloading…" : (link.filename ?? "Download")}
+          </a>
+          <span data-export-sha className="text-[8px] font-mono text-slate-500">
+            {link.sha256}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
