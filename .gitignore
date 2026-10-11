@@ -50,3 +50,6 @@ caps_dump.json
 test-results/
 playwright-report/
 playwright/.cache/
+
+# PCN walk results (e2e/walk)
+walk-out/
