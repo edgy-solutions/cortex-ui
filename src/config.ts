@@ -30,6 +30,8 @@ interface RuntimeConfig {
   // Dev-only mock grounding toggle ("1" or "true" turns it on). Read live via
   // readRuntimeConfig so a container can set it — see src/lib/mockGroundingEmitter.ts.
   VITE_MOCK_GROUNDING: string;
+  // "true" (exactly) sends frontend_version on /interview/stream. Default OFF — see src/lib/frontendVersion.ts.
+  VITE_SEND_FRONTEND_VERSION: string;
 }
 
 declare global {
@@ -60,6 +62,7 @@ export const config: RuntimeConfig = {
   VITE_ELECTRIC_URL: resolve("VITE_ELECTRIC_URL", "http://localhost:3000"),
   VITE_FEATURES: resolve("VITE_FEATURES", ""),
   VITE_MOCK_GROUNDING: resolve("VITE_MOCK_GROUNDING", ""),
+  VITE_SEND_FRONTEND_VERSION: resolve("VITE_SEND_FRONTEND_VERSION", ""),
 };
 
 /**

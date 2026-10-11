@@ -12,6 +12,8 @@ import { rawFieldsOf } from "@/lib/rawFields";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
+import { RefusalCard } from "./RefusalCard";
+import { readRefusalEnvelope } from "@/lib/refusalEnvelope";
 import { NamedHole } from "./NamedHole";
 import { SourceLedger } from "../ledger/SourceLedger";
 import { StepLadder } from "../planning/StepLadder";
@@ -202,6 +204,19 @@ const renderComponent = (
   // card uses it, and only to claim lineage to the artifact it is ON.
   artifactId?: string,
 ) => {
+  // THE REFUSAL GATE (PR #13). Keyed on the envelope, not an archetype list: a refused projected
+  // component carries `rows: []` and would otherwise draw its own empty state ("no contributors
+  // recorded"), which reads as "no failures".
+  const refusal = readRefusalEnvelope(comp);
+  if (refusal)
+    return (
+      <RefusalCard
+        envelope={refusal}
+        archetype={comp.archetype}
+        scopeLabel={typeof comp.scope_label === "string" ? comp.scope_label : undefined}
+      />
+    );
+
   switch (comp.archetype) {
     case "PROCESS_TOPOLOGY":
       // Redesigned 2026-06-26 — clean horizontal flow of blocks +
