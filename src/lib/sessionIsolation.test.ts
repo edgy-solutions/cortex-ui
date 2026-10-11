@@ -170,6 +170,7 @@ describe("sessionIsolation — the purge list stays complete", () => {
       "useCanvasStore",
       "useEvidenceStore",
       "useHumanTaskStore",
+      "useIngestComposerStore",
       "useInterviewStore",
       "usePersonaStore",
       "usePresentationStore",
@@ -482,6 +483,8 @@ describe("every module that can outlive a reload is in a register", () => {
       "writes cortex.ingest and cortex.ingestMock, the ADR-0041 ingest UI and mock-transport toggles. DEVICE-scoped by the same derivation as mockGroundingEmitter above: both select which UI/transport this machine runs, not anything about who is signed in, so a user switch must not reset them",
     "hooks/useComposerDraft.ts":
       "keys are COMPUTED per owner (cortex-composer-draft:<owner>), so A's draft is unreachable from B's session by construction; deliberately unpurged, per the seal above about same-user re-login",
+    "lib/myDrops.ts":
+      "keys are COMPUTED per owner (cortex.myDrops.v1:<sub>), so A's list of ingest ids is unreachable from B's session by construction (read and write both take the owner; no owner, no access); deliberately unpurged, because a purge would also erase the SAME user's list on a re-login, which is exactly when 'closing a panel never loses it' has to hold",
     "api/client.ts":
       "writes cortex-session-id to sessionStorage, which dies with the tab — a new tab is a new session id by construction, so the localStorage list's remit does not reach it",
     "lib/sessionIsolation.ts":

@@ -13,11 +13,13 @@ import {
   uploadIngest as realUploadIngest,
   fetchIngestStatus as realFetchIngestStatus,
   disputeIngestOrigin as realDisputeIngestOrigin,
+  confirmIngestContentKind as realConfirmIngestContentKind,
 } from "@/api/client";
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
   disputeIngestOrigin as mockDisputeIngestOrigin,
+  confirmIngestContentKind as mockConfirmIngestContentKind,
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
@@ -36,4 +38,11 @@ export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promi
   return isIngestMockEnabled()
     ? mockDisputeIngestOrigin(ingestId, onBehalfOf)
     : realDisputeIngestOrigin(ingestId, onBehalfOf);
+}
+
+/** PROPOSED — see `src/api/client.ts`'s `confirmIngestContentKind`. */
+export function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
+  return isIngestMockEnabled()
+    ? mockConfirmIngestContentKind(ingestId, contentKind)
+    : realConfirmIngestContentKind(ingestId, contentKind);
 }

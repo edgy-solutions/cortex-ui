@@ -149,8 +149,18 @@ export async function drop(page: Page, walk: Walk): Promise<string> {
   } else {
     await page.locator("[data-ingest-file-input]").setInputFiles(walk.cfg.pdfPath);
     await page.locator("[data-ingest-chip]").waitFor({ state: "visible", timeout: 10_000 });
-    // Inline kind picker: the radio inside the label. Click it explicitly even if preselected.
-    await page.locator('[data-ingest-kind="pdf"] input').click();
+    // PR #4 amendment 1: the composer infers the kind from extension + sniffed bytes and asks only
+    // on ambiguity. A real PDF shows `[data-ingest-kind-inferred="pdf"]` and no picker; if the
+    // picker appears instead (the bytes disagree, or an older bundle), pick `pdf` explicitly.
+    const inferred = page.locator("[data-ingest-kind-inferred]");
+    const picker = page.locator('[data-ingest-kind="pdf"] input');
+    await inferred.or(picker).first().waitFor({ state: "visible", timeout: 10_000 });
+    if (await inferred.isVisible().catch(() => false)) {
+      const kind = await inferred.getAttribute("data-ingest-kind-inferred");
+      if (kind !== "pdf") throw new Error(`drop (composer): kind inferred as "${kind}", expected "pdf"`);
+    } else {
+      await picker.click();
+    }
     await page.getByRole("button", { name: "Send" }).click();
   }
 
