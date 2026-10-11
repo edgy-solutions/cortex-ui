@@ -5,7 +5,10 @@
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { config } from "@/config";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { fetchCase, readWorkflowCasePayload } from "./cases";
+import { findCaseCaptures } from "./caseCaptures";
 import {
   CASE_ID,
   CASE_PAYLOAD_INVALID_HAND_BUILT,
@@ -98,6 +101,62 @@ describe("readWorkflowCasePayload", () => {
   });
 });
 
-describe("a live capture", () => {
-  it.todo("a live GET /cases capture — ask Lane 1 for one on rev ≥177");
+const NL = String.fromCharCode(10);
+const SESSIONS =path.join(__dirname, "../../sessions");
+
+function walkSessions(dir: string): { path: string; text: string }[] {
+  const out: { path: string; text: string }[] = [];
+  for (const name of readdirSync(dir)) {
+    const full = path.join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...walkSessions(full));
+    else if (/\.(json|md)$/i.test(name)) out.push({ path: path.relative(SESSIONS, full).split(path.sep).join("/"), text: readFileSync(full, "utf8") });
+  }
+  return out;
+}
+
+describe("findCaseCaptures — positive and negative controls", () => {
+  const P = CASE_PAYLOAD_PRODUCER_TEST_DERIVED;
+  const md = (body: string) => ["# note", "", "```json", body, "```", ""].join(NL);
+  it("finds a bare .json payload", () => {
+    expect(findCaseCaptures([{ path: "a.json", text: JSON.stringify(P) }]), "bare .json payload not found").toEqual(["a.json"]);
+  });
+  it("finds a .json with the payload under .body", () => {
+    expect(findCaseCaptures([{ path: "b.json", text: JSON.stringify({ status: 200, body: P }) }]), ".body payload not found").toEqual(["b.json"]);
+  });
+  it("finds a .md with a fenced json payload", () => {
+    expect(findCaseCaptures([{ path: "c.md", text: md(JSON.stringify(P, null, 2)) }]), "fenced .md payload not found").toEqual(["c.md"]);
+  });
+  it("does not find a .md that only mentions cases in prose", () => {
+    expect(findCaseCaptures([{ path: "d.md", text: "GET /cases returned the cases payload with instances." }])).toEqual([]);
+  });
+  it("does not find a .json with a non-case object", () => {
+    expect(findCaseCaptures([{ path: "e.json", text: JSON.stringify({ subject_ref: "c" }) }])).toEqual([]);
+  });
+  it("does not find, nor throw on, malformed JSON", () => {
+    const files = [{ path: "f.json", text: "{not json" }, { path: "g.md", text: md("{not json") }];
+    expect(() => findCaseCaptures(files)).not.toThrow();
+    expect(findCaseCaptures(files)).toEqual([]);
+  });
+});
+
+describe("a live capture — the /cases arrival seal", () => {
+  /** Captures already sealed against readWorkflowCasePayload. Empty until Lane 1 sends one. */
+  const CAPTURE_FILES: string[] = [];
+  const walked = walkSessions(SESSIONS);
+
+  it("sessions/ was actually scanned — the walker cannot read green on nothing", () => {
+    expect(walked.length, "sessions/ walk scanned 50 files or fewer").toBeGreaterThan(50);
+    expect(walked.some((f) => f.path.endsWith(".md")), "no .md scanned").toBe(true);
+    expect(walked.some((f) => f.path.endsWith(".json")), "no .json scanned").toBe(true);
+  });
+
+  it("every live GET /cases capture in sessions/ is named in CAPTURE_FILES", () => {
+    const found = findCaseCaptures(walked).sort();
+    const unsealed = found.filter((f) => !CAPTURE_FILES.includes(f));
+    expect(
+      found,
+      unsealed.map((f) => `a live GET /cases capture has arrived at ${f}; seal readWorkflowCasePayload against it and add it to CAPTURE_FILES`).join(NL) ||
+        "CAPTURE_FILES names a capture that is no longer found",
+    ).toEqual([...CAPTURE_FILES].sort());
+  });
 });
