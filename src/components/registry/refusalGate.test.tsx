@@ -132,4 +132,85 @@ describe("the refusal gate", () => {
       expect(container.querySelector("[data-refusal-document]")).toBeNull();
     });
   });
+
+  describe("saf hazard refusals name the hazard", () => {
+    const GAP = "severity is not assessed on this hazard; no risk level is resolved and no authority is implied";
+    const CASES: [string, string, string][] = [
+      ["hazard_closed", "HAZ-1005", "Hazard closed \u2014 no open risk to accept"],
+      ["not_assessed", "HAZ-1006", "Hazard not assessed \u2014 no risk level, no authority"],
+      ["unknown_hazard", "HAZ-9999", "Hazard not held \u2014 nothing to assess"],
+    ];
+    const reasonFor = (id: string) => `hazard '${id}' reason text`;
+
+    it.each(CASES)("%s draws its headline and outcome", (outcome, id, headline) => {
+      const { container } = draw({
+        archetype: "CONTRIBUTION_RANKING",
+        rows: [],
+        refusal: { refused: true, outcome, reason: reasonFor(id) },
+      });
+      expect(refusalEl()!.getAttribute("data-refusal-outcome")).toBe(outcome);
+      expect(container.textContent).toContain(headline);
+    });
+
+    it("hazard_id and gap render as the chip and the gap line, exact text", () => {
+      draw({
+        archetype: "CONTRIBUTION_RANKING",
+        rows: [],
+        refusal: { refused: true, outcome: "not_assessed", reason: reasonFor("HAZ-1006"), hazard_id: "HAZ-1006", gap: GAP },
+      });
+      const chip = document.querySelector("[data-refusal-hazard]");
+      expect(chip, "no hazard chip").not.toBeNull();
+      expect(chip!.getAttribute("data-refusal-hazard")).toBe("HAZ-1006");
+      expect(chip!.textContent).toBe("HAZ-1006");
+      const gap = document.querySelector("[data-refusal-gap]");
+      expect(gap, "no gap line").not.toBeNull();
+      expect(gap!.textContent).toBe(GAP);
+    });
+
+    it("without the keys: no chip, no gap line, and the reason names the hazard", () => {
+      const { container } = draw({
+        archetype: "CONTRIBUTION_RANKING",
+        rows: [],
+        refusal: { refused: true, outcome: "not_assessed", reason: reasonFor("HAZ-1006") },
+      });
+      expect(document.querySelector("[data-refusal-hazard]")).toBeNull();
+      expect(document.querySelector("[data-refusal-gap]")).toBeNull();
+      expect(container.textContent).toContain("HAZ-1006");
+    });
+
+    it("an empty-string hazard_id and gap draw nothing", () => {
+      draw({
+        archetype: "CONTRIBUTION_RANKING",
+        rows: [],
+        refusal: { refused: true, outcome: "hazard_closed", reason: "r", hazard_id: "", gap: "" },
+      });
+      expect(document.querySelector("[data-refusal-hazard]")).toBeNull();
+      expect(document.querySelector("[data-refusal-gap]")).toBeNull();
+    });
+
+    it("an unknown outcome still reads Refused", () => {
+      const { container } = draw({
+        archetype: "CONTRIBUTION_RANKING",
+        rows: [],
+        refusal: { refused: true, outcome: "some_future_outcome", reason: "r" },
+      });
+      expect(container.textContent).toContain("Refused");
+    });
+
+    it("KNOWLEDGE_DOCUMENT: not_assessed card with its headline, prose beneath", () => {
+      const PROSE = "No assessment draft can be written for this hazard.";
+      const { container } = draw({
+        archetype: "KNOWLEDGE_DOCUMENT",
+        markdown_content: PROSE,
+        refusal: { refused: true, outcome: "not_assessed", reason: reasonFor("HAZ-1006"), hazard_id: "HAZ-1006", gap: GAP },
+      });
+      const el = refusalEl()!;
+      expect(el.textContent).toContain("Hazard not assessed \u2014 no risk level, no authority");
+      expect(el.querySelector("[data-refusal-gap]")!.textContent).toBe(GAP);
+      const prose = container.querySelector("[data-refusal-document] [data-refusal-prose]");
+      expect(prose, "prose missing").not.toBeNull();
+      expect(prose!.textContent).toContain(PROSE);
+      expect(el.compareDocumentPosition(prose!) & Node.DOCUMENT_POSITION_FOLLOWING, "prose not after card").toBeTruthy();
+    });
+  });
 });
