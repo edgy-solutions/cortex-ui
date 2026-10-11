@@ -18,6 +18,9 @@ import {
   seedFakeOidcSession,
 } from "../fridayRoutes";
 import { buildPcn26117Fixture } from "@/lib/ingestPcn26117Fixture";
+import { FAILURE_RECORD_SET_DERIVED } from "@/archetypes/contribution-ranking/fixtures/fracasFailureRecordSet.derived";
+import { CONTRIBUTION_RANKING_FIXTURES } from "@/archetypes/contribution-ranking/fixtures";
+import { FAILURE_TREND_DERIVED } from "@/archetypes/multi-series/fixtures/fracasFailureTrend.derived";
 
 export const WALK_SHA = "d4f1b7a0c93e5a6b8c21e07f4a35d96b1c8e2f40a7b3d5961e8c0f2a4b6d8e10";
 export const WALK_INGEST_ID = `sha256:${WALK_SHA}`;
@@ -26,13 +29,29 @@ export const ALICE = "alice@example.com";
 export const BOB = "bob@example.com";
 
 export type DropMode = "new" | "duplicate";
-export type AnswerMode = "parts-table" | "knowledge-document";
+export type AnswerMode =
+  | "parts-table"
+  | "knowledge-document"
+  // HAZ / FRACAS walks (e2e/walk/answerWalk.ts). One mode per arm of the walk's outcome space.
+  | "haz-card"
+  | "haz-refusal"
+  | "fracas-card"
+  | "fracas-trend-card"
+  | "fracas-refusal"
+  | "ranking-not-fracas"
+  | "abstain-haz"
+  | "abstain-fracas"
+  | "not-grounded";
 
 export interface WalkMock {
   drop: DropMode;
   answer: AnswerMode;
   notice: string;
   parts: string[];
+  /** Whose shape stream receives the answer row (the asker). Default alice, as the PCN walk. */
+  answerTo: "alice" | "bob";
+  /** The question text the answer row carries, when it is not the PCN question. */
+  question?: string;
   /** GET status calls so far (drives received -> extracting -> review). */
   statusCalls: number;
   promoted: boolean;
@@ -42,12 +61,21 @@ export interface WalkMock {
   unrouted: string[];
 }
 
-export function newWalkMock(o: { drop: DropMode; answer: AnswerMode; notice?: string; parts?: string[] }): WalkMock {
+export function newWalkMock(o: {
+  drop: DropMode;
+  answer: AnswerMode;
+  notice?: string;
+  parts?: string[];
+  answerTo?: "alice" | "bob";
+  question?: string;
+}): WalkMock {
   return {
     drop: o.drop,
     answer: o.answer,
     notice: o.notice ?? "PCN26-184",
     parts: o.parts ?? ["5530-184", "5530-185"],
+    answerTo: o.answerTo ?? "alice",
+    question: o.question,
     statusCalls: 0,
     promoted: false,
     asked: false,
@@ -68,31 +96,101 @@ function json(route: Route, status: number, body: unknown, extra: Record<string,
   return route.fulfill({ status, headers: { ...CORS, ...extra }, contentType: "application/json", body: JSON.stringify(body) });
 }
 
+/** The refusal envelope exactly as the presenter emits it (src/lib/refusalEnvelope.ts): the payload key EMPTY, plus `refusal`. */
+const refusedRanking = (reason: string) => ({
+  archetype: "CONTRIBUTION_RANKING",
+  rows: [],
+  scope_label: "5530-184",
+  // The outcome token is a stand-in: the walk asserts only that it is non-empty.
+  refusal: { refused: true, outcome: "source_unavailable", reason, connector: "fracas", fn: "failure_record_set" },
+});
+
+/**
+ * A `routing` block exactly as the platform wrote it: read from a committed capture
+ * (routed: burn-rate, fallback=false; not grounded: performance-indices, fallback=true with
+ * fallback_reason no_verb_classified - the reason rev 185 gave the FRACAS question).
+ */
+function capturedRouting(file: string): Record<string, unknown> {
+  const cap = JSON.parse(readFileSync(new URL(`../../sessions/${file}`, import.meta.url), "utf8")) as { routing: Record<string, unknown> };
+  // The captures omit `about` (a subset of RouteDecision); RoutingDecision (HUD) reads `about.label`
+  // unconditionally and the page crashes without it, so the type's required block is added.
+  return { about: { label: "Subject", uri: "mesh:Subject", confidence: 0.9 }, ...cap.routing };
+}
+
+/** The components + routing an answer mode carries. Shapes: fixtures the app already ships, never invented fields. */
+function answerBody(m: WalkMock): { component: Record<string, unknown>; routing: Record<string, unknown> | null } {
+  const routed = capturedRouting("2026-09-19-payload-finance-burn-rate.json");
+  switch (m.answer) {
+    case "haz-card":
+      return { component: { archetype: "KNOWLEDGE_DOCUMENT", markdown_content: "## Risk assessment HAZ-1004\n\nSeverity and likelihood recorded." }, routing: routed };
+    case "haz-refusal":
+      return {
+        component: {
+          archetype: "KNOWLEDGE_DOCUMENT",
+          markdown_content: "",
+          refusal: { refused: true, outcome: "unknown_hazard", reason: "HAZ-1004 is not held", hazard_id: "HAZ-1004" },
+        },
+        routing: routed,
+      };
+    case "fracas-card":
+      return { component: { archetype: "CONTRIBUTION_RANKING", ...FAILURE_RECORD_SET_DERIVED }, routing: routed };
+    case "ranking-not-fracas": {
+      // A cost ranking (the card's own "complete" fixture): same archetype, same "Ranking" heading,
+      // not failures. Must fail the FRACAS step.
+      const { rows, value_unit } = CONTRIBUTION_RANKING_FIXTURES[0]!;
+      return { component: { archetype: "CONTRIBUTION_RANKING", rows, value_unit }, routing: routed };
+    }
+    case "fracas-trend-card":
+      return { component: { archetype: "MULTI_SERIES", ...FAILURE_TREND_DERIVED }, routing: routed };
+    case "fracas-refusal":
+      return { component: refusedRanking("unknown part '5530-184'"), routing: routed };
+    case "abstain-haz":
+      // ELICITATION fixture shape (elicitation.ts "abstained"), with the platform's live words.
+      return { component: { archetype: "ELICITATION", disposition: "abstain", status: "slot_abstain", message: "I could not find anything called 'HAZ-1004'." }, routing: routed };
+    case "abstain-fracas":
+      return { component: { archetype: "ELICITATION", disposition: "abstain", status: "slot_abstain", message: "I could not find anything called '5530-184'." }, routing: routed };
+    case "not-grounded":
+      // rev 185: routing.fallback with no_verb_classified; the body is the generalist's document.
+      return {
+        component: { archetype: "KNOWLEDGE_DOCUMENT", markdown_content: "A generalist reply." },
+        routing: capturedRouting("2026-09-19-payload-finance-performance-indices.json"),
+      };
+    default:
+      return { component: answerComponent(m), routing: null };
+  }
+}
+
+function answerComponent(m: WalkMock): Record<string, unknown> {
+  return m.answer === "parts-table"
+    ? {
+        archetype: "INSTANCES_BY_PROPERTY",
+        title: `Parts affected by ${m.notice}`,
+        target: { class: "Part", filter_property: "affectedBy", filter_value: m.notice },
+        columns: [{ key: "part", label: "Part" }],
+        row_identity: { key: "part" },
+        rows: m.parts.map((p) => ({ part: p })),
+        provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: 0 },
+      }
+    : {
+        // The roll-23 symptom: the same question drawn as a plain knowledge document.
+        archetype: "KNOWLEDGE_DOCUMENT",
+        markdown_content: `${m.notice} is a product change notice. It affects several parts.`,
+        provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: 0 },
+      };
+}
+
 function answerRow(m: WalkMock) {
   const now = Date.now();
-  const component =
-    m.answer === "parts-table"
-      ? {
-          archetype: "INSTANCES_BY_PROPERTY",
-          title: `Parts affected by ${m.notice}`,
-          target: { class: "Part", filter_property: "affectedBy", filter_value: m.notice },
-          columns: [{ key: "part", label: "Part" }],
-          row_identity: { key: "part" },
-          rows: m.parts.map((p) => ({ part: p })),
-          provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: 0 },
-        }
-      : {
-          // The roll-23 symptom: the same question drawn as a plain knowledge document.
-          archetype: "KNOWLEDGE_DOCUMENT",
-          markdown_content: `${m.notice} is a product change notice. It affects several parts.`,
-          provenance_floor: { obtained_via: "user-drop", ingest_ids: [], unidentified: 0 },
-        };
+  const { component, routing } = answerBody(m);
   return {
-    id: "walk-answer-1",
+    // The ask names the artifact id (InterviewRequest.artifact_id) and the server persists under it, so
+    // Electric merges into the pending row and it stays the CURRENT answer. Master (1264081) mounts a
+    // body only for the current/focused answer, so a row under any other id draws as a summary tile.
+    id: (m.askBodies[0] as { artifact_id?: string } | undefined)?.artifact_id ?? "walk-answer-1",
     created_at: now,
     updated_at: now,
     valid_as_of: now,
-    question_text: `which parts does ${m.notice} affect`,
+    question_text: m.question ?? `which parts does ${m.notice} affect`,
     summary: "",
     message_id: "walk-msg-1",
     status: "complete",
@@ -100,9 +198,10 @@ function answerRow(m: WalkMock) {
     watermark: 1,
     rendered_output: { components: [component] },
     produced_by: { actor_type: "agent", actor_id: "walk" },
-    produced_for: { user_id: ALICE, is_authenticated: true, entitlement_source: "none" },
+    produced_for: { user_id: m.answerTo === "bob" ? BOB : ALICE, is_authenticated: true, entitlement_source: "none" },
     sources: [],
     graph_trace: [],
+    routing,
   };
 }
 
@@ -212,7 +311,7 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
         // response after the ask.
         const live = u.searchParams.get("live") === "true";
         if (live) await new Promise((r) => setTimeout(r, 400));
-        const deliver = who === "alice" && m.asked && !delivered;
+        const deliver = who === m.answerTo && m.asked && !delivered;
         if (deliver) delivered = true;
         const offset = `${delivered ? 2 : 1}_0`;
         const messages: unknown[] = deliver

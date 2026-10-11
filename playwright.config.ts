@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { STALE_TEST_BUNDLE_SHA } from "./e2e/bundleSha";
 
 /**
  * The Friday walk as a dry run (order: "Approval card and ingest card: the Friday script as a
@@ -14,10 +15,13 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const PORT = 5179;
 
+// The bundle's git sha under the dev server. vite.config.ts reads GIT_SHA before `git rev-parse`, so
+// pinning it here (webServer env ONLY) gives e2e/staleBundle.spec.ts a known "mine" to compare with.
+
 export default defineConfig({
   testDir: "e2e",
   // The live walk targets a deployed sandbox (playwright.walk.config.ts); never run it from here.
-  testIgnore: [/pcnWalk.live.spec.ts$/, /[\\/]e2e[\\/]perf[\\/]/],
+  testIgnore: [/\.live\.spec\.ts$/, /[\\/]e2e[\\/]perf[\\/]/],
   timeout: 60_000,
   workers: 1,
   fullyParallel: false,
@@ -33,6 +37,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
+      GIT_SHA: STALE_TEST_BUNDLE_SHA,
       VITE_NO_AUTH: "true",
       VITE_FEATURES: "ingest",
       VITE_API_URL: "http://api.friday.test",
