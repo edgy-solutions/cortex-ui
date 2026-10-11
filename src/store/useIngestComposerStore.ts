@@ -10,6 +10,7 @@
  */
 import { create } from "zustand";
 import { uploadIngest } from "@/lib/ingestTransport";
+import { inferUploadKind, type Inferred } from "@/lib/ingestKindInfer";
 import {
   readIngestUploadId,
   readIngestErrorMessage,
@@ -33,8 +34,10 @@ export interface IngestTurn {
 interface State {
   file: File | null;
   kind: IngestKind | null;
+  /** The kind inference for the attached file; null while it is still reading the bytes (or no file). */
+  inferred: Inferred | null;
   turns: IngestTurn[];
-  attach: (file: File) => void;
+  attach: (file: File) => Promise<void>;
   setKind: (kind: IngestKind | null) => void;
   clearDraft: () => void;
   submit: (email: string, text: string) => Promise<void>;
@@ -55,10 +58,19 @@ function readDuplicate(raw: unknown): IngestTurn["duplicate"] {
 export const useIngestComposerStore = create<State>()((set, get) => ({
   file: null,
   kind: null,
+  inferred: null,
   turns: [],
-  attach: (file) => set({ file, kind: null }),
+  attach: async (file) => {
+    set({ file, kind: null, inferred: null });
+    const inferred = await inferUploadKind(file);
+    // A newer attach or a removed chip wins over a slow read.
+    if (get().file !== file) return;
+    // Unambiguous: the kind is set, no question asked. Ambiguous: pre-select what the bytes say
+    // (if they say anything); the dropper sees the reason and can change it.
+    set({ inferred, kind: inferred.ambiguous ? inferred.sniffed : inferred.kind });
+  },
   setKind: (kind) => set({ kind }),
-  clearDraft: () => set({ file: null, kind: null }),
+  clearDraft: () => set({ file: null, kind: null, inferred: null }),
   submit: async (email, text) => {
     const { file, kind } = get();
     if (!file || !kind) return;
@@ -74,7 +86,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       error: null,
       duplicate: null,
     };
-    set((s) => ({ turns: [turn, ...s.turns], file: null, kind: null }));
+    set((s) => ({ turns: [turn, ...s.turns], file: null, kind: null, inferred: null }));
     const patch = (p: Partial<IngestTurn>) =>
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {

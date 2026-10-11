@@ -146,6 +146,7 @@ export type IngestKind = (typeof INGEST_KINDS)[number];
  *  `INGEST_KINDS`. `xml` (producer `086a9cf0`) is the third file kind; S1000D data modules arrive
  *  as `kind=xml` with `content_kind=s1000d-data-module`. */
 export const INGEST_UPLOAD_KINDS = ["pdf", "cad", "xml"] as const satisfies readonly IngestKind[];
+export type IngestUploadKind = (typeof INGEST_UPLOAD_KINDS)[number];
 
 /** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. Mirrors producer
  *  `4c3b61a6` (renamed in `1c10e28c`) and SDK `iagent_mesh.ingest.INGEST_STAGES` at `012a24fb`

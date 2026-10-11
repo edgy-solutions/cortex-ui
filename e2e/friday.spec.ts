@@ -21,7 +21,7 @@ async function walkToAct(page: Page, f: Friday) {
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4 e2e stand-in\n"),
   });
-  await page.locator('[data-ingest-kind="pdf"] input').check();
+  await expect(page.locator('[data-ingest-kind-inferred="pdf"]')).toBeVisible();
   await page.getByRole("button", { name: "Send" }).click();
 
   const card = page.locator(`[data-ingest-id="${f.seed.ingestId}"]`);

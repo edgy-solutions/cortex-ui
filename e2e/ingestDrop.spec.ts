@@ -66,8 +66,10 @@ test("a drop on the composer is cancelled (no navigation), lands a chip, and Sen
   expect(await dropAt(page, c.x, c.y)).toEqual({ dragover: true, drop: true });
   await expect(page.locator("[data-ingest-chip-name]")).toHaveText("PCN26-117.pdf");
   const send = page.getByRole("button", { name: "Send" });
-  await expect(send).toBeDisabled(); // no kind yet
-  await page.locator('[data-ingest-kind="pdf"] input').check();
+  // The kind is read off the file (.pdf + %PDF-): no picker, Send is live at once.
+  await expect(page.locator('[data-ingest-kind-inferred="pdf"]')).toBeVisible();
+  await expect(page.locator("[data-ingest-kind]")).toHaveCount(0);
+  await expect(send).toBeEnabled();
   await send.click();
   const req = await posted;
   // The body is MULTIPART with the file in it: axios once JSON-stringified this FormData and the

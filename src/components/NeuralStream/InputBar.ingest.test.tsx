@@ -80,7 +80,7 @@ const overlay = () => document.querySelector("[data-ingest-drag-overlay]");
 beforeEach(() => {
   sendMessage.mockReset();
   uploadIngest.mockReset();
-  useIngestComposerStore.setState({ file: null, kind: null, turns: [] });
+  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
 });
 afterEach(cleanup);
 
@@ -174,14 +174,18 @@ describe("the composer as drop target", () => {
     }
   });
 
-  it("a drop on the composer lands a chip with the filename and the inline kind picker", () => {
+  it("a drop on the composer lands a chip with the filename; a PDF shows its detected kind, no picker", async () => {
     render(<InputBar />);
     act(() => {
       fireEvent(composer(), dragEvent("drop", composer(), { files: [pdf()] }));
     });
     expect(document.querySelector("[data-ingest-chip]")).not.toBeNull();
     expect(document.querySelector("[data-ingest-chip-name]")?.textContent).toBe("PCN26-117.pdf");
-    expect(document.querySelector("[data-kind-picker]")).not.toBeNull();
+    await waitFor(() => expect(document.querySelector("[data-ingest-kind-inferred]")).not.toBeNull());
+    expect(document.querySelector("[data-ingest-kind-inferred]")?.getAttribute("data-ingest-kind-inferred")).toBe("pdf");
+    expect(document.querySelector("[data-ingest-kind-inferred]")?.textContent).toMatch(/pdf · detected/i);
+    expect(document.querySelector("[data-ingest-kind]")).toBeNull();
+    expect(document.querySelector("[data-kind-picker]")).toBeNull();
   });
 
   it("the chip's remove button clears it", () => {
@@ -215,19 +219,47 @@ describe("the paperclip", () => {
     fireEvent.change(input, { target: { files: [pdf()] } });
     expect(document.querySelector("[data-ingest-chip-name]")?.textContent).toBe("PCN26-117.pdf");
   });
+
+  it("accepts the whole table: pdf, xml and the cad set", () => {
+    render(<InputBar />);
+    const accept = (document.querySelector("[data-ingest-file-input]") as HTMLInputElement).accept;
+    for (const e of [".pdf", ".xml", ".step", ".stp", ".dwg", ".dxf", ".igs", ".iges", ".stl"]) expect(accept).toContain(e);
+  });
 });
 
 describe("send", () => {
-  function attach(r: ReturnType<typeof render>) {
+  /** Drop a file and wait for the kind inference to settle (the chip shows a kind or a picker). */
+  async function attach(r: ReturnType<typeof render>, file: File = pdf()) {
     act(() => {
-      fireEvent(composer(), dragEvent("drop", composer(), { files: [pdf()] }));
+      fireEvent(composer(), dragEvent("drop", composer(), { files: [file] }));
     });
+    await waitFor(() => expect(useIngestComposerStore.getState().inferred).not.toBeNull());
     return r.getByRole("button", { name: "Send" }) as HTMLButtonElement;
   }
 
-  it("is disabled until a kind is picked (no preselect)", () => {
+  it("a real-looking PDF shows no kind picker and Send is enabled at once", async () => {
     const r = render(<InputBar />);
-    const send = attach(r);
+    const send = await attach(r);
+    expect(document.querySelector("[data-ingest-kind]")).toBeNull();
+    expect(document.querySelector("[data-ingest-kind-reason]")).toBeNull();
+    expect(document.querySelector('[data-ingest-kind-inferred="pdf"]')).not.toBeNull();
+    expect(send.disabled).toBe(false);
+  });
+
+  it("a .pdf whose bytes are <?xml shows the picker with xml pre-selected, and the reason", async () => {
+    const r = render(<InputBar />);
+    await attach(r, new File(["<?xml version=\"1.0\"?><a/>"], "mislabelled.pdf"));
+    expect(document.querySelector("[data-ingest-kind-inferred]")).toBeNull();
+    expect(document.querySelector("[data-ingest-kind-reason]")?.textContent).toMatch(/.pdf.*xml/);
+    expect((document.querySelector('[data-ingest-kind="xml"] input') as HTMLInputElement).checked).toBe(true);
+    expect((document.querySelector('[data-ingest-kind="pdf"] input') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("an ambiguous file with nothing to pre-select keeps Send disabled until a kind is picked", async () => {
+    const r = render(<InputBar />);
+    const send = await attach(r, new File(["plain text"], "notes.bin"));
+    expect(document.querySelector("[data-ingest-kind-reason]")).not.toBeNull();
+    expect(document.querySelectorAll("[data-ingest-kind] input:checked").length).toBe(0);
     expect(send.disabled).toBe(true);
     fireEvent.click(document.querySelector('[data-ingest-kind="pdf"] input')!);
     expect(send.disabled).toBe(false);
@@ -236,9 +268,8 @@ describe("send", () => {
   it("with chip + kind calls uploadIngest once with (file, kind, email) and starts no interview", async () => {
     uploadIngest.mockResolvedValue({ ingest_id: "ing-1", stage: "received", duplicate: null });
     const r = render(<InputBar />);
-    const send = attach(r);
+    const send = await attach(r);
     fireEvent.change(r.getByPlaceholderText(/Add a note/), { target: { value: "for the PCN review" } });
-    fireEvent.click(document.querySelector('[data-ingest-kind="pdf"] input')!);
     fireEvent.click(send);
     expect(uploadIngest).toHaveBeenCalledTimes(1);
     const [file, kind, email] = uploadIngest.mock.calls[0];

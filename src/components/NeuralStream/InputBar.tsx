@@ -30,6 +30,7 @@ export function InputBar() {
   const email = auth.user?.profile.email ?? null;
   const chipFile = useIngestComposerStore((s) => s.file);
   const chipKind = useIngestComposerStore((s) => s.kind);
+  const chipInferred = useIngestComposerStore((s) => s.inferred);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasChip = ingestEnabled && chipFile !== null;
@@ -128,16 +129,43 @@ export function InputBar() {
                   <X className="w-3 h-3" />
                 </button>
               </span>
-              {/* Keyed on the file so a re-attach resets the radios along with the store's kind. */}
-              <KindPicker
-                key={`${chipFile.name}:${chipFile.size}:${chipFile.lastModified}`}
-                inline
-                onConfirm={() => {}}
-                onSelect={(k) => useIngestComposerStore.getState().setKind(k)}
-                blockedReason={
-                  email ? null : "No verified email available — upload is disabled until one is."
-                }
-              />
+              {/* The kind is read off the file (extension + magic bytes). A picker appears ONLY when
+                  that is ambiguous. Keyed on the file so a re-attach resets the radios. */}
+              {chipInferred === null ? (
+                <span className="text-[10px] font-mono text-slate-500" data-ingest-kind-pending>
+                  Detecting kind…
+                </span>
+              ) : chipInferred.ambiguous ? (
+                <>
+                  <p className="text-[10px] font-mono text-amber-400" data-ingest-kind-reason>
+                    {chipInferred.reason}
+                  </p>
+                  <KindPicker
+                    key={`${chipFile.name}:${chipFile.size}:${chipFile.lastModified}`}
+                    inline
+                    suggestedKind={chipInferred.sniffed}
+                    onConfirm={() => {}}
+                    onSelect={(k) => useIngestComposerStore.getState().setKind(k)}
+                    blockedReason={
+                      email ? null : "No verified email available — upload is disabled until one is."
+                    }
+                  />
+                </>
+              ) : (
+                <>
+                  <span
+                    className="text-[11px] font-mono text-neon-cyan/80 uppercase"
+                    data-ingest-kind-inferred={chipInferred.kind}
+                  >
+                    {chipInferred.kind} · detected
+                  </span>
+                  {!email && (
+                    <p className="text-[10px] font-mono text-amber-400" data-ingest-kind-blocked>
+                      No verified email available — upload is disabled until one is.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -166,7 +194,7 @@ export function InputBar() {
               disabled={hasChip ? false : isDisabled}
               placeholder={
                 hasChip
-                  ? "Add a note (optional), pick a kind, then send..."
+                  ? "Add a note (optional), then send..."
                   : isProcessing
                     ? "Streaming response — please wait..."
                     : phase !== "active"

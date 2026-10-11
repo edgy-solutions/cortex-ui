@@ -82,7 +82,7 @@ export function purgeUserScopedState(): void {
     useAnswerPanelStore.setState({ pins: [] });
     useEvidenceStore.getState().dismiss();
     // Ingest turns + the composer's attached draft: A's filenames and notes must not paint for B.
-    useIngestComposerStore.setState({ file: null, kind: null, turns: [] });
+    useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
     // Conversation content: A's questions and the agent's answers to them. Nothing
     // renders `messages` today (the answer-first redesign left MessageBubble unmounted),
     // but "safe because a component is dead" is folklore-as-protection — revive the
