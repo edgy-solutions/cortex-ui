@@ -67,6 +67,8 @@ const STORE = new Map<string, MockRow>();
 /** Filenames of non-duplicate drops, kept OFF the row so the row's shape is unchanged. */
 const FILE_NAMES = new Map<string, string>();
 let counter = 0;
+/** The first non-duplicate drop: the stand-in "original" a later duplicate points at. */
+let FIRST_ORIGINAL: string | null = null;
 
 function sha256For(n: number): string {
   // Not a real digest — a deterministic, fixed-length hex string is enough for the mock's own
@@ -92,9 +94,13 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
   const now = Date.now();
 
   if (isDuplicate) {
-    // Mirrors `record_duplicate_arrival`: the ORIGINAL (first upload) is always row #1 here, a
-    // fixed stand-in since the mock has no real find_primary_by_sha dedupe index.
-    const original = STORE.get(`sha256:${sha256For(1)}`) ?? null;
+    // Mirrors TODAY'S server (IA 3976a9e0, gateway.py:9381-9397): a duplicate WRITES a new row
+    // (fresh uuid, status=duplicate) and answers { ingest_id: <that uuid>, stage: <the original's
+    // stage at that moment>, detail, duplicate: { of_ingest_id: <original id>, message } }.
+    // Cortex must never draw the uuid or that stage; the architect has ruled the server shall not
+    // mint the row at all. The ORIGINAL is the first non-duplicate drop here, a stand-in since the
+    // mock has no real find_primary_by_sha dedupe index.
+    const original = (FIRST_ORIGINAL ? STORE.get(FIRST_ORIGINAL) : undefined) ?? null;
     const ingestId = uuidFor(counter);
     const detail = `already processed on ${new Date(now).toISOString().slice(0, 10)} from ${file.name}`;
     const row: MockRow = {
@@ -131,6 +137,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string): Prom
   };
   STORE.set(ingestId, row);
   FILE_NAMES.set(ingestId, file.name);
+  FIRST_ORIGINAL ??= ingestId;
   return Promise.resolve({ ingest_id: ingestId, stage: row.stage, detail: null, object_prefix: `ingest/${ingestId}/`, duplicate: null });
 }
 
@@ -225,4 +232,5 @@ export function __resetIngestMock(): void {
   STORE.clear();
   FILE_NAMES.clear();
   counter = 0;
+  FIRST_ORIGINAL = null;
 }

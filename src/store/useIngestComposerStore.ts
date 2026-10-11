@@ -53,7 +53,7 @@ function readDuplicate(raw: unknown): IngestTurn["duplicate"] {
   const r = d as { message?: unknown; of_ingest_id?: unknown };
   return {
     message: typeof r.message === "string" ? r.message : "",
-    ofIngestId: typeof r.of_ingest_id === "string" ? r.of_ingest_id : null,
+    ofIngestId: typeof r.of_ingest_id === "string" && r.of_ingest_id !== "" ? r.of_ingest_id : null,
   };
 }
 
@@ -93,6 +93,19 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {
       const raw = await uploadIngest(file, kind, email);
+      const duplicate = readDuplicate(raw);
+      if (duplicate) {
+        // A duplicate is a RESULT about the ORIGINAL. Today's server answers with a fresh row id
+        // (`raw.ingest_id`, status=duplicate) and the original's id in `duplicate.of_ingest_id`;
+        // the fixed server will mint no row at all. Either way the turn's id is the original's,
+        // its card polls the original, and `raw.ingest_id` and `raw.stage` are never read. With no
+        // original id there is nothing to poll: the message alone is the result (no card, no badge).
+        if (duplicate.ofIngestId) {
+          recordMyDrop(owner, { ingestId: duplicate.ofIngestId, filename: file.name, droppedAt: Date.now() });
+        }
+        patch({ phase: "status", ingestId: duplicate.ofIngestId, duplicate });
+        return;
+      }
       const ingestId = readIngestUploadId(raw);
       if (!ingestId) {
         patch({ phase: "error", error: "The server's response could not be read." });
@@ -100,7 +113,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       }
       // Recorded BEFORE the patch so the re-render that shows the turn also shows the new count.
       recordMyDrop(owner, { ingestId, filename: file.name, droppedAt: Date.now() });
-      patch({ phase: "status", ingestId, duplicate: readDuplicate(raw) });
+      patch({ phase: "status", ingestId, duplicate: null });
     } catch (err) {
       // 400 (bad kind), 403 (on_behalf_of mismatch), 413 (over INGEST_MAX_BYTES): plain `detail`.
       patch({ phase: "error", error: readIngestErrorMessage(err) ?? "Upload failed." });
