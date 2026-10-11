@@ -1,0 +1,45 @@
+{
+  "export_id": null,
+  "status": "partial",
+  "recipient_scope": "notional-customer-alpha",
+  "reason": "1 of 2 engines refused",
+  "template_id": null,
+  "documents": [
+    {
+      "engine": "cost",
+      "answers": [
+        "79b41501-d83f-4ddd-a7c1-89ce99159e91",
+        "68a8a0e4-ee95-460e-97c9-27a7e66fd1f5"
+      ],
+      "export_id": "sha256:a4fb5e39afecc74db41d9c4920c13b4ccf75723f206a56385d89c064097da629",
+      "status": "exists",
+      "recipient_scope": "notional-customer-alpha",
+      "reason": null,
+      "artifact_uri": "/export/package/artifact/cost-validation-notional-customer-alpha.html",
+      "artifact_sha256": "sha256:a4fb5e39afecc74db41d9c4920c13b4ccf75723f206a56385d89c064097da629",
+      "artifact_bytes": 18471974,
+      "artifact_filename": "cost-validation-notional-customer-alpha.html",
+      "algorithm_sha": "5b2a16a2d2c5692e3751f8391b673d7f5e022a6f",
+      "lots_disclosed": [
+        4
+      ],
+      "sections": [
+        "labor",
+        "sepm",
+        "material"
+      ],
+      "template_id": null
+    },
+    {
+      "engine": "fin",
+      "answers": [
+        "b0ef7ea9-f914-49f4-ae46-23dfb23f6a2f"
+      ],
+      "export_id": null,
+      "status": "failed",
+      "recipient_scope": "notional-customer-alpha",
+      "outcome": "not_in_model",
+      "reason": "not a ratified template"
+    }
+  ]
+}

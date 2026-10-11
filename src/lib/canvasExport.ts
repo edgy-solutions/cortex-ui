@@ -75,12 +75,44 @@ export function readRecipientRequired(detail: unknown): ExportRecipient[] | null
 // async slice does not require re-widening this type and every reader of it.
 export type CanvasExportStatus = "producing" | "exists" | "failed";
 
+/**
+ * One engine's section of a MIXED-board export (`documents[]`, invincible-agent `5b2a16a2`,
+ * `gateway.py` `export_package`'s per-engine split). Each is `{engine, answers, ...section}`
+ * where the section is exactly one of `_shape_export_package_response`'s two arms (refusal /
+ * success + cost's `lots_disclosed`/`sections`), `_cost_refusal_section`, or
+ * `_fin_ad_hoc_refusal_section` — so every field past the five required ones may be absent or
+ * null, and a section's own `status` is only ever `exists` or `failed` (never `partial`).
+ * The refusal fields (`reason`, `outcome`) belong to the EXPORTER'S view only.
+ */
+export interface CanvasExportDocument {
+  engine: string;
+  answers: string[];
+  status: CanvasExportStatus;
+  export_id: string | null;
+  recipient_scope: string;
+  artifact_uri?: string;
+  artifact_sha256?: string;
+  artifact_bytes?: number;
+  artifact_filename?: string;
+  algorithm_sha?: string;
+  reason?: string;
+  outcome?: string;
+  lots_disclosed?: number[] | null;
+  sections?: string[] | null;
+  template_id?: string | null;
+}
+
 export interface CanvasExport {
   /** The content address (`artifact_sha256`) when `status === "exists"`; `null` on failure —
    *  there is no job id, because production is synchronous and the hash IS the identity. */
   export_id: string | null;
-  status: CanvasExportStatus;
+  /** `"partial"` is the MIXED-board verdict (some engines exported, some refused) and is only
+   *  ever read together with a non-empty `documents`. */
+  status: CanvasExportStatus | "partial";
   recipient_scope: string;
+  /** Per-engine sections of a mixed board. Present => the top-level artifact/lots/sections
+   *  fields are NOT where to look; each document carries its own. */
+  documents?: CanvasExportDocument[];
   artifact_uri?: string;
   artifact_sha256?: string;
   artifact_bytes?: number;
@@ -99,6 +131,75 @@ export interface CanvasExport {
 }
 
 const VALID_STATUSES: readonly CanvasExportStatus[] = ["producing", "exists", "failed"];
+/** The top-level set: the mixed path emits `exists | partial | failed` (`gateway.py`). */
+const VALID_TOP_STATUSES: readonly string[] = [...VALID_STATUSES, "partial"];
+
+/**
+ * One `documents[]` element, or `null` when malformed. The five required fields mirror what
+ * every section arm emits (engine, answers, status, export_id, recipient_scope); the rest follow
+ * the top-level reader's own rule — a wrong-typed optional is left out, never coerced.
+ */
+function readExportDocument(raw: unknown): CanvasExportDocument | null {
+  if (!isRecord(raw)) return null;
+  const d = raw as Record<string, unknown>;
+  if (!isNonEmptyString(d.engine)) return null;
+  if (!Array.isArray(d.answers) || !d.answers.every((a) => typeof a === "string")) return null;
+  if (typeof d.status !== "string" || !VALID_STATUSES.includes(d.status as CanvasExportStatus)) {
+    return null;
+  }
+  if (d.export_id !== null && typeof d.export_id !== "string") return null;
+  if (!isNonEmptyString(d.recipient_scope)) return null;
+
+  const out: CanvasExportDocument = {
+    engine: d.engine,
+    answers: d.answers as string[],
+    status: d.status as CanvasExportStatus,
+    export_id: d.export_id as string | null,
+    recipient_scope: d.recipient_scope,
+  };
+  if (typeof d.artifact_uri === "string") out.artifact_uri = d.artifact_uri;
+  if (typeof d.artifact_sha256 === "string") out.artifact_sha256 = d.artifact_sha256;
+  if (typeof d.artifact_bytes === "number") out.artifact_bytes = d.artifact_bytes;
+  if (typeof d.artifact_filename === "string") out.artifact_filename = d.artifact_filename;
+  if (typeof d.algorithm_sha === "string") out.algorithm_sha = d.algorithm_sha;
+  if (typeof d.reason === "string") out.reason = d.reason;
+  if (typeof d.outcome === "string") out.outcome = d.outcome;
+  if (d.template_id === null || typeof d.template_id === "string") out.template_id = d.template_id;
+  if (d.lots_disclosed === null) out.lots_disclosed = null;
+  else if (Array.isArray(d.lots_disclosed) && d.lots_disclosed.every((v) => typeof v === "number")) {
+    out.lots_disclosed = d.lots_disclosed as number[];
+  }
+  if (d.sections === null) out.sections = null;
+  else if (Array.isArray(d.sections) && d.sections.every((v) => typeof v === "string")) {
+    out.sections = d.sections as string[];
+  }
+  return out;
+}
+
+/**
+ * `documents` absent or null => `undefined` (the single-engine path, untouched). Present =>
+ * the list, or `null` for "unreadable".
+ *
+ * MALFORMED RULE (this file's own doctrine, `readExportRecipients` above: "a partial list must
+ * not be drawn as though it were the whole list"): any malformed element, a non-array, or an
+ * EMPTY array makes the documents unreadable, and unreadable documents null the WHOLE response —
+ * not just the list. Dropping to a documents-less row would draw a top-level `partial`/`exists`
+ * with no per-engine truth behind it (an `exists` with no link, a refusal never shown), which is
+ * the exact misreading this adapter exists to prevent; "an unrecognised shape reads as no export"
+ * (`readCanvasExport`'s own rule). An empty array is unreadable because the gateway never emits
+ * one (the mixed path runs only when a fin part exists) and zero rows would be a claim.
+ */
+function readExportDocuments(raw: unknown): CanvasExportDocument[] | null | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: CanvasExportDocument[] = [];
+  for (const item of raw) {
+    const d = readExportDocument(item);
+    if (d === null) return null;
+    out.push(d);
+  }
+  return out;
+}
 
 /**
  * Validating adapter for the export response (`POST /export/package`'s success body). Never
@@ -111,15 +212,20 @@ export function readCanvasExport(raw: unknown): CanvasExport | null {
   const r = raw as Record<string, unknown>;
   if (r.export_id !== null && typeof r.export_id !== "string") return null;
   if (typeof r.recipient_scope !== "string" || !r.recipient_scope) return null;
-  if (typeof r.status !== "string" || !VALID_STATUSES.includes(r.status as CanvasExportStatus)) {
+  if (typeof r.status !== "string" || !VALID_TOP_STATUSES.includes(r.status)) {
     return null;
   }
+  const documents = readExportDocuments(r.documents);
+  if (documents === null) return null;
+  // `partial` is only meaningful as a verdict over documents; without them it is unreadable.
+  if (r.status === "partial" && documents === undefined) return null;
 
   const out: CanvasExport = {
     export_id: r.export_id === null ? null : (r.export_id as string),
-    status: r.status as CanvasExportStatus,
+    status: r.status as CanvasExport["status"],
     recipient_scope: r.recipient_scope,
   };
+  if (documents !== undefined) out.documents = documents;
   if (typeof r.artifact_uri === "string") out.artifact_uri = r.artifact_uri;
   if (typeof r.artifact_sha256 === "string") out.artifact_sha256 = r.artifact_sha256;
   if (typeof r.artifact_bytes === "number") out.artifact_bytes = r.artifact_bytes;
@@ -153,7 +259,10 @@ const ARTIFACT_URI_PREFIX = "/export/package/artifact/";
  * client did not verify is the gateway's own proxy, is worse than no link.
  */
 export function artifactLink(
-  e: CanvasExport,
+  e: Pick<
+    CanvasExport,
+    "status" | "artifact_uri" | "artifact_sha256" | "artifact_filename" | "artifact_bytes"
+  >,
 ): { href: string; sha256: string; filename?: string; bytes?: number } | null {
   if (e.status !== "exists") return null;
   if (typeof e.artifact_sha256 !== "string" || !SHA256_RE.test(e.artifact_sha256)) return null;

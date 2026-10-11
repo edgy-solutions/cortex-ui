@@ -326,3 +326,110 @@ describe("roll-11 capture — drives the button through the captured bodies", ()
     expect(document.querySelector("[data-export-artifact]")).toBeNull();
   });
 });
+
+// ── Fin's live rev-187 body — a mixed board ────────────────────────────────────────────────
+// sessions/2026-10-10-payload-export-mixed-board-rev187.json, verbatim.
+
+function loadMixed(): { documents: Record<string, unknown>[] } & Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(
+      path.join(__dirname, "../../../sessions/2026-10-10-payload-export-mixed-board-rev187.json"),
+      "utf8",
+    ),
+  );
+}
+
+describe("mixed board — documents[] (rev 187)", () => {
+  beforeEach(() => window.localStorage.setItem(FLAG_KEY, "1"));
+
+  async function runWith(body: unknown) {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockResolvedValue(body);
+    render(<CanvasExportButton />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(document.querySelector("[data-export-document]")).not.toBeNull());
+  }
+
+  it("draws one row per document with the cost link, the fin refusal and the summary", async () => {
+    const body = loadMixed();
+    await runWith(body);
+
+    expect(document.querySelectorAll("[data-export-document]").length).toBe(body.documents.length);
+    expect(document.body.textContent).not.toContain("could not be read");
+    expect(document.querySelector("[data-export-error]")).toBeNull();
+    expect(document.querySelector("[data-export-summary]")?.textContent).toContain(
+      "1 of 2 engines refused",
+    );
+    expect(
+      document.querySelector("[data-export-summary]")?.getAttribute("data-export-top-status"),
+    ).toBe("partial");
+
+    const cost = document.querySelector('[data-export-engine="cost"]')!;
+    expect(cost.getAttribute("data-export-status")).toBe("exists");
+    expect(cost.querySelector("[data-export-lots]")?.textContent).toContain("4");
+    expect(cost.querySelector("[data-export-sections]")?.textContent).toContain(
+      "labor, sepm, material",
+    );
+    const costUri = body.documents[0].artifact_uri as string;
+    expect(cost.querySelector("[data-export-artifact]")?.getAttribute("data-export-href")).toBe(
+      costUri,
+    );
+    downloadExportArtifact.mockResolvedValue(new Blob(["x"]));
+    fireEvent.click(cost.querySelector("[data-export-artifact]")!);
+    await waitFor(() => expect(downloadExportArtifact).toHaveBeenCalledWith(costUri));
+
+    const fin = document.querySelector('[data-export-engine="fin"]')!;
+    expect(fin.getAttribute("data-export-status")).toBe("failed");
+    expect(fin.querySelector("[data-export-reason]")?.textContent).toBe("not a ratified template");
+    expect(fin.querySelector("[data-export-outcome]")?.textContent).toBe("not_in_model");
+    expect(fin.querySelector("[data-export-artifact]")).toBeNull();
+    expect(document.querySelectorAll("[data-export-artifact]").length).toBe(1);
+  });
+
+  it("the link comes from the DOCUMENT, never the top-level fields", async () => {
+    const body = loadMixed();
+    // A decoy top level: if the component read it, the href would be this one.
+    body.artifact_uri = "/export/package/artifact/TOP.html";
+    body.artifact_sha256 = GOOD_SHA;
+    await runWith(body);
+    const hrefs = [...document.querySelectorAll("[data-export-artifact]")].map((a) =>
+      a.getAttribute("data-export-href"),
+    );
+    expect(hrefs).toEqual([body.documents[0].artifact_uri]);
+  });
+
+  it("three documents → three rows (cardinality)", async () => {
+    const body = loadMixed();
+    body.documents.push({ ...body.documents[1], engine: "fin2" });
+    await runWith(body);
+    expect(document.querySelectorAll("[data-export-document]").length).toBe(3);
+  });
+
+  it("a malformed document reads as unreadable, not as a short list", async () => {
+    const body = loadMixed();
+    delete body.documents[1].engine;
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockResolvedValue(body);
+    render(<CanvasExportButton />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
+    expect(document.body.textContent).toContain("could not be read");
+    expect(document.querySelectorAll("[data-export-document]").length).toBe(0);
+  });
+
+  it("re-export of the same canvas with a NEW sha draws the new sha (nothing is keyed on the old one)", async () => {
+    await runWith(loadMixed());
+    expect(document.querySelector("[data-export-sha]")?.textContent).toBe(
+      loadMixed().documents[0].artifact_sha256,
+    );
+    const second = loadMixed();
+    const newSha = "sha256:" + "c".repeat(64);
+    second.documents[0].artifact_sha256 = newSha;
+    second.documents[0].export_id = newSha;
+    cleanup();
+    await runWith(second);
+    expect(document.querySelector("[data-export-sha]")?.textContent).toBe(newSha);
+  });
+});

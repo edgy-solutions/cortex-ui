@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   readCanvasExport,
@@ -369,5 +369,188 @@ describe("canvasAnswerIds", () => {
       { id: "a3" },
     ];
     expect(canvasAnswerIds(artifacts)).toEqual(["a1", "a2", "a3"]);
+  });
+});
+
+// ── Fin's live rev-187 body — a MIXED board (cost + finance answers) ───────────────────────
+// sessions/2026-10-10-payload-export-mixed-board-rev187.json, verbatim, loaded not inlined.
+// invincible-agent `5b2a16a2`: top-level `status` is `exists` (all ok) | `partial` (some) |
+// `failed` (none), `documents[]` carries each engine's section, and the top level carries NO
+// artifact fields of its own.
+
+function loadMixed(): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(
+      path.join(__dirname, "../../sessions/2026-10-10-payload-export-mixed-board-rev187.json"),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+}
+
+function mixedDocs(): Record<string, unknown>[] {
+  return structuredClone(loadMixed().documents as Record<string, unknown>[]);
+}
+
+describe("mixed-board export — documents[]", () => {
+  it("the live 187 body parses as partial with 2 documents", () => {
+    const row = readCanvasExport(loadMixed());
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe("partial");
+    expect(row!.reason).toBe("1 of 2 engines refused");
+    expect(row!.documents).toHaveLength(2);
+    expect(row!.documents!.map((d) => [d.engine, d.status])).toEqual([
+      ["cost", "exists"],
+      ["fin", "failed"],
+    ]);
+    const fin = row!.documents![1];
+    expect(fin.reason).toBe("not a ratified template");
+    expect(fin.outcome).toBe("not_in_model");
+    expect(row!.documents![0].lots_disclosed).toEqual([4]);
+    expect(row!.documents![0].sections).toEqual(["labor", "sepm", "material"]);
+  });
+
+  it("the top level has no artifact link; the cost document's link comes from ITS fields", () => {
+    const row = readCanvasExport(loadMixed())!;
+    expect(artifactLink(row)).toBeNull();
+    const cost = artifactLink(row.documents![0]);
+    expect(cost?.href).toBe(
+      "/export/package/artifact/cost-validation-notional-customer-alpha.html",
+    );
+    expect(artifactLink(row.documents![1])).toBeNull();
+  });
+
+  it("partial WITHOUT documents is unreadable", () => {
+    const { documents: _d, ...noDocs } = loadMixed();
+    expect(readCanvasExport(noDocs)).toBeNull();
+  });
+
+  it("partial with an EMPTY documents array is unreadable", () => {
+    expect(readCanvasExport({ ...loadMixed(), documents: [] })).toBeNull();
+  });
+
+  it("exists + documents (all ok) parses, and the top level has no artifact link", () => {
+    const docs = mixedDocs();
+    const fin = { ...(docs[0] as object), engine: "fin", answers: ["x"] };
+    const row = readCanvasExport({
+      ...loadMixed(),
+      status: "exists",
+      reason: null,
+      documents: [docs[0], fin],
+    });
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe("exists");
+    expect(row!.documents).toHaveLength(2);
+    expect(row!.artifact_uri).toBeUndefined();
+    expect(artifactLink(row!)).toBeNull();
+  });
+
+  it("failed + documents (all refused) parses", () => {
+    const docs = mixedDocs();
+    const costRefusal = {
+      engine: "cost",
+      answers: ["a"],
+      export_id: null,
+      status: "failed",
+      recipient_scope: "notional-customer-alpha",
+      reason: null,
+      outcome: null,
+    };
+    const row = readCanvasExport({
+      ...loadMixed(),
+      status: "failed",
+      reason: "2 of 2 engines refused",
+      documents: [costRefusal, docs[1]],
+    });
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe("failed");
+    expect(row!.documents).toHaveLength(2);
+    // null reason/outcome on a section read as ABSENT, as at the top level.
+    expect(row!.documents![0].reason).toBeUndefined();
+    expect(row!.documents![0].outcome).toBeUndefined();
+  });
+
+  it("a document status of partial is not a section status → unreadable", () => {
+    const docs = mixedDocs();
+    docs[1].status = "partial";
+    expect(readCanvasExport({ ...loadMixed(), documents: docs })).toBeNull();
+  });
+
+  // THE RULE: one malformed element nulls the WHOLE response (see readExportDocuments).
+  const MALFORMED: [string, (d: Record<string, unknown>) => void][] = [
+    ["missing engine", (d) => void delete d.engine],
+    ["answers not strings", (d) => void (d.answers = [1])],
+    ["unknown status", (d) => void (d.status = "done")],
+    ["export_id a number", (d) => void (d.export_id = 7)],
+    ["recipient_scope missing", (d) => void delete d.recipient_scope],
+  ];
+  for (const [name, mutate] of MALFORMED) {
+    it(`a malformed document (${name}) nulls the whole response — no partial list drawn as the list`, () => {
+      const docs = mixedDocs();
+      mutate(docs[1]);
+      expect(readCanvasExport({ ...loadMixed(), documents: docs })).toBeNull();
+    });
+  }
+
+  it("a non-array documents nulls the response", () => {
+    expect(readCanvasExport({ ...loadMixed(), documents: {} })).toBeNull();
+  });
+
+  it("a non-record element nulls the response", () => {
+    const docs = mixedDocs();
+    expect(readCanvasExport({ ...loadMixed(), documents: [docs[0], "x"] })).toBeNull();
+  });
+
+  it("no-documents path unchanged: an unknown top-level status is still null", () => {
+    expect(
+      readCanvasExport({ export_id: null, status: "weird", recipient_scope: "legal" }),
+    ).toBeNull();
+    const plain = readCanvasExport({ export_id: null, status: "failed", recipient_scope: "legal" });
+    expect(plain).toEqual({ export_id: null, status: "failed", recipient_scope: "legal" });
+    expect("documents" in plain!).toBe(false);
+  });
+});
+
+// ── producer seal: gateway.py's mixed path ────────────────────────────────────────────────
+// Same sibling-checkout pattern as ingestKindStatusParity.test.ts — SKIPS when absent.
+const GATEWAY_ROOTS = ["invincible-agent", "ia-01"];
+const GATEWAY_FILES = GATEWAY_ROOTS.map((n) =>
+  path.join(__dirname, "../../..", n, "src/iagent/gateway.py"),
+).filter((f) => existsSync(f));
+
+/** The string literals of the expression assigned to `status` on the mixed path. */
+function mixedStatusLiterals(text: string): string[] {
+  const m = text.match(/status = (.+)\n\s+refused = len\(ok\)/);
+  if (!m) throw new Error("mixed-path `status = ...` line not found in gateway.py");
+  return [...m[1].matchAll(/"([a-z]+)"/g)].map((x) => x[1]);
+}
+
+describe("mixed-path status parser — fixture, always runs", () => {
+  it("fires on a drifted line", () => {
+    expect(
+      mixedStatusLiterals('status = "exists" if all(ok) else "mixed"\n    refused = len(ok)'),
+    ).toEqual(["exists", "mixed"]);
+  });
+});
+
+describe.skipIf(GATEWAY_FILES.length === 0)("mixed-board export against gateway.py", () => {
+  const src = () => readFileSync(GATEWAY_FILES[0], "utf8");
+
+  it("the mixed path's top-level status set is exactly what cortex accepts", () => {
+    const accepts = (s: string) =>
+      readCanvasExport({
+        export_id: null,
+        status: s,
+        recipient_scope: "r",
+        documents: [
+          { engine: "e", answers: [], status: "failed", export_id: null, recipient_scope: "r" },
+        ],
+      }) !== null;
+    const emitted = [...new Set(mixedStatusLiterals(src()))].sort();
+    expect(emitted).toEqual(["exists", "failed", "partial"]);
+    for (const s of emitted) expect(accepts(s), s).toBe(true);
+  });
+
+  it("`documents` is the key the mixed path returns", () => {
+    expect(src()).toMatch(/"documents": documents,/);
   });
 });
