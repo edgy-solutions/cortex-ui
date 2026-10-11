@@ -2,8 +2,8 @@
  * The PCN walk against the dev server with mocked routes: proves the SAME walk functions' selectors
  * offline (drop -> promote -> ask), a duplicate-drop variant, and a negative control.
  *
- * The drop UI exercised here is whichever this branch ships (HUD pill on master); the composer
- * branch of `drop()` is selector-checked against origin/feat/ingest-composer's source, not run.
+ * The drop UI exercised here is the composer (PR #4): a real PDF is inferred as `pdf`, no picker.
+ * The HUD-pill branch of `drop()` is kept for an older bundle and is not run here.
  */
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { writeFileSync } from "node:fs";
@@ -81,7 +81,7 @@ test("walk: fresh drop -> review -> bob promotes -> promoted -> ask -> parts tab
     "8-provenance:pass",
   ]);
   expect(walk.dropOutcome).toBe("received");
-  expect(walk.dropUi).toBe("hud-pill");
+  expect(walk.dropUi).toBe("composer");
   expect(m.actBodies).toHaveLength(1);
   expect((m.actBodies[0] as { decision: string }).decision).toBe("promoted");
   expect(m.askBodies).toHaveLength(1);
