@@ -2,6 +2,7 @@ import axios from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
+import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
@@ -348,6 +349,19 @@ export function parseSSE(eventType: string, dataStr: string): StreamEvent | null
 
 // ── Streaming Interview ───────────────────────────────────
 /**
+ * The /interview/stream body. `frontend_version` is present ONLY when VITE_SEND_FRONTEND_VERSION
+ * is on (key absent otherwise, never undefined/null). The platform DISCARDS this field until
+ * `InterviewRequest` declares it (gateway.py:3798 as of IA 520755bb); the flag stays OFF until
+ * Lane 1's packet names it. The value is the memoised, already-resolved load-time promise.
+ */
+export async function buildInterviewBody(request: InterviewRequest): Promise<string> {
+  const version = isSendFrontendVersionEnabled()
+    ? { frontend_version: await loadFrontendVersion() }
+    : {};
+  return JSON.stringify({ frontend_id: CORTEX_UI_FRONTEND_ID, ...version, ...request });
+}
+
+/**
  * Connects to POST /interview/stream and yields parsed StreamEvents.
  * Uses @microsoft/fetch-event-source for robust authenticated streaming.
  *
@@ -361,6 +375,7 @@ export async function streamInterviewResponse(
   signal?: AbortSignal
 ): Promise<void> {
   const token = getOidcToken();
+  const body = await buildInterviewBody(request);
 
   const ctrl = new AbortController();
   if (signal) {
@@ -378,7 +393,7 @@ export async function streamInterviewResponse(
     // the render menu of the client that will render it, so the backend has to know which
     // frontend is asking. Same id used for capability registration -- one identity, one
     // menu. Merged here rather than at every call site so a caller cannot forget it.
-    body: JSON.stringify({ frontend_id: CORTEX_UI_FRONTEND_ID, ...request }),
+    body,
     signal: ctrl.signal,
     // CRITICAL: @microsoft/fetch-event-source by default binds a
     // visibilitychange listener that ABORTS the active SSE connection
