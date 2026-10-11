@@ -15,6 +15,9 @@ export type RefusalEnvelope = {
   reason: string | null;
   connector?: string;
   fn?: string;
+  /** saf hazard refusals: READ AHEAD of the producer (awaited from Lane 1 -- _refusal_envelope strips them today). */
+  hazard_id?: string;
+  gap?: string;
 };
 
 export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
@@ -35,5 +38,8 @@ export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
   };
   if (typeof o.connector === "string") env.connector = o.connector;
   if (typeof o.fn === "string") env.fn = o.fn;
+  // Non-empty strings only; absent is absent (never an undefined-valued key).
+  if (typeof o.hazard_id === "string" && o.hazard_id !== "") env.hazard_id = o.hazard_id;
+  if (typeof o.gap === "string" && o.gap !== "") env.gap = o.gap;
   return env;
 }

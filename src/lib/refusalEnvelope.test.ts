@@ -41,4 +41,29 @@ describe("readRefusalEnvelope", () => {
       expect(env!.reason).toBeNull();
     },
   );
+
+  it("hazard_id and gap are read when non-empty strings", () => {
+    const env = readRefusalEnvelope({
+      refusal: { refused: true, outcome: "not_assessed", reason: "r", hazard_id: "HAZ-1006", gap: "g" },
+    })!;
+    expect(env.hazard_id).toBe("HAZ-1006");
+    expect(env.gap).toBe("g");
+  });
+
+  it("empty or non-string hazard_id/gap are ABSENT keys, not undefined-valued ones", () => {
+    for (const bad of ["", 3, null, {}]) {
+      const env = readRefusalEnvelope({
+        refusal: { refused: true, outcome: "hazard_closed", reason: "r", hazard_id: bad, gap: bad },
+      })!;
+      expect(Object.keys(env)).not.toContain("hazard_id");
+      expect(Object.keys(env)).not.toContain("gap");
+    }
+  });
+
+  it("hazard_id is never parsed out of reason", () => {
+    const env = readRefusalEnvelope({
+      refusal: { refused: true, outcome: "hazard_closed", reason: "hazard 'HAZ-1005' is closed" },
+    })!;
+    expect(Object.keys(env)).not.toContain("hazard_id");
+  });
 });
