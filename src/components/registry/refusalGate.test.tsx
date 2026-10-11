@@ -93,4 +93,43 @@ describe("the refusal gate", () => {
     expect(refusalEl()).toBeNull();
     expect(container.textContent).toMatch(/no contributors recorded/i);
   });
+
+  describe("a refused KNOWLEDGE_DOCUMENT keeps its prose (rev 186)", () => {
+    const PROSE = "Hazard H-12 is closed; no assessment can be drafted.";
+    const doc = (extra: object) => ({ archetype: "KNOWLEDGE_DOCUMENT", ...extra });
+
+    it("draws the refusal, then the prose beneath it", () => {
+      const { container } = draw(doc({ markdown_content: PROSE, refusal: canonical }));
+      const el = refusalEl();
+      expect(el, "no [data-refusal]").not.toBeNull();
+      expect(el!.getAttribute("role")).toBe("status");
+      expect(el!.getAttribute("data-refusal-outcome")).toBe("source_unavailable");
+      expect(container.textContent).toContain(REASON);
+      const prose = container.querySelector("[data-refusal-document] [data-refusal-prose]");
+      expect(prose, "prose container missing").not.toBeNull();
+      expect(prose!.textContent).toContain(PROSE);
+      expect(el!.compareDocumentPosition(prose!) & Node.DOCUMENT_POSITION_FOLLOWING, "prose not after card").toBeTruthy();
+    });
+
+    it.each([[undefined], [""], ["   \n"]])("no prose (%j): card alone, no empty prose box", (md) => {
+      const { container } = draw(doc({ ...(md === undefined ? {} : { markdown_content: md }), refusal: canonical }));
+      expect(refusalEl()).not.toBeNull();
+      expect(container.querySelector("[data-refusal-prose]")).toBeNull();
+    });
+
+    it("CONTROL: without a refusal the prose renders and there is no refusal", () => {
+      const { container } = draw(doc({ markdown_content: PROSE }));
+      expect(refusalEl()).toBeNull();
+      expect(container.querySelector("[data-refusal-document]")).toBeNull();
+      expect(container.textContent).toContain(PROSE);
+    });
+
+    it("a non-document archetype with a prose-like field stays refusal-only", () => {
+      const { container } = draw({ archetype: "SHORTFALL_GRID", rows: [], markdown_content: PROSE, refusal: canonical });
+      expect(refusalEl()).not.toBeNull();
+      // (the card itself lists undeclared fields under "Raw"; that is today's behaviour)
+      expect(container.querySelector("[data-refusal-prose]")).toBeNull();
+      expect(container.querySelector("[data-refusal-document]")).toBeNull();
+    });
+  });
 });

@@ -208,14 +208,32 @@ const renderComponent = (
   // component carries `rows: []` and would otherwise draw its own empty state ("no contributors
   // recorded"), which reads as "no failures".
   const refusal = readRefusalEnvelope(comp);
-  if (refusal)
-    return (
+  if (refusal) {
+    const card = (
       <RefusalCard
         envelope={refusal}
         archetype={comp.archetype}
         scopeLabel={typeof comp.scope_label === "string" ? comp.scope_label : undefined}
       />
     );
+    // Platform rev 186: a refused engine body drawn as a document keeps its `markdown_content`
+    // (often the engine's own explanation). Draw the refusal first, then the prose beneath it,
+    // through the SAME renderer the ungated KNOWLEDGE_DOCUMENT path uses (recursion with the
+    // envelope stripped). Every other archetype stays refusal-only.
+    if (comp.archetype !== "KNOWLEDGE_DOCUMENT") return card;
+    const hasProse = typeof comp.markdown_content === "string" && comp.markdown_content.trim() !== "";
+    const { refusal: _dropped, ...unrefused } = comp;
+    return (
+      <div data-refusal-document>
+        {card}
+        {hasProse && (
+          <div data-refusal-prose className="mt-2 text-xs opacity-70">
+            {renderComponent(unrefused, onPublish, previewRows, artifactId)}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   switch (comp.archetype) {
     case "PROCESS_TOPOLOGY":
