@@ -67,9 +67,9 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     const inferred = await inferUploadKind(file);
     // A newer attach or a removed chip wins over a slow read.
     if (get().file !== file) return;
-    // Unambiguous: the kind is set, no question asked. Ambiguous: pre-select what the bytes say
-    // (if they say anything); the dropper sees the reason and can change it.
-    set({ inferred, kind: inferred.ambiguous ? inferred.sniffed : inferred.kind });
+    // Unambiguous: the kind is set, no question asked. Ambiguous: NOTHING is selected — the
+    // dropper must ask-and-answer (the picker only hints what the bytes look like).
+    set({ inferred, kind: inferred.ambiguous ? null : inferred.kind });
   },
   setKind: (kind) => set({ kind }),
   clearDraft: () => set({ file: null, kind: null, inferred: null }),

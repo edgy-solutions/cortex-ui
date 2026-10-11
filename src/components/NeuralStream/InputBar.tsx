@@ -144,7 +144,7 @@ export function InputBar() {
                   <KindPicker
                     key={`${chipFile.name}:${chipFile.size}:${chipFile.lastModified}`}
                     inline
-                    suggestedKind={chipInferred.sniffed}
+                    sniffedKind={chipInferred.sniffed}
                     onConfirm={() => {}}
                     onSelect={(k) => useIngestComposerStore.getState().setKind(k)}
                     blockedReason={

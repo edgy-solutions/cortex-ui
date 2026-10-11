@@ -29,9 +29,11 @@ export interface KindPickerProps {
    *  there is no Confirm button — the composer's Send is the confirmation. */
   onSelect?: (kind: IngestKind) => void;
   inline?: boolean;
+  /** What the file's bytes look like (ambiguity only): a hint on that option, NEVER a selection. */
+  sniffedKind?: string | null;
 }
 
-export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline }: KindPickerProps) {
+export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline, sniffedKind = null }: KindPickerProps) {
   const suggestionValid =
     suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind);
   const [selected, setSelected] = useState<IngestKind | null>(
@@ -64,6 +66,11 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
               }}
             />
             {k}
+            {sniffedKind === k && (
+              <span className="text-[9px] font-mono text-amber-400/80" data-ingest-kind-sniffed={k}>
+                bytes look like this
+              </span>
+            )}
           </label>
         ))}
       </div>

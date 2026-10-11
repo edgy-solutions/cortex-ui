@@ -75,7 +75,8 @@ function everything(root: HTMLElement): string[] {
 describe("a duplicate shows the original", () => {
   it("the dup row's uuid is absent from the turn's text and from every attribute", async () => {
     const r = await dropDuplicate(dupResponse());
-    await waitFor(() => expect(r.container.querySelector("[data-ingest-status]")).not.toBeNull());
+    // Precondition: the ORIGINAL's card has rendered with its fetched badge, so the leak check below is reached.
+    await waitFor(() => expect(r.container.querySelector(`[data-ingest-id="${ORIG}"] [data-ingest-status]`)?.textContent).toBe("review"));
     const hits = everything(r.container as HTMLElement).filter((s) => s.includes(DUP));
     expect(hits, "the duplicate row's own id leaked into the DOM").toEqual([]);
     expect(r.container.textContent).not.toContain(DUP);

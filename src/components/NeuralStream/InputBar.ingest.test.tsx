@@ -246,13 +246,18 @@ describe("send", () => {
     expect(send.disabled).toBe(false);
   });
 
-  it("a .pdf whose bytes are <?xml shows the picker with xml pre-selected, and the reason", async () => {
+  it("a .pdf whose bytes are <?xml ASKS: reason shown, xml hinted but NOT selected, no kind in the store, Send disabled", async () => {
     const r = render(<InputBar />);
     await attach(r, new File(["<?xml version=\"1.0\"?><a/>"], "mislabelled.pdf"));
     expect(document.querySelector("[data-ingest-kind-inferred]")).toBeNull();
     expect(document.querySelector("[data-ingest-kind-reason]")?.textContent).toMatch(/.pdf.*xml/);
-    expect((document.querySelector('[data-ingest-kind="xml"] input') as HTMLInputElement).checked).toBe(true);
-    expect((document.querySelector('[data-ingest-kind="pdf"] input') as HTMLInputElement).checked).toBe(false);
+    expect(document.querySelectorAll("[data-ingest-kind] input:checked").length).toBe(0);
+    expect(document.querySelector('[data-ingest-kind="xml"] [data-ingest-kind-sniffed]')).not.toBeNull();
+    expect(document.querySelectorAll("[data-ingest-kind-sniffed]").length).toBe(1);
+    expect(useIngestComposerStore.getState().kind).toBeNull();
+    expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(document.querySelector('[data-ingest-kind="xml"] input')!);
+    expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("an ambiguous file with nothing to pre-select keeps Send disabled until a kind is picked", async () => {
