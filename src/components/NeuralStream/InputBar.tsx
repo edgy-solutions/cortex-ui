@@ -9,6 +9,7 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { KindPicker } from "@/components/ingest/KindPicker";
 import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
+import { MyDrops } from "@/components/ingest/MyDrops";
 import { carriesFiles } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
@@ -64,7 +65,7 @@ export function InputBar() {
     if (hasChip) {
       // An ingest turn: needs the human-confirmed kind and a verified email; never an interview.
       if (!chipKind || !email) return;
-      void useIngestComposerStore.getState().submit(email, value.trim());
+      void useIngestComposerStore.getState().submit(email, value.trim(), auth.user?.profile?.sub ?? null);
       clearDraft();
       return;
     }
@@ -230,6 +231,7 @@ export function InputBar() {
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
+                <MyDrops />
               </>
             )}
 

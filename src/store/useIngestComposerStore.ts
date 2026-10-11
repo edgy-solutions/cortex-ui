@@ -10,6 +10,7 @@
  */
 import { create } from "zustand";
 import { uploadIngest } from "@/lib/ingestTransport";
+import { recordMyDrop } from "@/lib/myDrops";
 import { inferUploadKind, type Inferred } from "@/lib/ingestKindInfer";
 import {
   readIngestUploadId,
@@ -40,7 +41,8 @@ interface State {
   attach: (file: File) => Promise<void>;
   setKind: (kind: IngestKind | null) => void;
   clearDraft: () => void;
-  submit: (email: string, text: string) => Promise<void>;
+  /** `owner` is the OIDC sub that keys "My drops"; null records nothing. */
+  submit: (email: string, text: string, owner?: string | null) => Promise<void>;
 }
 
 let seq = 0;
@@ -71,7 +73,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
   },
   setKind: (kind) => set({ kind }),
   clearDraft: () => set({ file: null, kind: null, inferred: null }),
-  submit: async (email, text) => {
+  submit: async (email, text, owner = null) => {
     const { file, kind } = get();
     if (!file || !kind) return;
     const id = `ingest-turn-${++seq}`;
@@ -96,6 +98,8 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
         patch({ phase: "error", error: "The server's response could not be read." });
         return;
       }
+      // Recorded BEFORE the patch so the re-render that shows the turn also shows the new count.
+      recordMyDrop(owner, { ingestId, filename: file.name, droppedAt: Date.now() });
       patch({ phase: "status", ingestId, duplicate: readDuplicate(raw) });
     } catch (err) {
       // 400 (bad kind), 403 (on_behalf_of mismatch), 413 (over INGEST_MAX_BYTES): plain `detail`.
