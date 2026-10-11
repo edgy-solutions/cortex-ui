@@ -81,6 +81,24 @@ export interface ProvenanceCarrier {
 }
 
 /**
+ * The OPENED answers: those whose id is in `ids` and whose body is on the row. An answer with no
+ * `rendered_output` (a summary row, body not yet loaded) is not evidence yet and must not be
+ * marked seen, or it would never be read once its body arrives.
+ */
+export function openedArtifacts<T extends ProvenanceCarrier>(
+  artifacts: readonly T[],
+  ids: ReadonlyArray<string | null | undefined>,
+): T[] {
+  const want = new Set(ids.filter((x): x is string => Boolean(x)));
+  if (want.size === 0) return [];
+  const out: T[] = [];
+  for (const a of artifacts) {
+    if (a?.id && want.has(a.id) && a.rendered_output) out.push(a);
+  }
+  return out;
+}
+
+/**
  * Feed a batch of artifacts to the lifecycle. True when the caller should re-post.
  *
  * EXTRACTED SO IT CAN BE ASSERTED. Left inline in `App.tsx` the substantive parts — the field
@@ -134,6 +152,11 @@ export function createRegistrationLifecycle(opts: {
     shouldOpen() {
       if (opened || inFlight) return false;
       opened = true;
+      // RESERVED AT THE DECISION. The caller awaits a freshness check before it can call
+      // `attemptStarted`, and for that whole await `inFlight` read false - so a re-assertion
+      // decided in that window sailed past the single-flight guard and a second POST went out
+      // beside the first. The caller must settle on EVERY exit, including a refused (stale) one.
+      inFlight = true;
       return true;
     },
 
@@ -188,6 +211,9 @@ export function createRegistrationLifecycle(opts: {
       //
       // Stamping the decision here makes the several answers what they are: one missing menu.
       lastAttemptAt = now();
+      // Reserved here for the same reason as in `shouldOpen`: the decision, not the POST, is
+      // the moment another trigger must be refused.
+      inFlight = true;
       return true;
     },
 

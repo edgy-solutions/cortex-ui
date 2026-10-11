@@ -19,6 +19,17 @@ import { useMeshConfig, DynamicIcon } from "@/lib/meshPersonaConfig";
 
 export { STAGE_CARD };
 
+/** Coarse age for the summary tile. Pure on `now` so it can be asserted. */
+export function tileAge(createdAt: number | undefined, now: number = Date.now()): string {
+  if (!createdAt || !Number.isFinite(createdAt)) return "";
+  const min = Math.max(0, Math.floor((now - createdAt) / 60_000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 /**
  * StageCard — one answer on the camera stage. Renders the ACTUAL answer (reuses
  * SemanticInterpreter over rendered_output.components) at world scale, so the
@@ -43,6 +54,7 @@ export function StageCard({
   dragIds,
   onDragComplete,
   size,
+  open,
 }: {
   artifact: Artifact;
   focused: boolean;
@@ -68,6 +80,12 @@ export function StageCard({
    *  persisted with the canvas. Absent → the default card size, which is what every
    *  canvas authored before per-item dimensions existed carries. */
   size?: { w: number; h: number };
+  /**
+   * THE BODY MOUNTS ONLY ON OPEN. A card that is not open, focused, selected or placed on a
+   * canvas is a summary tile: title, status and age, with no AnswerBody and so no chart. The
+   * stage passes true for the current answer; focus and lasso selection are read here.
+   */
+  open?: boolean;
 }) {
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
@@ -87,6 +105,10 @@ export function StageCard({
   const components =
     (artifact.rendered_output?.components as unknown[] | undefined) ?? [];
   const hasRendered = components.length > 0;
+  // A card placed on a user canvas was put there to be read, so it keeps its body. The global
+  // board is the population that scales, and there only an opened card pays for one.
+  const bodyMounted = custom || focused || open === true;
+  const showBody = hasRendered && bodyMounted;
   // Absent when the payload declared no persona — the eyebrow then shows subject and verb and
   // nothing else, rather than a chip captioned with a guess.
   const sourcePersona = (components[0] as { source_persona?: string } | undefined)?.source_persona;
@@ -250,6 +272,7 @@ export function StageCard({
          which is exactly how it read. What stays here is everything that is not the card's
          appearance: position, size, the morph transition, and every gesture — so dragging,
          resizing and selection are untouched by the turn. */
+      data-answer-id={artifact.id}
       className="absolute cursor-pointer flip-stage"
     >
       {/* ONE SKIN, RENDERED TWICE. Both faces are the same card — same border, same focus ring,
@@ -432,7 +455,7 @@ export function StageCard({
         {/* Body: the answer. The turn happens one level up, on the card as a whole — see
             the faces in the render root. */}
         <div ref={bodyRef} className="flex-1 min-h-0 overflow-hidden relative">
-          {hasRendered && sized ? (
+          {showBody && sized ? (
             // PANEL. The card was given room; the content uses it. No scaling, so a chart fills
             // the width it was allotted instead of being letterboxed inside it. Overflow scrolls
             // rather than clipping, because a card sized slightly too small should still be
@@ -443,7 +466,7 @@ export function StageCard({
                 <AnswerBody artifact={artifact} components={components} hidePersona />
               </div>
             </div>
-          ) : hasRendered ? (
+          ) : showBody ? (
             // PREVIEW. Shrink the WHOLE answer to fit the card — nothing clipped, so the
             // chart / table / document is fully legible at card scale (the point
             // of the canvas). Rendered at a natural width, then scaled down.
@@ -491,6 +514,12 @@ export function StageCard({
                   body, nothing saying which. `status` was in the row and this branch did not
                   read it. See AttemptFailed. */}
               <AttemptFailed artifact={artifact} />
+              {hasRendered && (
+                <span data-testid="stage-tile-meta" className="text-[10px] font-mono text-slate-500">
+                  {artifact.status ? `${artifact.status} · ` : ""}
+                  {tileAge(artifact.created_at)}
+                </span>
+              )}
             </div>
           )}
         </div>

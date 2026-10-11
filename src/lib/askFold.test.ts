@@ -424,9 +424,9 @@ describe("the stage follows the fold instead of being stranded by it", () => {
     // rendering from a filtered copy is what left the hole.
     const s = STAGE();
     expect(s).toMatch(/const visibleArtifacts = useMemo\(\s*\(\) => artifacts\.filter\(\(a\) => !folded\.has\(a\.id\)\)/);
-    expect(s).toMatch(/computeStageLayout\(visibleArtifacts, sortMode, edges\)/);
+    expect(s).toMatch(/computeStageLayout\(visibleArtifacts, sortMode, layoutEdges\)/);
     // Edges too — an edge to a card that is not drawn is a line into empty space.
-    expect(s).toMatch(/computeStageEdges\(visibleArtifacts\)/);
+    expect(s).toMatch(/indexSubjects\(visibleArtifacts\)/);
     expect(s).not.toMatch(/computeStageLayout\(artifacts,/);
   });
 

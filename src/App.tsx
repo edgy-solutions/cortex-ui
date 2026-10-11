@@ -17,15 +17,16 @@ import { assembleCapabilities } from "@/registry/assembleCapabilities";
 import {
   createRegistrationLifecycle,
   observeArtifactsForMenuLoss,
+  openedArtifacts,
   type RegistrationLifecycle,
 } from "@/registry/registrationLifecycle";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { useStageStore } from "@/store/useStageStore";
 import { checkBundleFreshness } from "@/lib/bundleFreshness";
 import { useRegistrationStore } from "@/store/useRegistrationStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
-import type { Artifact } from "@/api/types";
 import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
@@ -145,8 +146,18 @@ export function useFrontendCapabilityRegistration() {
     // FRESHNESS FIRST. A tab left open across a deploy holds the OLD menu; registering it would
     // overwrite the new one. Refuse before the attempt is even counted. Undecidable proceeds.
     const mine = buildVersion().git_sha;
-    const fresh = await checkBundleFreshness(mine);
+    let fresh: Awaited<ReturnType<typeof checkBundleFreshness>>;
+    try {
+      fresh = await checkBundleFreshness(mine);
+    } catch (err) {
+      // The decision reserved the flight; a throw before the attempt starts must release it.
+      lifecycle.attemptSettled(false);
+      throw err;
+    }
     if (fresh.kind === "stale") {
+      // A refused registration is a settled one: without this the reservation taken at the
+      // decision would hold the single-flight shut for the rest of the session.
+      lifecycle.attemptSettled(false);
       useRegistrationStore.getState().reportStale(fresh.mine, fresh.served);
       // eslint-disable-next-line no-console
       console.warn(
@@ -274,8 +285,16 @@ export function useFrontendCapabilityRegistration() {
   const seenRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!auth.isAuthenticated) return;
-    const inspect = (artifacts: Artifact[]) => {
-      if (!observeArtifactsForMenuLoss(artifacts, seenRef.current, lifecycle)) return;
+    // ONLY ANSWERS THE USER HAS OPENED ARE EVIDENCE - the current answer and the focused card,
+    // the ones whose body mounted - and only once their body is on the row. Reading every
+    // artifact in the store made the LOAD the trigger: 1,000 answers meant 1,000 provenance
+    // reads and a re-assert decided inside the first batch.
+    const inspect = () => {
+      const opened = openedArtifacts(useCanvasStore.getState().artifacts, [
+        useCanvasStore.getState().currentArtifactId,
+        useStageStore.getState().focusId,
+      ]);
+      if (!observeArtifactsForMenuLoss(opened, seenRef.current, lifecycle)) return;
       // SAID OUT LOUD. The months this went undiagnosed were months in which the system was
       // behaving exactly as designed and reporting nothing, so the recovery announces itself —
       // and names the cause, because "re-registering" alone would read as routine noise.
@@ -287,10 +306,17 @@ export function useFrontendCapabilityRegistration() {
       );
       void post("re-assert");
     };
-    inspect(useCanvasStore.getState().artifacts);
-    return useCanvasStore.subscribe((s, prev) => {
-      if (s.artifacts !== prev.artifacts) inspect(s.artifacts);
+    inspect();
+    const offCanvas = useCanvasStore.subscribe((s, prev) => {
+      if (s.artifacts !== prev.artifacts || s.currentArtifactId !== prev.currentArtifactId) inspect();
     });
+    const offStage = useStageStore.subscribe((s, prev) => {
+      if (s.focusId !== prev.focusId) inspect();
+    });
+    return () => {
+      offCanvas();
+      offStage();
+    };
   }, [auth.isAuthenticated, lifecycle, post]);
 }
 

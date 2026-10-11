@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { applyElectricOps, type ElectricOp } from "@/lib/electricApply";
 import type { SourcesProvenance } from "@/lib/sourceProvenance";
 
 /** Do two task-artifacts carry the same displayed content? Compares the fields
@@ -333,6 +334,8 @@ interface CanvasState {
    * surface area on the data shape, not the wire shape.
    */
   electricUpsertArtifact: (artifact: Artifact) => void;
+  /** One `subscribe` batch in ONE `set()` (one subscriber notification). */
+  electricApplyBatch: (ops: readonly ElectricOp[]) => void;
 
   /**
    * Remove an artifact from the collection — driven by Electric `delete`
@@ -482,110 +485,11 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       };
     }),
 
+  // One row = a batch of one: the merge lives in applyElectricOps and is NOT forked.
   electricUpsertArtifact: (artifact) =>
-    set((state) => {
-      // Electric is the substrate's authoritative read-side per
-      // ADR-0023's CQRS naming. When a row arrives:
-      //   - If the artifact already exists locally (created-pending
-      //     started the local row), patch it with Electric's fields.
-      //     question_text + message_id were captured locally at
-      //     create-pending; Electric echoes them, the local values
-      //     win on the question_text/message_id keys to avoid a
-      //     spurious display change while the user is still reading
-      //     the question text. All other fields take Electric's
-      //     value.
-      //   - If no local row exists (page reload, cross-tab create),
-      //     append the Electric row outright.
-      //
-      // Every field touched is tagged
-      // `electric:answer_artifact_projection`. Per Part 2's absence
-      // probe, this is the ONLY source tag that may legitimately
-      // appear for fields in ELECTRIC_COVERED_FIELDS.
-      const existingIdx = state.artifacts.findIndex((a) => a.id === artifact.id);
-      const prevSource = state._lastUpdateSource[artifact.id] ?? {};
-      const nextSource: Partial<Record<keyof Artifact, UpdateSource>> = {
-        ...prevSource,
-      };
-      (Object.keys(artifact) as (keyof Artifact)[]).forEach((k) => {
-        nextSource[k] = "electric:answer_artifact_projection";
-      });
-      let nextArtifacts: Artifact[];
-      if (existingIdx >= 0) {
-        const existing = state.artifacts[existingIdx];
-        const merged: Artifact = {
-          ...existing,
-          ...artifact,
-          // Preserve locally-captured invariants — question_text +
-          // message_id are set at create-pending and the user is
-          // already seeing them; the projection echoes them but
-          // letting the SAME value re-arrive via Electric is fine,
-          // we just don't want a future schema drift to wipe them.
-          question_text: existing.question_text || artifact.question_text,
-          message_id: existing.message_id || artifact.message_id,
-          // A CLIENT-ONLY FIELD, and the one most exposed to the drift this block already
-          // guards against. `answered_with` is what THIS client sent; the projection has no
-          // column for it, so today the key is simply absent from the incoming row and the
-          // spread leaves it alone. The day someone adds one — or a mapper starts emitting
-          // `answered_with: undefined` — the chip would vanish mid-flight, on the surface a
-          // person is watching precisely because their answer has not come back yet.
-          answered_with: existing.answered_with ?? artifact.answered_with ?? null,
-          updated_at: Date.now(),
-        };
-        nextArtifacts = state.artifacts.map((a, i) =>
-          i === existingIdx ? merged : a
-        );
-      } else {
-        nextArtifacts = [...state.artifacts, artifact];
-      }
+    set((state) => applyElectricOps(state, [{ kind: "upsert", artifact }])),
 
-      // On page reload, the store starts with currentArtifactId=null,
-      // currentArtifactSetByUser=false, and Electric hydrates the
-      // collection from the substrate. We need to foreground the
-      // highest-watermark row (server-assigned monotonic apply-order
-      // per Decision 3 Option C) so the user lands on the most
-      // recently-projected artifact.
-      //
-      // Why "always recompute until user acts": Electric streams rows
-      // in apply-order (ascending watermark). On a "null → set on first
-      // row" approach, the FIRST row received wins and currentArtifactId
-      // locks to the OLDEST. We have to keep recomputing the
-      // highest-watermark on each upsert during the hydrate window, and
-      // stop only when the user has explicitly chosen (createPendingArtifact
-      // or setCurrentArtifact). That's what `currentArtifactSetByUser`
-      // gates.
-      //
-      // During an active query, createPendingArtifact has already set
-      // currentArtifactSetByUser=true at turn start — so this block
-      // never auto-foregrounds away from the user's pending artifact.
-      // The Electric upsert for that pending artifact's id matches
-      // existingIdx and merges in place; the foreground sticks.
-      //
-      // Class instance: [[fixture-must-exercise-paths]] — Hop 3
-      // substrate-proof tested propagation but didn't evoke the
-      // "page reload with multiple existing artifacts streamed in
-      // apply-order" path. First-fix attempt (82b999a) used a
-      // null-check that only fired once, locking to the first row.
-      // Production refresh exposed both bugs in sequence.
-      const computeHighestWatermarkId = (): string | null => {
-        if (nextArtifacts.length === 0) return null;
-        return nextArtifacts.reduce<Artifact>(
-          (best, a) => (a.watermark > best.watermark ? a : best),
-          nextArtifacts[0]
-        ).id;
-      };
-      const nextCurrentId = state.currentArtifactSetByUser
-        ? state.currentArtifactId
-        : computeHighestWatermarkId();
-
-      return {
-        artifacts: nextArtifacts,
-        currentArtifactId: nextCurrentId,
-        _lastUpdateSource: {
-          ...state._lastUpdateSource,
-          [artifact.id]: nextSource,
-        },
-      };
-    }),
+  electricApplyBatch: (ops) => set((state) => applyElectricOps(state, ops)),
 
   removeArtifact: (id) =>
     set((state) => {

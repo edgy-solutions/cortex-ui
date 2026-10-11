@@ -38,6 +38,7 @@
 import { ShapeStream, type Row, type Message } from "@electric-sql/client";
 import type { Artifact } from "@/api/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import type { ElectricOp } from "@/lib/electricApply";
 import { config } from "@/config";
 
 /**
@@ -283,20 +284,19 @@ export function startArtifactsSubscription(token: string | null): () => void {
   });
   const unsubscribe = stream.subscribe(
     (messages: Message[]) => {
+      // ONE batch -> ONE store update. Applying per message copied the whole collection once per
+      // row (O(N^2)) and notified every subscriber N times per snapshot. The ops keep message
+      // ORDER, so insert / update / delete / must-refetch interleave exactly as before.
+      const ops: ElectricOp[] = [];
       for (const msg of messages) {
         if (!("headers" in msg)) continue;
         const headers = msg.headers as Record<string, unknown>;
 
-        // Control: `must-refetch` means the cached shape is invalid —
-        // Electric will re-send the current snapshot. Drop all
-        // Electric-sourced (non-pending) artifacts so the re-sync can't
-        // leave ghosts; pending client-created artifacts are kept (they
-        // aren't in the shape yet). The subsequent inserts rebuild the set.
+        // Control: `must-refetch` means the cached shape is invalid - Electric will re-send the
+        // current snapshot. Drop all Electric-sourced (non-pending) artifacts so the re-sync can't
+        // leave ghosts; pending client-created artifacts are kept (they aren't in the shape yet).
         if (headers.control === "must-refetch") {
-          const st = useCanvasStore.getState();
-          for (const a of st.artifacts) {
-            if (a.status !== "pending") st.removeArtifact(a.id);
-          }
+          ops.push({ kind: "reset" });
           continue;
         }
 
@@ -304,25 +304,22 @@ export function startArtifactsSubscription(token: string | null): () => void {
         if (op === "insert" || op === "update") {
           const row = (msg as { value: Row }).value;
           try {
-            const artifact = rowToArtifact(row);
-            useCanvasStore.getState().electricUpsertArtifact(artifact);
+            ops.push({ kind: "upsert", artifact: rowToArtifact(row) });
           } catch (err) {
             console.error("[electric] row conversion failed", err, row);
           }
         } else if (op === "delete") {
-          // The projector grew a delete path (rows can be pruned from
-          // answer_artifact_projection). Electric delivers the deleted
-          // row's key columns; remove it from the collection. This
-          // resolves the Hop-3 premise-shift the old warning flagged.
+          // The projector grew a delete path (rows can be pruned from answer_artifact_projection).
           const row = (msg as { value?: Row }).value;
           const id = row?.id;
           if (id != null) {
-            useCanvasStore.getState().removeArtifact(String(id));
+            ops.push({ kind: "remove", id: String(id) });
           } else {
             console.warn("[electric] delete without id", msg);
           }
         }
       }
+      if (ops.length > 0) useCanvasStore.getState().electricApplyBatch(ops);
     },
     (err: Error) => {
       // Subscription's internal retry loop handles reconnect; we

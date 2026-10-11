@@ -1,0 +1,106 @@
+{
+  "before:N=1000": {
+    "n": 1000,
+    "summaryOnly": false,
+    "rowCount": 1000,
+    "medianRowBytes": 7507,
+    "median": {
+      "ttiMs": 29612,
+      "longTaskMaxMs": 25324,
+      "longTaskCount": 7,
+      "longTaskTotalMs": 37307,
+      "domNodes": 177935,
+      "jsHeapMB": 954
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 1000,
+        "ttiMs": 29612,
+        "ttiLabel": "29612ms",
+        "rowSeenMs": 29612,
+        "panelOpenClickMs": null,
+        "longTaskCount": 7,
+        "longTaskTotalMs": 37307,
+        "longTaskMaxMs": 26170,
+        "domNodes": 177935,
+        "jsHeapMB": 1373,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 2,
+        "n": 1000,
+        "ttiMs": 36417,
+        "ttiLabel": "36417ms",
+        "rowSeenMs": 25144,
+        "panelOpenClickMs": null,
+        "longTaskCount": 8,
+        "longTaskTotalMs": 35437,
+        "longTaskMaxMs": 22668,
+        "domNodes": 177935,
+        "jsHeapMB": 631,
+        "registerPosts": 1,
+        "notes": [
+          "panel not open and no opener found",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      },
+      {
+        "run": 3,
+        "n": 1000,
+        "ttiMs": 27909,
+        "ttiLabel": "27909ms",
+        "rowSeenMs": 27909,
+        "panelOpenClickMs": null,
+        "longTaskCount": 7,
+        "longTaskTotalMs": 40936,
+        "longTaskMaxMs": 25324,
+        "domNodes": 177984,
+        "jsHeapMB": 954,
+        "registerPosts": 1,
+        "notes": [
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  },
+  "before:N=10000": {
+    "n": 10000,
+    "summaryOnly": false,
+    "rowCount": 10000,
+    "medianRowBytes": 7513,
+    "median": {
+      "ttiMs": ">90s",
+      "longTaskMaxMs": 0,
+      "longTaskCount": 0,
+      "longTaskTotalMs": 0,
+      "domNodes": ">90s",
+      "jsHeapMB": ">90s"
+    },
+    "runs": [
+      {
+        "run": 1,
+        "n": 10000,
+        "ttiMs": null,
+        "ttiLabel": ">90s",
+        "rowSeenMs": null,
+        "panelOpenClickMs": null,
+        "longTaskCount": 0,
+        "longTaskTotalMs": 0,
+        "longTaskMaxMs": 0,
+        "domNodes": null,
+        "jsHeapMB": null,
+        "registerPosts": 0,
+        "notes": [
+          "panel not open and no opener found",
+          "final evaluate timed out (main thread saturated)",
+          "body: ",
+          "unrouted: console.error: Failed to load resource: net::ERR_FAILED"
+        ]
+      }
+    ]
+  }
+}

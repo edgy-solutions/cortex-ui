@@ -141,7 +141,7 @@ describe("BOTH in-flight surfaces say what was answered", () => {
     // adds one — or a mapper emits `answered_with: undefined` — the chip would vanish
     // mid-flight, on the surface a person is watching BECAUSE their answer has not come back.
     // The block already makes this promise for `question_text`; this joins it.
-    const STORE = stripComments2(readFileSync(path.join(__dirname, "../../store/useCanvasStore.ts"), "utf8"));
+    const STORE = stripComments2(readFileSync(path.join(__dirname, "../../lib/electricApply.ts"), "utf8"));
     expect(STORE).toContain("answered_with: existing.answered_with ?? artifact.answered_with ?? null");
   });
 });

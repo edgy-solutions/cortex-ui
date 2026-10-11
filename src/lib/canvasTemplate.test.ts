@@ -309,7 +309,7 @@ describe("a SIZED card renders its content; an unsized one previews it", () => {
     // FitBox scales a fixed 640-wide block by the SMALLER of the width and height ratios, so
     // content taller than the card's aspect ratio is scaled by height and then under-fills
     // the width. On a workspace panel that reads as a thumbnail in margins.
-    const branch = card.slice(card.indexOf("hasRendered && sized"), card.indexOf(") : hasRendered ?"));
+    const branch = card.slice(card.indexOf("showBody && sized"), card.indexOf(") : showBody ?"));
     expect(branch.length).toBeGreaterThan(50); // positive control on the slice
     expect(branch).not.toContain("FitBox");
     /*
@@ -325,7 +325,7 @@ describe("a SIZED card renders its content; an unsized one previews it", () => {
   it("a sized card SCROLLS rather than clipping", () => {
     // A panel sized slightly too small must stay readable. Silent clipping is content cut off
     // with nothing saying so — the same failure as a chart that draws nothing.
-    const branch = card.slice(card.indexOf("hasRendered && sized"), card.indexOf(") : hasRendered ?"));
+    const branch = card.slice(card.indexOf("showBody && sized"), card.indexOf(") : showBody ?"));
     expect(branch).toMatch(/overflow-auto/);
   });
 
