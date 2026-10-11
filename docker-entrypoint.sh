@@ -26,6 +26,9 @@ MOCK_GROUNDING=$(printf '%s' "${VITE_MOCK_GROUNDING:-}" | tr -cd "${MOCK_GROUNDI
 # VITE_SEND_FRONTEND_VERSION: same unquoted interpolation, same treatment (value is only ever "true"/"").
 SEND_FRONTEND_VERSION=$(printf '%s' "${VITE_SEND_FRONTEND_VERSION:-}" | tr -cd "${MOCK_GROUNDING_CHARSET}")
 
+# VITE_REVIEW_ROW_EDITS: same treatment (value is only ever "true"/"").
+REVIEW_ROW_EDITS=$(printf '%s' "${VITE_REVIEW_ROW_EDITS:-}" | tr -cd "${MOCK_GROUNDING_CHARSET}")
+
 cat > "${CONFIG_PATH}" <<EOF
 window.__RUNTIME_CONFIG__ = {
   VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}",
@@ -36,6 +39,7 @@ window.__RUNTIME_CONFIG__ = {
   VITE_FEATURES: "${FEATURES}",
   VITE_MOCK_GROUNDING: "${MOCK_GROUNDING}",
   VITE_SEND_FRONTEND_VERSION: "${SEND_FRONTEND_VERSION}",
+  VITE_REVIEW_ROW_EDITS: "${REVIEW_ROW_EDITS}",
 };
 EOF
 

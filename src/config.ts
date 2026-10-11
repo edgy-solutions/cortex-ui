@@ -32,6 +32,8 @@ interface RuntimeConfig {
   VITE_MOCK_GROUNDING: string;
   // "true" (exactly) sends frontend_version on /interview/stream. Default OFF — see src/lib/frontendVersion.ts.
   VITE_SEND_FRONTEND_VERSION: string;
+  // "true" (exactly) enables grouped-review row edits + Reject. Default OFF — see src/lib/reviewRowEdits.ts.
+  VITE_REVIEW_ROW_EDITS: string;
 }
 
 declare global {
@@ -63,6 +65,7 @@ export const config: RuntimeConfig = {
   VITE_FEATURES: resolve("VITE_FEATURES", ""),
   VITE_MOCK_GROUNDING: resolve("VITE_MOCK_GROUNDING", ""),
   VITE_SEND_FRONTEND_VERSION: resolve("VITE_SEND_FRONTEND_VERSION", ""),
+  VITE_REVIEW_ROW_EDITS: resolve("VITE_REVIEW_ROW_EDITS", ""),
 };
 
 /**
