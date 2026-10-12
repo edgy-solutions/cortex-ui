@@ -97,6 +97,8 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
    * GROUPED_REVIEW as a status record.
    */
   WORKFLOW_CASE: false,
+  /** A drop is the user's own turn, not a claim about the world: nothing to disclose. */
+  INGEST: false,
 };
 
 /** Whether a component's archetype asserts something, rather than asking for something. */

@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { IngestStatusCard } from "./IngestStatusCard";
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { taskArtifactId } from "@/lib/taskArtifact";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { promotionIngestId, type IngestStatusRow } from "@/lib/ingestWire";
@@ -157,6 +159,21 @@ describe("IngestStatusCard — keyed by row.ingest_id", () => {
     expect(document.querySelectorAll("[data-ingest-verb]")).toHaveLength(2);
     expect(document.querySelector('[data-ingest-verb="promoted"]')).toBeTruthy();
     expect(document.querySelector('[data-ingest-verb="rejected"]')).toBeTruthy();
+  });
+
+  it("Open review foregrounds the task artifact; the defect line opens its task by row id or task id", () => {
+    const r = { ...row({ stage: "promoted" }), extraction_defect: { task_id: "task-9", edits: 3 } };
+    useHumanTaskStore.setState({ tasks: [promotionTask(r)] });
+    const { unmount } = render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
+    expect(document.querySelector("[data-ingest-extraction-defect]")?.textContent).toContain("3 rows");
+    fireEvent.click(document.querySelector("[data-ingest-extraction-defect-open]")!);
+    expect(useCanvasStore.getState().currentArtifactId).toBe(taskArtifactId("row-1"));
+    unmount();
+    const r2 = row({ stage: "review" });
+    useHumanTaskStore.setState({ tasks: [promotionTask(r2, { id: "row-2" })] });
+    render(<IngestStatusCard ingestId={r2.ingest_id} initialRow={r2} pollIntervalMs={100000} />);
+    fireEvent.click(document.querySelector("[data-ingest-open-review]")!);
+    expect(useCanvasStore.getState().currentArtifactId).toBe(taskArtifactId("row-2"));
   });
 
   it("a payload naming a different ingest_id does NOT match", () => {

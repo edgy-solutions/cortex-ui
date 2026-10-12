@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { routeAnswerDrop } from "@/lib/canvasDrop";
+import { isIngestArtifactId } from "@/lib/ingestArtifact";
+import type { AnswerArchetype } from "@/lib/answerDisplay";
 
 /**
  * useAnswerPanelStore — the answer-first left column's *view* state,
@@ -47,9 +49,13 @@ interface AnswerPanelState {
   /** Whether the personal-canvas overlay is open. Ephemeral (a view
    *  toggle, not a preference) — NOT persisted. */
   canvasOpen: boolean;
+  /** Ephemeral TYPE filter: when set, the rail shows only answers of this archetype, in every
+   *  sort mode. A view toggle, not a preference — NOT persisted. */
+  typeFilter: AnswerArchetype | null;
 
   setSortMode: (mode: AnswerSortMode) => void;
   setCanvasOpen: (open: boolean) => void;
+  setTypeFilter: (t: AnswerArchetype | null) => void;
   pinAnswer: (answerId: string, x: number, y: number) => void;
   unpinAnswer: (answerId: string) => void;
   movePin: (answerId: string, x: number, y: number) => void;
@@ -70,9 +76,11 @@ export const useAnswerPanelStore = create<AnswerPanelState>()(
       unresolvedExpanded: false,
       search: "",
       canvasOpen: false,
+      typeFilter: null,
 
       setSortMode: (mode) => set({ sortMode: mode }),
       setCanvasOpen: (open) => set({ canvasOpen: open }),
+      setTypeFilter: (t) => set({ typeFilter: t }),
 
       // ADR-0028 canvas-dock: the list still calls pinAnswer on drop, but the
       // pin now ROUTES into the dock — onto whichever canvas chip the drop
@@ -82,6 +90,8 @@ export const useAnswerPanelStore = create<AnswerPanelState>()(
       // to the camera-stage canvases. The x/y args are ignored (the router
       // hit-tests the real pointer). `pins` is left in place for back-compat.
       pinAnswer: (answerId) => {
+        // A drop is a turn, not an answer: it never goes onto a canvas (a canvas is saved and exported).
+        if (isIngestArtifactId(answerId)) return;
         routeAnswerDrop(answerId);
       },
 

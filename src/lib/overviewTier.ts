@@ -30,6 +30,7 @@ const TIER: Record<string, OverviewTier> = {
   // compact — sparse cards: centered in the minimum frame.
   APPROVAL_TASK: "compact",
   HAZARD_DECLARATION: "compact",
+  INGEST: "compact",
   // visual — scale-to-fit is the point; keep FitBox.
   CHART_WIDGET: "visual",
   PROCESS_TOPOLOGY: "visual",

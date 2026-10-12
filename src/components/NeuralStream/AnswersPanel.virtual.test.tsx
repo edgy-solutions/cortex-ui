@@ -8,7 +8,6 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import type { Artifact } from "@/api/types";
 
-vi.mock("@/components/ingest/IngestTurns", () => ({ IngestTurns: () => null }));
 vi.mock("./LiveAnswerStrip", () => ({ LiveAnswerStrip: () => null }));
 vi.mock("./useLiveStages", () => ({ useLiveStages: () => ({ active: false }) }));
 

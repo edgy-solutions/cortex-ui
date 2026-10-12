@@ -10,6 +10,7 @@ import {
   type CanvasExport,
 } from "./canvasExport";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { INGEST_ARTIFACT_PREFIX } from "@/lib/ingestArtifact";
 
 const GOOD_SHA = "sha256:" + "a".repeat(64);
 const GOOD_URI = "/export/package/artifact/legal-2026-09-30.zip";
@@ -369,6 +370,16 @@ describe("canvasAnswerIds", () => {
       { id: "a3" },
     ];
     expect(canvasAnswerIds(artifacts)).toEqual(["a1", "a2", "a3"]);
+  });
+
+  it("excludes ingest artifacts: a drop is a turn, never an answer sent to the export route", () => {
+    const artifacts = [
+      { id: "a1" },
+      { id: INGEST_ARTIFACT_PREFIX + "turn-1" },
+      { id: INGEST_ARTIFACT_PREFIX + "sha256:" + "b".repeat(64) },
+      { id: "a2" },
+    ];
+    expect(canvasAnswerIds(artifacts)).toEqual(["a1", "a2"]);
   });
 });
 

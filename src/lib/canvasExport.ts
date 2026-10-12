@@ -24,6 +24,7 @@
  * the DOM/network is thin and lives in the component.
  */
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { INGEST_ARTIFACT_PREFIX } from "@/lib/ingestArtifact";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 
 export interface ExportRecipient {
@@ -281,13 +282,14 @@ export function artifactLink(
 /**
  * The ids of the canvas's ANSWERS, in canvas order, deduped — the population `answers` is built
  * from on export. Task-artifacts (`TASK_ARTIFACT_PREFIX`-prefixed ids, `taskArtifact.ts`) are
- * not answers and are excluded by id, per section A's contract population.
+ * not answers and are excluded by id, per section A's contract population; so are drops
+ * (`INGEST_ARTIFACT_PREFIX`, `ingestArtifact.ts`) — client-made, never in the graph of record.
  */
 export function canvasAnswerIds(artifacts: { id: string }[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const a of artifacts) {
-    if (a.id.startsWith(TASK_ARTIFACT_PREFIX)) continue;
+    if (a.id.startsWith(TASK_ARTIFACT_PREFIX) || a.id.startsWith(INGEST_ARTIFACT_PREFIX)) continue;
     if (seen.has(a.id)) continue;
     seen.add(a.id);
     out.push(a.id);

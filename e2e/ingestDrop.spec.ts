@@ -76,6 +76,16 @@ test("a drop on the composer is cancelled (no navigation), lands a chip, and Sen
   // File went out as `{}` (see `uploadIngest` in src/api/client.ts).
   expect(req.headers()["content-type"] ?? "").toMatch(/^multipart\/form-data; boundary=/);
   expect(req.postDataBuffer()?.toString("latin1")).toContain('filename="PCN26-117.pdf"');
+  // The drop is a TURN on the answers rail; the turn opens to the status card.
+  const entry = page.locator("[data-virtual-item]").filter({ has: page.locator("[data-ingest-stage]") });
+  await expect(entry).toHaveCount(1);
+  await expect(entry).toContainText("PCN26-117.pdf");
+  // The in-flight badge on the paperclip filters the rail to drops (it does not open the picker).
+  await page.locator("[data-ingest-inflight-badge]").click();
+  await expect(page.locator("[data-type-filter=\"INGEST\"]")).toBeVisible();
+  await page.locator("[data-type-filter=\"INGEST\"]").click();
+  await expect(page.locator("[data-type-filter]")).toHaveCount(0);
+  await entry.click();
   await expect(page.locator(`[data-ingest-id="${f.seed.ingestId}"]`)).toBeVisible();
   expect(page.url()).toBe(urlBefore);
 });

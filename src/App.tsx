@@ -31,6 +31,7 @@ import { registerFrontendCapabilities } from "@/api/client";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
+import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 import { usePersonaStore } from "@/store/usePersonaStore";
@@ -434,6 +435,7 @@ export default function App() {
   // Tasks are timeline citizens: mirror the HITL store into task-artifacts so
   // they ride the same timeline/canvas/HUD as answers.
   useTaskArtifactSync();
+  useIngestArtifactSync();
 
   return (
     <RequireAuth>

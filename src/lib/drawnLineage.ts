@@ -58,6 +58,7 @@
 import type { Artifact } from "@/api/types";
 import { isAsk } from "@/lib/askFold";
 import { isTaskArtifact } from "@/lib/taskArtifact";
+import { isIngestArtifact } from "@/lib/ingestArtifact";
 
 /**
  * The lineage id a turn may claim from the drawn card, or `undefined` for "claim nothing".
@@ -70,6 +71,8 @@ export function drawnLineageClaim(drawn: Artifact | null | undefined): string | 
   // A task-store row id is not an AnswerArtifact id. Checked by the shared helper so a task
   // carrying `task_ref` without the prefix is caught too.
   if (isTaskArtifact(drawn)) return undefined;
+  // A drop is the user's own client-made turn, never an AnswerArtifact the substrate holds.
+  if (isIngestArtifact(drawn)) return undefined;
   // THE SUBSTRATE'S OWN ANSWER. Not `status` — see the header.
   if (drawn.durability_status !== "durable") return undefined;
   // Would fold a question the reader did not answer.

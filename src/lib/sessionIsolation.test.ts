@@ -171,6 +171,7 @@ describe("sessionIsolation — the purge list stays complete", () => {
       "useEvidenceStore",
       "useHumanTaskStore",
       "useIngestComposerStore",
+      "useIngestStatusStore",
       "useInterviewStore",
       "usePersonaStore",
       "usePresentationStore",

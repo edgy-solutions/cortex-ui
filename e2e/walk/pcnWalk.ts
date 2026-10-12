@@ -218,7 +218,13 @@ export async function drop(page: Page, walk: Walk): Promise<string> {
       walk.dropOutcome = "duplicate";
       return `ui=${ui}; duplicate: ${(await dup.textContent())?.trim().slice(0, 160)}`;
     }
+    const railDup = page.locator('[data-ingest-stage="duplicate"]').first();
+    if (await railDup.isVisible().catch(() => false)) {
+      walk.dropOutcome = "duplicate";
+      return `ui=${ui}; duplicate: rail entry badge`;
+    }
     const card = page.locator("[data-ingest-id]").filter({ has: page.locator("[data-ingest-status]") }).first();
+    if (ui === "composer") await openIngestEntry(page);
     if (await card.isVisible().catch(() => false)) {
       // The duplicate notice can land between the two checks above; re-check before calling it fresh.
       if ((await page.locator("[data-ingest-duplicate]").count()) > 0) continue;
@@ -232,8 +238,23 @@ export async function drop(page: Page, walk: Walk): Promise<string> {
   throw new Error(`drop (${ui}): neither an ingest card nor a duplicate notice appeared within ${t} ms`);
 }
 
+/**
+ * A drop is a TURN on the answers rail; its status card is what the turn opens to. Open the newest
+ * ingest entry when no card is on screen (the card carries the `data-ingest-id` and status the
+ * readers below use). Returns whether a card is showing.
+ */
+export async function openIngestEntry(page: Page): Promise<boolean> {
+  const showing = () => page.locator("[data-ingest-id]").filter({ has: page.locator("[data-ingest-status]") }).first().isVisible().catch(() => false);
+  if (await showing()) return true;
+  const entry = page.locator("[data-virtual-item]").filter({ has: page.locator("[data-ingest-stage]") }).first();
+  if (!(await entry.isVisible().catch(() => false))) return false;
+  await entry.click().catch(() => undefined);
+  return showing();
+}
+
 /** Alice's ingest card reaches `stage` (the card polls every 2 s). */
 export async function waitForStage(page: Page, ingestId: string | null, stage: string, timeoutMs: number): Promise<string> {
+  if (!ingestId || (await page.locator(`[data-ingest-id="${ingestId}"]`).count()) === 0) await openIngestEntry(page);
   const card = ingestId ? page.locator(`[data-ingest-id="${ingestId}"]`) : page.locator("[data-ingest-id]");
   const loc = card.locator(`[data-ingest-status="${stage}"]`).first();
   try {

@@ -29,6 +29,7 @@ import {
   BookOpenCheck,
   GitBranch,
   Image,
+  FileUp,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -159,6 +160,8 @@ export function glyphFor(t: AnswerArchetype): {
       // checkmark (one decision) and VARIANCE_TREE's branch-of-causes Workflow glyph (already
       // taken) by being the only one that reads as a SEQUENCE of linked instances.
       return { Icon: GitBranch, color: "text-neon-cyan/80" };
+    case "INGEST":
+      return { Icon: FileUp, color: "text-neon-cyan/80" };
     case "ILLUSTRATION":
       // The one glyph in this table that is a literal picture, not a metaphor for one — a drawn
       // ICN with a hotspot, distinct from every chart/grid/tree glyph above it.
