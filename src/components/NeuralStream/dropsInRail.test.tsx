@@ -10,6 +10,7 @@ import type { Artifact } from "@/api/types";
 
 const uploadIngest = vi.fn();
 const fetchIngestStatus = vi.fn();
+const retryIngest = vi.fn();
 
 vi.mock("@/hooks/useAgent", () => ({
   useAgent: () => ({ sendMessage: vi.fn(), isConnected: true, isProcessing: false }),
@@ -35,6 +36,7 @@ vi.mock("react-oidc-context", () => ({
 vi.mock("@/lib/ingestTransport", () => ({
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
+  retryIngest: (...a: unknown[]) => retryIngest(...a),
   disputeIngestOrigin: vi.fn(),
   confirmIngestContentKind: vi.fn(),
 }));
@@ -52,6 +54,7 @@ import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
 import { useIngestStatusStore, INGEST_POLL_MS } from "@/store/useIngestStatusStore";
 import { recordMyDrop } from "@/lib/myDrops";
+import { INGEST_STAGES } from "@/lib/ingestWire";
 
 const ID = `sha256:${"3f9a2b".padEnd(64, "0")}`;
 const OLD = `sha256:${"0ld".padEnd(64, "0")}`;
@@ -112,6 +115,7 @@ beforeEach(() => {
   window.localStorage.clear();
   uploadIngest.mockReset();
   fetchIngestStatus.mockReset();
+  retryIngest.mockReset();
   useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
   useIngestStatusStore.getState().reset();
   useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
@@ -385,5 +389,145 @@ describe("extraction_defect on the rail", () => {
       expect(!!marker(), JSON.stringify(over)).toBe(drawn);
       if (drawn) expect(marker()!.getAttribute("title")).toBe("extraction corrected: 4 rows");
     }
+  });
+});
+
+describe("a failed drop's reason and the notice id on the rail", () => {
+  const setup = async (stage: string, over: Record<string, unknown> = {}) => {
+    uploadIngest.mockResolvedValue({ ingest_id: ID, stage: "received", duplicate: null });
+    fetchIngestStatus.mockResolvedValue(wire(ID, stage, over));
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+  };
+  const reasonEl = () => ingestRow()?.querySelector("[data-ingest-reason]") ?? null;
+  const badgeClass = () => ingestRow()!.querySelector("[data-ingest-stage]")!.className;
+
+  it("a failed row shows the reason verbatim, and a badge distinct from review's", async () => {
+    await setup("failed", { detail: "no registered content_kind" });
+    expect(stageText()).toBe("failed");
+    expect(reasonEl()?.textContent).toBe("no registered content_kind");
+    expect(reasonEl()?.getAttribute("title")).toBe("no registered content_kind");
+    const failedClass = badgeClass();
+    cleanup();
+    useIngestStatusStore.getState().reset();
+    useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
+    await setup("review");
+    expect(badgeClass()).not.toBe(failedClass);
+  });
+
+  it("a rejected row with detail shows no reason", async () => {
+    await setup("rejected", { detail: "not a PCN" });
+    expect(stageText()).toBe("rejected");
+    expect(document.querySelector("[data-ingest-reason]")).toBeNull();
+  });
+
+  it("a review row shows no reason", async () => {
+    await setup("review");
+    expect(document.querySelector("[data-ingest-reason]")).toBeNull();
+  });
+
+  it("an entry going extracting -> failed updates in place and gains the reason", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: ID, stage: "received", duplicate: null });
+    let n = 0;
+    fetchIngestStatus.mockImplementation(() =>
+      Promise.resolve(n++ === 0 ? wire(ID, "extracting") : wire(ID, "failed", { detail: "boom" })),
+    );
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+    const row = ingestRow();
+    expect(stageText()).toBe("extracting");
+    expect(reasonEl()).toBeNull();
+    await tick();
+    expect(ingestRow(), "the entry was re-created, not updated in place").toBe(row);
+    expect(stageText()).toBe("failed");
+    expect(reasonEl()?.textContent).toBe("boom");
+  });
+
+  it("notice_id is on the rail entry and the opened card, and the rail finds the entry by it", async () => {
+    recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
+    fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted", { notice_id: "PCN26-184" }));
+    useCanvasStore.setState({ artifacts: [answer(1), answer(2)] });
+    render(<Harness />);
+    await tick(0);
+    expect(ingestRow()?.querySelector("[data-ingest-notice-id]")?.textContent).toBe("PCN26-184");
+    const input = document.querySelector('input[placeholder="Search answers…"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "PCN26-184" } });
+    expect(railItems()).toHaveLength(1);
+    expect(railItems()[0].textContent).toContain("old.pdf");
+    fireEvent.change(input, { target: { value: "" } });
+    act(() => useCanvasStore.getState().setCurrentArtifact(useCanvasStore.getState().artifacts.find((a) => a.id.startsWith("ingest:"))!.id));
+    expect(document.querySelector("[data-ingest-id] [data-ingest-notice-id]")?.textContent).toBe("notice PCN26-184");
+  });
+
+  it.each([["null", { notice_id: null }], ["absent", {}]])("%s notice_id draws nothing and no placeholder", async (_n, extra) => {
+    await setup("promoted", extra);
+    act(() => useCanvasStore.getState().setCurrentArtifact(useCanvasStore.getState().artifacts[0].id));
+    expect(document.querySelector("[data-ingest-notice-id]")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/unclassified/i);
+  });
+});
+
+describe("a failed drop on the rail — failure, attempt, Retry", () => {
+  const failure = (over: Record<string, unknown> = {}) => ({
+    reason_code: "kind_unregistered", reason: "kind x is not registered: a, b", step: null, run_id: null, pin_digest: null, failed_at: 1, ...over,
+  });
+  const setup = async (stage: string, over: Record<string, unknown> = {}) => {
+    uploadIngest.mockResolvedValue({ ingest_id: ID, stage: "received", duplicate: null });
+    fetchIngestStatus.mockResolvedValue(wire(ID, stage, over));
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+  };
+  const q = (sel: string) => ingestRow()?.querySelector(sel) ?? null;
+
+  it("draws failure.reason over detail, its code verbatim, and attempt above 1", async () => {
+    await setup("failed", { detail: "old detail", failure: failure(), attempt: 2 });
+    expect(q("[data-ingest-reason]")?.textContent).toBe("kind x is not registered: a, b");
+    expect(q("[data-ingest-reason-code]")?.textContent).toBe("kind_unregistered");
+    expect(q("[data-ingest-attempt]")?.textContent).toBe("attempt 2");
+  });
+
+  it("falls back to detail when the fleet sends no failure; no code, no attempt", async () => {
+    await setup("failed", { detail: "old detail" });
+    expect(q("[data-ingest-reason]")?.textContent).toBe("old detail");
+    expect(q("[data-ingest-reason-code]")).toBeNull();
+    expect(q("[data-ingest-attempt]")).toBeNull();
+  });
+
+  it("timeout draws the muted note", async () => {
+    await setup("failed", { failure: failure({ reason_code: "timeout" }) });
+    expect(q("[data-ingest-timeout-note]")?.textContent).toBe("No stage was reported in time. It can still advance on its own.");
+  });
+
+  it.each(INGEST_STAGES.map((st) => [st]))("Retry on the rail for stage %s", async (stage) => {
+    await setup(stage, stage === "failed" ? { failure: failure() } : {});
+    expect(q("[data-ingest-retry]") !== null).toBe(stage === "failed");
+  });
+
+  it("clicking Retry calls the transport once, does not open the row, and the entry goes back to received", async () => {
+    retryIngest.mockResolvedValue({ ingest_id: ID, stage: "received", attempt: 2 });
+    await setup("failed", { failure: failure({ reason_code: "timeout" }), attempt: 1 });
+    expect(useCanvasStore.getState().currentArtifactId).toBeNull();
+    await act(async () => {
+      fireEvent.click(q("[data-ingest-retry]")!);
+    });
+    expect(retryIngest).toHaveBeenCalledTimes(1);
+    expect(retryIngest).toHaveBeenCalledWith(ID);
+    expect(useCanvasStore.getState().currentArtifactId, "the click reached the row").toBeNull();
+    expect(stageText()).toBe("received");
+    expect(q("[data-ingest-retry]")).toBeNull();
+    expect(q("[data-ingest-attempt]")?.textContent).toBe("attempt 2");
+  });
+
+  it("a refusal is shown inline on the entry", async () => {
+    retryIngest.mockRejectedValue({ response: { status: 403, data: { detail: { error: "retry_is_pin_driven" } } } });
+    await setup("failed", { failure: failure() });
+    await act(async () => {
+      fireEvent.click(q("[data-ingest-retry]")!);
+    });
+    expect(q("[data-ingest-retry-message]")?.textContent).toBe("This drop can’t be retried from here.");
+    expect(stageText()).toBe("failed");
   });
 });

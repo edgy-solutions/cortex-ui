@@ -8,6 +8,8 @@ import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/sta
 import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { IngestFailureExtras } from "@/components/ingest/IngestFailureExtras";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
   useAnswerPanelStore,
@@ -599,11 +601,20 @@ function IngestBadge({ a }: { a: Artifact }) {
   return (
     <span className="inline-flex items-center gap-1 mb-0.5">
       <span
-        className="px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border text-neon-cyan border-neon-cyan/30 bg-neon-cyan/10"
+        className={`px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
+          ing.badge === "failed"
+            ? "text-amber-300 border-amber-400/40 bg-amber-400/10"
+            : "text-neon-cyan border-neon-cyan/30 bg-neon-cyan/10"
+        }`}
         data-ingest-stage={ing.badge}
       >
         {ing.badge}
       </span>
+      {ing.notice_id !== null && (
+        <span className="text-[9px] font-mono text-slate-400 truncate" data-ingest-notice-id title={ing.notice_id}>
+          {ing.notice_id}
+        </span>
+      )}
       {ing.extraction_defect && (
         <span
           className="text-[9px] font-mono text-amber-300"
@@ -614,6 +625,25 @@ function IngestBadge({ a }: { a: Artifact }) {
         </span>
       )}
     </span>
+  );
+}
+
+/** The reason a drop FAILED, verbatim, under the summary line, with its reason code, attempt and Retry
+ *  (`IngestFailureExtras`). Nothing for any other stage. */
+function IngestReason({ a }: { a: Artifact }) {
+  const ing = ingestComponentFrom(a);
+  const retry = useIngestStatusStore((s) => s.retry);
+  if (!ing) return null;
+  const reason = ing.reason;
+  return (
+    <>
+      {reason !== null && (
+        <p className="text-[10px] font-mono text-amber-400 leading-snug line-clamp-2 mt-0.5" data-ingest-reason title={reason}>
+          {reason}
+        </p>
+      )}
+      <IngestFailureExtras stage={ing.badge} ingestId={ing.ingest_id} reasonCode={ing.reason_code} attempt={ing.attempt} retry={retry} />
+    </>
   );
 }
 
@@ -714,6 +744,7 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         >
           {highlight(summary, ctx.searchHit)}
         </p>
+        <IngestReason a={a} />
         {captured && a.question_text && (
           <p className="text-[10px] font-mono text-slate-500 leading-snug line-clamp-1 mt-0.5">
             {/* See CanvasPane's header: a label beside a question is copied with it. */}
@@ -929,6 +960,7 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         >
           {highlight(summary, ctx.searchHit)}
         </p>
+        <IngestReason a={a} />
         <p className="text-[10px] font-mono text-slate-500 leading-snug line-clamp-1 mt-0.5">
           {/* THE WORST OF THESE ROWS: the question shares one line with a label, a separator,
               a timestamp and a duration, so a selection over it copies

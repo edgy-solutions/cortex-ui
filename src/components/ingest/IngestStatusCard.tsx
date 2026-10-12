@@ -36,14 +36,15 @@
  * the ONE poller is `useIngestStatusStore` and the card, mounted with `fromStore`, only READS it. A
  * card mounted outside the rail (no `fromStore`) keeps its own poll, as below. Never both for one id.
  *
- * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed`.
- * `review` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
+ * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed` — except a
+ * `failed` row with reason_code `timeout`, which a late run can still advance: it is re-read every
+ * `INGEST_FAILED_TIMEOUT_POLL_MS` (this card's own poll included). `review` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
  * also stops polling, distinctly from a transient transport error, which is tolerated and
  * retried.
  */
 import { useEffect, useRef, useState } from "react";
 import { actOnHumanTask } from "@/api/client";
-import { fetchIngestStatus, disputeIngestOrigin } from "@/lib/ingestTransport";
+import { fetchIngestStatus, disputeIngestOrigin, retryIngest } from "@/lib/ingestTransport";
 import { fetchCase, type FetchCaseResult } from "@/lib/cases";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
@@ -60,11 +61,15 @@ import {
   ingestEventLadder,
   INGEST_CASE_OPENED_STATUS,
   ingestPollingDone,
+  INGEST_FAILED_TIMEOUT_POLL_MS,
+  INGEST_FAILURE_TIMEOUT,
+  readIngestRetryRefusal,
   promotionIngestId,
   payloadMatchesIngestId,
   type IngestStatusRow,
   type IngestStage,
 } from "@/lib/ingestWire";
+import { IngestFailureExtras } from "./IngestFailureExtras";
 import { IngestKindSuggestion } from "./IngestKindSuggestion";
 import { duplicatePhrase } from "@/lib/ingestWire";
 import { originSummary } from "@/lib/ingestOrigin";
@@ -224,6 +229,34 @@ export function IngestStatusCard({
   const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastPollRef = useRef(0);
+  const [pollEpoch, setPollEpoch] = useState(0);
+  const storeRetry = useIngestStatusStore((s) => s.retry);
+  // Store mode uses the store action; self-poll mode calls the transport, then restarts its poll.
+  const retry = async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    if (fromStore) return storeRetry(id);
+    try {
+      await retryIngest(id);
+      setRow((cur) => (cur ? { ...cur, stage: "received", failure: null } : cur));
+      setPollEpoch((n) => n + 1);
+      return { ok: true };
+    } catch (err) {
+      const refusal = readIngestRetryRefusal(err);
+      if (refusal?.status === 409 && refusal.error === "not_failed") {
+        // It moved since it was read: re-read now (the stale failed row would stop the interval).
+        void fetchIngestStatus(id)
+          .then((raw) => {
+            const next = readIngestStatusRow(raw);
+            if (next) setRow(next);
+            setPollEpoch((n) => n + 1);
+          })
+          .catch(() => undefined);
+        return { ok: false, message: "It moved since it was read — refreshed." };
+      }
+      if (refusal?.status === 403) return { ok: false, message: "This drop can’t be retried from here." };
+      return { ok: false, message: readIngestErrorMessage(err) ?? "Retry failed." };
+    }
+  };
 
   const tasks = useHumanTaskStore((s) => s.tasks);
   const declarationFor = useTaskKindStore((s) => s.declarationFor);
@@ -285,7 +318,10 @@ export function IngestStatusCard({
       }
     };
 
-    if (!initialRow) void poll();
+    if (!initialRow) {
+      lastPollRef.current = Date.now();
+      void poll();
+    }
 
     timerRef.current = setInterval(() => {
       setRow((current) => {
@@ -293,6 +329,15 @@ export function IngestStatusCard({
           if (timerRef.current) clearInterval(timerRef.current);
           return current;
         }
+        // A failed+timeout row is re-read at most every INGEST_FAILED_TIMEOUT_POLL_MS.
+        if (
+          current?.stage === "failed" &&
+          current.failure?.reason_code === INGEST_FAILURE_TIMEOUT &&
+          Date.now() - lastPollRef.current < INGEST_FAILED_TIMEOUT_POLL_MS
+        ) {
+          return current;
+        }
+        lastPollRef.current = Date.now();
         void poll();
         return current;
       });
@@ -303,7 +348,7 @@ export function IngestStatusCard({
       if (timerRef.current) clearInterval(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingestId, pollIntervalMs, fromStore]);
+  }, [ingestId, pollIntervalMs, fromStore, pollEpoch]);
 
   if (notFound) {
     return (
@@ -373,6 +418,12 @@ export function IngestStatusCard({
           </span>
         )}
       </div>
+
+      {typeof row.notice_id === "string" && (
+        <p className="text-[10px] font-mono text-slate-300" data-ingest-notice-id>
+          notice {row.notice_id}
+        </p>
+      )}
 
       {/*
        * CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — `row.origin === null` is the real,
@@ -480,11 +531,18 @@ export function IngestStatusCard({
             ))}
           </ul>
 
-          {(row.stage === "rejected" || row.stage === "failed") && row.detail && (
+          {(row.stage === "rejected" || row.stage === "failed") && (row.stage === "failed" ? (row.failure?.reason ?? row.detail) : row.detail) && (
             <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-detail>
-              {row.detail}
+              {row.stage === "failed" ? (row.failure?.reason ?? row.detail) : row.detail}
             </p>
           )}
+          <IngestFailureExtras
+            stage={row.stage ?? ""}
+            ingestId={row.ingest_id}
+            reasonCode={row.stage === "failed" ? (row.failure?.reason_code ?? null) : null}
+            attempt={row.attempt ?? null}
+            retry={retry}
+          />
 
           {reviewTask ? (
             <div className="mt-3 flex flex-col gap-2" data-ingest-review>

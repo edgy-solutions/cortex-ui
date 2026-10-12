@@ -10,7 +10,7 @@
  * excludes task-artifacts for that reason excludes this too — see `isIngestArtifact`.
  *
  * Only fields the client holds are carried: the filename and kind it sent, the upload phase, and
- * the status row it polled. The notice id is NOT on the wire today, so there is no slot for it.
+ * the status row it polled, including the `failed` reason and the notice id when the row carries one.
  */
 import type { Artifact } from "@/api/types";
 import { INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
@@ -40,6 +40,14 @@ export interface IngestComponent {
   /** The note typed with the drop, verbatim; null when there was none. */
   note: string | null;
   extraction_defect: ExtractionDefect | null;
+  /** The producer's `failure.reason`, verbatim, when its stage is `failed`; on a fleet that sends no `failure` (before 33b80988) the row's `detail` instead; null for every other stage (rejected included). */
+  reason: string | null;
+  /** `failure.reason_code` verbatim (open vocabulary), only when failed; null when unclassified, absent, or not failed. */
+  reason_code: string | null;
+  /** The row's `attempt` (1 on arrival, +1 per retry); null when the wire sent none. */
+  attempt: number | null;
+  /** The notice's own identifier from the status row; null when absent or null on the wire. */
+  notice_id: string | null;
 }
 
 /** What the sync hook knows about one drop. */
@@ -84,8 +92,11 @@ export function ingestComponentOf(e: IngestEntry): IngestComponent {
     duplicate_of: e.duplicate?.ofIngestId ?? e.row?.duplicate?.of_ingest_id ?? null,
     duplicate_message: e.duplicate?.message ?? null,
     note: e.note || null,
-    // LANE-1: notice id on the status row once classified (no slot until the wire carries one).
     extraction_defect: e.row?.extraction_defect ?? null,
+    reason: e.row?.stage === "failed" ? (e.row.failure?.reason ?? e.row.detail ?? null) : null,
+    reason_code: e.row?.stage === "failed" ? (e.row.failure?.reason_code ?? null) : null,
+    attempt: e.row?.attempt ?? null,
+    notice_id: e.row?.notice_id ?? null,
   };
 }
 

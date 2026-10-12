@@ -7,7 +7,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
+import { ingestRetryPath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -1016,6 +1016,17 @@ export async function uploadIngest(file: File, kind: string, onBehalfOf: string,
  */
 export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
   const { data } = await api.get<unknown>(ingestStatusPath(ingestId));
+  return data;
+}
+
+/**
+ * `POST /ingest/{id}/retry` (Lane 1 packet `sessions/2026-10-12-packet-to-cortex-the-failure-field-is-failure-on-ingest-status-a-failed-drop-is-retryable.md` §2,
+ * invincible-agent 33b80988): re-opens the person's own `failed` drop. NO BODY — no data argument, not `{}`.
+ * 200 `{ingest_id, stage:"received", attempt}`; 409 `not_failed` and 403 `retry_is_pin_driven` throw
+ * (FastAPI wraps them under `detail`; read with `readIngestRetryRefusal`).
+ */
+export async function retryIngest(ingestId: string): Promise<unknown> {
+  const { data } = await api.post<unknown>(ingestRetryPath(ingestId));
   return data;
 }
 

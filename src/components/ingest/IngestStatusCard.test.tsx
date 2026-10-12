@@ -6,12 +6,15 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { taskArtifactId } from "@/lib/taskArtifact";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
-import { promotionIngestId, type IngestStatusRow } from "@/lib/ingestWire";
+import { promotionIngestId, INGEST_STAGES, type IngestStatusRow } from "@/lib/ingestWire";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import type { IngestOrigin } from "@/lib/ingestOrigin";
 
 const fetchIngestStatus = vi.fn();
 const disputeIngestOrigin = vi.fn();
+const retryIngest = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
+  retryIngest: (...args: unknown[]) => retryIngest(...args),
   fetchIngestStatus: (...args: unknown[]) => fetchIngestStatus(...args),
   disputeIngestOrigin: (...args: unknown[]) => disputeIngestOrigin(...args),
 }));
@@ -25,6 +28,8 @@ afterEach(() => {
   cleanup();
   fetchIngestStatus.mockReset();
   disputeIngestOrigin.mockReset();
+  retryIngest.mockReset();
+  useIngestStatusStore.getState().reset();
   actOnHumanTask.mockReset();
   actOnHumanTask.mockResolvedValue({ task_id: "t", decision: "promoted" });
   useHumanTaskStore.setState({ tasks: [] });
@@ -374,5 +379,113 @@ describe("IngestStatusCard — origin (CORTEX-PROPOSED)", () => {
     expect(document.querySelector("[data-ingest-origin-disputed]")).toBeNull();
     const button = document.querySelector("[data-ingest-origin-dispute]") as HTMLButtonElement;
     expect(button.disabled).toBe(false);
+  });
+});
+
+describe("notice_id on the card", () => {
+  it("draws `notice <id>` when non-null, and nothing (no placeholder) for null and absent", () => {
+    const r = row({ stage: "promoted", notice_id: "PCN26-184" });
+    const { unmount } = render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
+    expect(document.querySelector("[data-ingest-notice-id]")?.textContent).toBe("notice PCN26-184");
+    unmount();
+    for (const over of [{ notice_id: null }, {}]) {
+      const r2 = row({ stage: "promoted", ...over });
+      const u = render(<IngestStatusCard ingestId={r2.ingest_id} initialRow={r2} pollIntervalMs={100000} />);
+      expect(document.querySelector("[data-ingest-notice-id]")).toBeNull();
+      expect(document.body.textContent).not.toMatch(/unclassified/i);
+      u.unmount();
+    }
+  });
+});
+
+describe("IngestStatusCard — failure reason, code, attempt, Retry", () => {
+  const failure = (over: Record<string, unknown> = {}) => ({
+    reason_code: "kind_unregistered", reason: "kind x is not registered: a, b", step: null, run_id: null, pin_digest: null, failed_at: 1, ...over,
+  });
+  const q = (sel: string) => document.querySelector(sel);
+  const failedRow = (over: Partial<IngestStatusRow> = {}) =>
+    row({ stage: "failed", detail: "old detail", failure: failure(), attempt: 1, ...over });
+
+  it("draws failure.reason over detail, and falls back to detail when the fleet sends no failure", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow()} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-detail]")?.textContent).toBe("kind x is not registered: a, b");
+    cleanup();
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "failed", detail: "old detail" })} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-detail]")?.textContent).toBe("old detail");
+    expect(q("[data-ingest-reason-code]")).toBeNull();
+  });
+
+  it("draws the reason code verbatim, and attempt only above 1", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow({ attempt: 3 })} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-reason-code]")?.textContent).toBe("kind_unregistered");
+    expect(q("[data-ingest-attempt]")?.textContent).toBe("attempt 3");
+    cleanup();
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow({ attempt: 1 })} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-attempt]")).toBeNull();
+  });
+
+  it("timeout draws the muted note; another code does not", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow({ failure: failure({ reason_code: "timeout" }) })} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-timeout-note]")?.textContent).toBe("No stage was reported in time. It can still advance on its own.");
+    cleanup();
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow()} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-timeout-note]")).toBeNull();
+  });
+
+  it.each(INGEST_STAGES.map((st) => [st]))("Retry for stage %s is present only for failed", (stage) => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage, failure: stage === "failed" ? failure() : null })} pollIntervalMs={100000} />);
+    expect(q("[data-ingest-retry]") !== null).toBe(stage === "failed");
+  });
+
+  it("self-poll mode: clicking calls the transport once, then the poll restarts", async () => {
+    retryIngest.mockResolvedValue({ ingest_id: INGEST_ID, stage: "received", attempt: 2 });
+    fetchIngestStatus.mockResolvedValue(row({ stage: "extracting" }));
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow()} pollIntervalMs={20} />);
+    fireEvent.click(q("[data-ingest-retry]")!);
+    await waitFor(() => expect(q("[data-ingest-retry]")).toBeNull());
+    expect(retryIngest).toHaveBeenCalledTimes(1);
+    expect(retryIngest).toHaveBeenCalledWith(INGEST_ID);
+    await waitFor(() => expect(fetchIngestStatus).toHaveBeenCalled());
+  });
+
+  it("self-poll mode: a refusal is shown inline and the row stays failed", async () => {
+    retryIngest.mockRejectedValue({ response: { status: 403, data: { detail: { error: "retry_is_pin_driven", message: "m" } } } });
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow()} pollIntervalMs={100000} />);
+    fireEvent.click(q("[data-ingest-retry]")!);
+    await waitFor(() => expect(q("[data-ingest-retry-message]")?.textContent).toBe("This drop can’t be retried from here."));
+    expect(q("[data-ingest-retry]")).toBeTruthy();
+  });
+
+  it("store mode: uses the store action and the row goes back to received", async () => {
+    retryIngest.mockResolvedValue({ ingest_id: INGEST_ID, stage: "received", attempt: 2 });
+    useIngestStatusStore.setState({ rows: { [INGEST_ID]: failedRow() } });
+    render(<IngestStatusCard ingestId={INGEST_ID} fromStore />);
+    fireEvent.click(q("[data-ingest-retry]")!);
+    await waitFor(() => expect(q("[data-ingest-retry]")).toBeNull());
+    expect(retryIngest).toHaveBeenCalledTimes(1);
+    expect(useIngestStatusStore.getState().rows[INGEST_ID]).toMatchObject({ stage: "received", attempt: 2 });
+    expect(q("[data-ingest-attempt]")?.textContent).toBe("attempt 2");
+  });
+
+  it("store mode: a 409 shows the moved message", async () => {
+    retryIngest.mockRejectedValue({ response: { status: 409, data: { detail: { error: "not_failed" } } } });
+    fetchIngestStatus.mockResolvedValue(failedRow());
+    useIngestStatusStore.setState({ rows: { [INGEST_ID]: failedRow() } });
+    render(<IngestStatusCard ingestId={INGEST_ID} fromStore />);
+    fireEvent.click(q("[data-ingest-retry]")!);
+    await waitFor(() => expect(q("[data-ingest-retry-message]")?.textContent).toBe("It moved since it was read — refreshed."));
+  });
+
+  it("the Retry click does not reach the surrounding click handler", async () => {
+    retryIngest.mockResolvedValue({ ingest_id: INGEST_ID, stage: "received", attempt: 2 });
+    const outer = vi.fn();
+    render(
+      <div onClick={outer}>
+        <IngestStatusCard ingestId={INGEST_ID} initialRow={failedRow()} pollIntervalMs={100000} />
+      </div>,
+    );
+    fireEvent.click(q("[data-ingest-retry]")!);
+    await waitFor(() => expect(retryIngest).toHaveBeenCalled());
+    expect(outer).not.toHaveBeenCalled();
   });
 });

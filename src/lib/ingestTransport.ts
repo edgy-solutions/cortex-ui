@@ -14,12 +14,14 @@ import {
   fetchIngestStatus as realFetchIngestStatus,
   disputeIngestOrigin as realDisputeIngestOrigin,
   confirmIngestContentKind as realConfirmIngestContentKind,
+  retryIngest as realRetryIngest,
 } from "@/api/client";
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
   disputeIngestOrigin as mockDisputeIngestOrigin,
   confirmIngestContentKind as mockConfirmIngestContentKind,
+  mockRetryIngest,
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
@@ -45,4 +47,9 @@ export function confirmIngestContentKind(ingestId: string, contentKind: string):
   return isIngestMockEnabled()
     ? mockConfirmIngestContentKind(ingestId, contentKind)
     : realConfirmIngestContentKind(ingestId, contentKind);
+}
+
+/** `POST /ingest/{id}/retry`, no body — see `src/api/client.ts`'s `retryIngest`. */
+export function retryIngest(ingestId: string): Promise<unknown> {
+  return isIngestMockEnabled() ? mockRetryIngest(ingestId) : realRetryIngest(ingestId);
 }
