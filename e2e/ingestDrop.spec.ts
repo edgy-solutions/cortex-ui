@@ -102,3 +102,23 @@ test("dragenter anywhere shows the overlay; the drop hides it", async ({ page })
   await dropAt(page, 4, 4);
   await expect(page.locator("[data-ingest-drag-overlay]")).toHaveCount(0);
 });
+
+test("the grown composer returns to rest when the drag just stops (cannot stick)", async ({ page }) => {
+  const f = await installFridayRoutes(page, { act: "4b" });
+  await open(page, f);
+  const composer = page.locator("[data-ingest-composer]");
+  const rest = (await composer.boundingBox())!.height;
+  const dataTransfer = await page.evaluateHandle(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["x"], "a.pdf", { type: "application/pdf" }));
+    return dt;
+  });
+  await composer.dispatchEvent("dragenter", { dataTransfer });
+  await composer.dispatchEvent("dragover", { dataTransfer });
+  await expect(composer).toHaveAttribute("data-drag-active", "true");
+  await expect.poll(async () => (await composer.boundingBox())!.height).toBeGreaterThan(rest);
+  // No further events: no dragleave, no drop, no dragover.
+  await page.waitForTimeout(600);
+  await expect(composer).toHaveAttribute("data-drag-active", "false");
+  await expect.poll(async () => (await composer.boundingBox())!.height).toBeCloseTo(rest, 0);
+});

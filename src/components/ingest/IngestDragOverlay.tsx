@@ -8,27 +8,38 @@
  * matching enters. A leave with `relatedTarget === null` is the pointer exiting the window.
  * The overlay is `pointer-events-none`, so it never becomes the drag target (no flicker).
  * `text/plain` drags (canvas chips) are ignored entirely.
+ *
+ * Depth counting alone can strand the overlay (a leave that never arrives: Esc, a cancelled
+ * drag, a swallowed event), so a window `dragover` re-arms an idle watchdog and silence hides it.
  */
-import { useEffect, useState } from "react";
-import { carriesFiles } from "@/lib/fileDropGuard";
+import { useEffect, useRef, useState } from "react";
+import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
 
 export function IngestDragOverlay() {
   const [active, setActive] = useState(false);
   const enabled = isIngestUiEnabled();
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
     let depth = 0;
     const hide = () => {
       depth = 0;
+      if (idle.current !== null) clearTimeout(idle.current);
+      idle.current = null;
       setActive(false);
+    };
+    const arm = () => {
+      if (idle.current !== null) clearTimeout(idle.current);
+      idle.current = setTimeout(hide, DRAG_IDLE_MS);
     };
     const enter = (e: DragEvent) => {
       if (!carriesFiles(e)) return;
       depth++;
       setActive(true);
+      arm();
     };
     const leave = (e: DragEvent) => {
       if (!carriesFiles(e)) return;
@@ -45,7 +56,15 @@ export function IngestDragOverlay() {
       if (f) useIngestComposerStore.getState().attach(f);
     };
     const over = (e: DragEvent) => {
-      if (carriesFiles(e)) e.preventDefault();
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+    };
+    // Capture: the composer stops its own dragovers, which would otherwise never re-arm.
+    const overCapture = (e: DragEvent) => {
+      if (carriesFiles(e)) {
+        setActive(true);
+        arm();
+      }
     };
     window.addEventListener("dragenter", enter, true);
     window.addEventListener("dragleave", leave, true);
@@ -53,7 +72,10 @@ export function IngestDragOverlay() {
     window.addEventListener("drop", dropCapture, true);
     window.addEventListener("drop", dropBubble);
     window.addEventListener("dragover", over);
+    window.addEventListener("dragover", overCapture, true);
     return () => {
+      if (idle.current !== null) clearTimeout(idle.current);
+      window.removeEventListener("dragover", overCapture, true);
       window.removeEventListener("dragenter", enter, true);
       window.removeEventListener("dragleave", leave, true);
       window.removeEventListener("dragend", hide, true);

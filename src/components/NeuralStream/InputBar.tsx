@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "react-oidc-context";
 import { motion } from "framer-motion";
@@ -10,7 +10,7 @@ import { PersonaPicker } from "@/components/PersonaPicker";
 import { KindPicker } from "@/components/ingest/KindPicker";
 import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
 import { MyDrops } from "@/components/ingest/MyDrops";
-import { carriesFiles } from "@/lib/fileDropGuard";
+import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
@@ -42,19 +42,46 @@ export function InputBar() {
     e.preventDefault();
     e.stopPropagation();
   };
+  // "Stuck big" must be impossible: every Files enter/over (re)arms a watchdog that clears the
+  // grown state once dragovers stop, so no missing dragleave can strand it.
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearActive = useCallback(() => {
+    if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+    idleTimer.current = null;
+    setDragActive(false);
+  }, []);
+  useEffect(() => {
+    // Capture on window: the composer stops propagation of its own drag events (P0 2026-10-08),
+    // and a drop elsewhere, a cancelled drag, or the pointer leaving the window never reaches it.
+    const onLeaveWindow = (e: globalThis.DragEvent) => {
+      if (!e.relatedTarget) clearActive();
+    };
+    window.addEventListener("drop", clearActive, true);
+    window.addEventListener("dragend", clearActive, true);
+    window.addEventListener("dragleave", onLeaveWindow, true);
+    return () => {
+      window.removeEventListener("drop", clearActive, true);
+      window.removeEventListener("dragend", clearActive, true);
+      window.removeEventListener("dragleave", onLeaveWindow, true);
+      if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+    };
+  }, [clearActive]);
   const onDragEnterOver = (e: DragEvent) => {
     holdDrag(e);
-    if (ingestEnabled && carriesFiles(e.nativeEvent)) setDragActive(true);
+    if (!ingestEnabled || !carriesFiles(e.nativeEvent)) return;
+    setDragActive(true);
+    if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(clearActive, DRAG_IDLE_MS);
   };
   const onDragLeave = (e: DragEvent) => {
     holdDrag(e);
     // Moving between the composer's own children is not a leave.
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-    setDragActive(false);
+    clearActive();
   };
   const onDrop = (e: DragEvent) => {
     holdDrag(e);
-    setDragActive(false);
+    clearActive();
     if (!ingestEnabled) return;
     const f = e.dataTransfer.files?.[0];
     if (f) useIngestComposerStore.getState().attach(f);
