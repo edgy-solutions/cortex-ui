@@ -246,8 +246,7 @@ export function CanvasExportButton() {
                 data-export-top-status={exportRow.status}
                 className="text-[9px] font-mono uppercase tracking-wider text-slate-400"
               >
-                {exportRow.status}
-                {exportRow.reason ? ` — ${exportRow.reason}` : ""}
+                {summaryText(exportRow.status, exportRow.reason)}
               </div>
               {documents.map((doc, i) => (
                 <ExportDocumentRow
@@ -263,8 +262,7 @@ export function CanvasExportButton() {
           {exportRow && !documents && (
             <div className="mt-1 flex flex-col gap-1">
               <div data-export-status className="text-[9px] font-mono uppercase tracking-wider text-slate-400">
-                {exportRow.status}
-                {exportRow.status === "failed" && exportRow.reason ? ` — ${exportRow.reason}` : ""}
+                {statusText(exportRow.status, exportRow.reason)}
               </div>
               {exportRow.status === "failed" && exportRow.outcome && (
                 <div data-export-outcome className="text-[8px] font-mono text-slate-500">
@@ -311,6 +309,21 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
+// RULING (product owner): "finance-only shows the reason, never 'failed'." The ATTRIBUTES keep
+// saying failed (data-export-status, data-export-top-status); the person reads WHY. A failed
+// status with no reason (the reader allows it, the gateway never sends it) reads as the fallback.
+const NO_REASON_TEXT = "not exported — no reason given";
+
+function statusText(status: string, reason?: string | null): string {
+  return status === "failed" ? reason || NO_REASON_TEXT : status;
+}
+
+// The summary line: failed is the reason alone; every other status keeps "status — reason".
+function summaryText(status: string, reason?: string | null): string {
+  if (status === "failed") return statusText(status, reason);
+  return reason ? `${status} — ${reason}` : status;
+}
+
 // The status lives in the `data-export-status` attribute AND drives the colour from the same
 // value, so a test reading the attribute sees exactly what the colour claims.
 const DOC_STATUS_CLASS: Record<string, string> = {
@@ -344,13 +357,13 @@ function ExportDocumentRow({
     >
       <div className="text-[9px] font-mono uppercase tracking-wider text-slate-300">
         {doc.engine}{" "}
-        <span className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}>{doc.status}</span>
+        <span
+          {...(doc.status === "failed" ? { "data-export-reason": "" } : {})}
+          className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}
+        >
+          {statusText(doc.status, doc.reason)}
+        </span>
       </div>
-      {doc.status === "failed" && doc.reason && (
-        <div data-export-reason className="text-[8px] font-mono text-slate-400">
-          {doc.reason}
-        </div>
-      )}
       {doc.status === "failed" && doc.outcome && (
         <div data-export-outcome className="text-[8px] font-mono text-slate-500">
           {doc.outcome}
