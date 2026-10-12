@@ -6,7 +6,7 @@
  * browser context. Credentials come ONLY from creds() and are never written to a result file.
  * Exit 0 only if every selected walk's every step passed.
  */
-import { test } from "@playwright/test";
+import { test, type Browser } from "@playwright/test";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Walk, DEFAULT_KC, defaultQuestion, runWalk, type WalkConfig } from "./pcnWalk";
@@ -46,15 +46,21 @@ function makeCfg(tag: string): WalkConfig {
   };
 }
 
-async function servedVersion(playwright: { request: { newContext: () => Promise<import("@playwright/test").APIRequestContext> } }) {
+/**
+ * What the sandbox serves, read through a BROWSER context so the SPKI pin applies. An
+ * APIRequestContext is Node and never receives the pin's launch flag (see readVersionJson in
+ * answerWalk.ts), so it failed the handshake live. A fresh context has no cache to answer from.
+ */
+async function servedVersion(browser: Browser) {
+  const ctx = await browser.newContext({ baseURL });
   try {
-    const api = await playwright.request.newContext();
-    const r = await api.get(`${baseURL}/version.json`, { headers: { "cache-control": "no-store" } });
-    const body = r.ok() ? ((await r.json()) as { git_sha?: string }) : null;
-    await api.dispose();
+    const r = await (await ctx.newPage()).goto(`${baseURL}/version.json`);
+    const body = r && r.ok() ? ((await r.json()) as { git_sha?: string }) : null;
     return { sha: body?.git_sha ?? null, body };
   } catch {
     return { sha: null, body: null };
+  } finally {
+    await ctx.close();
   }
 }
 
@@ -87,11 +93,11 @@ test.afterAll(() => {
   writeFileSync(path.join(outRoot, `walk-summary-${iso}.json`), JSON.stringify({ baseURL, startedAt: iso, ok: outcomes.every(walkPassed), outcomes }, null, 2));
 });
 
-test("PCN walk: drop -> promote -> ask (live)", async ({ browser, playwright }) => {
+test("PCN walk: drop -> promote -> ask (live)", async ({ browser }) => {
   test.skip(!selected.includes("pcn"), "WALK_ONLY excludes pcn");
   const cfg = makeCfg("pcn");
   const walk = new Walk(cfg);
-  const v = await servedVersion(playwright);
+  const v = await servedVersion(browser);
   await record("pcn", walk, { servedGitSha: v.sha, servedVersion: v.body, notice: cfg.notice, expectParts: cfg.expectParts }, async () => {
     const a = creds("alice");
     const b = creds("bob");
@@ -126,10 +132,10 @@ for (const [name, title, run] of [
   });
 }
 
-test("stale walk: a fresh load shows no stale-bundle pill (live)", async ({ browser, playwright }) => {
+test("stale walk: a fresh load shows no stale-bundle pill (live)", async ({ browser }) => {
   test.skip(!selected.includes("stale"), "WALK_ONLY excludes stale");
   const walk = new Walk(makeCfg("stale"));
-  const v = await servedVersion(playwright);
+  const v = await servedVersion(browser);
   await record("stale", walk, { servedGitSha: v.sha }, async () => {
     const cb = await browser.newContext({ baseURL });
     try {

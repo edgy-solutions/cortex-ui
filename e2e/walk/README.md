@@ -50,6 +50,14 @@ mock's `ranking-not-fracas` arm proves it does not. The tile's echo of the quest
 that text check, because the prompt itself says "failures". The abstain text match is the other text
 fallback. A card of another archetype fails the FRACAS step as "not a FRACAS card".
 
+**Whose outcome.** Only markers drawn for THIS ask's artifact count. The client mints the artifact id and
+sends it as `artifact_id` on `POST …/interview/stream`; the walk reads it off that request
+(`askIdOf`), and `snapshot()` attributes every marker to the `[data-answer-id]` tile or the
+`[data-canvas-artifact-id]` pane it sits in. A marker in neither (a pinned card) is nobody's. The walk
+used to compare marker COUNTS before and after the ask, and a historical answer's `[data-attempt-failed]`
+entering the DOM after the ask failed a good run (Lane 1's walk defect §5.1). "Tiles absent from the
+before-snapshot" would not have fixed it: a historical tile mounted later is absent from it too.
+
 **The walk cannot check the PART.** Both archetypes draw `scope_label` only on their empty path, so a
 populated FRACAS card never says which part it covers. A FRACAS card for the wrong part passes this
 step. Read the card yourself on the live run. The mock refusal outcome token is a stand-in; the walk asserts only
@@ -121,6 +129,12 @@ Live control (not automated: no self-signed-cert library is a dev dependency): r
 expect `ERR_CERT_AUTHORITY_INVALID` at the first `goto`; the right pin gets past TLS. The pure arg-builder
 `spkiPinArg()` is proven offline in `walkLogin.mock.spec.ts`.
 
+**The pin is a LAUNCH flag, so only the browser carries it.** A Playwright `APIRequestContext` is Node: it
+never receives the flag and fails the handshake (Lane 1's walk defect §5.2). Every `/version.json` read
+therefore goes through a page (`readVersionJson`, and `servedVersion` in the live spec), and a source
+seal in `answerWalk.mock.spec.ts` refuses `APIRequestContext`, `.request.get(` and `ignoreHTTPSErrors`
+in the walk's files.
+
 ## Run
 
 ```
@@ -166,7 +180,12 @@ npx playwright test e2e/walk e2e/staleBundle.spec.ts
 - `answerWalk.mock.spec.ts`: per answer walk, a card (pass), a named refusal (pass), an abstain (the step FAILS)
   and a not-grounded answer (the step FAILS); for the failing arms the test passes by asserting the walk's
   computed result is `fail`. Also a missing-credential arm (FAILS naming `WALK_BOB_USER`).
-  Mutants proven red: `detectAbstain` always false; `creds()` returning instead of throwing.
+  Pure arms for ownership: a historical tile's failed attempt is not this ask's; each marker arm
+  ignores another artifact's and an unowned marker, and decides on the ask's own; `askIdOf` names a
+  missing id. `readVersionJson` reads through the page's routes.
+  Mutants proven red: `detectAbstain` always false; `creds()` returning instead of throwing; the
+  failed-attempt arm counting any owner; the card taken from any tile; the disclosure arm counting any
+  owner; the ask id ignored (the haz-card arm fails); a Node request context in `readVersionJson`.
 - `walkLogin.mock.spec.ts` (no app needed; fake Keycloak): `login()` SUBMITS the form when the app first answers
   with Keycloak (cross-origin and same-origin), says "already authenticated" / "logged in (SSO session)" only when
   true, and fails fast when Keycloak re-shows the form; `snapshot()` on a non-app page is the named
