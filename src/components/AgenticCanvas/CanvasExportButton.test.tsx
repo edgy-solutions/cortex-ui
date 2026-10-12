@@ -134,6 +134,24 @@ describe("flag on", () => {
       "engine returned no verifiable artifact hash",
     );
     expect(document.querySelector("[data-export-artifact]")).toBeNull();
+    // ruling: the reason REPLACES the status word; the attribute stays honest
+    expect(document.querySelector("[data-export-status]")?.textContent).not.toMatch(/failed/i);
+    expect(document.querySelector("[data-export-status]")?.textContent).toBe(
+      "engine returned no verifiable artifact hash",
+    );
+  });
+
+  it("failed with NO reason (no-documents path) shows the fallback, never the word failed", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockResolvedValue({ export_id: null, status: "failed", recipient_scope: "legal" });
+    render(<CanvasExportButton />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
+    expect(document.querySelector("[data-export-status]")?.textContent).toBe(
+      "not exported — no reason given",
+    );
+    expect(document.querySelector("[data-export-status]")?.textContent).not.toMatch(/failed/i);
   });
 
   it("no polling call is ever made (synchronous route, single POST)", async () => {
@@ -320,7 +338,7 @@ describe("roll-11 capture — drives the button through the captured bodies", ()
     fireEvent.click(screen.getByText("Start export"));
 
     await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
-    expect(document.querySelector("[data-export-status]")?.textContent).toContain("failed");
+    expect(document.querySelector("[data-export-status]")?.textContent).not.toMatch(/failed/i);
     expect(document.querySelector("[data-export-status]")?.textContent).toContain("agent_fleet");
     expect(document.querySelector("[data-export-outcome]")?.textContent).toBe("unavailable");
     expect(document.querySelector("[data-export-artifact]")).toBeNull();
@@ -382,9 +400,37 @@ describe("mixed board — documents[] (rev 187)", () => {
     const fin = document.querySelector('[data-export-engine="fin"]')!;
     expect(fin.getAttribute("data-export-status")).toBe("failed");
     expect(fin.querySelector("[data-export-reason]")?.textContent).toBe("not a ratified template");
+    expect(fin.textContent).not.toMatch(/failed/i);
     expect(fin.querySelector("[data-export-outcome]")?.textContent).toBe("not_in_model");
     expect(fin.querySelector("[data-export-artifact]")).toBeNull();
     expect(document.querySelectorAll("[data-export-artifact]").length).toBe(1);
+  });
+
+  it("finance-only: the reason is drawn, the word failed never is; attributes stay failed", async () => {
+    // Shape origin: invincible-agent gateway.py export_package (~2185-2210) with
+    // _fin_ad_hoc_refusal_section (1884): HTTP 200, top status failed, export_id null, the fin
+    // section always carrying outcome not_in_model + reason. Built from the rev187 fin row.
+    const mixed = loadMixed();
+    const fin = mixed.documents.find((d) => d.engine === "fin")!;
+    const body = {
+      ...mixed,
+      export_id: null,
+      status: "failed",
+      reason: "1 of 1 engines refused",
+      template_id: null,
+      documents: [fin],
+    };
+    await runWith(body);
+
+    const summary = document.querySelector("[data-export-summary]")!;
+    expect(summary.textContent).toBe("1 of 1 engines refused");
+    expect(summary.getAttribute("data-export-top-status")).toBe("failed");
+    const row = document.querySelector('[data-export-engine="fin"]')!;
+    expect(row.getAttribute("data-export-status")).toBe("failed");
+    expect(row.textContent).toContain("not a ratified template");
+    expect(row.querySelector("[data-export-outcome]")?.textContent).toBe("not_in_model");
+    expect(summary.parentElement!.textContent).not.toMatch(/failed/i);
+    expect(document.querySelector("[data-export-artifact]")).toBeNull();
   });
 
   it("the link comes from the DOCUMENT, never the top-level fields", async () => {
