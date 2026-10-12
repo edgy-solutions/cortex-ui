@@ -1,5 +1,5 @@
 /**
- * virtualWindow - hand-rolled windowing for a list of FIXED-HEIGHT items.
+ * virtualWindow - hand-rolled windowing for a list of items whose heights are measured (estimated until mounted).
  *
  * `layoutOffsets` turns per-item heights into cumulative offsets (O(N), once per list change).
  * `visibleRange` finds, by binary search, the half-open index range [start, end) of the items
@@ -51,4 +51,28 @@ export function visibleRange(
     else lo = mid + 1;
   }
   return [start, lo];
+}
+
+/** A measured height wins over the estimate; the estimate is only for never-mounted items. */
+export function mergedHeight(key: string, measured: ReadonlyMap<string, number>, estimate: number): number {
+  return measured.get(key) ?? estimate;
+}
+
+/** An item whose height changed from oldH to newH, with the list-relative top it had. */
+export interface AnchorChange {
+  top: number;
+  oldH: number;
+  newH: number;
+}
+
+/**
+ * Scroll compensation for measured-height windowing. scrollTop is in the list's coordinates.
+ * An item that lies WHOLLY above the viewport top (top + oldH <= scrollTop) pushes everything
+ * below it by (newH - oldH), so the scroll container must move by the same amount to keep what
+ * the reader is looking at still. Items at or below the viewport top move nothing the reader sees.
+ */
+export function anchorDelta(changes: readonly AnchorChange[], scrollTop: number): number {
+  let d = 0;
+  for (const c of changes) if (c.top + c.oldH <= scrollTop) d += c.newH - c.oldH;
+  return d;
 }

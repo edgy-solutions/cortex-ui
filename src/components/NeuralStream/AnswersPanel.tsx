@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useMemo, useLayoutEffect, useRef, useState, useEffect, useCallback } from "react";
 import { Search, GripVertical, Clock, Hash, Shapes, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { foldedAskIds } from "@/lib/askFold";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useStageStore } from "@/store/useStageStore";
 import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/stageEdges";
-import { layoutOffsets, visibleRange } from "@/lib/virtualWindow";
+import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
@@ -369,12 +369,14 @@ function zoomToGroup(id: string) {
   st.setGroup(id);
 }
 
-/** FIXED HEIGHTS, one per item kind, because the list is windowed: an item is positioned by
- *  arithmetic, not measured. Rows clip (overflow hidden) rather than grow. */
+/** ESTIMATED heights, one per item kind: used ONLY for an item that has never been mounted.
+ *  A mounted item is measured (ResizeObserver) and the measurement replaces the estimate, so a
+ *  wrapping title grows its slot and a short one leaves no gap. Estimates are the natural
+ *  heights of a one-line-title row, so the scrollbar is close before anything is measured. */
 const DAY_H = 28;
-const TIME_ROW_H = 76;
-const CLUSTER_H = 36;
-const CLUSTER_ROW_H = 68;
+const TIME_ROW_H = 44;
+const CLUSTER_H = 28;
+const CLUSTER_ROW_H = 44;
 const OVERSCAN_PX = 400;
 
 type FlatItem =
@@ -383,7 +385,7 @@ type FlatItem =
   | { kind: "cluster"; key: string; label: string; count: number; color: string; archetype?: AnswerArchetype; groupId: string | null }
   | { kind: "cluster-row"; key: string; a: Artifact };
 
-const heightOf = (it: FlatItem): number =>
+const estimateOf = (it: FlatItem): number =>
   it.kind === "day" ? DAY_H : it.kind === "time-row" ? TIME_ROW_H : it.kind === "cluster" ? CLUSTER_H : CLUSTER_ROW_H;
 
 /** What the scroll container reports: scrollTop and the visible height. */
@@ -413,13 +415,99 @@ function renderFlat(it: FlatItem, ctx: RowCtx): React.ReactNode {
   }
 }
 
-/** Renders only the window of `flat` that meets the scroll view, plus overscan. */
+/** One windowed item: positioned absolute, NOT clipped, and measured. */
+function MeasuredItem({
+  k,
+  top,
+  ro,
+  report,
+  children,
+}: {
+  k: string;
+  top: number;
+  ro: ResizeObserver | null;
+  report: (key: string, h: number) => void;
+  children: React.ReactNode;
+}) {
+  const elRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = elRef.current;
+    if (!el) return;
+    report(k, el.offsetHeight);
+    if (!ro) return;
+    ro.observe(el);
+    return () => ro.unobserve(el);
+  }, [k, ro, report]);
+  return (
+    <div ref={elRef} data-virtual-item data-vkey={k} className="absolute left-0 right-0" style={{ top }}>
+      {children}
+    </div>
+  );
+}
+
+/** Renders only the window of `flat` that meets the scroll view, plus overscan. Heights are
+ *  measured for mounted items and estimated for the rest; when an item wholly above the viewport
+ *  changes size, the scroll container is nudged by the delta so the content does not jump. */
 function VirtualRows({ flat, ctx, view }: { flat: FlatItem[]; ctx: RowCtx; view: ScrollView }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const { offsets, heights, total } = useMemo(() => {
-    const heights = flat.map(heightOf);
-    return { heights, ...layoutOffsets(heights) };
-  }, [flat]);
+  const measured = useRef(new Map<string, number>());
+  const [version, setVersion] = useState(0);
+  const { offsets, heights, total, index } = useMemo(() => {
+    const heights = flat.map((it) => mergedHeight(it.key, measured.current, estimateOf(it)));
+    const index = new Map<string, number>();
+    flat.forEach((it, i) => index.set(it.key, i));
+    return { heights, index, ...layoutOffsets(heights) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat, version]);
+  const latest = useRef({ offsets, heights, index });
+  latest.current = { offsets, heights, index };
+  const pending = useRef<{ changed: boolean; changes: AnchorChange[] }>({ changed: false, changes: [] });
+  const scrollEl = () => rootRef.current?.closest<HTMLElement>("[data-answers-scroll]") ?? null;
+
+  const report = useCallback((key: string, h: number) => {
+    if (h <= 0) return; // not laid out (hidden / jsdom): keep the estimate
+    const m = measured.current;
+    const i = latest.current.index.get(key);
+    const assumed = m.get(key) ?? (i === undefined ? undefined : latest.current.heights[i]);
+    if (assumed === h && m.has(key)) return;
+    m.set(key, h);
+    if (i !== undefined && assumed !== undefined && assumed !== h) {
+      pending.current.changes.push({ top: latest.current.offsets[i]!, oldH: assumed, newH: h });
+    }
+    if (!pending.current.changed) {
+      pending.current.changed = true;
+      // one bump per burst of reports (a RO callback, or a commit's layout effects)
+      queueMicrotask(() => {
+        pending.current.changed = false;
+        setVersion((v) => v + 1);
+      });
+    }
+  }, []);
+
+  // Apply the scroll compensation in the same commit that applies the new heights.
+  useLayoutEffect(() => {
+    const changes = pending.current.changes;
+    if (changes.length === 0) return;
+    pending.current.changes = [];
+    const el = scrollEl();
+    if (!el) return;
+    const delta = anchorDelta(changes, el.scrollTop - (rootRef.current?.offsetTop ?? 0));
+    if (delta !== 0) el.scrollTop += delta;
+  }, [version]);
+
+  const [ro, setRo] = useState<ResizeObserver | null>(null);
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const o = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const k = (e.target as HTMLElement).dataset.vkey;
+        if (k) report(k, (e.target as HTMLElement).offsetHeight);
+      }
+    });
+    setRo(o);
+    return () => o.disconnect();
+  }, [report]);
+
   // The list sits below the live strip and friends inside the same scroll container, so the
   // scroll position is translated into the list's own coordinates.
   const listTop = rootRef.current?.offsetTop ?? 0;
@@ -427,14 +515,9 @@ function VirtualRows({ flat, ctx, view }: { flat: FlatItem[]; ctx: RowCtx; view:
   return (
     <div ref={rootRef} data-virtual-list className="relative" style={{ height: total }}>
       {flat.slice(start, end).map((it, k) => (
-        <div
-          key={it.key}
-          data-virtual-item
-          className="absolute left-0 right-0 overflow-hidden"
-          style={{ top: offsets[start + k], height: heights[start + k] }}
-        >
+        <MeasuredItem key={it.key} k={it.key} top={offsets[start + k]!} ro={ro} report={report}>
           {renderFlat(it, ctx)}
-        </div>
+        </MeasuredItem>
       ))}
     </div>
   );
