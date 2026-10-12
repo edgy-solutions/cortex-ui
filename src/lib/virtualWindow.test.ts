@@ -29,3 +29,21 @@ describe("virtualWindow", () => {
     expect(visibleRange([], [], 0, 800, 400)).toEqual([0, 0]);
   });
 });
+
+import { anchorDelta, mergedHeight } from "./virtualWindow";
+describe("measured heights", () => {
+  it("offsets use the measured height when present, the estimate otherwise", () => {
+    const measured = new Map([["b", 90]]);
+    const heights = ["a", "b", "c"].map((k) => mergedHeight(k, measured, 50));
+    expect(heights).toEqual([50, 90, 50]);
+    expect(layoutOffsets(heights).offsets).toEqual([0, 50, 140]);
+  });
+  it("a change wholly above the view yields the scroll delta; others do not", () => {
+    const above = { top: 0, oldH: 50, newH: 80 };
+    const straddling = { top: 90, oldH: 50, newH: 80 };
+    const below = { top: 300, oldH: 50, newH: 80 };
+    expect(anchorDelta([above, straddling, below], 100)).toBe(30);
+    expect(anchorDelta([{ top: 0, oldH: 80, newH: 50 }], 100)).toBe(-30);
+    expect(anchorDelta([straddling, below], 100)).toBe(0);
+  });
+});
