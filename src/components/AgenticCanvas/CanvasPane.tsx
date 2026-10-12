@@ -229,7 +229,7 @@ export const CanvasPane = () => {
         ? { label: "This attempt failed.", tone: "text-rose-400/80" }
         : { label: "No components produced.", tone: "text-amber-400/80" };
     return (
-      <div className="h-full w-full flex flex-col bg-slate-950/50 border-l border-white/10">
+      <div className="h-full w-full flex flex-col bg-slate-950/50 border-l border-white/10" data-canvas-artifact-id={artifact.id}>
         {artifactHeader}
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           {/* NAMES THE REASON, which this surface never did — it said the attempt failed and
@@ -248,8 +248,12 @@ export const CanvasPane = () => {
     );
   }
 
+  // WHOSE markers these are. The pane draws one artifact's AttemptFailed and AnswerBody outside
+  // any `[data-answer-id]` tile, so a reader attributing a marker to its answer (the walk does,
+  // e2e/walk/answerWalk.ts) needs the id on the pane too; without it a historical artifact opened
+  // here reads as the newest answer's outcome.
   return (
-    <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col">
+    <div className="h-full w-full bg-slate-900 border-l border-white/10 flex flex-col" data-canvas-artifact-id={artifact.id}>
       {artifactHeader}
       {/* Tab Navigation — Answer + Decision Map are PEER views of the
           artifact; persona chips sub-filter the Answer. Shows whenever
