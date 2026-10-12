@@ -44,7 +44,7 @@ beforeEach(() => {
 describe("uploadIngest — the body that reaches the adapter", () => {
   it("is still a FormData, carrying the File itself (not its JSON `{}`)", async () => {
     const file = new File(["%PDF-1.4\n"], "PCN26-117.pdf", { type: "application/pdf" });
-    await uploadIngest(file, "pdf", "alice@example.com");
+    await uploadIngest(file, "pdf", "alice@example.com", "pdf");
 
     expect(seen).toHaveLength(1);
     const body = seen[0].data;
@@ -55,10 +55,11 @@ describe("uploadIngest — the body that reaches the adapter", () => {
     expect((sent as File).name).toBe("PCN26-117.pdf");
     expect((body as FormData).get("kind")).toBe("pdf");
     expect((body as FormData).get("on_behalf_of")).toBe("alice@example.com");
+    expect((body as FormData).get("content_kind")).toBe("pdf");
   });
 
   it("does not leave the instance's application/json on the request", async () => {
-    await uploadIngest(new File(["x"], "a.xml", { type: "application/xml" }), "xml", "alice@example.com");
+    await uploadIngest(new File(["x"], "a.xml", { type: "application/xml" }), "xml", "alice@example.com", "xml");
     const ct = String(seen[0].headers.get("Content-Type") ?? "");
     expect(ct).not.toMatch(/application\/json/);
   });
