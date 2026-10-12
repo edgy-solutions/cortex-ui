@@ -10,6 +10,7 @@ import type { Artifact } from "@/api/types";
 const registerFrontendCapabilities = vi.fn();
 vi.mock("@/lib/bundleFreshness", () => ({
   checkBundleFreshness: vi.fn().mockResolvedValue({ kind: "current", sha: "x" }),
+  watchBundleFreshness: () => () => {}, // the focus/interval watcher is not under test here
 }));
 vi.mock("react-oidc-context", () => ({ useAuth: () => ({ isAuthenticated: true, user: null }) }));
 vi.mock("@/api/client", () => ({

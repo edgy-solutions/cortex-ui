@@ -50,3 +50,47 @@ export async function checkBundleFreshness(
     return { kind: "undecidable", reason: err instanceof Error ? err.message : String(err) };
   }
 }
+
+/** Re-check cadence for a tab that stays open. Ruled: window focus and every 5 minutes. */
+export const BUNDLE_RECHECK_MS = 5 * 60_000;
+
+/**
+ * KEEP ASKING WHILE THE TAB LIVES. The only check above rides a registration attempt, and a tab
+ * open across a roll makes none, so it never learns it is stale. This re-asks on window focus and
+ * on a timer and reports through `onStale` — PILL ONLY, nothing reloads by itself.
+ *
+ * No new fetch site: it calls `checkBundleFreshness`. SINGLE-FLIGHT: a trigger that arrives while
+ * a check is in flight is dropped. Does not check on start; the opening registration already did.
+ * Current and undecidable stay silent (no log per tick). Returns a disposer for both triggers.
+ */
+export function watchBundleFreshness(opts: {
+  mine: string | null;
+  onStale: (mine: string, served: string) => void;
+  intervalMs?: number;
+  check?: (mine: string | null) => Promise<Freshness>;
+  target?: Pick<Window, "addEventListener" | "removeEventListener">;
+}): () => void {
+  const { mine, onStale } = opts;
+  const check = opts.check ?? ((m: string | null) => checkBundleFreshness(m));
+  const target = opts.target ?? window;
+  let inFlight = false;
+  const run = async () => {
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      const fresh = await check(mine);
+      if (fresh.kind === "stale") onStale(fresh.mine, fresh.served);
+    } catch {
+      // checkBundleFreshness never throws; an injected check that does is undecidable too.
+    } finally {
+      inFlight = false;
+    }
+  };
+  const onFocus = () => void run();
+  target.addEventListener("focus", onFocus);
+  const timer = setInterval(() => void run(), opts.intervalMs ?? BUNDLE_RECHECK_MS);
+  return () => {
+    target.removeEventListener("focus", onFocus);
+    clearInterval(timer);
+  };
+}

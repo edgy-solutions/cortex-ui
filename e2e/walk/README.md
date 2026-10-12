@@ -59,21 +59,25 @@ that the outcome is non-empty.
 
 `StaleBundleBanner` (`[data-stale-bundle]`, `data-stale-mine`, `data-stale-served`) appears when the
 tab's bundle sha differs from `/version.json`'s `git_sha`. The check runs once per registration attempt
-(`src/App.tsx`), not on a timer.
+and ALSO on window focus and every 5 minutes (`watchBundleFreshness`, `src/lib/bundleFreshness.ts`, started
+from `src/App.tsx`). Pill only: the Reload button is the user's; nothing reloads by itself.
 
 - **Live `stale` step (no false positive):** on a fresh load as bob the pill is absent and `/version.json`'s
   `git_sha` starts with the sha in the header build stamp (`[data-build-stamp-ui]`). An unstamped bundle
   fails the step (freshness is undecidable, so the check would prove nothing).
-- **Flip (the pill appears), by hand on the next roll:** open the UI as bob and leave that tab alone; roll
-  the new image; then make the old tab attempt a registration. There is NO cheap trigger short of a
-  reload, and a reload loads the new bundle, which shows no pill. The opening registration runs once per
-  page load; the re-assert (`post("re-assert")`) runs only when an opened artifact shows the capability
-  menu was wiped. So the pill is observable only if the roll wiped the menu while the old tab was open
-  and the old tab then re-asserts (it logs `[ADR-0017] registration REFUSED` and shows the pill). If the
-  roll does not wipe the menu, nothing in the old tab ever checks. Undetermined: a user action that forces
-  a registration without a reload. There is no poll or timer, by design.
+- **Flip (the pill appears), by hand on the next roll:** open the UI as bob and leave that tab open; roll
+  the new image; then focus the old tab (or wait up to 5 minutes). The pill appears with "reload to update"
+  (`data-stale-refused="false"`: the watcher saw it, no registration was refused). If a registration
+  attempt was also refused the text reads "this tab's menu is not registered" (`data-stale-refused="true"`,
+  sticky). Once shown it stays until reload; a rollback to the tab's own sha is not handled.
 - **Offline proof:** `e2e/staleBundle.spec.ts` routes `/version.json` to a differing sha (pill visible,
-  `data-stale-served` equals it), the same sha (no pill) and a body with no sha (undecidable, no pill).
+  `data-stale-served` equals it), the same sha (no pill) and a body with no sha (undecidable, no pill); a FLIP
+  arm loads on the same sha, re-routes to a different one, dispatches `focus` and asserts the pill
+  (`data-stale-refused="false"`) with the page NOT reloaded; a second arm does the same via `page.clock` and
+  5 minutes. Mutants proven red: focus listener not added (unit: checks once on focus); interval 50x longer
+  (unit: checks every BUNDLE_RECHECK_MS); single-flight guard removed (unit); disposer not removing the
+  listener (unit); watcher passing `refused=true` (both FLIP arms: `data-stale-refused` "true"); watcher
+  `onStale` never called (both FLIP arms: pill not found).
   The dev bundle's sha is pinned by `GIT_SHA` in `playwright.config.ts`'s `webServer.env` only (value in
   `e2e/bundleSha.ts`); `vite.config.ts` reads `GIT_SHA` before `git rev-parse`.
 

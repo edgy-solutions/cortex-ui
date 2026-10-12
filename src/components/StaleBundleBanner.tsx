@@ -1,8 +1,8 @@
 import { useRegistrationStore } from "@/store/useRegistrationStore";
 
 /**
- * Shown when this tab's bundle is older than the one served and registration was refused
- * (see `bundleFreshness.ts`). Renders nothing otherwise.
+ * Shown when this tab's bundle is older than the one served (see `bundleFreshness.ts`): says the
+ * menu is not registered if registration was refused, else offers a reload. Renders nothing otherwise.
  */
 export function StaleBundleBanner() {
   const stale = useRegistrationStore((s) => s.stale);
@@ -13,11 +13,12 @@ export function StaleBundleBanner() {
       data-stale-bundle
       data-stale-mine={stale.mine}
       data-stale-served={stale.served}
+      data-stale-refused={stale.refused ? "true" : "false"}
       className="flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-500/15 px-3 py-1 text-xs text-amber-300"
     >
       <span>
-        Newer Cortex deployed (served {stale.served.slice(0, 7)}, this tab {stale.mine.slice(0, 7)}) —
-        this tab&apos;s menu is not registered
+        Newer Cortex deployed (served {stale.served.slice(0, 7)}, this tab {stale.mine.slice(0, 7)})
+        {stale.refused ? " — this tab's menu is not registered" : " — reload to update"}
       </span>
       <button
         type="button"
