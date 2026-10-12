@@ -32,7 +32,7 @@ interface RuntimeConfig {
   VITE_MOCK_GROUNDING: string;
   // "true" (exactly) sends frontend_version on /interview/stream. Default OFF — see src/lib/frontendVersion.ts.
   VITE_SEND_FRONTEND_VERSION: string;
-  // "true" (exactly) enables grouped-review row edits + Reject. Default OFF — see src/lib/reviewRowEdits.ts.
+  // Exactly "false" disables grouped-review row edits + Reject; anything else (incl. unset) enables. See src/lib/reviewRowEdits.ts.
   VITE_REVIEW_ROW_EDITS: string;
 }
 

@@ -338,6 +338,11 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
     // card renders it from the SERVED menu; a table row would feed what M3.3 deletes. It is the
     // steward's origin confirmation (`policy/workflows/origin_confirm.yaml`).
     "origin_confirmation",
+    // ADDED 2026-10-12 WITH THE PIN BUMP TO `49aa5e28`. Filed once per accepted grouped review
+    // that carried row edits (the extractor was wrong); archetype TRIAGE_TASK, which
+    // TriageTaskCard draws from the SERVED menu (verbs acknowledged / dismissed). Pinned for the
+    // same reason as the rest: a table row would feed what M3.3 deletes.
+    "extraction_defect",
   ];
 
   it("no declared species is unaccounted for on the cortex side", () => {

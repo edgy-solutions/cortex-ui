@@ -25,8 +25,8 @@ import {
   presentDisposition,
   type Disposition,
 } from "@/lib/dispositions";
-import { actOnHumanTask, type RowEdits } from "@/api/client";
-import { isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
+import { actOnHumanTask, type GroupedRejectCode, type RowEdits } from "@/api/client";
+import { buildRowEdits, isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
 import type { ReviewBatch, ReviewItem } from "./types";
 
 interface OverrideDraft {
@@ -61,6 +61,9 @@ interface ReviewDraft {
   deleted: Record<string, { reason: string }>;
   added: string[];
   corrected: Record<string, string>;
+  /** evidence for each added row (keyed by its mpn) and each correction (keyed by the EXTRACTED mpn) */
+  addedEvidence: Record<string, string>;
+  correctedEvidence: Record<string, string>;
 }
 const reviewDraftCache = new Map<string, ReviewDraft>();
 
@@ -104,20 +107,34 @@ export function GroupedReviewTable({
   const [corrected, setCorrected] = useState<Record<string, string>>(
     () => reviewDraftCache.get(batch.batch_id)?.corrected ?? {}
   );
+  const [addedEvidence, setAddedEvidence] = useState<Record<string, string>>(
+    () => reviewDraftCache.get(batch.batch_id)?.addedEvidence ?? {}
+  );
+  const [correctedEvidence, setCorrectedEvidence] = useState<Record<string, string>>(
+    () => reviewDraftCache.get(batch.batch_id)?.correctedEvidence ?? {}
+  );
   const [submitting, setSubmitting] = useState(false);
   const [resolved, setResolved] = useState(false);
   // transient UI (not drafted): the add input, the inline correct editor, the reject panel
   const [addOpen, setAddOpen] = useState(false);
   const [addValue, setAddValue] = useState("");
+  const [addEvidence, setAddEvidence] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ mpn: string; value: string; error: string | null } | null>(null);
+  const [editing, setEditing] = useState<{ mpn: string; value: string; evidence: string; error: string | null } | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectCode, setRejectCode] = useState<string | null>(null);
 
   // Persist every change to the cache so it outlives a remount.
   useEffect(() => {
-    reviewDraftCache.set(batch.batch_id, { overrides, deleted, added: addedMpns, corrected });
-  }, [batch.batch_id, overrides, deleted, addedMpns, corrected]);
+    reviewDraftCache.set(batch.batch_id, {
+      overrides,
+      deleted,
+      added: addedMpns,
+      corrected,
+      addedEvidence,
+      correctedEvidence,
+    });
+  }, [batch.batch_id, overrides, deleted, addedMpns, corrected, addedEvidence, correctedEvidence]);
 
   // The rows on the table: the server's items plus (flag on) the approver's added parts. Flag off,
   // the two draft collections are empty and this is exactly batch.items.
@@ -187,11 +204,26 @@ export function GroupedReviewTable({
     return { needsDisposition: nd, missingReason: mr, unhandledUnverified: uu };
   }, [rows, overrides, deleted, rowEdits]);
 
+  // Row edits the platform would 422: a required field that is blank after trim. The producer
+  // (RowEdits, every string non-blank) is the contract; this names each incomplete row so the
+  // approver sees WHICH one. A delete's reason is already counted in missingReason above.
+  const missingEvidence = useMemo(() => {
+    if (!rowEdits) return [] as string[];
+    const out: string[] = [];
+    for (const m of addedMpns) if ((addedEvidence[m] ?? "").trim() === "") out.push(m);
+    for (const [m, v] of Object.entries(corrected)) {
+      if (deleted[m]) continue;
+      if (v.trim() === "" || (correctedEvidence[m] ?? "").trim() === "") out.push(m);
+    }
+    return out;
+  }, [rowEdits, addedMpns, addedEvidence, corrected, correctedEvidence, deleted]);
+
   const canSubmit =
     !submitting &&
     !resolved &&
     needsDisposition.length === 0 &&
     missingReason.length === 0 &&
+    missingEvidence.length === 0 &&
     unhandledUnverified.length === 0;
 
   const needsReviewCount = useMemo(
@@ -217,6 +249,11 @@ export function GroupedReviewTable({
     if (rows.find((r) => r.mpn === mpn)?.added) {
       // an added row was never extracted: removing it just takes it back, no reason owed
       setAddedMpns((p) => p.filter((m) => m !== mpn));
+      setAddedEvidence((p) => {
+        const next = { ...p };
+        delete next[mpn];
+        return next;
+      });
       clearOverride(mpn);
       return;
     }
@@ -233,8 +270,11 @@ export function GroupedReviewTable({
     const mpn = addValue.trim();
     if (mpn === "") return setAddError("Enter a part number (MPN).");
     if (takenMpns().has(mpn.toLowerCase())) return setAddError(`${mpn} is already a row in this review.`);
+    if (addEvidence.trim() === "") return setAddError("Enter the evidence for this part.");
     setAddedMpns((p) => [...p, mpn]);
+    setAddedEvidence((p) => ({ ...p, [mpn]: addEvidence.trim() }));
     setAddValue("");
+    setAddEvidence("");
     setAddError(null);
     setAddOpen(false);
   };
@@ -242,13 +282,25 @@ export function GroupedReviewTable({
     if (!editing) return;
     const value = editing.value.trim();
     if (value === "") return setEditing({ ...editing, error: "Enter a part number (MPN)." });
+    if (value !== editing.mpn && value.toLowerCase() === editing.mpn.toLowerCase()) {
+      return setEditing({ ...editing, error: `${value} is the extracted part number (case-insensitive) — a correction must change it.` });
+    }
     if (takenMpns(editing.mpn).has(value.toLowerCase())) {
       return setEditing({ ...editing, error: `${value} collides with another row in this review.` });
     }
+    const unchanged = value === editing.mpn; // back to the extracted value = no correction
+    // A blank evidence is NOT refused here: the correction lands, Resolve stays disabled naming this
+    // row (missingEvidence), and the pencil reopens the editor prefilled. Same shape as a delete's reason.
     setCorrected((p) => {
       const next = { ...p };
-      if (value === editing.mpn) delete next[editing.mpn]; // back to the extracted value = no correction
+      if (unchanged) delete next[editing.mpn];
       else next[editing.mpn] = value;
+      return next;
+    });
+    setCorrectedEvidence((p) => {
+      const next = { ...p };
+      if (unchanged) delete next[editing.mpn];
+      else next[editing.mpn] = editing.evidence.trim();
       return next;
     });
     setEditing(null);
@@ -269,15 +321,7 @@ export function GroupedReviewTable({
       }
       let edits: RowEdits | undefined;
       if (rowEdits) {
-        edits = {
-          deleted: Object.entries(deleted).map(([mpn, d]) => ({ mpn, reason: d.reason.trim() })),
-          added: addedMpns.map((mpn) => ({
-            mpn,
-            disposition: overrides[mpn]!.disposition,
-            reason: overrides[mpn]!.reason.trim(),
-          })),
-          corrected: Object.entries(corrected).map(([mpn, corrected_mpn]) => ({ mpn, corrected_mpn })),
-        };
+        edits = buildRowEdits({ deleted, addedMpns, corrected, overrides, addedEvidence, correctedEvidence });
       }
       const res = await actOnHumanTask(batch.batch_id, "approved", "", overridesDict, edits);
       if (res.accepted === false) {
@@ -333,14 +377,22 @@ export function GroupedReviewTable({
     }
   };
 
-  // Narrow Reject (flag on only — the platform answers 501 grouped_reject_not_wired today). The
-  // reason rides the COMMENT, which the server keeps; there is deliberately no reason_code field.
+  // Narrow Reject (flag on only). `reason_code` is the enum value; a reject never carries row_edits.
   const reject = async () => {
     const reason = REJECT_REASONS.find((r) => r.code === rejectCode);
     if (!reason) return;
     setSubmitting(true);
     try {
-      const res = await actOnHumanTask(batch.batch_id, "rejected", `${reason.code}: ${reason.label}`);
+      // reason_code is its own field (the platform 422s a grouped reject without it); the comment
+      // keeps the human-readable line.
+      const res = await actOnHumanTask(
+        batch.batch_id,
+        "rejected",
+        `${reason.code}: ${reason.label}`,
+        undefined,
+        undefined,
+        reason.code as GroupedRejectCode
+      );
       if (res.accepted === false) {
         toast.error(res.reason ? `Refused — ${res.reason}` : "Rejection refused — still pending");
         return;
@@ -558,7 +610,7 @@ export function GroupedReviewTable({
                       {rowEdits && !it.added && (
                         <button
                           data-review-row-edit
-                          onClick={() => setEditing({ mpn: it.mpn, value: shownMpn(it.mpn), error: null })}
+                          onClick={() => setEditing({ mpn: it.mpn, value: shownMpn(it.mpn), evidence: correctedEvidence[it.mpn] ?? "", error: null })}
                           disabled={submitting || resolved}
                           title="Correct this part number"
                           className="text-slate-500 hover:text-neon-cyan transition-colors shrink-0 disabled:opacity-40"
@@ -614,6 +666,17 @@ export function GroupedReviewTable({
                             Cancel
                           </button>
                         </div>
+                        <input
+                          data-review-row-edit-evidence
+                          value={editing.evidence}
+                          onChange={(e) => setEditing({ ...editing, evidence: e.target.value, error: null })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitCorrection();
+                            if (e.key === "Escape") setEditing(null);
+                          }}
+                          placeholder="evidence for the correction"
+                          className="w-full bg-slate-900 border border-neon-cyan/40 rounded px-2 py-1 text-[11px] text-white placeholder:text-slate-600"
+                        />
                         {editing.error && (
                           <p data-review-row-edit-error className="text-[10px] text-red-400">{editing.error}</p>
                         )}
@@ -774,12 +837,27 @@ export function GroupedReviewTable({
                   onClick={() => {
                     setAddOpen(false);
                     setAddError(null);
+                    setAddEvidence("");
                   }}
                   className="px-2 py-1 rounded border border-white/15 text-slate-300 text-[10px] uppercase tracking-tighter hover:bg-white/5 cursor-pointer"
                 >
                   Cancel
                 </button>
               </div>
+              <input
+                data-review-row-add-evidence
+                value={addEvidence}
+                onChange={(e) => {
+                  setAddEvidence(e.target.value);
+                  setAddError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitAdd();
+                  if (e.key === "Escape") setAddOpen(false);
+                }}
+                placeholder="evidence (where in the notice)"
+                className="w-full bg-slate-900 border border-neon-green/40 rounded px-2 py-1 text-[11px] text-white placeholder:text-slate-600"
+              />
               {addError && <p data-review-row-add-error className="text-[10px] text-red-400">{addError}</p>}
             </div>
           ) : (
@@ -806,6 +884,10 @@ export function GroupedReviewTable({
             </span>
           ) : missingReason.length > 0 ? (
             <span className="text-red-400">{missingReason.length} override(s) need a reason</span>
+          ) : missingEvidence.length > 0 ? (
+            <span data-review-incomplete className="text-red-400">
+              Incomplete edit — evidence missing: {missingEvidence.join(", ")}
+            </span>
           ) : (
             <span>
               {exceptionCount} exception(s) · {activeCount - exceptionCount} accepted
@@ -833,7 +915,9 @@ export function GroupedReviewTable({
                 ? `Disposition the ${unhandledUnverified.length} unverified row(s) first`
                 : missingReason.length > 0
                   ? `Add a reason to ${missingReason.length} override(s) — capture-why is required`
-                  : needsDisposition.length > 0
+                  : missingEvidence.length > 0
+                    ? `Add evidence to: ${missingEvidence.join(", ")}`
+                    : needsDisposition.length > 0
                     ? `${needsDisposition.length} row(s) still need a disposition`
                     : "Nothing to resolve"
           }

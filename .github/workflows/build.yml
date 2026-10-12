@@ -123,7 +123,15 @@ env:
   #   EMPTY (control: 223 files changed). Check 3: uv.lock moves iagent-mesh 012a24fb -> 60e56c97
   #   (both 0.9.5); iagent_mesh/rows.py diff EMPTY (control: 19 files changed). Gate: full suite
   #   211 files green against a git-archive export of 5b2a16a2 placed as the sibling.
-  PRODUCER_REF: 5b2a16a2d2c5692e3751f8391b673d7f5e022a6f
+  # 2026-10-12 BUMP to 49aa5e28 (rev 190; read off the sandbox pods, all 22 iagent images uniform
+  #   on it). Why: the new row-edits seal (src/lib/rowEditsWireParity.test.ts) reads DeletedRow /
+  #   AddedRow / CorrectedRow / RowEdits, _GROUPED_REJECT_CODES and HumanTaskActRequest's
+  #   reason_code Literal, none of which exists at 5b2a16a2 (there reason_code is not declared on
+  #   the act request at all), so against the old pin it throws "class DeletedRow not found".
+  #   Check 2: task_kinds diff is ONE file, policy/task_kinds/extraction_defect.yaml (control: 123
+  #   files changed). Check 3: uv.lock iagent-mesh 60e56c97 at both (unchanged). Gate: the full
+  #   suite against a git-archive export of 49aa5e28 placed as the sibling.
+  PRODUCER_REF: 49aa5e28cd708be6596c28444d3539b725a79f5e
 
 permissions:
   contents: read
