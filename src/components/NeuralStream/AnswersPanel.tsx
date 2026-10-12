@@ -1,5 +1,5 @@
 import { useMemo, useLayoutEffect, useRef, useState, useEffect, useCallback } from "react";
-import { Search, GripVertical, Clock, Hash, Shapes, Share2 } from "lucide-react";
+import { Search, GripVertical, Clock, Hash, Shapes, Share2, X } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { foldedAskIds } from "@/lib/askFold";
 import { useInterviewStore } from "@/store/useInterviewStore";
@@ -7,13 +7,13 @@ import { useStageStore } from "@/store/useStageStore";
 import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/stageEdges";
 import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
+import { ingestComponentFrom } from "@/lib/ingestArtifact";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
 } from "@/store/useAnswerPanelStore";
 import { LiveAnswerStrip } from "./LiveAnswerStrip";
-import { IngestTurns } from "@/components/ingest/IngestTurns";
 import { AccessDeniedCard } from "./AccessDeniedCard";
 import { useLiveStages } from "./useLiveStages";
 import { ArchetypeGlyph, glyphFor } from "./ArchetypeGlyph";
@@ -64,6 +64,8 @@ export function AnswersPanel() {
   const setSortMode = useAnswerPanelStore((s) => s.setSortMode);
   const search = useAnswerPanelStore((s) => s.search);
   const setSearch = useAnswerPanelStore((s) => s.setSearch);
+  const typeFilter = useAnswerPanelStore((s) => s.typeFilter);
+  const setTypeFilter = useAnswerPanelStore((s) => s.setTypeFilter);
   const pins = useAnswerPanelStore((s) => s.pins);
   const pinAnswer = useAnswerPanelStore((s) => s.pinAnswer);
   const setCanvasOpen = useAnswerPanelStore((s) => s.setCanvasOpen);
@@ -116,10 +118,12 @@ export function AnswersPanel() {
     for (const a of sorted) m.set(a.id, answerSearchText(a));
     return m;
   }, [sorted]);
+  // The TYPE filter narrows in EVERY mode (search included); search narrows within it.
   const filtered = useMemo(() => {
-    if (!q) return sorted;
-    return sorted.filter((a) => (searchIndex.get(a.id) ?? "").includes(q));
-  }, [sorted, q, searchIndex]);
+    const ofType = typeFilter ? sorted.filter((a) => answerArchetype(a) === typeFilter) : sorted;
+    if (!q) return ofType;
+    return ofType.filter((a) => (searchIndex.get(a.id) ?? "").includes(q));
+  }, [sorted, q, searchIndex, typeFilter]);
 
   // ── Pointer drag → chit ghost → pin ────────────────────────────────
   const [drag, setDrag] = useState<{
@@ -273,6 +277,20 @@ export function AnswersPanel() {
           <SortChip mode="GRAPH" active={sortMode} onPick={setSortMode} icon={<Share2 className="w-2.5 h-2.5" />} />
         </div>
       )}
+      {typeFilter && (
+        <div className="px-3 pt-2 flex items-center flex-shrink-0">
+          <button
+            type="button"
+            data-type-filter={typeFilter}
+            onClick={() => setTypeFilter(null)}
+            title="Clear the type filter"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-neon-cyan/30 bg-neon-cyan/10 text-[9px] font-mono uppercase tracking-widest text-neon-cyan"
+          >
+            {archetypeLabel(typeFilter)}
+            <X className="w-2.5 h-2.5" aria-label="Clear the type filter" />
+          </button>
+        </div>
+      )}
       {q && (
         <div className="px-4 pt-2 flex-shrink-0">
           <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500">
@@ -299,11 +317,14 @@ export function AnswersPanel() {
               here (terminal state, replaces the live strip once the spinner
               stops) with the request-access action. */}
           <AccessDeniedCard />
-          {/* Ingest turns from the composer (drop is the prompt): newest-first, ahead of the answers. */}
-          <IngestTurns />
         </div>
 
         {total === 0 && !liveActive && !hasAccessDenial && <EmptyState />}
+        {total > 0 && filtered.length === 0 && typeFilter && !q && (
+          <p className="text-slate-600 font-mono text-[11px] px-2 py-4 text-center" data-type-filter-empty>
+            No {archetypeLabel(typeFilter).toLowerCase()} entries.
+          </p>
+        )}
         {total > 0 && filtered.length === 0 && q && (
           <p className="text-slate-600 font-mono text-[11px] px-2 py-4 text-center">
             No answers match “{search}”.
@@ -570,6 +591,32 @@ function DayHeader({ label, onClick }: { label: string; onClick?: () => void }) 
   );
 }
 
+/** A drop's stage badge, and the extraction-defect marker when (and only when) the status row
+ *  carried the defect OBJECT. Nothing for any other row: the marker is absent for absent and null. */
+function IngestBadge({ a }: { a: Artifact }) {
+  const ing = ingestComponentFrom(a);
+  if (!ing) return null;
+  return (
+    <span className="inline-flex items-center gap-1 mb-0.5">
+      <span
+        className="px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border text-neon-cyan border-neon-cyan/30 bg-neon-cyan/10"
+        data-ingest-stage={ing.badge}
+      >
+        {ing.badge}
+      </span>
+      {ing.extraction_defect && (
+        <span
+          className="text-[9px] font-mono text-amber-300"
+          data-ingest-extraction-defect
+          title={`extraction corrected: ${ing.extraction_defect.edits} rows`}
+        >
+          ✎
+        </span>
+      )}
+    </span>
+  );
+}
+
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   // null when nothing in the chain was measured — the row then shows no duration at all,
   // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
@@ -646,6 +693,7 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
 
       {/* Content */}
       <div className="flex-1 min-w-0 py-1.5">
+        <IngestBadge a={a} />
         {task && (
           <span
             className={`inline-block mb-0.5 px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
@@ -872,6 +920,7 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         <ArchetypeGlyph archetype={archetype} fallback={fallback} />
       </span>
       <div className="flex-1 min-w-0">
+        <IngestBadge a={a} />
         <p
           className={`text-[12px] font-mono leading-snug line-clamp-2 ${
             selected ? "text-slate-100" : "text-slate-200"

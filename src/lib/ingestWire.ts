@@ -219,6 +219,31 @@ export interface IngestStatusRow {
    * `readIngestStatusRow` always sets it.
    */
   suggested_content_kind?: string | null;
+  /**
+   * `GET /ingest/{id}/status`'s `extraction_defect` (Lane 1 packet
+   * `sessions/2026-10-11-packet-to-cortex-my-drops-extraction-incomplete-has-no-producer-yet.md`):
+   * THREE states, kept apart on purpose. ABSENT (the key is not on the row, today's wire until
+   * rev 188) means NO CLAIM: nothing is drawn, and it is never read as "complete". `null` means
+   * the route can tell and no defect is on record. An object means a steward corrected this
+   * drop's extraction. A malformed value is NO CLAIM too, never "complete". Optional on the type;
+   * `readIngestStatusRow` OMITS the key unless the wire carried a valid null or object.
+   */
+  extraction_defect?: ExtractionDefect | null;
+}
+
+export interface ExtractionDefect {
+  task_id: string;
+  /** Rows deleted, added or corrected by the steward. */
+  edits: number;
+}
+
+/** The three-state reader for `extraction_defect`: `undefined` is no claim (absent or malformed). */
+function readExtractionDefect(raw: unknown): ExtractionDefect | null | undefined {
+  if (raw === null) return null;
+  if (!isRecord(raw)) return undefined;
+  if (!isNonEmptyString(raw.task_id)) return undefined;
+  if (typeof raw.edits !== "number" || !Number.isInteger(raw.edits) || raw.edits < 0) return undefined;
+  return { task_id: raw.task_id, edits: raw.edits };
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -292,6 +317,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   // PROPOSED field (see `IngestStatusRow.suggested_content_kind`): non-blank string, else null —
   // a wrong-typed value is not a refusal of the row, just no suggestion.
   const suggested_content_kind = isNonEmptyString(raw.suggested_content_kind) ? raw.suggested_content_kind : null;
+  const extraction_defect = readExtractionDefect(raw.extraction_defect);
 
   return {
     ingest_id: raw.ingest_id,
@@ -307,6 +333,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     origin: readIngestOrigin(raw.origin),
     case_id,
     suggested_content_kind,
+    ...(extraction_defect !== undefined ? { extraction_defect } : {}),
   };
 }
 

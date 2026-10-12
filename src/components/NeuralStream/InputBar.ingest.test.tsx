@@ -30,6 +30,8 @@ vi.mock("react-oidc-context", () => ({
 }));
 vi.mock("@/lib/ingestTransport", () => ({
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
+  // Never answers: the entry tests only need the rail entry and its opened body, not a status.
+  fetchIngestStatus: () => new Promise(() => {}),
 }));
 // The status card polls the network on its own; the turn tests only need to know it mounted.
 vi.mock("@/components/ingest/IngestStatusCard", () => ({
@@ -46,7 +48,11 @@ vi.mock("@/components/HUD/TaskContextCard", () => ({ TaskContextCard: () => null
 vi.mock("@/components/Compilation/CompileButton", () => ({ CompileButton: () => null }));
 
 import { InputBar } from "./InputBar";
-import { IngestTurns } from "@/components/ingest/IngestTurns";
+import { IngestEntryBody } from "@/components/ingest/IngestEntryBody";
+import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
+import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { HUD } from "@/components/HUD/HUD";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
@@ -297,7 +303,26 @@ describe("send", () => {
   });
 });
 
-describe("ingest turns in the transcript", () => {
+/** The rail's drop entries, opened: sync hook + entry body (the status card is mocked above). */
+function Entries() {
+  useIngestArtifactSync();
+  const artifacts = useCanvasStore((s) => s.artifacts);
+  return (
+    <>
+      {artifacts.map((a) => {
+        const c = ingestComponentFrom(a);
+        return c ? <IngestEntryBody key={a.id} ingest={c} /> : null;
+      })}
+    </>
+  );
+}
+
+describe("ingest turns as rail entries", () => {
+  afterEach(() => {
+    useIngestStatusStore.getState().reset();
+    useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
+  });
+
   async function sendOne(resp: unknown) {
     if (resp instanceof Error) uploadIngest.mockRejectedValue(resp);
     else uploadIngest.mockResolvedValue(resp);
@@ -308,7 +333,7 @@ describe("ingest turns in the transcript", () => {
 
   it("renders a header (filename, kind, note) with the status card under it", async () => {
     await sendOne({ ingest_id: "ing-9", stage: "received", duplicate: null });
-    const r = render(<IngestTurns />);
+    const r = render(<Entries />);
     expect(r.container.querySelector("[data-ingest-turn-file]")?.textContent).toBe("PCN26-117.pdf");
     expect(r.container.querySelector("[data-ingest-turn-kind]")?.textContent).toBe("pdf");
     expect(r.container.querySelector("[data-ingest-turn-text]")?.textContent).toBe("note text");
@@ -321,10 +346,10 @@ describe("ingest turns in the transcript", () => {
       stage: "received",
       duplicate: { of_ingest_id: "ing-1", message: "already processed on 2026-09-29 from work-instruction.pdf" },
     });
-    const r = render(<IngestTurns />);
+    const r = render(<Entries />);
     const res = r.container.querySelector("[data-ingest-turn-result='duplicate']")!;
     expect(res.textContent).toBe("already processed on 2026-09-29 from work-instruction.pdf");
-    expect(((r.container.querySelector("[data-ingest-turn]")!.textContent ?? "").match(/already processed/gi) ?? []).length).toBe(1);
+    expect(((r.container.querySelector("[data-ingest-entry]")!.textContent ?? "").match(/already processed/gi) ?? []).length).toBe(1);
     expect(res.className).not.toMatch(/rose|red|amber/);
     expect(r.container.querySelector("[data-ingest-upload-error]")).toBeNull();
   });
@@ -335,7 +360,7 @@ describe("ingest turns in the transcript", () => {
         response: { status: 413, data: { detail: "file exceeds INGEST_MAX_BYTES (25 MB)" } },
       }),
     );
-    const r = render(<IngestTurns />);
+    const r = render(<Entries />);
     expect(r.container.querySelector("[data-ingest-upload-error]")?.textContent).toBe(
       "file exceeds INGEST_MAX_BYTES (25 MB)",
     );

@@ -32,6 +32,10 @@
  * was before the press, and there is NO automatic retry: the button stays available for a
  * deliberate retry only.
  *
+ * Where the poll lives: on the answers rail a drop is an entry and this card is its opened body, so
+ * the ONE poller is `useIngestStatusStore` and the card, mounted with `fromStore`, only READS it. A
+ * card mounted outside the rail (no `fromStore`) keeps its own poll, as below. Never both for one id.
+ *
  * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed`.
  * `review` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
  * also stops polling, distinctly from a transient transport error, which is tolerated and
@@ -44,6 +48,9 @@ import { fetchCase, type FetchCaseResult } from "@/lib/cases";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { taskArtifactId } from "@/lib/taskArtifact";
 import {
   readIngestStatusRow,
   readActRefusal,
@@ -193,6 +200,8 @@ export interface IngestStatusCardProps {
   /** The surrounding turn already drew the duplicate phrase (message or label); the card then draws
    *  only the original's id/stage, so the phrase appears once. */
   duplicatePhraseDrawn?: boolean;
+  /** Read the row from `useIngestStatusStore` (the rail's one poller) instead of polling here. */
+  fromStore?: boolean;
 }
 
 export function IngestStatusCard({
@@ -201,9 +210,15 @@ export function IngestStatusCard({
   initialRow,
   onBehalfOf = null,
   duplicatePhraseDrawn = false,
+  fromStore = false,
 }: IngestStatusCardProps) {
-  const [row, setRow] = useState<IngestStatusRow | null>(initialRow ?? null);
-  const [notFound, setNotFound] = useState(false);
+  const [ownRow, setRow] = useState<IngestStatusRow | null>(initialRow ?? null);
+  const [ownNotFound, setNotFound] = useState(false);
+  const storeRow = useIngestStatusStore((s) => s.rows[ingestId] ?? null);
+  const storeNotFound = useIngestStatusStore((s) => !!s.notFound[ingestId]);
+  const row = fromStore ? storeRow : ownRow;
+  const notFound = fromStore ? storeNotFound : ownNotFound;
+  const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
@@ -212,6 +227,9 @@ export function IngestStatusCard({
 
   const tasks = useHumanTaskStore((s) => s.tasks);
   const declarationFor = useTaskKindStore((s) => s.declarationFor);
+  // The packet says "<human task id>" without saying which of the task's two ids; accept either.
+  const defectTaskId = row?.extraction_defect?.task_id;
+  const defectTask = defectTaskId ? tasks.find((t) => t.id === defectTaskId || t.taskId === defectTaskId) ?? null : null;
 
   // CORTEX-PROPOSED — see `src/lib/ingestOrigin.ts`. `onBehalfOf` arrives as a prop; see its doc
   // comment above.
@@ -248,6 +266,7 @@ export function IngestStatusCard({
   };
 
   useEffect(() => {
+    if (fromStore) return;
     let cancelled = false;
 
     const poll = async () => {
@@ -284,7 +303,7 @@ export function IngestStatusCard({
       if (timerRef.current) clearInterval(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingestId, pollIntervalMs]);
+  }, [ingestId, pollIntervalMs, fromStore]);
 
   if (notFound) {
     return (
@@ -409,6 +428,29 @@ export function IngestStatusCard({
 
       <IngestKindSuggestion row={row} />
 
+      {/* Drawn ONLY for the object. Absent (no claim) and null (no defect on record) draw nothing. */}
+      {row.extraction_defect && (
+        <p className="mt-2 text-[10px] font-mono text-amber-300" data-ingest-extraction-defect>
+          Extraction was corrected by the steward ({row.extraction_defect.edits} rows)
+          {defectTask && (
+            <>
+              {" "}
+              <button
+                type="button"
+                data-ingest-extraction-defect-open
+                className="underline text-cyan-300 hover:text-cyan-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentArtifact(taskArtifactId(defectTask.id));
+                }}
+              >
+                open the task
+              </button>
+            </>
+          )}
+        </p>
+      )}
+
       {isDuplicate ? (
         <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-duplicate>
           {!duplicatePhraseDrawn && <span>{duplicatePhrase(row.duplicate!.message)}</span>}
@@ -466,6 +508,18 @@ export function IngestStatusCard({
                   className="w-full px-2 py-1.5 rounded bg-black/30 border border-white/10 text-[11px] font-mono text-slate-200 placeholder:text-slate-600"
                 />
               )}
+              <button
+                type="button"
+                data-ingest-open-review
+                className="self-start text-[10px] font-mono underline text-cyan-300 hover:text-cyan-200"
+                onClick={(e) => {
+                  // The card sits in a canvas card whose own click re-focuses it; this one moves away.
+                  e.stopPropagation();
+                  setCurrentArtifact(taskArtifactId(reviewTask.id));
+                }}
+              >
+                Open review
+              </button>
               <div className="flex gap-2">
                 {verbs.map((verb) => {
                   const blocked = needsReason(verb) && !reason.trim();

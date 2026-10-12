@@ -42,6 +42,7 @@ import { publishToSuperset } from "@/api/client";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { toast } from "sonner";
 import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
+import { IngestEntryBody } from "@/components/ingest/IngestEntryBody";
 import { OriginUnresolvedBanner } from "@/components/ingest/OriginUnresolvedBanner";
 
 /**
@@ -305,6 +306,11 @@ const renderComponent = (
           onPublish={onPublish}
         />
       );
+
+    case "INGEST":
+      // A drop, as a turn on the answers rail (src/lib/ingestArtifact.ts): its opened body is the
+      // status card. Not an answer, so no ask card and no export (see isIngestArtifact).
+      return comp.ingest ? <IngestEntryBody ingest={comp.ingest} /> : null;
 
     case "GROUPED_REVIEW":
       // PCN/PDN part-obsolescence grouped review — one approver resolves N
@@ -764,6 +770,7 @@ const isFullWidth = (archetype: string) =>
   archetype === "ASSET_STATE_METRIC" ||
   archetype === "HAZARD_DECLARATION" ||
   archetype === "GROUPED_REVIEW" ||
+  archetype === "INGEST" ||
   archetype === "WORKFLOW_OBSERVATION" ||
   archetype === "INSTANCES_BY_PROPERTY" ||
   archetype === "PERIOD_SERIES" ||

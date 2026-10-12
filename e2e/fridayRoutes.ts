@@ -106,6 +106,9 @@ export const KNOWN_UNSERVED: Unserved[] = [
   { method: "GET", match: (u) => u.pathname === "/me/entitlements", label: "GET /me/entitlements", reason: NO_CAPTURE },
   { method: "POST", match: (u) => u.pathname === "/register_frontend_capabilities", label: "POST /register_frontend_capabilities", reason: NO_CAPTURE },
   { method: "GET", match: (u) => u.pathname === "/me/canvases", label: "GET /me/canvases", reason: NO_CAPTURE },
+  // Opening a drop entry from the rail reveals the HUD, the pane re-measures (setViewport), and the
+  // canvases array is rewritten and saved. No walk step depends on the save.
+  { method: "PUT", match: (u) => u.pathname === "/me/canvases", label: "PUT /me/canvases", reason: NO_CAPTURE },
   { method: "GET", match: (u) => u.pathname === "/fleet/version", label: "GET /fleet/version", reason: NO_CAPTURE },
   // The ninth: not in the coordinator's eight; found by the unrouted census on the first full run
   // (fired once the review card mounts). Same class: no capture, no walk step depends on it.

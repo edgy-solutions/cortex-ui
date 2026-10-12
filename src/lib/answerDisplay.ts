@@ -1,4 +1,5 @@
 import type { Artifact } from "@/api/types";
+import { ingestComponentFrom } from "@/lib/ingestArtifact";
 
 /**
  * answerDisplay — the ONE place that derives an answer's display facts
@@ -74,6 +75,8 @@ export type AnswerArchetype =
   // illustration with one hotspot highlighted by id. Added WITH its dispatch, its glyph and
   // its label in one change, for the same reason WORKFLOW_CASE's own comment above names.
   | "ILLUSTRATION"
+  // A DROP, as a turn on the rail (src/lib/ingestArtifact.ts). Client-made, never an answer.
+  | "INGEST"
   | "UNKNOWN";
 
 /**
@@ -112,6 +115,7 @@ export const DISPLAY_ARCHETYPES = [
   "GROUPED_REVIEW",
   "WORKFLOW_CASE",
   "ILLUSTRATION",
+  "INGEST",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
 /** SPO provenance the card carries forward (ADR-0028 Decision 2). */
@@ -261,6 +265,8 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Case";
     case "ILLUSTRATION":
       return "Illustration";
+    case "INGEST":
+      return "Ingest";
     default:
       return "Answer";
   }
@@ -290,11 +296,24 @@ export function answerTopic(a: Artifact): string {
 /** Search text for an answer, built from SUMMARY FIELDS ONLY: headline, question, status and
  *  the task kind. Never the rendered payload, sources or routing - those are bodies, and a body
  *  is not on the client when the list is a summary page (and stringifying 1,000 of them was a
- *  long task on its own). Lowercased; compute once per answer set - see AnswersPanel.
+ *  long task on its own). The ONE exception is a drop's own client-made component (ingest id, stage
+ *  badge, original's id): it is not a server body and is tiny, and those are what a drop is found by.
+ *  Lowercased; compute once per answer set - see AnswersPanel.
  *  // LANE-1: the server replaces this with a query over the summary index (the summary route's
  *  // search param); until it lands this is the client-side stand-in over the same fields. */
 export function answerSearchText(a: Artifact): string {
-  return [answerSummary(a), a.question_text || "", a.status || "", a.task_ref?.kind ?? ""]
+  const ingest = ingestComponentFrom(a);
+  return [
+    answerSummary(a),
+    a.question_text || "",
+    a.status || "",
+    a.task_ref?.kind ?? "",
+    // A drop is found by its filename (the summary), its ingest id, its stage badge, or the id of
+    // the original it duplicates.
+    ingest?.ingest_id ?? "",
+    ingest?.badge ?? "",
+    ingest?.duplicate_of ?? "",
+  ]
     .join(" ")
     .toLowerCase();
 }

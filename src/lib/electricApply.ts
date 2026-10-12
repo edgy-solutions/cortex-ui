@@ -1,5 +1,6 @@
 import type { Artifact } from "@/api/types";
 import type { UpdateSource } from "@/store/useCanvasStore";
+import { isIngestArtifact } from "@/lib/ingestArtifact";
 
 /**
  * The Electric ingest as a PURE function, so one `subscribe` batch is ONE `set()`.
@@ -40,7 +41,8 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
 
   const highest = (): string | null => {
     let best: Artifact | null = null;
-    for (const a of arr) if (a && (best === null || a.watermark > best.watermark)) best = a;
+    // A drop is the user's own turn, not a streamed answer: it never wins the auto-foreground.
+    for (const a of arr) if (a && !isIngestArtifact(a) && (best === null || a.watermark > best.watermark)) best = a;
     return best ? best.id : null;
   };
   const resolve = () => {
@@ -68,7 +70,9 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
     if (op.kind === "remove") {
       remove(op.id);
     } else if (op.kind === "reset") {
-      for (const a of arr.slice()) if (a && a.status !== "pending") remove(a.id);
+      // Drops are client-made (no Electric shape carries them) and nothing re-sends them after a
+      // refetch, so a reset keeps them.
+      for (const a of arr.slice()) if (a && a.status !== "pending" && !isIngestArtifact(a)) remove(a.id);
     } else {
       const artifact = op.artifact;
       const prevSource = sources[artifact.id] ?? {};

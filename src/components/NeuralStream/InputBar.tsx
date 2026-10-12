@@ -9,11 +9,13 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { KindPicker } from "@/components/ingest/KindPicker";
 import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
-import { MyDrops } from "@/components/ingest/MyDrops";
 import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
+import { ingestComponentFrom, ingestInFlight } from "@/lib/ingestArtifact";
 
 export function InputBar() {
   // Draft-backed instead of plain useState: a failed silent renew unmounts this whole
@@ -35,6 +37,14 @@ export function InputBar() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasChip = ingestEnabled && chipFile !== null;
+  // Drops in flight: the rail's own entries (uploading + not yet terminal), counted off the one
+  // place they live. The count is a number, so the selector returns a primitive.
+  const inflight = useCanvasStore((s) =>
+    s.artifacts.reduce((n, a) => {
+      const c = ingestComponentFrom(a);
+      return c && ingestInFlight(c) ? n + 1 : n;
+    }, 0),
+  );
 
   // Every drag handler cancels AND stops (P0 2026-10-08): an uncancelled file drop navigates
   // the tab, and an ancestor's handler must not get a say.
@@ -198,17 +208,48 @@ export function InputBar() {
           )}
 
           <div className="flex items-center gap-3">
-            {/* Connection status indicator */}
-            {isConnected ? (
-              <Wifi className="w-4 h-4 text-neon-green/70 flex-shrink-0" />
-            ) : (
-              <WifiOff className="w-4 h-4 text-slate-500 flex-shrink-0" />
-            )}
-            {/* ADR-0026 picker — the bolt glyph IS the persona/domain
-              trigger (design option 2e). Hover → label pill; click →
-              two-column palette opening upward. Replaces the former
-              static Zap glyph + the exposed dropdown row. */}
-            <PersonaPicker />
+            {/* [wifi][bolt][clip·n]: one tight group of three plain indicators at the left. */}
+            <div className="flex items-center gap-2">
+              {/* Connection status indicator */}
+              {isConnected ? (
+                <Wifi className="w-4 h-4 text-neon-green/70 flex-shrink-0" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-slate-500 flex-shrink-0" />
+              )}
+              {/* ADR-0026 picker — the bolt glyph IS the persona/domain
+                trigger (design option 2e). Hover → label pill; click →
+                two-column palette opening upward. Replaces the former
+                static Zap glyph + the exposed dropdown row. */}
+              <PersonaPicker />
+              {ingestEnabled && (
+                <span className="relative inline-flex">
+                  <button
+                    type="button"
+                    aria-label="Attach a document"
+                    data-ingest-attach
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-shrink-0 flex items-center text-slate-400 hover:text-neon-cyan transition-colors"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                  {inflight > 0 && (
+                    <button
+                      type="button"
+                      aria-label={`${inflight} document${inflight === 1 ? "" : "s"} in flight — show them`}
+                      data-ingest-inflight-badge
+                      onClick={(e) => {
+                        // The badge filters the rail; it must not also open the file picker.
+                        e.stopPropagation();
+                        useAnswerPanelStore.getState().setTypeFilter("INGEST");
+                      }}
+                      className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-neon-cyan/20 border border-neon-cyan/40 text-[9px] leading-[12px] font-mono text-neon-cyan flex items-center justify-center"
+                    >
+                      {inflight}
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
 
             {/* min-w-0 on the input is load-bearing: without it the input
               keeps its intrinsic min content-width and refuses to
@@ -235,31 +276,19 @@ export function InputBar() {
             />
 
             {ingestEnabled && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={INGEST_ACCEPT}
-                  className="hidden"
-                  data-ingest-file-input
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) useIngestComposerStore.getState().attach(f);
-                    // Choosing the same file twice in a row fires no change unless the value resets.
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="Attach a document"
-                  data-ingest-attach
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-shrink-0 w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:text-neon-cyan transition-colors"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <MyDrops />
-              </>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={INGEST_ACCEPT}
+                className="hidden"
+                data-ingest-file-input
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) useIngestComposerStore.getState().attach(f);
+                  // Choosing the same file twice in a row fires no change unless the value resets.
+                  e.target.value = "";
+                }}
+              />
             )}
 
             <button

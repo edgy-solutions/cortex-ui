@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { INGEST_ARTIFACT_PREFIX } from "@/lib/ingestArtifact";
 import { applyElectricOps, type ElectricOp } from "@/lib/electricApply";
 import type { SourcesProvenance } from "@/lib/sourceProvenance";
 
@@ -25,6 +26,17 @@ function taskArtifactContentEqual(a: Artifact, b: Artifact): boolean {
     ra.subjectRef === rb.subjectRef &&
     ra.workflowId === rb.workflowId &&
     ra.taskId === rb.taskId
+  );
+}
+
+/** Do two drop-artifacts show the same thing? The component is rebuilt on every sync, so it is
+ *  compared by value; the reconciler reuses the old object when nothing a row draws changed. */
+function ingestArtifactContentEqual(a: Artifact, b: Artifact): boolean {
+  return (
+    a.summary === b.summary &&
+    a.created_at === b.created_at &&
+    a.question_text === b.question_text &&
+    JSON.stringify(a.rendered_output) === JSON.stringify(b.rendered_output)
   );
 }
 
@@ -355,6 +367,18 @@ interface CanvasState {
    */
   reconcileTaskArtifacts: (taskArtifacts: Artifact[]) => void;
 
+  /**
+   * Reconcile the synthetic DROP artifacts (id-prefixed `ingest:`) to exactly the supplied set,
+   * as `reconcileTaskArtifacts` does for tasks: upsert in place (an unchanged drop keeps its
+   * object, so its row does not re-render), drop the ones no longer present, touch no other
+   * artifact. The ingest sync hook calls this.
+   */
+  /**
+   * `renamed` maps an entry's old id to its new one (a turn's id gives way to its ingest id once
+   * the upload is accepted), so an OPEN entry stays open across the switch.
+   */
+  reconcileIngestArtifacts: (ingestArtifacts: Artifact[], renamed?: Readonly<Record<string, string>>) => void;
+
   /** Foreground a specific artifact (canvas view selection). */
   setCurrentArtifact: (id: string) => void;
 
@@ -551,6 +575,47 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       return {
         artifacts: [...answers, ...merged],
         _lastUpdateSource,
+        ...(currentGone
+          ? { currentArtifactId: null, currentArtifactSetByUser: false }
+          : {}),
+      };
+    }),
+
+  reconcileIngestArtifacts: (ingestArtifacts, renamed = {}) =>
+    set((state) => {
+      const incoming = new Map(ingestArtifacts.map((t) => [t.id, t]));
+      const existing = new Map(
+        state.artifacts
+          .filter((a) => a.id.startsWith(INGEST_ARTIFACT_PREFIX))
+          .map((a) => [a.id, a] as const)
+      );
+      let changed = existing.size !== incoming.size;
+      const merged = ingestArtifacts.map((t) => {
+        const prev = existing.get(t.id);
+        if (prev && ingestArtifactContentEqual(prev, t)) return prev;
+        changed = true;
+        return t;
+      });
+      if (!changed) return {};
+      const others = state.artifacts.filter((a) => !a.id.startsWith(INGEST_ARTIFACT_PREFIX));
+      const _lastUpdateSource = { ...state._lastUpdateSource };
+      for (const id of existing.keys()) {
+        if (!incoming.has(id)) delete _lastUpdateSource[id];
+      }
+      const current = state.currentArtifactId;
+      const movedTo =
+        current != null && !incoming.has(current) && incoming.has(renamed[current] ?? "")
+          ? renamed[current]
+          : null;
+      const currentGone =
+        current != null &&
+        current.startsWith(INGEST_ARTIFACT_PREFIX) &&
+        !incoming.has(current) &&
+        movedTo == null;
+      return {
+        artifacts: [...others, ...merged],
+        _lastUpdateSource,
+        ...(movedTo ? { currentArtifactId: movedTo } : {}),
         ...(currentGone
           ? { currentArtifactId: null, currentArtifactSetByUser: false }
           : {}),

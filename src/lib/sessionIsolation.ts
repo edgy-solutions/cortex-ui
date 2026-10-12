@@ -20,6 +20,7 @@ import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
 const OWNER_KEY = "cortex-session-owner";
 
@@ -83,6 +84,8 @@ export function purgeUserScopedState(): void {
     useEvidenceStore.getState().dismiss();
     // Ingest turns + the composer's attached draft: A's filenames and notes must not paint for B.
     useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+    // The polled status rows behind those turns (and behind remembered drops): same reason.
+    useIngestStatusStore.getState().reset();
     // Conversation content: A's questions and the agent's answers to them. Nothing
     // renders `messages` today (the answer-first redesign left MessageBubble unmounted),
     // but "safe because a component is dead" is folklore-as-protection — revive the

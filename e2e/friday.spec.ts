@@ -24,6 +24,8 @@ async function walkToAct(page: Page, f: Friday) {
   await expect(page.locator('[data-ingest-kind-inferred="pdf"]')).toBeVisible();
   await page.getByRole("button", { name: "Send" }).click();
 
+  // The drop is a turn on the answers rail; opening it draws the status card.
+  await page.locator("[data-virtual-item]").filter({ has: page.locator("[data-ingest-stage]") }).click();
   const card = page.locator(`[data-ingest-id="${f.seed.ingestId}"]`);
   await expect(card).toBeVisible();
   // received -> extracting -> review at the 2000 ms poll
@@ -31,8 +33,13 @@ async function walkToAct(page: Page, f: Friday) {
     timeout: 20_000,
   });
 
-  // The approval card for the same task is on screen too, and its reason box has the a11y name.
+  // The status card opens the review task (one artifact is open at a time): its approval card
+  // draws, and its reason box has the a11y name. Then back to the drop entry to promote.
+  const rail = page.locator("[data-virtual-item]").filter({ has: page.locator("[data-ingest-stage]") });
+  await card.locator("[data-ingest-open-review]").click();
   await expect(approvalCard(page)).toBeVisible();
+  await rail.click();
+  await expect(card).toBeVisible();
 
   // The same accessible name is on BOTH the ingest status card and the ApprovalTaskCard (see
   // approvalCard()), so step 6 is scoped to the status card.

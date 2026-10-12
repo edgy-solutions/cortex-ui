@@ -19,8 +19,12 @@ vi.mock("react-oidc-context", () => ({
   useAuth: () => ({ user: { profile: { sub: "user-a", email: "a@example.com" } } }),
 }));
 
-import { IngestTurns } from "./IngestTurns";
+import { IngestEntryBody } from "./IngestEntryBody";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
+import { ingestComponentFrom } from "@/lib/ingestArtifact";
 import { readMyDrops } from "@/lib/myDrops";
 import { uploadIngest as mockUpload, fetchIngestStatus as mockFetch, __resetIngestMock } from "@/lib/ingestMock";
 
@@ -53,11 +57,27 @@ afterEach(() => {
   fetchIngestStatus.mockReset();
   uploadIngest.mockReset();
   useIngestComposerStore.setState({ turns: [], file: null, kind: null, inferred: null });
+  useIngestStatusStore.getState().reset();
+  useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
 });
+
+/** The rail's drop entries, opened: the sync hook + the one poller + the entry body. */
+function RailEntries() {
+  useIngestArtifactSync();
+  const artifacts = useCanvasStore((s) => s.artifacts);
+  return (
+    <>
+      {artifacts.map((a) => {
+        const c = ingestComponentFrom(a);
+        return c ? <IngestEntryBody key={a.id} ingest={c} /> : null;
+      })}
+    </>
+  );
+}
 
 async function dropDuplicate(response: unknown) {
   uploadIngest.mockResolvedValue(response);
-  const r = render(<IngestTurns />);
+  const r = render(<RailEntries />);
   useIngestComposerStore.setState({ file: new File(["%PDF-"], "work-instruction.pdf"), kind: "pdf" });
   await useIngestComposerStore.getState().submit("a@example.com", "", "user-a");
   return r;
