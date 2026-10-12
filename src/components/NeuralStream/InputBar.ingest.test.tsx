@@ -50,6 +50,7 @@ import { IngestTurns } from "@/components/ingest/IngestTurns";
 import { HUD } from "@/components/HUD/HUD";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
+import { DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 
 const pdf = () => new File(["%PDF-1.4\n"], "PCN26-117.pdf", { type: "application/pdf" });
 
@@ -365,5 +366,91 @@ describe("HUD is output only", () => {
     const { container } = render(<HUD />);
     expect(container.querySelector("[data-ingest-trigger]")).toBeNull();
     expect(container.querySelector("[data-ingest-slide-in]")).toBeNull();
+  });
+});
+
+describe("a drag can never leave the composer or overlay stuck open", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const active = () => composer().getAttribute("data-drag-active");
+  const enter = () =>
+    act(() => {
+      fireEvent(composer(), dragEvent("dragenter", composer(), { files: [pdf()] }));
+    });
+
+  it("clears by itself once dragovers stop (the stuck case)", () => {
+    render(<InputBar />);
+    enter();
+    expect(active()).toBe("true");
+    act(() => {
+      vi.advanceTimersByTime(DRAG_IDLE_MS + 1);
+    });
+    expect(active()).toBe("false");
+  });
+
+  it("stays active while dragover keeps arriving every 50 ms for 2 s", () => {
+    render(<InputBar />);
+    enter();
+    for (let t = 0; t < 2000; t += 50) {
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      // Checked BEFORE the next dragover: a dragover that re-sets the flag but not the timer
+      // would otherwise flap off between events and be masked by the re-set.
+      expect(active(), "before dragover at " + t + "ms").toBe("true");
+      act(() => {
+        fireEvent(composer(), dragEvent("dragover", composer(), { files: [pdf()] }));
+      });
+      expect(active(), "at " + t + "ms").toBe("true");
+    }
+  });
+
+  it.each([
+    ["a window drop elsewhere", () => dragEvent("drop", document.body, { files: [pdf()] })],
+    ["a window dragend", () => createEvent.dragEnd(document.body)],
+    ["a window dragleave with relatedTarget null", () => dragEvent("dragleave", document.body, { files: [pdf()] })],
+  ])("clears immediately on %s", (_n, make) => {
+    render(<InputBar />);
+    enter();
+    expect(active()).toBe("true");
+    act(() => {
+      fireEvent(document.body, make());
+    });
+    expect(active()).toBe("false");
+  });
+
+  it("never activates for a text/plain drag, even with time passing", () => {
+    render(<InputBar />);
+    act(() => {
+      fireEvent(composer(), dragEvent("dragenter", composer(), { types: ["text/plain"] }));
+      vi.advanceTimersByTime(DRAG_IDLE_MS + 1);
+    });
+    expect(active()).toBe("false");
+  });
+
+  it("the window overlay hides by itself once drag events stop", () => {
+    render(<InputBar />);
+    act(() => {
+      fireEvent(document.body, dragEvent("dragenter", document.body, { files: [pdf()] }));
+    });
+    expect(overlay()).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(DRAG_IDLE_MS + 1);
+    });
+    expect(overlay()).toBeNull();
+  });
+
+  it("the window overlay stays up while dragover keeps arriving", () => {
+    render(<InputBar />);
+    act(() => {
+      fireEvent(document.body, dragEvent("dragenter", document.body, { files: [pdf()] }));
+    });
+    for (let t = 0; t < 2000; t += 50) {
+      act(() => {
+        vi.advanceTimersByTime(50);
+        fireEvent(document.body, dragEvent("dragover", document.body, { files: [pdf()] }));
+      });
+      expect(overlay(), "at " + t + "ms").not.toBeNull();
+    }
   });
 });

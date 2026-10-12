@@ -10,6 +10,15 @@
  */
 import { useEffect } from "react";
 
+/**
+ * A drag over an element fires `dragover` on it every ~50 ms, even with a still pointer. So a
+ * drag surface that has seen no dragover for this long is not being dragged over, whichever
+ * dragleave went missing (swallowed by stopPropagation, Esc, a browser that leaves relatedTarget
+ * empty, the grow transition moving the edge under a still pointer). Surfaces use it as a
+ * watchdog so "stuck open" is impossible by construction.
+ */
+export const DRAG_IDLE_MS = 250;
+
 export function carriesFiles(e: DragEvent): boolean {
   return Array.from(e.dataTransfer?.types ?? []).includes("Files");
 }
