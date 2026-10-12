@@ -22,7 +22,7 @@ import {
 } from "@/registry/registrationLifecycle";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
-import { checkBundleFreshness } from "@/lib/bundleFreshness";
+import { checkBundleFreshness, watchBundleFreshness } from "@/lib/bundleFreshness";
 import { useRegistrationStore } from "@/store/useRegistrationStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
@@ -260,6 +260,25 @@ export function useFrontendCapabilityRegistration() {
       },
     );
   }).current;
+
+  // A TAB OPEN ACROSS A ROLL makes no registration attempt, so the opening check never re-runs.
+  // Re-ask on focus and every 5 min; pill only, nothing reloads by itself.
+  useEffect(() => {
+    let warned = false;
+    return watchBundleFreshness({
+      mine: buildVersion().git_sha,
+      onStale: (m, s) => {
+        useRegistrationStore.getState().reportStale(m, s, false);
+        if (warned) return;
+        warned = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[ADR-0017] newer bundle deployed — served " + s.slice(0, 7) + ", this tab " + m.slice(0, 7) +
+            ": reload to update.",
+        );
+      },
+    });
+  }, []);
 
   // Resolve frontend_version once at load (flag-gated) so the ask never waits on it.
   useEffect(() => {

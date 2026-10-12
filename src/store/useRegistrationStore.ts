@@ -47,9 +47,14 @@ interface RegistrationState {
   reassertions: number;
   report: (r: { sent: number; accepted: number; reassertion: boolean }) => void;
   reportFailure: () => void;
-  /** Set when this tab's bundle is not the one served; registration was refused. */
-  stale: { mine: string; served: string } | null;
-  reportStale: (mine: string, served: string) => void;
+  /** Set when this tab's bundle is not the one served (by a refused registration or the watcher). */
+  stale: { mine: string; served: string; refused: boolean } | null;
+  /**
+   * `refused` = this tab's registration was refused (true, the default); the focus/interval watcher
+   * passes false. Sticky: a later call never turns true back to false, and `served` follows the
+   * newest. Once stale the pill stays until reload; a rollback to this tab's sha is not handled.
+   */
+  reportStale: (mine: string, served: string, refused?: boolean) => void;
 }
 
 export const useRegistrationStore = create<RegistrationState>()((set) => ({
@@ -58,7 +63,8 @@ export const useRegistrationStore = create<RegistrationState>()((set) => ({
   accepted: null,
   reassertions: 0,
   stale: null,
-  reportStale: (mine, served) => set({ stale: { mine, served } }),
+  reportStale: (mine, served, refused = true) =>
+    set((s) => ({ stale: { mine, served, refused: refused || (s.stale?.refused ?? false) } })),
 
   report: ({ sent, accepted, reassertion }) =>
     set((s) => ({

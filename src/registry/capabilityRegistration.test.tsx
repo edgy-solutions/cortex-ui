@@ -32,6 +32,7 @@ const registerFrontendCapabilities = vi.fn();
 const checkBundleFreshness = vi.fn();
 vi.mock("@/lib/bundleFreshness", () => ({
   checkBundleFreshness: (...args: unknown[]) => checkBundleFreshness(...args),
+  watchBundleFreshness: () => () => {}, // the focus/interval watcher is not under test here
 }));
 vi.mock("react-oidc-context", () => ({
   useAuth: () => ({ isAuthenticated: true, user: null }),
@@ -125,7 +126,7 @@ describe("the freshness gate in front of the registration", () => {
     registerFrontendCapabilities.mockResolvedValue({ accepted: 1, frontend_id: "x" });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     renderHook(() => useFrontendCapabilityRegistration());
-    await waitFor(() => expect(state().stale).toEqual({ mine: "mine1234567", served: "srv7654321" }));
+    await waitFor(() => expect(state().stale).toEqual({ mine: "mine1234567", served: "srv7654321", refused: true }));
     expect(registerFrontendCapabilities).not.toHaveBeenCalled();
     expect(state().status).toBe("idle");
     expect(warn).toHaveBeenCalled();
