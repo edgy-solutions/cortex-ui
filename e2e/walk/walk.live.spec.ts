@@ -35,6 +35,7 @@ function makeCfg(tag: string): WalkConfig {
     expectParts: (env.WALK_EXPECT_PARTS || "5530-184,5530-185").split(",").map((s) => s.trim()).filter(Boolean),
     pdfPath: env.WALK_PCN_PDF ? path.resolve(env.WALK_PCN_PDF) : "",
     question: defaultQuestion(notice),
+    baseURL,
     outDir: path.join(outRoot, `shots-${iso}`, tag),
     kc: {
       user: env.WALK_KC_USER_SELECTOR || DEFAULT_KC.user,

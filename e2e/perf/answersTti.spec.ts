@@ -302,7 +302,7 @@ async function oneRun(page: Page, n: number, run: number): Promise<RunResult> {
   if (!final) notes.push("final evaluate timed out (main thread saturated)");
   if (tti == null) {
     await page.screenshot({ path: `test-results/perf-n${n}-run${run}.png`, timeout: 10_000 }).catch(() => {});
-    notes.push(`body: ${((await ev(() => document.body.innerText.slice(0, 200))) ?? "").replace(/s+/g, " ")}`);
+    notes.push(`body: ${((await ev(() => document.body.innerText.slice(0, 200))) ?? "").replace(/\s+/g, " ")}`);
   }
   return {
     run,
@@ -340,7 +340,7 @@ for (const n of NS) {
       const context = await browser.newContext();
       const page = await context.newPage();
       const counters = { registerPosts: 0, unrouted: [] as string[] };
-      page.on("pageerror", (e) => counters.unrouted.push(`pageerror: ${String(e.stack).replace(/s+/g, " ").slice(0, 600)}`));
+      page.on("pageerror", (e) => counters.unrouted.push(`pageerror: ${String(e.stack).replace(/\s+/g, " ").slice(0, 600)}`));
       page.on("console", (m) => { if (m.type() === "error") counters.unrouted.push(`console.error: ${m.text().slice(0, 160)}`); });
       await seedOidc(page);
       await routeAll(page, snapshot, counters, stat?.url);

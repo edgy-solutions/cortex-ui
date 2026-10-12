@@ -24,7 +24,7 @@
  *                   draws <h3>Trends</h3>.
  */
 import type { Page } from "@playwright/test";
-import { ask, login, type Walk, type WalkConfig } from "./pcnWalk";
+import { ask, login, DEFAULT_KC, type Walk, type WalkConfig } from "./pcnWalk";
 import { creds, type Env } from "./walkEnv";
 
 export const HAZ_PROMPT = "draft a risk assessment for HAZ-1004";
@@ -55,14 +55,36 @@ export type Outcome =
 
 const ABSTAIN_TEXT_SRC = "I could not find anything called";
 
-export async function snapshot(page: Page): Promise<AnswerSnapshot> {
+/** Why the page is not the app: its url, and whether a Keycloak form is showing. Never page text. */
+async function whereAmI(page: Page): Promise<string> {
+  const kc = await page.locator(DEFAULT_KC.user).first().isVisible().catch(() => false);
+  return `url ${page.url()}${kc ? "; a Keycloak login form is visible" : ""}`;
+}
+
+/**
+ * Read the page. A page that is not the app (Keycloak after a login that did not take, an error
+ * page, an XML document with no <body>) is a NAMED error, never a TypeError out of evaluate().
+ * `baseURL` is the app's origin; when given, any other origin is refused.
+ */
+export async function snapshot(page: Page, baseURL?: string, bodyWaitMs = 10_000): Promise<AnswerSnapshot> {
+  await page.waitForFunction(() => !!document.body, undefined, { timeout: bodyWaitMs }).catch(() => undefined);
+  let wrongOrigin = false;
+  if (baseURL) {
+    try {
+      wrongOrigin = new URL(page.url()).origin !== new URL(baseURL).origin;
+    } catch {
+      wrongOrigin = true;
+    }
+  }
+  const hasBody = await page.evaluate(() => !!document.body).catch(() => false);
+  if (wrongOrigin || !hasBody) throw new Error(`snapshot: not on the app (url ${page.url()})`);
   return page.evaluate((abstainSrc) => {
     const q = (s: string) => Array.from(document.querySelectorAll(s));
     const tileEls = q("[data-answer-id]").filter((e) => !(e.getAttribute("data-answer-id") ?? "").startsWith("task:"));
     return {
       tileIds: tileEls.map((e) => e.getAttribute("data-answer-id") ?? ""),
       abstainedAttr: q("[data-ask-abstained]").length,
-      abstainText: (document.body.innerText.match(new RegExp(abstainSrc, "gi")) ?? []).length,
+      abstainText: ((document.body?.innerText ?? "").match(new RegExp(abstainSrc, "gi")) ?? []).length,
       disclosures: q("[data-fallback-disclosure]").map((e) => e.getAttribute("data-fallback-reason") ?? ""),
       failedAttempts: q("[data-attempt-failed]").length,
       refusals: q("[data-refusal]").map((e) => ({
@@ -82,7 +104,7 @@ export async function snapshot(page: Page): Promise<AnswerSnapshot> {
           c.querySelectorAll("[title]").forEach((e) => {
             if ((e.textContent ?? "").trim() === (e.getAttribute("title") ?? "").trim()) e.remove();
           });
-          return (c.textContent ?? "").replace(/s+/g, " ").trim().slice(0, 4000);
+          return (c.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 4000);
         })(),
       })),
     };
@@ -125,15 +147,15 @@ export function classifyAnswer(kind: AnswerKind, before: AnswerSnapshot, after: 
   return { kind: "card", label: `domain card (heading "${drawn.headings[0] ?? "table"}")` };
 }
 
-async function awaitOutcome(page: Page, kind: AnswerKind, before: AnswerSnapshot, timeoutMs: number): Promise<Outcome> {
+async function awaitOutcome(page: Page, kind: AnswerKind, before: AnswerSnapshot, timeoutMs: number, baseURL?: string): Promise<Outcome> {
   const deadline = Date.now() + timeoutMs;
   let last: Outcome = { kind: "pending" };
   while (Date.now() < deadline) {
-    last = classifyAnswer(kind, before, await snapshot(page));
+    last = classifyAnswer(kind, before, await snapshot(page, baseURL));
     if (last.kind !== "pending") {
       // A card can land a frame before its abstain/fallback disclosure: look again after a beat.
       await page.waitForTimeout(400);
-      return classifyAnswer(kind, before, await snapshot(page));
+      return classifyAnswer(kind, before, await snapshot(page, baseURL));
     }
     await page.waitForTimeout(300);
   }
@@ -141,10 +163,10 @@ async function awaitOutcome(page: Page, kind: AnswerKind, before: AnswerSnapshot
 }
 
 /** Ask, then PASS (returning the detail) on a card or a named refusal; throw on anything else. */
-export async function assertAnswer(page: Page, kind: AnswerKind, prompt: string, timeoutMs: number): Promise<string> {
-  const before = await snapshot(page);
+export async function assertAnswer(page: Page, kind: AnswerKind, prompt: string, timeoutMs: number, baseURL?: string): Promise<string> {
+  const before = await snapshot(page, baseURL);
   await ask(page, prompt);
-  const o = await awaitOutcome(page, kind, before, timeoutMs);
+  const o = await awaitOutcome(page, kind, before, timeoutMs, baseURL);
   switch (o.kind) {
     case "card":
       return `(a) ${o.label}`;
@@ -171,10 +193,10 @@ async function asUser(walk: Walk, page: Page, who: string, env: Env, name: strin
 }
 
 export const runHaz = (walk: Walk, bob: Page, env: Env): Promise<void> =>
-  asUser(walk, bob, "bob", env, "haz-draft-risk-assessment", () => assertAnswer(bob, "haz", HAZ_PROMPT, walk.cfg.timeouts.ask));
+  asUser(walk, bob, "bob", env, "haz-draft-risk-assessment", () => assertAnswer(bob, "haz", HAZ_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
 
 export const runFracas = (walk: Walk, bob: Page, env: Env): Promise<void> =>
-  asUser(walk, bob, "bob", env, "fracas-failures-for-part", () => assertAnswer(bob, "fracas", FRACAS_PROMPT, walk.cfg.timeouts.ask));
+  asUser(walk, bob, "bob", env, "fracas-failures-for-part", () => assertAnswer(bob, "fracas", FRACAS_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
 
 // -- the stale-tab check (live: the NO-FALSE-POSITIVE half) --------------------------------------
 
@@ -185,7 +207,9 @@ export const runFracas = (walk: Walk, bob: Page, env: Env): Promise<void> =>
  */
 export async function assertNotStale(page: Page, cfg: WalkConfig, baseURL: string): Promise<string> {
   const stamp = page.locator("[data-build-stamp-ui]").first();
-  await stamp.waitFor({ state: "visible", timeout: cfg.timeouts.login });
+  await stamp.waitFor({ state: "visible", timeout: cfg.timeouts.login }).catch(async () => {
+    throw new Error(`stale: the build stamp never appeared within ${cfg.timeouts.login} ms (${await whereAmI(page)})`);
+  });
   const mine = ((await stamp.textContent()) ?? "").replace(/^\s*ui\s+/, "").trim();
   if (!mine || mine === "no sha") throw new Error("stale: this bundle carries no sha, so freshness is undecidable (a dev/unstamped build)");
   const res = await page.context().request.get(`${baseURL.replace(/\/+$/, "")}/version.json`, { headers: { "cache-control": "no-store" } });

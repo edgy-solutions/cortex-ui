@@ -21,6 +21,7 @@ function makeCfg(): WalkConfig {
     expectParts: [],
     pdfPath: "",
     question: defaultQuestion("PCN26-184"),
+    baseURL: test.info().project.use.baseURL,
     outDir: test.info().outputPath("shots"),
     kc: DEFAULT_KC,
     timeouts: { login: 20_000, drop: 20_000, stage: 20_000, promote: 20_000, promoted: 20_000, ask: 12_000 },
