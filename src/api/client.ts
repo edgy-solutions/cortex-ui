@@ -166,14 +166,41 @@ export type TaskDecision = string;
 export const SEED_TASK_DECISIONS = ["approved", "rejected", "acknowledged", "redriven"] as const;
 
 /**
- * grouped_review row edits — a PROPOSAL to Lane 1, NOT a platform contract: `HumanTaskActRequest`
- * declares no such field today and silently drops it. Sent only behind VITE_REVIEW_ROW_EDITS.
+ * grouped_review row edits — the platform's `RowEdits` (invincible-agent src/iagent/gateway.py
+ * DeletedRow / AddedRow / CorrectedRow, `extra="forbid"`, every string non-blank). Accepted by the
+ * live fleet since 49aa5e28 (Lane 1 packet 2026-10-12). Sealed key-for-key by rowEditsWireParity.test.ts.
  */
 export interface RowEdits {
   deleted: { mpn: string; reason: string }[];
-  added: { mpn: string; disposition: string; reason: string }[];
-  /** `mpn` is the EXTRACTED value (the idempotency key); `corrected_mpn` is the approver's text. */
-  corrected: { mpn: string; corrected_mpn: string; reason?: string }[];
+  added: { mpn: string; disposition: string; reason: string; evidence: string }[];
+  /** `mpn` is the EXTRACTED value (identity never moves); `corrected_mpn` is the approver's text. */
+  corrected: { mpn: string; corrected_mpn: string; evidence: string }[];
+}
+
+/** The three `reason_code` values a grouped-review REJECT may carry (gateway.py _GROUPED_REJECT_CODES). */
+export type GroupedRejectCode = "not_a_notice" | "parts_list_unusable" | "superseded_or_duplicate";
+
+/**
+ * The /act request body. `HumanTaskActRequest` refuses `reason_code` on anything but `rejected` and
+ * `row_edits` on anything but `approved` (its `_verb_fields` validator), so each is emitted ONLY for
+ * its own verb, whatever the caller passes. NOTE the request model itself is plain `_BaseModel` and
+ * DROPS an undeclared key silently; only the row models are `extra="forbid"`. So a misspelt
+ * top-level key is not a 422, it is lost: rowEditsWireParity.test.ts checks each key is declared. Empty `row_edits` is omitted (the platform defaults it).
+ */
+export function buildActBody(
+  decision: TaskDecision,
+  comment = "",
+  overrides?: Record<string, { disposition: string; reason: string }>,
+  rowEdits?: RowEdits,
+  reasonCode?: GroupedRejectCode
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { decision, comment };
+  if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
+  if (decision === "approved" && rowEdits && (rowEdits.deleted.length || rowEdits.added.length || rowEdits.corrected.length)) {
+    body.row_edits = rowEdits;
+  }
+  if (decision === "rejected" && reasonCode) body.reason_code = reasonCode;
+  return body;
 }
 
 export async function actOnHumanTask(
@@ -182,14 +209,12 @@ export async function actOnHumanTask(
   comment = "",
   // grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
   overrides?: Record<string, { disposition: string; reason: string }>,
-  // grouped_review only, flag-gated PROPOSAL (see RowEdits): sent as `row_edits` only when non-empty.
-  rowEdits?: RowEdits
+  // grouped_review approve only: steward row edits, sent as `row_edits` only when non-empty.
+  rowEdits?: RowEdits,
+  // grouped_review reject only: REQUIRED by the platform (422 reason_code_required without it).
+  reasonCode?: GroupedRejectCode
 ): Promise<ActOnTaskResult> {
-  const body: Record<string, unknown> = { decision, comment };
-  if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
-  if (rowEdits && (rowEdits.deleted.length || rowEdits.added.length || rowEdits.corrected.length)) {
-    body.row_edits = rowEdits;
-  }
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode);
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
     body
