@@ -136,3 +136,51 @@ describe("extraction_defect: absent / null / object / malformed", () => {
     expect(read({ extraction_defect: { task_id: "t", edits: 0 } }).extraction_defect).toEqual({ task_id: "t", edits: 0 });
   });
 });
+
+describe("notice_id: absent / null / string / malformed", () => {
+  const read = (over: Record<string, unknown>): IngestStatusRow => readIngestStatusRow(wireRow(over))!;
+  const noticeOf = (row: IngestStatusRow) => ingestComponentFrom(ingestToArtifact(entry({ row })))!.notice_id;
+
+  it("absent: no claim -- the key is not on the row; the component carries null", () => {
+    const row = read({});
+    expect("notice_id" in row).toBe(false);
+    expect(noticeOf(row)).toBeNull();
+  });
+
+  it("null: the key is present and null", () => {
+    const row = read({ notice_id: null });
+    expect("notice_id" in row).toBe(true);
+    expect(row.notice_id).toBeNull();
+    expect(noticeOf(row)).toBeNull();
+  });
+
+  it("a non-blank string is kept verbatim", () => {
+    const row = read({ notice_id: "PCN26-184" });
+    expect(row.notice_id).toBe("PCN26-184");
+    expect(noticeOf(row)).toBe("PCN26-184");
+    expect(read({ notice_id: " PCN26-184 " }).notice_id).toBe(" PCN26-184 ");
+  });
+
+  it.each([["empty", ""], ["whitespace", "  "], ["a number", 42], ["an object", {}]])(
+    "%s: no claim -- the key is not on the row",
+    (_n, value) => {
+      expect("notice_id" in read({ notice_id: value })).toBe(false);
+    },
+  );
+
+  it("search finds the entry by its notice id", () => {
+    const art = ingestToArtifact(entry({ row: read({ notice_id: "PCN26-184" }) }));
+    expect(answerSearchText(art)).toContain("pcn26-184");
+  });
+});
+
+describe("failed reason", () => {
+  const reasonOf = (stage: string, detail: string | null) =>
+    ingestComponentFrom(ingestToArtifact(entry({ row: readIngestStatusRow(wireRow({ stage, detail })) })))!.reason;
+
+  it("is the detail for failed, null for rejected and every other stage", () => {
+    expect(reasonOf("failed", "no registered content_kind")).toBe("no registered content_kind");
+    expect(reasonOf("rejected", "not a PCN")).toBeNull();
+    expect(reasonOf("review", null)).toBeNull();
+  });
+});

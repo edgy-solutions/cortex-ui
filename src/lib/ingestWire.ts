@@ -229,6 +229,65 @@ export interface IngestStatusRow {
    * `readIngestStatusRow` OMITS the key unless the wire carried a valid null or object.
    */
   extraction_defect?: ExtractionDefect | null;
+  /**
+   * `GET /ingest/{id}/status`'s `notice_id` (Lane 1 packet
+   * `sessions/2026-10-12-packet-to-cortex-f3617a9-is-live-notice-id-named-row-edits-accepted-flip-it.md` §2):
+   * THREE states, kept apart. A non-blank string is the notice's own identifier (e.g. `PCN26-184`).
+   * `null` is a claim that no notice is known. ABSENT (the live fleet never sends it today) is NO
+   * CLAIM. Anything else (blank, number, object) is no claim too. Optional on the type;
+   * `readIngestStatusRow` OMITS the key unless the wire carried a non-blank string or null.
+   */
+  notice_id?: string | null;
+  /**
+   * `GET /ingest/{id}/status`'s `failure` (Lane 1 packet
+   * `sessions/2026-10-12-packet-to-cortex-the-failure-field-is-failure-on-ingest-status-a-failed-drop-is-retryable.md` §1,
+   * invincible-agent 33b80988): THREE states. An object is the producer's account of why the drop
+   * failed (non-null exactly when stage is `failed`). `null` is a claim of no failure. ABSENT
+   * (every fleet before 33b80988 is live) is NO CLAIM, never "no failure". Anything malformed
+   * (no non-blank `reason`) is no claim too. Optional on the type; `readIngestStatusRow` OMITS
+   * the key unless the wire carried a valid null or object.
+   */
+  failure?: IngestFailure | null;
+  /**
+   * `GET /ingest/{id}/status`'s `attempt` (same packet §1/§2, 33b80988): 1 on arrival, +1 per
+   * retry. ABSENT on older fleets (no claim). Optional on the type; `readIngestStatusRow` OMITS the
+   * key unless the wire carried a positive integer.
+   */
+  attempt?: number;
+}
+
+/** The fixed reason codes (the vocabulary is OPEN — doc-tools owns it; never a closed enum). */
+export const INGEST_FAILURE_TIMEOUT = "timeout";
+export const INGEST_FAILURE_KIND_UNREGISTERED = "kind_unregistered";
+
+export interface IngestFailure {
+  /** Open vocabulary, verbatim; null = the producer did not classify the failure. */
+  reason_code: string | null;
+  /** Human-readable, always present, verbatim. */
+  reason: string;
+  step: string | null;
+  run_id: string | null;
+  pin_digest: string | null;
+  failed_at: number | null;
+}
+
+function nonBlankOrNull(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+/** The three-state reader for `failure`: `undefined` is no claim (not a record, or no non-blank `reason`). */
+export function readIngestFailure(raw: unknown): IngestFailure | null | undefined {
+  if (raw === null) return null;
+  if (!isRecord(raw)) return undefined;
+  if (typeof raw.reason !== "string" || raw.reason.trim() === "") return undefined;
+  return {
+    reason_code: nonBlankOrNull(raw.reason_code),
+    reason: raw.reason,
+    step: nonBlankOrNull(raw.step),
+    run_id: nonBlankOrNull(raw.run_id),
+    pin_digest: nonBlankOrNull(raw.pin_digest),
+    failed_at: typeof raw.failed_at === "number" && Number.isFinite(raw.failed_at) ? raw.failed_at : null,
+  };
 }
 
 export interface ExtractionDefect {
@@ -244,6 +303,13 @@ function readExtractionDefect(raw: unknown): ExtractionDefect | null | undefined
   if (!isNonEmptyString(raw.task_id)) return undefined;
   if (typeof raw.edits !== "number" || !Number.isInteger(raw.edits) || raw.edits < 0) return undefined;
   return { task_id: raw.task_id, edits: raw.edits };
+}
+
+/** The three-state reader for `notice_id`: `undefined` is no claim (absent, blank, or any non-string). */
+export function readNoticeId(raw: unknown): string | null | undefined {
+  if (raw === null) return null;
+  if (typeof raw === "string" && raw.trim() !== "") return raw;
+  return undefined;
 }
 
 const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
@@ -318,6 +384,9 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   // a wrong-typed value is not a refusal of the row, just no suggestion.
   const suggested_content_kind = isNonEmptyString(raw.suggested_content_kind) ? raw.suggested_content_kind : null;
   const extraction_defect = readExtractionDefect(raw.extraction_defect);
+  const notice_id = readNoticeId(raw.notice_id);
+  const failure = readIngestFailure(raw.failure);
+  const attempt = typeof raw.attempt === "number" && Number.isInteger(raw.attempt) && raw.attempt > 0 ? raw.attempt : undefined;
 
   return {
     ingest_id: raw.ingest_id,
@@ -334,6 +403,9 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     case_id,
     suggested_content_kind,
     ...(extraction_defect !== undefined ? { extraction_defect } : {}),
+    ...(notice_id !== undefined ? { notice_id } : {}),
+    ...(failure !== undefined ? { failure } : {}),
+    ...(attempt !== undefined ? { attempt } : {}),
   };
 }
 
@@ -372,6 +444,11 @@ export function readIngestUploadId(raw: unknown): string | null {
  */
 export function ingestStatusPath(id: string): string {
   return `/ingest/${encodeURIComponent(id)}/status`;
+}
+
+/** `POST /ingest/{id}/retry` — encoded exactly like `ingestStatusPath`. */
+export function ingestRetryPath(id: string): string {
+  return `/ingest/${encodeURIComponent(id)}/retry`;
 }
 
 // ── Errors — 400/403/413/422 on upload, 409/503 on act, 404 on status ──────────────────────
@@ -441,6 +518,25 @@ export function readActRefusal(err: unknown): { status: number; error: string; m
   if (!isRecord(detail)) return null;
   if (typeof detail.error !== "string" || typeof detail.message !== "string") return null;
   return { status: response.status, error: detail.error, message: detail.message };
+}
+
+/**
+ * The retry route's refusal — FastAPI `HTTPException(detail={"error", "message"?})`, so the body is
+ * WRAPPED: 409 `{"detail":{"error":"not_failed"}}`, 403 `{"detail":{"error":"retry_is_pin_driven",
+ * "message":"..."}}`. Unlike `readActRefusal`, `message` is optional. `null` when not an HTTP error;
+ * `error` is null when the body carries none.
+ */
+export function readIngestRetryRefusal(err: unknown): { status: number; error: string | null; message: string } | null {
+  if (!isRecord(err)) return null;
+  const response = err.response;
+  if (!isRecord(response) || typeof response.status !== "number") return null;
+  const data = response.data;
+  const detail = isRecord(data) && isRecord(data.detail) ? data.detail : null;
+  return {
+    status: response.status,
+    error: detail && typeof detail.error === "string" ? detail.error : null,
+    message: detail && typeof detail.message === "string" ? detail.message : "",
+  };
 }
 
 // ── The promotion id ─────────────────────────────────────────────────────────────────────────
@@ -542,12 +638,17 @@ export function ingestEventLadder(stage: IngestRowStage | null): EventRung[] | n
 
 // ── Polling ──────────────────────────────────────────────────────────────────────────────
 
+/** How often a failed+timeout row is re-read (a late run can still advance it). */
+export const INGEST_FAILED_TIMEOUT_POLL_MS = 30000;
+
 /** Whether a card polling this row should stop: a duplicate (any row whose `duplicate` is
  *  non-null, including one whose original is invisible — `stage === null`), or a row that has
- *  reached `promoted`, `rejected` or `failed`. `review` keeps polling — a viewer
+ *  reached `promoted`, `rejected` or `failed` — EXCEPT a `failed` row whose `failure.reason_code` is
+ *  `timeout`, which a late run can still move on (packet §3), so it is not done. `review` keeps polling — a viewer
  *  may still be about to act. */
-export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicate">): boolean {
+export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicate" | "failure">): boolean {
   if (row.duplicate !== null) return true;
+  if (row.stage === "failed" && row.failure?.reason_code === INGEST_FAILURE_TIMEOUT) return false;
   // `case_opened` is the event branch's terminal: nothing in this route moves it on.
   return (
     row.stage === "promoted" ||

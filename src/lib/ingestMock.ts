@@ -33,7 +33,7 @@
  * mutating nothing.
  */
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
-import { promotionIngestId, type IngestStage } from "./ingestWire";
+import { promotionIngestId, type IngestFailure, type IngestStage } from "./ingestWire";
 import type { IngestOrigin } from "./ingestOrigin";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
@@ -61,6 +61,9 @@ interface MockRow {
   /** PROPOSED wire field (see `IngestStatusRow.suggested_content_kind`): set only when a drop reaches
    *  `review`, from the filename — /pcn/i → "pcn", /pdn/i → "pdn". Absent otherwise. */
   suggested_content_kind?: string;
+  /** Mirrors the wire's `failure`/`attempt` (33b80988). Set only by `__seedMockFailedFixture` — the mock never fails a drop on its own. */
+  failure?: IngestFailure | null;
+  attempt?: number;
 }
 
 const STORE = new Map<string, MockRow>();
@@ -174,6 +177,26 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   return Promise.resolve({ ...row });
 }
 
+/**
+ * `POST /ingest/{id}/retry`'s mock: a `failed` row goes back to `received`, attempt + 1, failure null;
+ * anything else rejects with the wrapped 409 `not_failed` the real route answers.
+ */
+export function mockRetryIngest(ingestId: string): Promise<unknown> {
+  const row = STORE.get(ingestId);
+  if (row && row.stage === "failed") {
+    row.stage = "received";
+    row.attempt = (row.attempt ?? 1) + 1;
+    row.failure = null;
+    row.updated_at = Date.now();
+    return Promise.resolve({ ingest_id: ingestId, stage: "received", attempt: row.attempt });
+  }
+  const err = new Error(`mock: ingest ${ingestId} is not failed`) as Error & {
+    response?: { status: number; data: { detail: { error: string } } };
+  };
+  err.response = { status: 409, data: { detail: { error: "not_failed" } } };
+  return Promise.reject(err);
+}
+
 function seedReviewTask(row: MockRow): void {
   const task: HumanTask = {
     id: `mock-task-${row.ingest_id}`,
@@ -226,6 +249,15 @@ export function __seedMockOriginFixture(ingestId: string, origin: IngestOrigin |
   const row = STORE.get(ingestId);
   if (!row) throw new Error(`__seedMockOriginFixture: no mock row for ${ingestId}`);
   row.origin = origin;
+}
+
+/** Test/dev-only: marks an existing mock row `failed` with a `failure` object (the mock never fails one itself). */
+export function __seedMockFailedFixture(ingestId: string, failure: IngestFailure): void {
+  const row = STORE.get(ingestId);
+  if (!row) throw new Error(`__seedMockFailedFixture: no mock row for ${ingestId}`);
+  row.stage = "failed";
+  row.failure = failure;
+  row.attempt ??= 1;
 }
 
 /** Test/dev-only reset — the module is a singleton store across the session otherwise. */

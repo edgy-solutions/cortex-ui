@@ -313,6 +313,7 @@ export function answerSearchText(a: Artifact): string {
     ingest?.ingest_id ?? "",
     ingest?.badge ?? "",
     ingest?.duplicate_of ?? "",
+    ingest?.notice_id ?? "",
   ]
     .join(" ")
     .toLowerCase();
