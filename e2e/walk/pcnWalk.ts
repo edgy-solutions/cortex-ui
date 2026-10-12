@@ -29,6 +29,8 @@ export interface WalkConfig {
   /** Path of the PCN PDF on disk (the bytes the sandbox already knows decide `duplicate`). */
   pdfPath: string;
   question: string;
+  /** The app's origin (WALK_BASE_URL). login() will not call the app ready on any other origin. */
+  baseURL?: string;
   /** Directory for screenshots. */
   outDir: string;
   /** Keycloak form selectors; overridable by env in the live spec. */
@@ -85,31 +87,71 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // -- login --------------------------------------------------------------------------------------
 
-/** The app's own text input (InputBar). Present in both the HUD-pill and composer builds. */
-const composerInput = (page: Page): Locator => page.locator('form input[type="text"]').first();
+/**
+ * The app's own text input (InputBar). Present in both the HUD-pill and composer builds.
+ * Scoped to `[data-ingest-composer]`, which only the app renders: a bare `form input[type="text"]`
+ * also matches Keycloak's #username and made login() report a login page as "logged in".
+ */
+export const COMPOSER_INPUT_SELECTOR = '[data-ingest-composer] input[type="text"]';
+const composerInput = (page: Page): Locator => page.locator(COMPOSER_INPUT_SELECTOR).first();
+
+/** Keycloak's own error elements, shown when a submit re-renders the form with a 200. */
+const KC_ERROR_SELECTOR = '#input-error, [id^="input-error"], .alert-error';
+
+const originOf = (u: string): string | null => {
+  try {
+    return new URL(u).origin;
+  } catch {
+    return null;
+  }
+};
+
+/** The app's origin: cfg.baseURL, else WALK_BASE_URL; neither is an error, never a guess. */
+function appOrigin(cfg: WalkConfig): string {
+  const raw = cfg.baseURL || process.env.WALK_BASE_URL;
+  const o = raw ? originOf(raw) : null;
+  if (!o) throw new Error("login: no app origin to compare against (set cfg.baseURL or WALK_BASE_URL)");
+  return o;
+}
 
 /**
  * Log in through the Keycloak form, or do nothing when the app is already authenticated (the
  * mock spec seeds a fake OIDC session). Flow: RequireAuth shows "Synchronize Identity" ->
  * signinRedirect -> Keycloak form -> redirect back.
+ *
+ * READY means something only the app renders (the composer input) AND the page is on the app's
+ * origin. The return label says what actually happened: "already authenticated" only when the app
+ * was ready on first sight and no Keycloak form was ever seen.
  */
 export async function login(page: Page, cfg: WalkConfig, user: string, password: string): Promise<string> {
+  const origin = appOrigin(cfg);
   await page.goto("/");
   const ready = composerInput(page);
   const syncBtn = page.getByRole("button", { name: /synchronize identity/i });
   const kcUser = page.locator(cfg.kc.user);
+  const kcError = page.locator(KC_ERROR_SELECTOR).first();
   const deadline = Date.now() + cfg.timeouts.login;
   let clickedSync = false;
-  let filled = false;
+  let filledAt = 0;
+  let sawForm = false;
   while (Date.now() < deadline) {
-    if (await ready.isVisible().catch(() => false)) {
-      return filled ? "logged in via Keycloak form" : clickedSync ? "logged in (SSO session)" : "already authenticated";
+    if (originOf(page.url()) === origin && (await ready.isVisible().catch(() => false))) {
+      if (filledAt) return "logged in via Keycloak form";
+      if (clickedSync && !sawForm) return "logged in (SSO session)";
+      if (!clickedSync && !sawForm) return "already authenticated";
+      return "logged in via Keycloak form";
     }
-    if (!filled && (await kcUser.isVisible().catch(() => false))) {
-      await kcUser.fill(user);
-      await page.locator(cfg.kc.password).fill(password);
-      await page.locator(cfg.kc.submit).click();
-      filled = true;
+    const formUp = await kcUser.isVisible().catch(() => false);
+    if (formUp) {
+      sawForm = true;
+      if (!filledAt) {
+        await kcUser.fill(user);
+        await page.locator(cfg.kc.password).fill(password);
+        await page.locator(cfg.kc.submit).click();
+        filledAt = Date.now();
+      } else if ((await kcError.isVisible().catch(() => false)) || Date.now() - filledAt > 5_000) {
+        throw new Error("login: Keycloak re-showed the form after submit (bad credentials or realm)");
+      }
     } else if (!clickedSync && (await syncBtn.isVisible().catch(() => false))) {
       clickedSync = true;
       await syncBtn.click();
@@ -263,7 +305,7 @@ export async function ask(page: Page, text: string): Promise<string> {
   await input.waitFor({ state: "visible", timeout: 30_000 });
   await page.waitForFunction(
     () => {
-      const i = document.querySelector('form input[type="text"]') as HTMLInputElement | null;
+      const i = document.querySelector('[data-ingest-composer] input[type="text"]') as HTMLInputElement | null;
       return !!i && !i.disabled;
     },
     undefined,

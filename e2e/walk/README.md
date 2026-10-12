@@ -96,6 +96,7 @@ never a skip.
 | Variable | Required | Meaning |
 |---|---|---|
 | `WALK_BASE_URL` | yes | the deployed UI, e.g. the sandbox URL |
+| `WALK_SPKI_PIN` | yes (live run) | base64 sha256 of the server certificate's SPKI (44 characters ending `=`; comma-separate several). Passed to Chromium as `--ignore-certificate-errors-spki-list`. Absent or malformed: `playwright.walk.config.ts` fails to load, naming the variable (never its value) |
 | `WALK_BOB_USER`, `WALK_BOB_PASSWORD` | yes (pcn, haz, fracas, stale) | Keycloak login for bob (the username the realm expects; not assumed) |
 | `WALK_ALICE_USER`, `WALK_ALICE_PASSWORD` | pcn only | Keycloak login for alice |
 | `WALK_PCN_PDF` | pcn only | path to the PCN26-184 PDF on disk |
@@ -103,6 +104,22 @@ never a skip.
 | `WALK_NOTICE` | no | default `PCN26-184` |
 | `WALK_EXPECT_PARTS` | no | default `5530-184,5530-185` (comma separated) |
 | `WALK_KC_USER_SELECTOR`, `WALK_KC_PASSWORD_SELECTOR`, `WALK_KC_SUBMIT_SELECTOR` | no | default `#username`, `#password`, `#kc-login` |
+
+## TLS: the SPKI pin
+
+The sandbox serves a self-signed leaf. **Chromium ignores PEM bundles** - it reads only the OS trust store -
+so `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE` do nothing for the page. The pin trusts exactly one key
+and leaves verification on for everything else; it does not disable verification (the config never sets
+`ignoreHTTPSErrors`). Get the value from whoever owns the certificate (the platform runbook records it);
+it is not stored in this repo. Compute one from a PEM with:
+
+```
+openssl x509 -in leaf.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64
+```
+
+Live control (not automated: no self-signed-cert library is a dev dependency): run with a WRONG pin and
+expect `ERR_CERT_AUTHORITY_INVALID` at the first `goto`; the right pin gets past TLS. The pure arg-builder
+`spkiPinArg()` is proven offline in `walkLogin.mock.spec.ts`.
 
 ## Run
 
@@ -150,4 +167,9 @@ npx playwright test e2e/walk e2e/staleBundle.spec.ts
   and a not-grounded answer (the step FAILS); for the failing arms the test passes by asserting the walk's
   computed result is `fail`. Also a missing-credential arm (FAILS naming `WALK_BOB_USER`).
   Mutants proven red: `detectAbstain` always false; `creds()` returning instead of throwing.
+- `walkLogin.mock.spec.ts` (no app needed; fake Keycloak): `login()` SUBMITS the form when the app first answers
+  with Keycloak (cross-origin and same-origin), says "already authenticated" / "logged in (SSO session)" only when
+  true, and fails fast when Keycloak re-shows the form; `snapshot()` on a non-app page is the named
+  `snapshot: not on the app` error; `spkiPinArg()` arms. Mutants proven red: the app-ready locator back to
+  `form input[type="text"]`; `spkiPinArg()` returning on an absent pin; `snapshot()` without its guard.
 - `e2e/staleBundle.spec.ts`: see above. Mutant proven red: `compareBundle` always "current".

@@ -33,6 +33,24 @@ export function creds(name: string, env: Env = process.env): UserCreds {
   return { user, password };
 }
 
+/**
+ * `WALK_SPKI_PIN`: base64 sha256 of the server key's SPKI (a comma list is allowed), turned into the
+ * Chromium launch argument. The ONE place the pin is read. A live run REQUIRES it: absent or malformed
+ * throws a message naming the VARIABLE, never its value, so a walk can only fail, never skip or
+ * fall back to ignoring certificate errors. Chromium ignores PEM bundles, so this is the only way
+ * to trust a self-signed leaf; it pins one key and leaves verification on for everything else.
+ */
+export function spkiPinArg(env: Env = process.env): string {
+  const raw = (env.WALK_SPKI_PIN ?? "").trim();
+  if (!raw) throw new Error("WALK_SPKI_PIN: missing required environment variable (base64 sha256 of the server's SPKI; see e2e/walk/README.md)");
+  const pins = raw.split(",").map((s) => s.trim());
+  const ok = (p: string) => /^[A-Za-z0-9+/]{43}=$/.test(p) && Buffer.from(p, "base64").length === 32;
+  if (!pins.every(ok)) {
+    throw new Error("WALK_SPKI_PIN: malformed (each pin must be the base64 of a 32-byte sha256: 44 characters ending in '='; comma-separate several)");
+  }
+  return `--ignore-certificate-errors-spki-list=${pins.join(",")}`;
+}
+
 /** `WALK_ONLY=pcn,haz,fracas,stale` (default: all). An unknown name is an error, not a no-op. */
 export function selectedWalks(env: Env = process.env): WalkName[] {
   const raw = (env.WALK_ONLY ?? "").trim();
