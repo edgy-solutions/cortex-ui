@@ -92,7 +92,8 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     const patch = (p: Partial<IngestTurn>) =>
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {
-      const raw = await uploadIngest(file, kind, email);
+      // content_kind = the format: no leaf kind can be confirmed before the upload (see `uploadIngest`).
+      const raw = await uploadIngest(file, kind, email, kind);
       const duplicate = readDuplicate(raw);
       if (duplicate) {
         // A duplicate is a RESULT about the ORIGINAL. Today's server answers with a fresh row id

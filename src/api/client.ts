@@ -961,12 +961,21 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  * transformRequest has already stringified the body. Naming multipart keeps the body a FormData
  * through transformRequest; the adapter then drops the header and the browser writes it with its
  * `boundary=`. Sealed by `uploadIngest.multipart.test.ts` and `e2e/ingestDrop.spec.ts`.
+ *
+ * `content_kind` is REQUIRED from this app (P0 2026-10-12, architect via Chris). The gateway takes
+ * it as optional (`Form(None)`, gateway.py `ingest_document` at fleet `49aa5e28`), but a drop
+ * that omits it HALTs downstream: doc-tools refuses "no registered content_kind" and the drop goes
+ * `failed`. It is the REGISTERED kind, a separate channel from `kind` (the file format and path
+ * segment): the format (`pdf` is registered, `policy/overlays/openddil-lab/content_kinds/pdf.yaml`)
+ * unless a human confirmed a leaf kind (`pcn`, `pdn`). Today no leaf is confirmable before the
+ * upload (the confirm is `POST /ingest/{id}/content_kind`, after), so the composer sends the format.
  */
-export async function uploadIngest(file: File, kind: string, onBehalfOf: string): Promise<unknown> {
+export async function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kind", kind);
   formData.append("on_behalf_of", onBehalfOf);
+  formData.append("content_kind", contentKind);
   const { data } = await api.post<unknown>("/ingest", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

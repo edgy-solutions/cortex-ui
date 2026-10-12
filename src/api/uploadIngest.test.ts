@@ -29,10 +29,10 @@ beforeEach(() => {
 });
 
 describe("uploadIngest — the multipart body's key set, exactly", () => {
-  it("carries exactly {file, kind, on_behalf_of} — no more, no fewer, and NO origin", async () => {
+  it("carries exactly {file, kind, on_behalf_of, content_kind} — no more, no fewer, and NO origin", async () => {
     mockPost.mockResolvedValue({ data: { ingest_id: "sha256:abc" } });
     const file = new File(["x"], "drawing.pdf", { type: "application/pdf" });
-    await uploadIngest(file, "pdf", "steward@example.com");
+    await uploadIngest(file, "pdf", "steward@example.com", "pdf");
 
     expect(mockPost).toHaveBeenCalledTimes(1);
     const [path, body] = mockPost.mock.calls[0];
@@ -41,7 +41,9 @@ describe("uploadIngest — the multipart body's key set, exactly", () => {
     const keys = new Set((body as FormData).keys());
     // EQUALITY, not containment — a set that merely CONTAINS {file,kind,on_behalf_of} would
     // still pass if an `origin` field (or anything else) had been added alongside them.
-    expect(keys).toEqual(new Set(["file", "kind", "on_behalf_of"]));
+    expect(keys).toEqual(new Set(["file", "kind", "on_behalf_of", "content_kind"]));
+    // Without it doc-tools refuses "no registered content_kind" and the drop goes `failed`.
+    expect((body as FormData).get("content_kind")).toBe("pdf");
   });
 });
 

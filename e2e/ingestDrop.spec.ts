@@ -76,6 +76,8 @@ test("a drop on the composer is cancelled (no navigation), lands a chip, and Sen
   // File went out as `{}` (see `uploadIngest` in src/api/client.ts).
   expect(req.headers()["content-type"] ?? "").toMatch(/^multipart\/form-data; boundary=/);
   expect(req.postDataBuffer()?.toString("latin1")).toContain('filename="PCN26-117.pdf"');
+  // P0 2026-10-12: a dropped .pdf posts content_kind=pdf (absent, doc-tools HALTs the drop).
+  expect(req.postDataBuffer()?.toString("latin1")).toMatch(/name="content_kind"\r\n\r\npdf\r\n/);
   // The drop is a TURN on the answers rail; the turn opens to the status card.
   const entry = page.locator("[data-virtual-item]").filter({ has: page.locator("[data-ingest-stage]") });
   await expect(entry).toHaveCount(1);

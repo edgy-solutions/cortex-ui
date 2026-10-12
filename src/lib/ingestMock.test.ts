@@ -14,7 +14,7 @@ beforeEach(() => __resetIngestMock());
 
 describe("ingestMock responses are accepted by the ingestWire readers", () => {
   it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to review, where it parks for a human", async () => {
-    const id = readIngestUploadId(await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com"));
+    const id = readIngestUploadId(await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com", "pdf"));
     expect(id, "readIngestUploadId refused the mock's upload response").not.toBeNull();
     // The mock advances a stage per fetch. Poll it the way the card does, and refuse any row the
     // reader rejects — one stage the mock spells wrong would leave the card blank at that step.
@@ -30,8 +30,8 @@ describe("ingestMock responses are accepted by the ingestWire readers", () => {
   });
 
   it("a duplicate: both reads accept it, and the row carries the duplicate object", async () => {
-    await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com");
-    const id = readIngestUploadId(await uploadIngest(file("spec-dup.pdf"), "pdf", "alice@example.com"));
+    await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com", "pdf");
+    const id = readIngestUploadId(await uploadIngest(file("spec-dup.pdf"), "pdf", "alice@example.com", "pdf"));
     expect(id, "readIngestUploadId refused the mock's duplicate upload response").not.toBeNull();
     const row = readIngestStatusRow(await fetchIngestStatus(id!));
     expect(row, "readIngestStatusRow refused the mock's duplicate row").not.toBeNull();
@@ -41,8 +41,8 @@ describe("ingestMock responses are accepted by the ingestWire readers", () => {
   // The roll-11 capture showed a duplicate's own ingest_id is a uuid, not sha256 — mirrored here
   // (M7 fires this test if the mock's duplicate id regresses back to sha form).
   it("a duplicate upload yields a uuid ingest_id, the reader accepts its row, and its stage does not advance on a second fetch", async () => {
-    await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com");
-    const id = readIngestUploadId(await uploadIngest(file("spec-dup.pdf"), "pdf", "alice@example.com"));
+    await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com", "pdf");
+    const id = readIngestUploadId(await uploadIngest(file("spec-dup.pdf"), "pdf", "alice@example.com", "pdf"));
     expect(id, "readIngestUploadId refused the mock's duplicate upload response").not.toBeNull();
     expect(id, "a duplicate's own ingest_id must not be sha256 form").not.toMatch(/^sha256:/);
 

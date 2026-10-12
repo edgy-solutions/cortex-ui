@@ -277,17 +277,18 @@ describe("send", () => {
     expect(send.disabled).toBe(false);
   });
 
-  it("with chip + kind calls uploadIngest once with (file, kind, email) and starts no interview", async () => {
+  it("with chip + kind calls uploadIngest once with (file, kind, email, content_kind) and starts no interview", async () => {
     uploadIngest.mockResolvedValue({ ingest_id: "ing-1", stage: "received", duplicate: null });
     const r = render(<InputBar />);
     const send = await attach(r);
     fireEvent.change(r.getByPlaceholderText(/Add a note/), { target: { value: "for the PCN review" } });
     fireEvent.click(send);
     expect(uploadIngest).toHaveBeenCalledTimes(1);
-    const [file, kind, email] = uploadIngest.mock.calls[0];
+    const [file, kind, email, contentKind] = uploadIngest.mock.calls[0];
     expect((file as File).name).toBe("PCN26-117.pdf");
     expect(kind).toBe("pdf");
     expect(email).toBe("steward@example.com");
+    expect(contentKind, "a dropped .pdf must post content_kind=pdf").toBe("pdf");
     expect(sendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(useIngestComposerStore.getState().turns[0].phase).toBe("status"));
     expect(useIngestComposerStore.getState().turns[0].text).toBe("for the PCN review");

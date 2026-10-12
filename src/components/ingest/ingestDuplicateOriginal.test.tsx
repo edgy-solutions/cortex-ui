@@ -142,8 +142,8 @@ describe("a duplicate shows the original", () => {
 describe("the mock mirrors today's server", () => {
   it("a duplicate answer carries a fresh uuid ingest_id AND of_ingest_id naming the original, whose status fetches", async () => {
     __resetIngestMock();
-    const first = (await mockUpload(new File(["a"], "first.pdf"), "pdf", "a@example.com")) as { ingest_id: string };
-    const dup = (await mockUpload(new File(["a"], "first-dup.pdf"), "pdf", "a@example.com")) as {
+    const first = (await mockUpload(new File(["a"], "first.pdf"), "pdf", "a@example.com", "pdf")) as { ingest_id: string };
+    const dup = (await mockUpload(new File(["a"], "first-dup.pdf"), "pdf", "a@example.com", "pdf")) as {
       ingest_id: string; stage: string; duplicate: { of_ingest_id: string; message: string };
     };
     expect(dup.ingest_id).not.toBe(first.ingest_id);
