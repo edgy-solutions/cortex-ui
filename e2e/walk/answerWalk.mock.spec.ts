@@ -6,13 +6,14 @@
  * Plus: a missing credential FAILS (naming the variable) and never skips.
  */
 import { test, expect, type Browser, type Page } from "@playwright/test";
-import { Walk, DEFAULT_KC, defaultQuestion, type WalkConfig } from "./pcnWalk";
+import { Walk, login, DEFAULT_KC, defaultQuestion, type WalkConfig } from "./pcnWalk";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runHaz, runFracas, HAZ_PROMPT, FRACAS_PROMPT, classifyAnswer, askIdOf, readVersionJson, type AnswerSnapshot } from "./answerWalk";
-import { installWalkRoutes, newWalkMock, type AnswerMode } from "./walkRoutes";
-import { creds, walkPassed, type Env } from "./walkEnv";
+import { installWalkRoutes, newWalkMock, BOB_CELLS, type AnswerMode, type Cell } from "./walkRoutes";
+import { creds, walkPassed, WALK_NAMES, type Env } from "./walkEnv";
+import { WALK_PERSONAS, WALK_TITLES } from "./walkPersona";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -31,10 +32,10 @@ function makeCfg(): WalkConfig {
   };
 }
 
-async function bobPage(browser: Browser, mode: AnswerMode, question: string): Promise<{ page: Page; close: () => Promise<void> }> {
+async function bobPage(browser: Browser, mode: AnswerMode, question: string, bobCells?: Cell[]): Promise<{ page: Page; close: () => Promise<void> }> {
   const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const page = await ctx.newPage();
-  await installWalkRoutes(page, newWalkMock({ drop: "new", answer: mode, answerTo: "bob", question }), "bob");
+  await installWalkRoutes(page, newWalkMock({ drop: "new", answer: mode, answerTo: "bob", question, bobCells }), "bob");
   return { page, close: () => ctx.close() };
 }
 
@@ -88,7 +89,7 @@ for (const w of ARMS) {
       expect(last.detail).toMatch(arm.detail);
       expect(thrown).toBe(arm.want === "fail");
       expect(walkPassed({ walk: w.walk as "haz", steps: walk.results, error: thrown ? "x" : null })).toBe(arm.want === "pass");
-      if (arm.want === "pass") expect(walk.results.map((r) => r.status)).toEqual(["pass", "pass", "pass"]);
+      if (arm.want === "pass") expect(walk.results.map((r) => r.status)).toEqual(["pass", "pass", "pass", "pass"]);
     });
   }
 }
@@ -208,4 +209,86 @@ test("the walk never opens a Node request context nor waives certificate errors"
     const code = readFileSync(path.join(dir, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
     expect.soft(code, f).not.toMatch(/\.request\.(get|post|fetch|newContext)\(|context\(\)\.request|APIRequestContext|ignoreHTTPSErrors/);
   }
+});
+
+// -- persona per row (architect ruling: each walk row names its persona) -------------------------
+
+const triggerAttrs = (page: Page) =>
+  page.locator("[data-pp-trigger]").first().evaluate((e) => ({
+    persona: e.getAttribute("data-pp-active-persona"),
+    domain: e.getAttribute("data-pp-active-domain"),
+  }));
+
+test("persona: the haz walk PICKS SAFETY_ENGINEER/SUSTAINMENT (bob defaults to DATA_STEWARD/AVIATION) before it asks", async ({ browser }) => {
+  const { page, close } = await bobPage(browser, "haz-card", HAZ_PROMPT);
+  const walk = new Walk(makeCfg());
+  let before: unknown = null;
+  try {
+    // Positive control: with no pick, the trigger reads bob's DEFAULT, so the later read is a pick, not an inheritance.
+    await login(page, walk.cfg, BOB_ENV.WALK_BOB_USER!, BOB_ENV.WALK_BOB_PASSWORD!);
+    await page.locator("[data-pp-trigger]").first().waitFor({ state: "visible", timeout: 20_000 });
+    before = await triggerAttrs(page);
+    await runHaz(walk, page, BOB_ENV);
+    expect(await triggerAttrs(page)).toEqual({ persona: "SAFETY_ENGINEER", domain: "SUSTAINMENT" });
+  } finally {
+    await close();
+  }
+  expect(before).toEqual({ persona: "DATA_STEWARD", domain: "AVIATION" });
+  const steps = walk.results.map((r) => r.step);
+  expect(steps.slice(-4)).toEqual(["creds-bob", "login-bob", "persona-bob", "haz-draft-risk-assessment"]);
+  expect(walk.results.find((r) => r.step === "persona-bob")!.detail).toBe("bob answers as SAFETY_ENGINEER/SUSTAINMENT");
+});
+
+test("persona: a bob NOT offered SAFETY_ENGINEER FAILS the persona step with the not-offered message (never a skip, never asks)", async ({ browser }) => {
+  const cells = BOB_CELLS.filter(([p]) => p !== "SAFETY_ENGINEER");
+  const { page, close } = await bobPage(browser, "haz-card", HAZ_PROMPT, cells);
+  const walk = new Walk(makeCfg());
+  let thrown: Error | null = null;
+  try {
+    await runHaz(walk, page, BOB_ENV);
+  } catch (e) {
+    thrown = e as Error;
+  } finally {
+    await close();
+  }
+  expect(thrown?.message).toBe("walk: bob is not offered SAFETY_ENGINEER/SUSTAINMENT (offered: DATA_STEWARD)");
+  const last = walk.results[walk.results.length - 1]!;
+  expect(last.step).toBe("persona-bob");
+  expect(last.status).toBe("fail");
+  expect(last.detail).toBe(thrown!.message);
+  expect(walk.results.some((r) => r.step === "haz-draft-risk-assessment")).toBe(false);
+});
+
+test("persona: SAFETY_ENGINEER offered but not the declared DOMAIN FAILS naming the domains offered", async ({ browser }) => {
+  const cells = BOB_CELLS.filter(([p, d]) => !(p === "SAFETY_ENGINEER" && d === "SUSTAINMENT")).concat([["SAFETY_ENGINEER", "AVIATION"], ["SAFETY_ENGINEER", "LOGISTICS"]]);
+  const { page, close } = await bobPage(browser, "haz-card", HAZ_PROMPT, cells);
+  const walk = new Walk(makeCfg());
+  let thrown: Error | null = null;
+  try {
+    await runHaz(walk, page, BOB_ENV);
+  } catch (e) {
+    thrown = e as Error;
+  } finally {
+    await close();
+  }
+  expect(thrown?.message).toBe("walk: bob is not offered SAFETY_ENGINEER/SUSTAINMENT (offered: AVIATION, LOGISTICS)");
+  expect(walk.results[walk.results.length - 1]!.step).toBe("persona-bob");
+});
+
+test("creds(): erin is a user name like any other - a missing erin names WALK_ERIN_USER, WALK_ERIN_PASSWORD", () => {
+  expect(() => creds("erin", {})).toThrow(/WALK_ERIN_USER, WALK_ERIN_PASSWORD/);
+  expect(() => creds("erin", { WALK_ERIN_USER: "u", WALK_ERIN_PASSWORD: "p" })).not.toThrow();
+});
+
+test("persona table: every row is declared, titles say the declared user, and no row is erin's", () => {
+  expect(Object.keys(WALK_PERSONAS).sort()).toEqual([...WALK_NAMES].sort());
+  expect(WALK_TITLES.haz).toContain(`as ${WALK_PERSONAS.haz.user} (live)`);
+  expect(WALK_TITLES.fracas).toContain(`as ${WALK_PERSONAS.fracas.user} (live)`);
+  expect(WALK_TITLES.haz).toContain("HAZ-1003");
+  expect(HAZ_PROMPT).toBe("draft a risk assessment for HAZ-1003");
+  for (const p of [WALK_PERSONAS.haz, WALK_PERSONAS.fracas, WALK_PERSONAS.pcn.asker]) {
+    expect([p.role, p.domains]).toEqual(["SAFETY_ENGINEER", ["SUSTAINMENT"]]);
+  }
+  const users = [WALK_PERSONAS.pcn.dropper.user, WALK_PERSONAS.pcn.asker.user, WALK_PERSONAS.haz.user, WALK_PERSONAS.fracas.user, WALK_PERSONAS.stale.user];
+  expect(users).not.toContain("erin");
 });

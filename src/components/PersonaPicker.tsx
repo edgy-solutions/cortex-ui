@@ -242,6 +242,9 @@ export function PersonaPicker() {
         aria-expanded={open}
         tabIndex={0}
         title="Configure who answers"
+        data-pp-trigger
+        data-pp-active-persona={selectedPersona ?? ""}
+        data-pp-active-domain={activeDomain}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
@@ -270,6 +273,7 @@ export function PersonaPicker() {
               return (
                 <div
                   key={p}
+                  data-pp-persona={p}
                   className={"pp-item" + (sel ? " pp-selected" : "")}
                   role="menuitemradio"
                   aria-checked={sel}
@@ -289,6 +293,7 @@ export function PersonaPicker() {
               return (
                 <div
                   key={d}
+                  data-pp-domain={d}
                   className={"pp-item" + (sel ? " pp-selected" : "")}
                   role="menuitemradio"
                   aria-checked={sel}

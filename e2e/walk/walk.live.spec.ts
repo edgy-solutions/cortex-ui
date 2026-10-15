@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Walk, DEFAULT_KC, defaultQuestion, runWalk, type WalkConfig } from "./pcnWalk";
 import { runHaz, runFracas, runStale } from "./answerWalk";
+import { WALK_PERSONAS, WALK_TITLES } from "./walkPersona";
 import { creds, selectedWalks, summaryTable, walkPassed, type WalkName, type WalkOutcome } from "./walkEnv";
 
 const env = process.env as Record<string, string | undefined>;
@@ -99,8 +100,9 @@ test("PCN walk: drop -> promote -> ask (live)", async ({ browser }) => {
   const walk = new Walk(cfg);
   const v = await servedVersion(browser);
   await record("pcn", walk, { servedGitSha: v.sha, servedVersion: v.body, notice: cfg.notice, expectParts: cfg.expectParts }, async () => {
-    const a = creds("alice");
-    const b = creds("bob");
+    // The creds are the table's users and nobody else's: a missing WALK_<USER>_* fails THIS row naming the var.
+    const a = creds(WALK_PERSONAS.pcn.dropper.user);
+    const b = creds(WALK_PERSONAS.pcn.asker.user);
     if (!cfg.pdfPath) throw new Error("walk: missing required environment variable WALK_PCN_PDF");
     if (!existsSync(cfg.pdfPath)) throw new Error(`walk: WALK_PCN_PDF does not exist: ${cfg.pdfPath}`);
     const ca = await browser.newContext({ baseURL });
@@ -115,8 +117,8 @@ test("PCN walk: drop -> promote -> ask (live)", async ({ browser }) => {
 });
 
 for (const [name, title, run] of [
-  ["haz", "HAZ walk: draft a risk assessment for HAZ-1004 as bob (live)", runHaz],
-  ["fracas", "FRACAS walk: failures for part 5530-184 as bob (live)", runFracas],
+  ["haz", WALK_TITLES.haz, runHaz],
+  ["fracas", WALK_TITLES.fracas, runFracas],
 ] as const) {
   test(title, async ({ browser }) => {
     test.skip(!selected.includes(name), `WALK_ONLY excludes ${name}`);
