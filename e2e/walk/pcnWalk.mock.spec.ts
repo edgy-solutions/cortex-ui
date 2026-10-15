@@ -56,8 +56,8 @@ async function twoUsers(browser: Browser, m: WalkMock): Promise<{ alice: Page; b
   };
 }
 
-async function setup(browser: Browser, dropMode: DropMode, answer: AnswerMode) {
-  const m = newWalkMock({ drop: dropMode, answer });
+async function setup(browser: Browser, dropMode: DropMode, answer: AnswerMode, answerTo: "alice" | "bob" = "bob") {
+  const m = newWalkMock({ drop: dropMode, answer, answerTo });
   const u = await twoUsers(browser, m);
   return { m, ...u, walk: new Walk(makeCfg()) };
 }
@@ -77,6 +77,7 @@ test("walk: fresh drop -> review -> bob promotes -> promoted -> ask -> parts tab
     "login-bob:pass",
     "3-4-bob-promote:pass",
     "5-promoted:pass",
+    "persona-bob:pass",
     "6-ask:pass",
     "7-parts-table:pass",
     "8-provenance:pass",
@@ -102,6 +103,8 @@ test("walk: duplicate drop passes step 1, skips 2-5, and the ask still runs", as
     "2-extracting-review:skipped",
     "3-4-bob-promote:skipped",
     "5-promoted:skipped",
+    "login-bob:pass",
+    "persona-bob:pass",
     "6-ask:pass",
     "7-parts-table:pass",
     "8-provenance:pass",
@@ -114,7 +117,7 @@ test("walk: duplicate drop passes step 1, skips 2-5, and the ask still runs", as
 });
 
 test("negative control: a KNOWLEDGE_DOCUMENT answer fails assertPartsTable naming the roll-23 symptom", async ({ browser }) => {
-  const { alice, walk, close } = await setup(browser, "duplicate", "knowledge-document");
+  const { alice, walk, close } = await setup(browser, "duplicate", "knowledge-document", "alice");
   try {
     await login(alice, walk.cfg, "", "");
     await drop(alice, walk);

@@ -43,7 +43,27 @@ export type AnswerMode =
   | "abstain-fracas"
   | "not-grounded";
 
+export type Cell = [persona: string, domain: string];
+
+/** What /me/entitlements serves per user. bob mirrors the sandbox: DATA_STEWARD by default, SAFETY_ENGINEER offered. */
+export const BOB_CELLS: Cell[] = [
+  ["SAFETY_ENGINEER", "SUSTAINMENT"],
+  ["SAFETY_ENGINEER", "MESH"],
+  ["SAFETY_ENGINEER", "DOCS"],
+  ["DATA_STEWARD", "AVIATION"],
+  ["DATA_STEWARD", "MESH"],
+  ["DATA_STEWARD", "DOCS"],
+];
+/** alice only drops: one persona is enough for the picker to render; she picks nothing. */
+export const ALICE_CELLS: Cell[] = [
+  ["DATA_STEWARD", "AVIATION"],
+  ["DATA_STEWARD", "MESH"],
+  ["DATA_STEWARD", "DOCS"],
+];
+
 export interface WalkMock {
+  /** The cells /me/entitlements serves, per user (the first cell is the default). */
+  cells: { alice: Cell[]; bob: Cell[] };
   drop: DropMode;
   answer: AnswerMode;
   notice: string;
@@ -68,8 +88,10 @@ export function newWalkMock(o: {
   parts?: string[];
   answerTo?: "alice" | "bob";
   question?: string;
+  bobCells?: Cell[];
 }): WalkMock {
   return {
+    cells: { alice: ALICE_CELLS, bob: o.bobCells ?? BOB_CELLS },
     drop: o.drop,
     answer: o.answer,
     notice: o.notice ?? "PCN26-184",
@@ -122,13 +144,13 @@ function answerBody(m: WalkMock): { component: Record<string, unknown>; routing:
   const routed = capturedRouting("2026-09-19-payload-finance-burn-rate.json");
   switch (m.answer) {
     case "haz-card":
-      return { component: { archetype: "KNOWLEDGE_DOCUMENT", markdown_content: "## Risk assessment HAZ-1004\n\nSeverity and likelihood recorded." }, routing: routed };
+      return { component: { archetype: "KNOWLEDGE_DOCUMENT", markdown_content: "## Risk assessment HAZ-1003\n\nSeverity and likelihood recorded." }, routing: routed };
     case "haz-refusal":
       return {
         component: {
           archetype: "KNOWLEDGE_DOCUMENT",
           markdown_content: "",
-          refusal: { refused: true, outcome: "unknown_hazard", reason: "HAZ-1004 is not held", hazard_id: "HAZ-1004" },
+          refusal: { refused: true, outcome: "unknown_hazard", reason: "HAZ-1003 is not held", hazard_id: "HAZ-1003" },
         },
         routing: routed,
       };
@@ -146,7 +168,7 @@ function answerBody(m: WalkMock): { component: Record<string, unknown>; routing:
       return { component: refusedRanking("unknown part '5530-184'"), routing: routed };
     case "abstain-haz":
       // ELICITATION fixture shape (elicitation.ts "abstained"), with the platform's live words.
-      return { component: { archetype: "ELICITATION", disposition: "abstain", status: "slot_abstain", message: "I could not find anything called 'HAZ-1004'." }, routing: routed };
+      return { component: { archetype: "ELICITATION", disposition: "abstain", status: "slot_abstain", message: "I could not find anything called 'HAZ-1003'." }, routing: routed };
     case "abstain-fracas":
       return { component: { archetype: "ELICITATION", disposition: "abstain", status: "slot_abstain", message: "I could not find anything called '5530-184'." }, routing: routed };
     case "not-grounded":
@@ -283,6 +305,18 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
         if (m.promoted) return json(route, 200, { ...promotedRow, ingest_id: WALK_INGEST_ID, sha256: WALK_SHA });
         const stage = m.statusCalls === 1 ? "received" : m.statusCalls === 2 ? "extracting" : "review";
         return json(route, 200, row(stage));
+      }
+      if (method === "GET" && p === "/me/entitlements") {
+        const cells = m.cells[who];
+        // bob's default is DATA_STEWARD/AVIATION, not his first cell: the walk must PICK, not inherit.
+        const def = who === "bob" ? cells.find(([pr, d]) => pr === "DATA_STEWARD" && d === "AVIATION") ?? cells[0] : cells[0];
+        return json(route, 200, {
+          user_id: who === "bob" ? "sub-bob" : "sub-alice",
+          email: who === "bob" ? BOB : ALICE,
+          cells: cells.map(([persona, domain]) => ({ persona, domain })),
+          default: def ? { persona: def[0], domain: def[1] } : null,
+          source: "topaz",
+        });
       }
       if (method === "GET" && p === "/me/human_tasks") {
         return json(route, 200, who === "bob" ? { ...humanTaskRow, email: BOB } : { email: ALICE, tasks: [] });

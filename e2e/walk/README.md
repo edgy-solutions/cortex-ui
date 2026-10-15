@@ -5,8 +5,8 @@ Playwright invocation runs the selected walks in order; each walk gets its own b
 
 | Walk | Who | What it checks |
 |---|---|---|
-| `pcn` | alice drops and asks; bob promotes | the PCN26-184 chain below |
-| `haz` | bob | `draft a risk assessment for HAZ-1004` gets a card or a named refusal |
+| `pcn` | alice drops; bob promotes and asks | the PCN26-184 chain below |
+| `haz` | bob | `draft a risk assessment for HAZ-1003` gets a card or a named refusal |
 | `fracas` | bob | `what failures are recorded for part 5530-184` gets a FRACAS card or a named refusal |
 | `stale` | bob | on a fresh load there is no stale-bundle pill, and `/version.json` names the bundle's own sha |
 
@@ -21,7 +21,7 @@ Playwright invocation runs the selected walks in order; each walk gets its own b
 | 2 | wait for `review` (~100 s) | alice's card reaches `review` |
 | 3-4 | bob opens Tasks, acts `promoted` with a reason | the act POST returns 200 |
 | 5 | alice's card reaches `promoted` | within 60 s |
-| 6 | alice asks "which parts does PCN26-184 affect" | the question is sent |
+| 6 | bob picks SAFETY_ENGINEER/SUSTAINMENT (step `persona-bob`), then asks "which parts does PCN26-184 affect" | the question is sent |
 | 7 | the answer | a table titled "Parts affected by PCN26-184" with rows 5530-184 and 5530-185 |
 | 8 | provenance floor | `obtained_via: user-drop` |
 
@@ -38,7 +38,7 @@ records which of (a)/(b) was seen and the heading or outcome name, so the fix is
 
 | Walk | Prompt (verbatim) | Today's live behaviour (FAILS) | Pass condition |
 |---|---|---|---|
-| HAZ | `draft a risk assessment for HAZ-1004` | routes to `draftRiskAssessment` with `instance_resolved:false`, abstains: "I could not find anything called 'HAZ-1004'" (invincible-agent `sessions/2026-10-10-packet-to-saf-fracas-verbs-dispatch-as-svc-supervisor-and-refuse-no-person.md:62-68`) | a domain card, or a named refusal |
+| HAZ | `draft a risk assessment for HAZ-1003` | routes to `draftRiskAssessment` with `instance_resolved:false`, abstains: "I could not find anything called 'HAZ-1003'" (invincible-agent `sessions/2026-10-10-packet-to-saf-fracas-verbs-dispatch-as-svc-supervisor-and-refuse-no-person.md:62-68`) | a domain card, or a named refusal |
 | FRACAS | `what failures are recorded for part 5530-184` | rev 185 answered NOT GROUNDED / no capability for this subject (`no_verb_classified`) (invincible-agent `docs/measurements/hand-repro-walk-sheet.md:14,22-31`) | a FRACAS card, or a named refusal; if the refusal names `unknown part '5530-184'` the detail says so |
 
 Detection limits, stated plainly. No `data-*` attribute names the mounted archetype (the per-component
@@ -107,11 +107,31 @@ never a skip.
 | `WALK_SPKI_PIN` | yes (live run) | base64 sha256 of the server certificate's SPKI (44 characters ending `=`; comma-separate several). Passed to Chromium as `--ignore-certificate-errors-spki-list`. Absent or malformed: `playwright.walk.config.ts` fails to load, naming the variable (never its value) |
 | `WALK_BOB_USER`, `WALK_BOB_PASSWORD` | yes (pcn, haz, fracas, stale) | Keycloak login for bob (the username the realm expects; not assumed) |
 | `WALK_ALICE_USER`, `WALK_ALICE_PASSWORD` | pcn only | Keycloak login for alice |
+| `WALK_ERIN_USER`, `WALK_ERIN_PASSWORD` | no row today | Keycloak login for erin (`erin@example.com`, the "clean walker" in policy). `creds("erin")` works like any name, but no row declares her, so nothing reads these yet |
 | `WALK_PCN_PDF` | pcn only | path to the PCN26-184 PDF on disk |
 | `WALK_ONLY` | no | `pcn,haz,fracas,stale` subset; default all |
 | `WALK_NOTICE` | no | default `PCN26-184` |
 | `WALK_EXPECT_PARTS` | no | default `5530-184,5530-185` (comma separated) |
 | `WALK_KC_USER_SELECTOR`, `WALK_KC_PASSWORD_SELECTOR`, `WALK_KC_SUBMIT_SELECTOR` | no | default `#username`, `#password`, `#kc-login` |
+
+## Persona per row
+
+Each row names its persona in `walkPersona.ts`, and its creds come from `creds(<that user>)` only: a row
+whose `WALK_<USER>_*` is missing fails naming the variable. After login and before asking, the walk opens
+the persona picker, picks the role and the domain, and reads the trigger back (step `persona-<user>`). A
+role or domain the user is not offered FAILS with `walk: <user> is not offered <ROLE>/<DOMAIN> (offered: ...)`;
+it never skips. bob's default is DATA_STEWARD/AVIATION, so without the pick the walk would ask as the wrong
+persona. The picker is single-select: only the first declared domain is clicked (MESH and DOCS are platform
+domains, never offered, kept in scope at send).
+
+| Row | User | Role | Domain | Census row (invincible-agent `docs/measurements/walk-census.yaml`) |
+|---|---|---|---|---|
+| `pcn` drop | alice | none | none | (no pick; the drop is unchanged) |
+| `pcn` ask | bob | SAFETY_ENGINEER | SUSTAINMENT | `sustainment-which-parts-does-pcn26-182-affect` |
+| `haz` | bob | SAFETY_ENGINEER | SUSTAINMENT | `safety-haz-1003-risk-assessment` |
+| `fracas` | bob | SAFETY_ENGINEER | SUSTAINMENT | `repro-failures-recorded-for-part-5530-184` |
+| `stale` | bob | none | none | (only checks the pill) |
+| (none) | erin | | | no row is erin's |
 
 ## TLS: the SPKI pin
 

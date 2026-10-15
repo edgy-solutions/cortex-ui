@@ -12,6 +12,7 @@
 import path from "node:path";
 import { mkdirSync } from "node:fs";
 import type { Page, Locator } from "@playwright/test";
+import { WALK_PERSONAS, type WalkPersona } from "./walkPersona";
 
 export type StepStatus = "pass" | "fail" | "skipped";
 export interface StepResult {
@@ -386,14 +387,62 @@ export async function assertProvenance(page: Page, expected = "user-drop", timeo
 
 // -- the whole chain ----------------------------------------------------------------------------
 
+// -- persona ------------------------------------------------------------------------------------
+
+/**
+ * Pick the declared persona in the PersonaPicker, then read the trigger back. bob's default is
+ * DATA_STEWARD, so a walk that skips this asks as the wrong persona and answers for the wrong scope.
+ * Hooks: `data-pp-trigger` (with `data-pp-active-persona` / `-domain`), `data-pp-persona`, `data-pp-domain`
+ * (raw values, not the prettified text). Only `domains[0]` is clickable: the picker is single-select.
+ * A role or domain the user is not offered is a FAILED step, never a skip.
+ */
+export async function selectPersona(page: Page, persona: WalkPersona, timeoutMs = 20_000): Promise<string> {
+  const { user, role, domains } = persona;
+  const domain = domains?.[0];
+  if (!role || !domain) throw new Error(`walk: selectPersona called for ${user} with no role/domain declared`);
+  const trigger = page.locator("[data-pp-trigger]").first();
+  await trigger.waitFor({ state: "visible", timeout: timeoutMs }).catch(() => {
+    throw new Error(`walk: ${user} has no persona picker within ${timeoutMs} ms (url ${page.url()}); entitlements may not have loaded`);
+  });
+  const attrs = (sel: string, attr: string) =>
+    page.locator(sel).evaluateAll((els, a) => els.map((e) => e.getAttribute(a) ?? ""), attr);
+  await trigger.click();
+  await page.locator("[data-pp-persona]").first().waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
+  const personas = await attrs("[data-pp-persona]", "data-pp-persona");
+  if (!personas.includes(role)) {
+    throw new Error(`walk: ${user} is not offered ${role}/${domain} (offered: ${personas.join(", ") || "nothing"})`);
+  }
+  await page.locator(`[data-pp-persona="${role}"]`).click();
+  // One pickable domain closes the palette by itself; several leave it open for the domain click.
+  const domainItems = await attrs("[data-pp-domain]", "data-pp-domain");
+  if (domainItems.length > 0) {
+    if (!domainItems.includes(domain)) {
+      throw new Error(`walk: ${user} is not offered ${role}/${domain} (offered: ${domainItems.join(", ")})`);
+    }
+    await page.locator(`[data-pp-domain="${domain}"]`).click();
+  }
+  const gotRole = (await trigger.getAttribute("data-pp-active-persona")) ?? "";
+  const gotDomain = (await trigger.getAttribute("data-pp-active-domain")) ?? "";
+  if (gotRole !== role || gotDomain !== domain) {
+    throw new Error(`walk: ${user} picked ${role}/${domain} but the picker reads ${gotRole || "-"}/${gotDomain || "-"}`);
+  }
+  return `${user} answers as ${gotRole}/${gotDomain}`;
+}
+
 export interface WalkPages {
   alice: Page;
   bob: Page;
   aliceCreds?: { user: string; password: string };
   bobCreds?: { user: string; password: string };
+  /** Who asks and as what. Default: the row declared in walkPersona.ts. */
+  asker?: WalkPersona;
 }
 
-/** Steps 1-8. A `duplicate` drop passes step 1 and skips 2-5; the ask always runs. */
+/**
+ * Steps 1-8. A `duplicate` drop passes step 1 and skips 2-5; the ask always runs.
+ * The ask is BOB's (census: `sustainment-which-parts-does-pcn26-182-affect` = bob / SAFETY_ENGINEER /
+ * SUSTAINMENT): after login he picks that persona, then asks, and steps 7-8 read his page.
+ */
 export async function runWalk(walk: Walk, p: WalkPages): Promise<void> {
   const { cfg } = walk;
   const a = p.aliceCreds ?? { user: "", password: "" };
@@ -414,7 +463,12 @@ export async function runWalk(walk: Walk, p: WalkPages): Promise<void> {
     await walk.step(p.alice, "5-promoted", () => waitForStage(p.alice, walk.ingestId, "promoted", cfg.timeouts.promoted));
   }
 
-  await walk.step(p.alice, "6-ask", () => ask(p.alice, cfg.question));
-  await walk.step(p.alice, "7-parts-table", () => assertPartsTable(p.alice, cfg));
-  await walk.step(p.alice, "8-provenance", () => assertProvenance(p.alice));
+  // A duplicate drop never reached the promote path, so bob has not logged in yet.
+  if (walk.dropOutcome === "duplicate") await walk.step(p.bob, "login-bob", () => login(p.bob, cfg, b.user, b.password));
+  const asker = p.asker ?? WALK_PERSONAS.pcn.asker;
+  if (asker.user !== "bob") throw new Error(`walk: the PCN ask runs on bob's page; the table declares ${asker.user}`);
+  await walk.step(p.bob, `persona-${asker.user}`, () => selectPersona(p.bob, asker));
+  await walk.step(p.bob, "6-ask", () => ask(p.bob, cfg.question));
+  await walk.step(p.bob, "7-parts-table", () => assertPartsTable(p.bob, cfg));
+  await walk.step(p.bob, "8-provenance", () => assertProvenance(p.bob));
 }

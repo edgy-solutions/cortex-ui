@@ -24,10 +24,11 @@
  *                   draws <h3>Trends</h3>.
  */
 import type { Page, Request } from "@playwright/test";
-import { ask, login, DEFAULT_KC, type Walk, type WalkConfig } from "./pcnWalk";
+import { ask, login, selectPersona, DEFAULT_KC, type Walk, type WalkConfig } from "./pcnWalk";
 import { creds, type Env } from "./walkEnv";
+import { WALK_PERSONAS, type WalkPersona } from "./walkPersona";
 
-export const HAZ_PROMPT = "draft a risk assessment for HAZ-1004";
+export const HAZ_PROMPT = "draft a risk assessment for HAZ-1003";
 export const FRACAS_PROMPT = "what failures are recorded for part 5530-184";
 
 export type AnswerKind = "haz" | "fracas";
@@ -227,22 +228,28 @@ export async function assertAnswer(page: Page, kind: AnswerKind, prompt: string,
   }
 }
 
-/** Log in as `who` through creds(): a missing variable is a FAILED step, never a skip. */
-async function asUser(walk: Walk, page: Page, who: string, env: Env, name: string, work: () => Promise<string>): Promise<void> {
+/**
+ * Log in as the row's declared persona through creds(): a missing variable is a FAILED step, never a
+ * skip, and a row can only read creds for the user it declares. A persona with a role is then picked
+ * in the picker (step `persona-<user>`) BEFORE the work; one without (stale) is not.
+ */
+async function asUser(walk: Walk, page: Page, persona: WalkPersona, env: Env, name: string, work: () => Promise<string>): Promise<void> {
+  const who = persona.user;
   let c: { user: string; password: string } | null = null;
   await walk.step(page, `creds-${who}`, async () => {
     c = creds(who, env);
     return `WALK_${who.toUpperCase()}_USER and WALK_${who.toUpperCase()}_PASSWORD are set`;
   });
   await walk.step(page, `login-${who}`, () => login(page, walk.cfg, c!.user, c!.password));
+  if (persona.role) await walk.step(page, `persona-${who}`, () => selectPersona(page, persona));
   await walk.step(page, name, work);
 }
 
 export const runHaz = (walk: Walk, bob: Page, env: Env): Promise<void> =>
-  asUser(walk, bob, "bob", env, "haz-draft-risk-assessment", () => assertAnswer(bob, "haz", HAZ_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
+  asUser(walk, bob, WALK_PERSONAS.haz, env, "haz-draft-risk-assessment", () => assertAnswer(bob, "haz", HAZ_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
 
 export const runFracas = (walk: Walk, bob: Page, env: Env): Promise<void> =>
-  asUser(walk, bob, "bob", env, "fracas-failures-for-part", () => assertAnswer(bob, "fracas", FRACAS_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
+  asUser(walk, bob, WALK_PERSONAS.fracas, env, "fracas-failures-for-part", () => assertAnswer(bob, "fracas", FRACAS_PROMPT, walk.cfg.timeouts.ask, walk.cfg.baseURL));
 
 // -- the stale-tab check (live: the NO-FALSE-POSITIVE half) --------------------------------------
 
@@ -298,4 +305,4 @@ export async function assertNotStale(page: Page, cfg: WalkConfig, baseURL: strin
 }
 
 export const runStale = (walk: Walk, bob: Page, env: Env, baseURL: string): Promise<void> =>
-  asUser(walk, bob, "bob", env, "stale-fresh-load-no-pill", () => assertNotStale(bob, walk.cfg, baseURL));
+  asUser(walk, bob, WALK_PERSONAS.stale, env, "stale-fresh-load-no-pill", () => assertNotStale(bob, walk.cfg, baseURL));

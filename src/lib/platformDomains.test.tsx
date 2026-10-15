@@ -62,6 +62,21 @@ describe("the picker does not offer platform domains", () => {
   });
 });
 
+describe("the picker carries stable hooks with RAW values (the walk selects by them)", () => {
+  it("trigger, persona items and domain items carry data-pp-* raw values, not nice() text", async () => {
+    await load(matrix(PM, ["PORTFOLIO_LEAD", "PORTFOLIO_PLANNING"]));
+    const c = render(<PersonaPicker />).container;
+    const trig = c.querySelector("[data-pp-trigger]")!;
+    expect(trig.getAttribute("data-pp-active-persona")).toBe("PORTFOLIO_LEAD");
+    expect(trig.getAttribute("data-pp-active-domain")).toBe("PORTFOLIO_PLANNING");
+    fireEvent.click(trig);
+    expect([...c.querySelectorAll("[data-pp-persona]")].map((n) => n.getAttribute("data-pp-persona"))).toEqual(["PORTFOLIO_LEAD"]);
+    expect([...c.querySelectorAll("[data-pp-domain]")].map((n) => n.getAttribute("data-pp-domain"))).toEqual(["PORTFOLIO_PLANNING", "PROGRAM_FINANCE"]);
+    // the visible text is prettified; the hook is not
+    expect(c.querySelector("[data-pp-persona]")!.textContent).not.toContain("PORTFOLIO_LEAD");
+  });
+});
+
 describe("platform domains stay in scope", () => {
   it("the pick is sent first, then every ENTITLED platform domain", () => {
     expect(inScope(["PORTFOLIO_PLANNING"], PM.map(([, d]) => d))).toEqual(["PORTFOLIO_PLANNING", "MESH", "DOCS"]);
