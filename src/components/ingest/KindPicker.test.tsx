@@ -58,7 +58,7 @@ describe("KindPicker — kinds awaiting registration (cad, row 7f)", () => {
     expect(cad.getAttribute("data-ingest-kind-awaiting")).toBe("true");
     expect(cad.getAttribute("aria-disabled")).toBe("true");
     expect(cad.getAttribute("title")).toMatch(/kind_unregistered/);
-    expect(cad.textContent).toContain("awaiting registration");
+    expect(cad.textContent).toContain("not yet accepted");
     for (const k of ["pdf", "xml"]) {
       const el = document.querySelector(`[data-ingest-kind="${k}"]`) as HTMLElement;
       expect((el.querySelector("input") as HTMLInputElement).disabled).toBe(false);

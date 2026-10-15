@@ -63,7 +63,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
               ? {
                   "aria-disabled": true as const,
                   "data-ingest-kind-awaiting": "true",
-                  title: `${k} has no registered content kind yet; the door would refuse it (kind_unregistered).`,
+                  title: `${k} is not yet accepted: it has no registered content kind, so the door would refuse it (kind_unregistered).`,
                 }
               : {})}
           >
@@ -81,7 +81,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
             />
             {k}
             {awaiting && (
-              <span className="text-[9px] font-mono text-amber-400/80">awaiting registration</span>
+              <span className="text-[9px] font-mono text-amber-400/80">not yet accepted</span>
             )}
             {sniffedKind === k && (
               <span className="text-[9px] font-mono text-amber-400/80" data-ingest-kind-sniffed={k}>
