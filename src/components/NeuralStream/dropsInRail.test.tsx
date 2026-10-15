@@ -531,3 +531,54 @@ describe("a failed drop on the rail — failure, attempt, Retry", () => {
     expect(stageText()).toBe("failed");
   });
 });
+
+describe("a refused drop is drawn on the rail entry itself", () => {
+  const REFUSAL = {
+    response: {
+      status: 400,
+      data: { detail: { error: "kind_unregistered", message: "content_kind 'pdf' is not registered", registered: ["pdf", "xml"] } },
+    },
+  };
+  const reasonEl = () => ingestRow()?.querySelector("[data-ingest-reason]") ?? null;
+
+  for (const mode of ["TIME", "TYPE"] as const) {
+    it(`${mode} mode: stage refused, server message verbatim, code chip, registered line, no Retry; entry not opened`, async () => {
+      uploadIngest.mockRejectedValue(REFUSAL);
+      useAnswerPanelStore.setState({ sortMode: mode, typeFilter: mode === "TYPE" ? "INGEST" : null });
+      render(<Harness />);
+      await sendOne();
+      await tick(0);
+      const row = ingestRow()!;
+      expect(row, "no ingest row drawn").not.toBeNull();
+      expect(stageText()).toBe("refused");
+      expect(reasonEl()?.textContent).toBe("content_kind 'pdf' is not registered");
+      expect(reasonEl()?.getAttribute("data-ingest-refused")).toBe("true");
+      expect(row.querySelector("[data-ingest-reason-code]")?.textContent).toBe("kind_unregistered");
+      expect(row.querySelector("[data-ingest-registered]")?.textContent).toBe("registered: pdf, xml");
+      expect(row.querySelector("[data-ingest-retry]")).toBeNull();
+      expect(document.querySelector("[data-ingest-refusal]")).toBeNull();
+    });
+  }
+
+  it("opening the refused entry shows the refusal, not the rose upload error", async () => {
+    uploadIngest.mockRejectedValue(REFUSAL);
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+    act(() => useCanvasStore.getState().setCurrentArtifact(useCanvasStore.getState().artifacts.find((a) => a.id.startsWith("ingest:"))!.id));
+    expect(document.querySelector("[data-ingest-refusal]")?.textContent).toBe("content_kind 'pdf' is not registered");
+    expect(document.querySelector("[data-ingest-upload-error]")).toBeNull();
+  });
+
+  it("a network failure is an error entry: badge error, no refusal marks", async () => {
+    uploadIngest.mockRejectedValue(new Error("Network Error"));
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+    expect(stageText()).toBe("error");
+    const row = ingestRow()!;
+    expect(row.querySelector("[data-ingest-refused]")).toBeNull();
+    expect(row.querySelector("[data-ingest-registered]")).toBeNull();
+    expect(row.querySelector("[data-ingest-retry]")).toBeNull();
+  });
+});

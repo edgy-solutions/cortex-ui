@@ -13,7 +13,7 @@
  * the status row it polled, including the `failed` reason and the notice id when the row carries one.
  */
 import type { Artifact } from "@/api/types";
-import { INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
+import { INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestRefusal, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
 
 export const INGEST_ARTIFACT_PREFIX = "ingest:";
 
@@ -48,6 +48,8 @@ export interface IngestComponent {
   attempt: number | null;
   /** The notice's own identifier from the status row; null when absent or null on the wire. */
   notice_id: string | null;
+  /** The kinds the door said it accepts, when the drop was refused with a list; null otherwise. */
+  registered: string[] | null;
 }
 
 /** What the sync hook knows about one drop. */
@@ -58,9 +60,11 @@ export interface IngestEntry {
   kind: IngestKind | null;
   /** epoch ms */
   droppedAt: number;
-  phase: "uploading" | "status" | "error";
+  phase: "uploading" | "status" | "error" | "refused";
   ingestId: string | null;
   error: string | null;
+  /** The 4xx body, when phase is `refused`. */
+  refusal?: IngestRefusal | null;
   /** This session's upload was accepted (202 with an id); false for a drop remembered from storage. */
   acceptedThisSession: boolean;
   /** The upload response said "already processed". */
@@ -74,6 +78,7 @@ export interface IngestEntry {
 function badgeOf(e: IngestEntry): string {
   if (e.phase === "uploading") return "uploading";
   if (e.phase === "error") return "error";
+  if (e.phase === "refused") return "refused";
   if (e.duplicate !== null || e.row?.duplicate) return INGEST_DUPLICATE_STATUS;
   if (e.notFound) return "not found";
   if (e.row?.stage) return e.row.stage;
@@ -83,6 +88,7 @@ function badgeOf(e: IngestEntry): string {
 }
 
 export function ingestComponentOf(e: IngestEntry): IngestComponent {
+  const refused = e.phase === "refused";
   return {
     ingest_id: e.ingestId,
     filename: e.filename,
@@ -93,10 +99,11 @@ export function ingestComponentOf(e: IngestEntry): IngestComponent {
     duplicate_message: e.duplicate?.message ?? null,
     note: e.note || null,
     extraction_defect: e.row?.extraction_defect ?? null,
-    reason: e.row?.stage === "failed" ? (e.row.failure?.reason ?? e.row.detail ?? null) : null,
-    reason_code: e.row?.stage === "failed" ? (e.row.failure?.reason_code ?? null) : null,
+    reason: refused ? e.error : e.row?.stage === "failed" ? (e.row.failure?.reason ?? e.row.detail ?? null) : null,
+    reason_code: refused ? (e.refusal?.code ?? null) : e.row?.stage === "failed" ? (e.row.failure?.reason_code ?? null) : null,
     attempt: e.row?.attempt ?? null,
     notice_id: e.row?.notice_id ?? null,
+    registered: refused ? (e.refusal?.registered ?? null) : null,
   };
 }
 

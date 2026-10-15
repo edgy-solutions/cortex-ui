@@ -18,7 +18,7 @@
  * wrong rather than merely premature.
  */
 import { useState } from "react";
-import { INGEST_UPLOAD_KINDS, type IngestKind } from "@/lib/ingestWire";
+import { INGEST_UPLOAD_KINDS, ingestKindAwaitingRegistration, type IngestKind } from "@/lib/ingestWire";
 
 export interface KindPickerProps {
   suggestedKind?: string | null;
@@ -35,7 +35,8 @@ export interface KindPickerProps {
 
 export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline, sniffedKind = null }: KindPickerProps) {
   const suggestionValid =
-    suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind);
+    suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind) &&
+    !ingestKindAwaitingRegistration(suggestedKind);
   const [selected, setSelected] = useState<IngestKind | null>(
     suggestionValid ? (suggestedKind as IngestKind) : null,
   );
@@ -49,30 +50,47 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
         What kind of document is this?
       </p>}
       <div className={inline ? "flex items-center gap-3" : "flex flex-col gap-1"} role="radiogroup" aria-label="Document kind">
-        {INGEST_UPLOAD_KINDS.map((k) => (
+        {INGEST_UPLOAD_KINDS.map((k) => {
+          const awaiting = ingestKindAwaitingRegistration(k);
+          return (
           <label
             key={k}
-            className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer py-1"
+            className={`flex items-center gap-2 text-sm py-1 ${
+              awaiting ? "text-slate-500 opacity-50 cursor-not-allowed" : "text-slate-200 cursor-pointer"
+            }`}
             data-ingest-kind={k}
+            {...(awaiting
+              ? {
+                  "aria-disabled": true as const,
+                  "data-ingest-kind-awaiting": "true",
+                  title: `${k} has no registered content kind yet; the door would refuse it (kind_unregistered).`,
+                }
+              : {})}
           >
             <input
               type="radio"
               name="ingest-kind"
               value={k}
+              disabled={awaiting}
               checked={selected === k}
               onChange={() => {
+                if (awaiting) return;
                 setSelected(k);
                 onSelect?.(k);
               }}
             />
             {k}
+            {awaiting && (
+              <span className="text-[9px] font-mono text-amber-400/80">awaiting registration</span>
+            )}
             {sniffedKind === k && (
               <span className="text-[9px] font-mono text-amber-400/80" data-ingest-kind-sniffed={k}>
                 bytes look like this
               </span>
             )}
           </label>
-        ))}
+          );
+        })}
       </div>
       {blockedReason && (
         <p className="mt-2 text-[10px] font-mono text-amber-400" data-ingest-kind-blocked>

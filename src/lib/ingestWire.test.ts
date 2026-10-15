@@ -7,6 +7,9 @@ import {
   readProvenanceFloor,
   provenanceFloorIsUnverified,
   readIngestErrorMessage,
+  readIngestRefusal,
+  ingestKindAwaitingRegistration,
+  INGEST_KINDS_AWAITING_REGISTRATION,
   readActRefusal,
   isIngestNotFoundError,
   promotionIngestId,
@@ -439,5 +442,59 @@ describe("Lane 1's rev-162 refusal fixture", () => {
   it("readIngestErrorMessage returns the measured 403 detail verbatim", () => {
     const err = { response: { status: fixture.upload_403.status, data: fixture.upload_403.body } };
     expect(readIngestErrorMessage(err)).toBe(fixture.upload_403.body.detail);
+  });
+});
+
+describe("readIngestRefusal — a 4xx with a readable body", () => {
+  const http = (status: number, detail?: unknown) => ({ response: { status, data: detail === undefined ? {} : { detail } } });
+
+  it("kind_unregistered: message, code and the registered list", () => {
+    expect(
+      readIngestRefusal(http(400, { error: "kind_unregistered", message: "cad is not registered", registered: ["pdf", "xml"] })),
+    ).toEqual({ status: 400, message: "cad is not registered", code: "kind_unregistered", registered: ["pdf", "xml"] });
+  });
+  it("content_kind_required carries its code", () => {
+    expect(readIngestRefusal(http(400, { error: "content_kind_required", message: "content_kind is required", registered: ["pdf"] }))).toEqual({
+      status: 400, message: "content_kind is required", code: "content_kind_required", registered: ["pdf"],
+    });
+  });
+  it("string detail: no code, no registered", () => {
+    expect(readIngestRefusal(http(400, "kind must be one of pdf, cad, xml"))).toEqual({
+      status: 400, message: "kind must be one of pdf, cad, xml", code: null, registered: null,
+    });
+  });
+  it("422 array detail and 413 string detail", () => {
+    expect(readIngestRefusal(http(422, [{ loc: ["body", "file"], msg: "field required" }]))).toEqual({
+      status: 422, message: "file: field required", code: null, registered: null,
+    });
+    expect(readIngestRefusal(http(413, "file too large"))).toEqual({ status: 413, message: "file too large", code: null, registered: null });
+  });
+  it("registered that is not an array of strings is null", () => {
+    expect(readIngestRefusal(http(400, { error: "x", message: "m", registered: [1, 2] }))?.registered).toBeNull();
+  });
+  it("null for no response, 5xx with a detail, and 4xx with no detail", () => {
+    expect(readIngestRefusal(new Error("Network Error"))).toBeNull();
+    expect(readIngestRefusal({ response: undefined })).toBeNull();
+    expect(readIngestRefusal(http(500, "boom"))).toBeNull();
+    expect(readIngestRefusal(http(400))).toBeNull();
+  });
+});
+
+describe("readIngestErrorMessage — object detail with only an error code", () => {
+  it("returns the error string", () => {
+    expect(readIngestErrorMessage({ response: { status: 409, data: { detail: { error: "not_failed" } } } })).toBe("not_failed");
+  });
+  it("message still wins over error", () => {
+    expect(readIngestErrorMessage({ response: { data: { detail: { error: "e", message: "m" } } } })).toBe("m");
+  });
+});
+
+describe("INGEST_KINDS_AWAITING_REGISTRATION", () => {
+  it("is exactly cad, a subset of the upload kinds", () => {
+    expect([...INGEST_KINDS_AWAITING_REGISTRATION]).toEqual(["cad"]);
+    expect(ingestKindAwaitingRegistration("cad")).toBe(true);
+    expect(ingestKindAwaitingRegistration("pdf")).toBe(false);
+    expect(ingestKindAwaitingRegistration("xml")).toBe(false);
+    expect(INGEST_UPLOAD_KINDS).toContain("cad");
   });
 });

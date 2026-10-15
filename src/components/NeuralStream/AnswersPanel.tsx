@@ -602,7 +602,7 @@ function IngestBadge({ a }: { a: Artifact }) {
     <span className="inline-flex items-center gap-1 mb-0.5">
       <span
         className={`px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
-          ing.badge === "failed"
+          ing.badge === "failed" || ing.badge === "refused"
             ? "text-amber-300 border-amber-400/40 bg-amber-400/10"
             : "text-neon-cyan border-neon-cyan/30 bg-neon-cyan/10"
         }`}
@@ -638,8 +638,18 @@ function IngestReason({ a }: { a: Artifact }) {
   return (
     <>
       {reason !== null && (
-        <p className="text-[10px] font-mono text-amber-400 leading-snug line-clamp-2 mt-0.5" data-ingest-reason title={reason}>
+        <p
+          className="text-[10px] font-mono text-amber-400 leading-snug line-clamp-2 mt-0.5"
+          data-ingest-reason
+          {...(ing.badge === "refused" ? { "data-ingest-refused": "true" } : {})}
+          title={reason}
+        >
           {reason}
+        </p>
+      )}
+      {ing.registered !== null && ing.registered.length > 0 && (
+        <p className="text-[10px] font-mono text-slate-400 leading-snug mt-0.5" data-ingest-registered>
+          registered: {ing.registered.join(", ")}
         </p>
       )}
       <IngestFailureExtras stage={ing.badge} ingestId={ing.ingest_id} reasonCode={ing.reason_code} attempt={ing.attempt} retry={retry} />

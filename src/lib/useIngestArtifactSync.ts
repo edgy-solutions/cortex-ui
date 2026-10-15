@@ -68,6 +68,7 @@ export function useIngestArtifactSync(): void {
         phase: t.phase,
         ingestId: t.ingestId,
         error: t.error,
+        refusal: t.refusal ?? null,
         acceptedThisSession: t.phase === "status",
         duplicate: t.duplicate,
         note: t.text,
