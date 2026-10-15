@@ -148,12 +148,30 @@ export type IngestKind = (typeof INGEST_KINDS)[number];
 export const INGEST_UPLOAD_KINDS = ["pdf", "cad", "xml"] as const satisfies readonly IngestKind[];
 export type IngestUploadKind = (typeof INGEST_UPLOAD_KINDS)[number];
 
-/** Upload kinds the picker draws but cannot send yet: `cad` has no content_kind registry row
- *  (row "7f"). From pin 188 the producer's `POST /ingest` refuses an unregistered content_kind
- *  with 400 `kind_unregistered`. Delete "cad" from this list when 7f's row ships. */
-export const INGEST_KINDS_AWAITING_REGISTRATION = ["cad"] as const satisfies readonly IngestUploadKind[];
-export function ingestKindAwaitingRegistration(k: string): boolean {
-  return (INGEST_KINDS_AWAITING_REGISTRATION as readonly string[]).includes(k);
+/** Upload kinds the picker draws but does not accept yet, each with its own reason (shown as the
+ *  option's `title`). Two different facts sit behind one grey:
+ *  - `cad`: no content_kind registry row (row "7f"); from pin 188 the door refuses it with 400
+ *    `kind_unregistered`. Delete "cad" when 7f's registry row is live in BOTH doc-tools
+ *    KIND_MAPPING and the overlay (Lane 1 says when).
+ *  - `xml`: IS registered and the door answers 200 `received`, but doc-tools' user-drop sensor
+ *    only takes `ingress-user/pdf/...pdf`, so an xml drop is never picked up and the watchdog
+ *    fails it `timeout` 600 s later (measured live at 188). Delete "xml" when 7f's sensor pin
+ *    lands (Lane 1 says when).
+ *  pdf is the only enabled kind. */
+export const INGEST_KIND_NOT_YET_ACCEPTED_REASON = {
+  cad: "no registered content kind, so the door would refuse it (kind_unregistered).",
+  xml: "registered, but no sensor picks up an xml drop yet, so it would fail timeout.",
+} as const satisfies Partial<Record<IngestUploadKind, string>>;
+export const INGEST_KINDS_NOT_YET_ACCEPTED = Object.keys(
+  INGEST_KIND_NOT_YET_ACCEPTED_REASON,
+) as (keyof typeof INGEST_KIND_NOT_YET_ACCEPTED_REASON)[];
+export function ingestKindNotYetAccepted(k: string): boolean {
+  return (INGEST_KINDS_NOT_YET_ACCEPTED as readonly string[]).includes(k);
+}
+export function ingestKindNotYetAcceptedReason(k: string): string | null {
+  return ingestKindNotYetAccepted(k)
+    ? INGEST_KIND_NOT_YET_ACCEPTED_REASON[k as keyof typeof INGEST_KIND_NOT_YET_ACCEPTED_REASON]
+    : null;
 }
 
 /** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. Mirrors producer

@@ -59,7 +59,7 @@ describe("uploadIngest — the body that reaches the adapter", () => {
   });
 
   it("does not leave the instance's application/json on the request", async () => {
-    await uploadIngest(new File(["x"], "a.xml", { type: "application/xml" }), "xml", "alice@example.com", "xml");
+    await uploadIngest(new File(["x"], "a.pdf", { type: "application/pdf" }), "pdf", "alice@example.com", "pdf");
     const ct = String(seen[0].headers.get("Content-Type") ?? "");
     expect(ct).not.toMatch(/application\/json/);
   });
