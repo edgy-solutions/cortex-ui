@@ -8,8 +8,9 @@ import {
   provenanceFloorIsUnverified,
   readIngestErrorMessage,
   readIngestRefusal,
-  ingestKindAwaitingRegistration,
-  INGEST_KINDS_AWAITING_REGISTRATION,
+  ingestKindNotYetAccepted,
+  ingestKindNotYetAcceptedReason,
+  INGEST_KINDS_NOT_YET_ACCEPTED,
   readActRefusal,
   isIngestNotFoundError,
   promotionIngestId,
@@ -489,12 +490,19 @@ describe("readIngestErrorMessage — object detail with only an error code", () 
   });
 });
 
-describe("INGEST_KINDS_AWAITING_REGISTRATION", () => {
-  it("is exactly cad, a subset of the upload kinds", () => {
-    expect([...INGEST_KINDS_AWAITING_REGISTRATION]).toEqual(["cad"]);
-    expect(ingestKindAwaitingRegistration("cad")).toBe(true);
-    expect(ingestKindAwaitingRegistration("pdf")).toBe(false);
-    expect(ingestKindAwaitingRegistration("xml")).toBe(false);
-    expect(INGEST_UPLOAD_KINDS).toContain("cad");
+describe("INGEST_KINDS_NOT_YET_ACCEPTED", () => {
+  it("is exactly cad and xml, a subset of the upload kinds; pdf is accepted", () => {
+    expect([...INGEST_KINDS_NOT_YET_ACCEPTED]).toEqual(["cad", "xml"]);
+    expect(ingestKindNotYetAccepted("cad")).toBe(true);
+    expect(ingestKindNotYetAccepted("xml")).toBe(true);
+    expect(ingestKindNotYetAccepted("pdf")).toBe(false);
+    for (const k of INGEST_KINDS_NOT_YET_ACCEPTED) expect(INGEST_UPLOAD_KINDS).toContain(k);
+    expect(INGEST_UPLOAD_KINDS).toContain("xml");
+  });
+  it("each kind carries its own reason: cad kind_unregistered, xml sensor/timeout", () => {
+    expect(ingestKindNotYetAcceptedReason("cad")).toMatch(/kind_unregistered/);
+    expect(ingestKindNotYetAcceptedReason("xml")).toMatch(/sensor.*timeout/);
+    expect(ingestKindNotYetAcceptedReason("xml")).not.toMatch(/kind_unregistered/);
+    expect(ingestKindNotYetAcceptedReason("pdf")).toBeNull();
   });
 });

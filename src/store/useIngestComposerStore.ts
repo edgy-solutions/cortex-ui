@@ -16,7 +16,7 @@ import {
   readIngestUploadId,
   readIngestErrorMessage,
   readIngestRefusal,
-  ingestKindAwaitingRegistration,
+  ingestKindNotYetAccepted,
   type IngestKind,
   type IngestRefusal,
 } from "@/lib/ingestWire";
@@ -77,19 +77,19 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     // dropper must ask-and-answer (the picker only hints what the bytes look like).
     set({
       inferred,
-      kind: inferred.ambiguous || ingestKindAwaitingRegistration(inferred.kind) ? null : inferred.kind,
+      kind: inferred.ambiguous || ingestKindNotYetAccepted(inferred.kind) ? null : inferred.kind,
     });
   },
   setKind: (kind) => {
-    if (kind !== null && ingestKindAwaitingRegistration(kind)) return;
+    if (kind !== null && ingestKindNotYetAccepted(kind)) return;
     set({ kind });
   },
   clearDraft: () => set({ file: null, kind: null, inferred: null }),
   submit: async (email, text, owner = null) => {
     const { file, kind } = get();
     if (!file || !kind) return;
-    // No registry row yet: the door would answer 400 kind_unregistered. Do not send.
-    if (ingestKindAwaitingRegistration(kind)) return;
+    // Not yet accepted (cad: kind_unregistered at the door; xml: no sensor, fails timeout). Do not send.
+    if (ingestKindNotYetAccepted(kind)) return;
     const id = `ingest-turn-${++seq}`;
     const turn: IngestTurn = {
       id,

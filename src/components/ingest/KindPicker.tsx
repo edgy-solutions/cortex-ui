@@ -18,7 +18,7 @@
  * wrong rather than merely premature.
  */
 import { useState } from "react";
-import { INGEST_UPLOAD_KINDS, ingestKindAwaitingRegistration, type IngestKind } from "@/lib/ingestWire";
+import { INGEST_UPLOAD_KINDS, ingestKindNotYetAccepted, ingestKindNotYetAcceptedReason, type IngestKind } from "@/lib/ingestWire";
 
 export interface KindPickerProps {
   suggestedKind?: string | null;
@@ -36,7 +36,7 @@ export interface KindPickerProps {
 export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline, sniffedKind = null }: KindPickerProps) {
   const suggestionValid =
     suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind) &&
-    !ingestKindAwaitingRegistration(suggestedKind);
+    !ingestKindNotYetAccepted(suggestedKind);
   const [selected, setSelected] = useState<IngestKind | null>(
     suggestionValid ? (suggestedKind as IngestKind) : null,
   );
@@ -51,7 +51,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
       </p>}
       <div className={inline ? "flex items-center gap-3" : "flex flex-col gap-1"} role="radiogroup" aria-label="Document kind">
         {INGEST_UPLOAD_KINDS.map((k) => {
-          const awaiting = ingestKindAwaitingRegistration(k);
+          const awaiting = ingestKindNotYetAccepted(k);
           return (
           <label
             key={k}
@@ -63,7 +63,7 @@ export function KindPicker({ suggestedKind = null, onConfirm, confirming, blocke
               ? {
                   "aria-disabled": true as const,
                   "data-ingest-kind-awaiting": "true",
-                  title: `${k} is not yet accepted: it has no registered content kind, so the door would refuse it (kind_unregistered).`,
+                  title: `${k} is not yet accepted: ${ingestKindNotYetAcceptedReason(k)}`,
                 }
               : {})}
           >
