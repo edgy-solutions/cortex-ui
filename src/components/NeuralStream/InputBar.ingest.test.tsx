@@ -355,17 +355,25 @@ describe("ingest turns as rail entries", () => {
     expect(r.container.querySelector("[data-ingest-upload-error]")).toBeNull();
   });
 
-  it("an HTTP error detail renders verbatim in the turn", async () => {
+  it("a 4xx detail renders verbatim in the turn, as a refusal (not the rose upload error)", async () => {
     await sendOne(
       Object.assign(new Error("x"), {
         response: { status: 413, data: { detail: "file exceeds INGEST_MAX_BYTES (25 MB)" } },
       }),
     );
     const r = render(<Entries />);
-    expect(r.container.querySelector("[data-ingest-upload-error]")?.textContent).toBe(
+    expect(r.container.querySelector("[data-ingest-refusal]")?.textContent).toBe(
       "file exceeds INGEST_MAX_BYTES (25 MB)",
     );
+    expect(r.container.querySelector("[data-ingest-upload-error]")).toBeNull();
     expect(r.queryByTestId("status-card")).toBeNull();
+  });
+
+  it("a 5xx detail stays an upload error, verbatim", async () => {
+    await sendOne(Object.assign(new Error("x"), { response: { status: 500, data: { detail: "boom" } } }));
+    const r = render(<Entries />);
+    expect(r.container.querySelector("[data-ingest-upload-error]")?.textContent).toBe("boom");
+    expect(r.container.querySelector("[data-ingest-refusal]")).toBeNull();
   });
 });
 

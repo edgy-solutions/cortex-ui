@@ -44,6 +44,11 @@ export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
           {ingest.error}
         </p>
       )}
+      {ingest.badge === "refused" && ingest.reason !== null && (
+        <p className="mt-2 text-[10px] font-mono text-amber-400" data-ingest-refusal>
+          {ingest.reason}
+        </p>
+      )}
       {ingest.duplicate_message !== null && (
         <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-turn-result="duplicate">
           {duplicatePhrase(ingest.duplicate_message)}

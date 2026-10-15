@@ -148,6 +148,14 @@ export type IngestKind = (typeof INGEST_KINDS)[number];
 export const INGEST_UPLOAD_KINDS = ["pdf", "cad", "xml"] as const satisfies readonly IngestKind[];
 export type IngestUploadKind = (typeof INGEST_UPLOAD_KINDS)[number];
 
+/** Upload kinds the picker draws but cannot send yet: `cad` has no content_kind registry row
+ *  (row "7f"). From pin 188 the producer's `POST /ingest` refuses an unregistered content_kind
+ *  with 400 `kind_unregistered`. Delete "cad" from this list when 7f's row ships. */
+export const INGEST_KINDS_AWAITING_REGISTRATION = ["cad"] as const satisfies readonly IngestUploadKind[];
+export function ingestKindAwaitingRegistration(k: string): boolean {
+  return (INGEST_KINDS_AWAITING_REGISTRATION as readonly string[]).includes(k);
+}
+
 /** `ingest_status.py.STAGES` — closed, ordered nearest-to-arrival first. Mirrors producer
  *  `4c3b61a6` (renamed in `1c10e28c`) and SDK `iagent_mesh.ingest.INGEST_STAGES` at `012a24fb`
  *  (lane/ca-0.9.7). It was `awaiting_disposition` until `1c10e28c`. */
@@ -474,6 +482,7 @@ export function readIngestErrorMessage(err: unknown): string | null {
   const detail = data.detail;
   if (typeof detail === "string") return detail;
   if (isRecord(detail) && typeof detail.message === "string") return detail.message;
+  if (isRecord(detail) && typeof detail.error === "string") return detail.error;
   if (Array.isArray(detail) && detail.length > 0) {
     const parts = detail
       .filter((item): item is Record<string, unknown> => isRecord(item) && typeof item.msg === "string")
@@ -487,6 +496,29 @@ export function readIngestErrorMessage(err: unknown): string | null {
     return parts.length > 0 ? parts.join("; ") : null;
   }
   return null;
+}
+
+/** A 4xx from `POST /ingest` with a readable detail: drawn as a refusal on the rail entry. */
+export interface IngestRefusal {
+  status: number;
+  message: string;
+  code: string | null;
+  registered: string[] | null;
+}
+
+/** Non-null ONLY for a 400-499 response whose detail `readIngestErrorMessage` can read. */
+export function readIngestRefusal(err: unknown): IngestRefusal | null {
+  if (!isRecord(err) || !isRecord(err.response)) return null;
+  const status = err.response.status;
+  if (typeof status !== "number" || status < 400 || status > 499) return null;
+  const message = readIngestErrorMessage(err);
+  if (message === null) return null;
+  const data = err.response.data;
+  const detail = isRecord(data) ? data.detail : null;
+  const code = isRecord(detail) && typeof detail.error === "string" ? detail.error : null;
+  const reg = isRecord(detail) ? detail.registered : null;
+  const registered = Array.isArray(reg) && reg.every((x) => typeof x === "string") ? (reg as string[]) : null;
+  return { status, message, code, registered };
 }
 
 /**

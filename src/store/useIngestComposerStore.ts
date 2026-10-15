@@ -15,7 +15,10 @@ import { inferUploadKind, type Inferred } from "@/lib/ingestKindInfer";
 import {
   readIngestUploadId,
   readIngestErrorMessage,
+  readIngestRefusal,
+  ingestKindAwaitingRegistration,
   type IngestKind,
+  type IngestRefusal,
 } from "@/lib/ingestWire";
 
 export interface IngestTurn {
@@ -25,9 +28,12 @@ export interface IngestTurn {
   /** The optional note typed beside the chip. Header only — the wire has no field for it. */
   text: string;
   createdAt: number;
-  phase: "uploading" | "status" | "error";
+  /** `refused`: a 4xx with a readable body (the producer said no); terminal like `error`. */
+  phase: "uploading" | "status" | "error" | "refused";
   ingestId: string | null;
   error: string | null;
+  /** The 4xx body, when phase is `refused`. */
+  refusal?: IngestRefusal | null;
   /** The upload response itself said "already processed" (level-1 dedupe). A RESULT, not an error. */
   duplicate: { message: string; ofIngestId: string | null } | null;
 }
@@ -69,13 +75,21 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     if (get().file !== file) return;
     // Unambiguous: the kind is set, no question asked. Ambiguous: NOTHING is selected — the
     // dropper must ask-and-answer (the picker only hints what the bytes look like).
-    set({ inferred, kind: inferred.ambiguous ? null : inferred.kind });
+    set({
+      inferred,
+      kind: inferred.ambiguous || ingestKindAwaitingRegistration(inferred.kind) ? null : inferred.kind,
+    });
   },
-  setKind: (kind) => set({ kind }),
+  setKind: (kind) => {
+    if (kind !== null && ingestKindAwaitingRegistration(kind)) return;
+    set({ kind });
+  },
   clearDraft: () => set({ file: null, kind: null, inferred: null }),
   submit: async (email, text, owner = null) => {
     const { file, kind } = get();
     if (!file || !kind) return;
+    // No registry row yet: the door would answer 400 kind_unregistered. Do not send.
+    if (ingestKindAwaitingRegistration(kind)) return;
     const id = `ingest-turn-${++seq}`;
     const turn: IngestTurn = {
       id,
@@ -116,8 +130,11 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       recordMyDrop(owner, { ingestId, filename: file.name, droppedAt: Date.now() });
       patch({ phase: "status", ingestId, duplicate: null });
     } catch (err) {
-      // 400 (bad kind), 403 (on_behalf_of mismatch), 413 (over INGEST_MAX_BYTES): plain `detail`.
-      patch({ phase: "error", error: readIngestErrorMessage(err) ?? "Upload failed." });
+      // 4xx with a readable body is the producer REFUSING the drop (400 kind_unregistered /
+      // content_kind_required, 403, 413, 422): drawn as a refusal on the rail entry.
+      const refusal = readIngestRefusal(err);
+      if (refusal) patch({ phase: "refused", error: refusal.message, refusal });
+      else patch({ phase: "error", error: readIngestErrorMessage(err) ?? "Upload failed." });
     }
   },
 }));
