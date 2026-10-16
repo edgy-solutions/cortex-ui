@@ -124,13 +124,26 @@ export function ingestComponentFrom(a: Pick<Artifact, "rendered_output">): Inges
   return c && c.archetype === "INGEST" && c.ingest ? c.ingest : null;
 }
 
+/**
+ * Where the rail places a drop (its day header and its time). A RETRIED drop (`attempt` >= 2) is
+ * placed by the row's latest activity, `updated_at`, which the retry bumps: otherwise a retry made
+ * today sits under the original drop's day. Every other drop stays at its drop time, so a drop
+ * moving through its stages does not walk down the rail. Never earlier than the drop: `updated_at`
+ * is the server's clock and `droppedAt` may be this browser's.
+ */
+export function ingestPlacedAt(e: Pick<IngestEntry, "droppedAt" | "row">): number {
+  const r = e.row;
+  return r && (r.attempt ?? 1) >= 2 ? Math.max(e.droppedAt, r.updated_at) : e.droppedAt;
+}
+
 export function ingestToArtifact(e: IngestEntry): Artifact {
   const comp = ingestComponentOf(e);
   const kind = comp.kind;
+  const placedAt = ingestPlacedAt(e);
   return {
     id: ingestArtifactId(e.key),
-    created_at: e.droppedAt,
-    updated_at: e.droppedAt,
+    created_at: placedAt,
+    updated_at: placedAt,
     valid_as_of: e.droppedAt,
     valid_until: null,
     question_text: kind ? `dropped as ${kind}` : "",

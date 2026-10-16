@@ -174,6 +174,31 @@ describe("notice_id: absent / null / string / malformed", () => {
   });
 });
 
+describe("rail placement: a retried drop sits at its latest activity, every other drop at its drop", () => {
+  const DROP = 1790860800000; // the original drop
+  const LATER = DROP + 4 * 86400000; // four days on: a different day header
+  const placed = (row: Record<string, unknown> | null) => {
+    const a = ingestToArtifact(entry({ droppedAt: DROP, row: row ? readIngestStatusRow(wireRow({ created_at: DROP, ...row })) : null }));
+    return [a.created_at, a.updated_at];
+  };
+
+  it("attempt 2, retried four days later -> placed at updated_at, not the original drop", () => {
+    expect(placed({ attempt: 2, stage: "received", updated_at: LATER })).toEqual([LATER, LATER]);
+  });
+  it("attempt 1 that moved on four days later -> stays at the drop (a stage change is not a retry)", () => {
+    expect(placed({ attempt: 1, stage: "promoted", updated_at: LATER })).toEqual([DROP, DROP]);
+  });
+  it("attempt absent -> stays at the drop, however late updated_at is", () => {
+    expect(placed({ stage: "promoted", updated_at: LATER })).toEqual([DROP, DROP]);
+  });
+  it("attempt 2 whose server updated_at reads EARLIER than this browser's drop -> never placed before the drop", () => {
+    expect(placed({ attempt: 2, stage: "received", updated_at: DROP - 60_000 })).toEqual([DROP, DROP]);
+  });
+  it("no row yet -> the drop", () => {
+    expect(placed(null)).toEqual([DROP, DROP]);
+  });
+});
+
 describe("failed reason", () => {
   const reasonOf = (stage: string, detail: string | null) =>
     ingestComponentFrom(ingestToArtifact(entry({ row: readIngestStatusRow(wireRow({ stage, detail })) })))!.reason;
