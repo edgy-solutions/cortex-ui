@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Walk, DEFAULT_KC, defaultQuestion, runWalk, type WalkConfig } from "./pcnWalk";
 import { runHaz, runFracas, runStale } from "./answerWalk";
+import { runBroker } from "./walkBroker";
 import { WALK_PERSONAS, WALK_TITLES } from "./walkPersona";
 import { creds, selectedWalks, summaryTable, walkPassed, type WalkName, type WalkOutcome } from "./walkEnv";
 
@@ -134,7 +135,21 @@ for (const [name, title, run] of [
   });
 }
 
-test("stale walk: a fresh load shows no stale-bundle pill (live)", async ({ browser }) => {
+test(WALK_TITLES.broker, async ({ browser }) => {
+  test.skip(!selected.includes("broker"), "WALK_ONLY excludes broker");
+  const walk = new Walk(makeCfg("broker"));
+  await record("broker", walk, {}, async () => {
+    // A FRESH context: a leftover SSO session would skip the Keycloak broker screen this row checks.
+    const cb = await browser.newContext({ baseURL });
+    try {
+      await runBroker(walk, await cb.newPage(), env);
+    } finally {
+      await cb.close();
+    }
+  });
+});
+
+test("stale walk:a fresh load shows no stale-bundle pill (live)", async ({ browser }) => {
   test.skip(!selected.includes("stale"), "WALK_ONLY excludes stale");
   const walk = new Walk(makeCfg("stale"));
   const v = await servedVersion(browser);

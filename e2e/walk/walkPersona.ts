@@ -11,7 +11,7 @@
 import type { WalkName } from "./walkEnv";
 
 /** A user name is `WALK_<NAME>_USER` / `_PASSWORD` (creds() is generic over names). erin has no row today. */
-export type WalkUser = "alice" | "bob" | "erin";
+export type WalkUser = "alice" | "bob" | "erin" | "atlantia";
 
 export interface WalkPersona {
   user: WalkUser;
@@ -22,25 +22,30 @@ export interface WalkPersona {
    * MESH and DOCS are platform domains, never offered, and stay in scope at send.
    */
   domains: readonly string[] | null;
+  /** "brokered": signs in via the Keycloak identity broker (walkBroker.ts), not the local form. */
+  login: "local" | "brokered";
 }
 
 export const WALK_PERSONAS = {
   pcn: {
     // The drop needs no persona pick: whatever alice does today stays.
-    dropper: { user: "alice", role: null, domains: null },
+    dropper: { user: "alice", role: null, domains: null, login: "local" },
     // census row `sustainment-which-parts-does-pcn26-182-affect` (the ask)
-    asker: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"] },
+    asker: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"], login: "local" },
   },
   // census row `safety-haz-1003-risk-assessment`
-  haz: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"] },
+  haz: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"], login: "local" },
   // census row `repro-failures-recorded-for-part-5530-184`
-  fracas: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"] },
+  fracas: { user: "bob", role: "SAFETY_ENGINEER", domains: ["SUSTAINMENT"], login: "local" },
   // no census row: it only checks the stale-bundle pill, so it declares a user and no pick.
-  stale: { user: "bob", role: null, domains: null },
+  stale: { user: "bob", role: null, domains: null, login: "local" },
+  // operator.atlantia holds no grant until Lane 1 seeds one: the cell is CHECKED (WALK_ATLANTIA_CELL), never pre-declared.
+  broker: { user: "atlantia", role: null, domains: null, login: "brokered" },
 } as const satisfies { [K in WalkName]: WalkPersona | { dropper: WalkPersona; asker: WalkPersona } };
 
 /** The live test titles, here so a mock spec can check each says the user the table declares. */
 export const WALK_TITLES = {
   haz: "HAZ walk: draft a risk assessment for HAZ-1003 as bob (live)",
   fracas: "FRACAS walk: failures for part 5530-184 as bob (live)",
+  broker: "broker walk: operator.atlantia brokered login lands with a cell (live)",
 } as const;

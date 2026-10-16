@@ -9,6 +9,7 @@ Playwright invocation runs the selected walks in order; each walk gets its own b
 | `haz` | bob | `draft a risk assessment for HAZ-1003` gets a card or a named refusal |
 | `fracas` | bob | `what failures are recorded for part 5530-184` gets a FRACAS card or a named refusal |
 | `stale` | bob | on a fresh load there is no stale-bundle pill, and `/version.json` names the bundle's own sha |
+| `broker` | operator.atlantia | brokered login via the `openddil` broker lands with a persona x domain cell (expected red until Lane 1 seeds a grant) |
 
 `npm run walk:pcn` is an alias that runs the PCN test only. `WALK_ONLY=haz,fracas npm run walk` selects walks
 (comma separated; default all; an unknown name is an error, not a no-op).
@@ -89,6 +90,19 @@ from `src/App.tsx`). Pill only: the Reload button is the user's; nothing reloads
   The dev bundle's sha is pinned by `GIT_SHA` in `playwright.config.ts`'s `webServer.env` only (value in
   `e2e/bundleSha.ts`); `vite.config.ts` reads `GIT_SHA` before `git rev-parse`.
 
+## Broker walk (operator.atlantia, brokered login)
+
+Walk `broker` signs in as `operator.atlantia` through the Keycloak identity broker (alias `openddil`), not the
+local form, in a fresh context. Steps: `creds-atlantia`, `broker-screen` (the broker link is on the Keycloak
+login page; absent fails naming the selector and any provider links that ARE there), `broker-upstream` (click it,
+fill the upstream form, submit), `broker-first-login` (the next page must be the app: a Keycloak first-broker-login
+"Update account", "already exists", link or verify page FAILS naming its heading and URL path, never the query),
+`broker-cell` (the PersonaPicker offers at least one cell; none fails `landed with no cell (offered: none)`).
+Code: `walkBroker.ts`; offline proof: `walkBroker.mock.spec.ts`.
+
+**Expected RED until Lane 1 seeds a grant:** operator.atlantia holds no persona x domain grant today, so
+`broker-cell` fails with `landed with no cell`. That failure is the point of the check, not a harness bug.
+
 ## Prerequisites
 
 - node, then in the repo root: `npm ci`
@@ -109,10 +123,14 @@ never a skip.
 | `WALK_ALICE_USER`, `WALK_ALICE_PASSWORD` | pcn only | Keycloak login for alice |
 | `WALK_ERIN_USER`, `WALK_ERIN_PASSWORD` | no row today | Keycloak login for erin (`erin@example.com`, the "clean walker" in policy). `creds("erin")` works like any name, but no row declares her, so nothing reads these yet |
 | `WALK_PCN_PDF` | pcn only | path to the PCN26-184 PDF on disk |
-| `WALK_ONLY` | no | `pcn,haz,fracas,stale` subset; default all |
+| `WALK_ONLY` | no | `pcn,haz,fracas,stale,broker` subset; default all |
 | `WALK_NOTICE` | no | default `PCN26-184` |
 | `WALK_EXPECT_PARTS` | no | default `5530-184,5530-185` (comma separated) |
 | `WALK_KC_USER_SELECTOR`, `WALK_KC_PASSWORD_SELECTOR`, `WALK_KC_SUBMIT_SELECTOR` | no | default `#username`, `#password`, `#kc-login` |
+| `WALK_ATLANTIA_USER`, `WALK_ATLANTIA_PASSWORD` | broker only | login for operator.atlantia at the UPSTREAM (OpenDDIL) form; a missing one fails the row naming it |
+| `WALK_ATLANTIA_CELL` | no | `ROLE/DOMAIN`: that exact cell must be offered and is selected; unset = any one offered cell passes |
+| `WALK_KC_BROKER_SELECTOR` | no | default `#social-openddil` (Keycloak renders `id="social-<alias>"`) |
+| `WALK_UPSTREAM_USERNAME_SELECTOR`, `WALK_UPSTREAM_PASSWORD_SELECTOR`, `WALK_UPSTREAM_SUBMIT_SELECTOR` | no | upstream form; default `#username`, `#password`, `#kc-login` |
 
 ## Persona per row
 
@@ -211,4 +229,5 @@ npx playwright test e2e/walk e2e/staleBundle.spec.ts
   true, and fails fast when Keycloak re-shows the form; `snapshot()` on a non-app page is the named
   `snapshot: not on the app` error; `spkiPinArg()` arms. Mutants proven red: the app-ready locator back to
   `form input[type="text"]`; `spkiPinArg()` returning on an absent pin; `snapshot()` without its guard.
+- `walkBroker.mock.spec.ts` (fake Keycloak, upstream and app): the happy path; no broker link; a first-broker-login "Update Account Information" page (message carries the path, never the query); no cell offered; `WALK_ATLANTIA_CELL` not offered (names the offered cells); a missing `WALK_ATLANTIA_PASSWORD` (names the variable, never a value).
 - `e2e/staleBundle.spec.ts`: see above. Mutant proven red: `compareBundle` always "current".

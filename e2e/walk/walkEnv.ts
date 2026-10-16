@@ -6,7 +6,7 @@ import type { StepResult } from "./pcnWalk";
 
 export type Env = Record<string, string | undefined>;
 
-export const WALK_NAMES = ["pcn", "haz", "fracas", "stale"] as const;
+export const WALK_NAMES = ["pcn", "haz", "fracas", "stale", "broker"] as const;
 export type WalkName = (typeof WALK_NAMES)[number];
 
 export interface UserCreds {
@@ -51,7 +51,7 @@ export function spkiPinArg(env: Env = process.env): string {
   return `--ignore-certificate-errors-spki-list=${pins.join(",")}`;
 }
 
-/** `WALK_ONLY=pcn,haz,fracas,stale` (default: all). An unknown name is an error, not a no-op. */
+/** `WALK_ONLY=pcn,haz,fracas,stale,broker` (default: all). An unknown name is an error, not a no-op. */
 export function selectedWalks(env: Env = process.env): WalkName[] {
   const raw = (env.WALK_ONLY ?? "").trim();
   if (!raw) return [...WALK_NAMES];
