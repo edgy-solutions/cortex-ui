@@ -17,6 +17,9 @@ export const MODEL_EXPLANATION_ABSENCES = [
   'data-model-question="unreadable"',
   'data-model-answer-source="none"',
   'data-model-questions="unknown-keys"',
+  'data-model-cardinality="not-stated"',
+  'data-model-cardinality="part-stated"',
+  'data-model-cardinality="unreadable"',
 ] as const;
 
 export type ModelExplanationAbsence = (typeof MODEL_EXPLANATION_ABSENCES)[number];
@@ -60,7 +63,7 @@ const EVERY_QUESTION_ANSWERED: ModelExplanation = {
   super_classes: [{ iri: `${NS}Item`, label: "Item" }],
   properties: [
     { iri: `${NS}hasAssetTag`, label: "has asset tag", range: "xsd:string", min: 1, max: 1 },
-    { iri: `${NS}hasWorkOrder`, label: "has work order", range: "WorkOrder", min: null, max: null },
+    { iri: `${NS}hasWorkOrder`, label: "has work order", range: "WorkOrder", min: 0, max: "unbounded" },
   ],
   answers: ALL_ANSWERED,
 };
@@ -80,7 +83,9 @@ const MID_WAY: ModelExplanation = {
   subject: { kind: "class", iri: `${NS}InspectionPlan` },
   super_classes: [],
   properties: [
-    { iri: `${NS}hasInterval`, label: "has interval", range: "xsd:duration", min: 1, max: 1 },
+    { iri: `${NS}hasInterval`, label: "has interval", range: "xsd:duration", min: 1, max: null },
+    // "*" is drawn from "unbounded" only; a producer that sends the symbol itself is unreadable.
+    { iri: `${NS}supersedes`, label: "supersedes", range: "InspectionPlan", min: 0, max: "*" as unknown as number },
     { iri: `${NS}appliesTo`, range: "MaintainableItem", min: null, max: null },
   ],
   answers: {
@@ -136,6 +141,9 @@ export const MODEL_EXPLANATION_FIXTURES: ModelExplanationFixture[] = [
       'data-model-question="unreadable"',
       'data-model-answer-source="none"',
       'data-model-questions="unknown-keys"',
+      'data-model-cardinality="not-stated"',
+      'data-model-cardinality="part-stated"',
+      'data-model-cardinality="unreadable"',
     ],
   },
   { name: "a property subject", payload: PROPERTY_SUBJECT, declares: [] },

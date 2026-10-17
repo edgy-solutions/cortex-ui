@@ -108,6 +108,25 @@ describe("MODEL_EXPLANATION fixtures discriminate", () => {
     expect(container.textContent).not.toContain("Ratified model @");
   });
 
+  // Architect, 10-17: "null = not stated, never 'unbounded'". The ratified model states no
+  // cardinality (lane/74, 5d8800e0), so this is what every property would draw today.
+  it("a property with no bounds says so, and never draws 0 or *", () => {
+    const { container } = draw(MID_WAY);
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "");
+    const appliesTo = rows.find((t) => t.includes("appliesTo"))!;
+    expect(appliesTo).toContain("Not stated in the model");
+    expect(appliesTo).not.toMatch(/\*|0\.\./);
+    expect(rows.find((t) => t.startsWith("has interval"))).toContain("1..?");
+    expect(rows.find((t) => t.startsWith("supersedes"))).toContain("Unreadable bound");
+  });
+
+  it("* is drawn from an explicit 'unbounded', and a stated bound is drawn plainly", () => {
+    const { container } = draw(MODEL_EXPLANATION_FIXTURES[0]);
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "");
+    expect(rows.find((t) => t.startsWith("has work order"))).toContain("0..*");
+    expect(rows.find((t) => t.startsWith("has asset tag"))).toContain("1..1");
+  });
+
   it("the eight rows render in MODEL_QUESTIONS order", () => {
     for (const f of MODEL_EXPLANATION_FIXTURES) {
       const { container } = draw(f);

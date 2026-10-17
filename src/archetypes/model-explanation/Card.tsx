@@ -1,5 +1,6 @@
 import { MODEL_QUESTIONS, MODEL_QUESTION_LABEL, type ModelExplanation as Payload, type ModelProperty } from "./contract";
 import { readAnswers } from "./questionState";
+import { readBounds } from "./bounds";
 
 /**
  * MODEL_EXPLANATION — cortex-proposed (see `contract.ts`'s header: no producer serves this).
@@ -13,8 +14,26 @@ import { readAnswers } from "./questionState";
 
 const nonBlank = (x: unknown): x is string => typeof x === "string" && x.trim() !== "";
 
-function cardinality(p: ModelProperty): string {
-  return `${p.min ?? 0}..${p.max ?? "*"}`;
+function Cardinality({ p }: { p: ModelProperty }) {
+  const b = readBounds(p);
+  if (b.state === "stated") return <td className="text-slate-400">{b.text}</td>;
+  if (b.state === "part-stated")
+    return (
+      <td className="text-slate-400" data-model-cardinality="part-stated" title="? = the model states no bound">
+        {b.text}
+      </td>
+    );
+  if (b.state === "not-stated")
+    return (
+      <td className="text-slate-500 italic" data-model-cardinality="not-stated">
+        Not stated in the model
+      </td>
+    );
+  return (
+    <td className="text-amber-400/80" data-model-cardinality="unreadable">
+      Unreadable bound — not shown as one.
+    </td>
+  );
 }
 
 export function ModelExplanation({ model_explanation }: { model_explanation: Payload }) {
@@ -82,7 +101,7 @@ export function ModelExplanation({ model_explanation }: { model_explanation: Pay
                 <tr key={p.iri}>
                   <td className="pr-2">{nonBlank(p.label) ? p.label : p.iri}</td>
                   <td className="pr-2 text-slate-500">{nonBlank(p.range) ? p.range : ""}</td>
-                  <td className="text-slate-400">{cardinality(p)}</td>
+                  <Cardinality p={p} />
                 </tr>
               ))}
             </tbody>

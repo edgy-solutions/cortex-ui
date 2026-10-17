@@ -52,9 +52,10 @@ export interface ModelTerm {
 }
 export interface ModelProperty extends ModelTerm {
   range?: string | null;
+  /** null/absent = the model states no lower bound — never read as 0. */
   min?: number | null;
-  /** null = unbounded, drawn `*`. */
-  max?: number | null;
+  /** null/absent = the model states no upper bound; only an explicit "unbounded" is `*`. */
+  max?: number | "unbounded" | null;
 }
 export interface ModelExplanation {
   subject: { kind: string; iri: string; label?: string | null; definition?: string | null };
