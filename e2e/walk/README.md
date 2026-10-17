@@ -20,7 +20,8 @@ Playwright invocation runs the selected walks in order; each walk gets its own b
 |---|------|-------------|
 | 1 | alice drops the PDF (kind `pdf`) | an ingest card appears (`received`) **or** a duplicate notice appears |
 | 2 | wait for `review` (~100 s) | alice's card reaches `review` |
-| 3-4 | bob opens Tasks, acts `promoted` with a reason | the act POST returns 200 |
+| 3 | steward review: bob opens the task (nothing is clicked) | the review card draws: title is the notice id (never the sha), the extracted rows, the source PDF `ready`, and row 1's evidence outlined. **Skipped** (with why) if the task names no `ingest_id` or `/extraction` answers a plain 404 (not served: 192, before 193). Any other miss fails with the card's own words, e.g. `404 source_absent` |
+| 4 | bob acts `promoted` | the act POST returns 200 (review card: Promote carries no reason; generic card: the reason box is filled) |
 | 5 | alice's card reaches `promoted` | within 60 s |
 | 6 | bob picks SAFETY_ENGINEER/SUSTAINMENT (step `persona-bob`), then asks "which parts does PCN26-184 affect" | the question is sent |
 | 7 | the answer | a table titled "Parts affected by PCN26-184" with rows 5530-184 and 5530-185 |
@@ -123,6 +124,7 @@ never a skip.
 | `WALK_ALICE_USER`, `WALK_ALICE_PASSWORD` | pcn only | Keycloak login for alice |
 | `WALK_ERIN_USER`, `WALK_ERIN_PASSWORD` | no row today | Keycloak login for erin (`erin@example.com`, the "clean walker" in policy). `creds("erin")` works like any name, but no row declares her, so nothing reads these yet |
 | `WALK_PCN_PDF` | pcn only | path to the PCN26-184 PDF on disk |
+| `WALK_REQUIRE_REVIEW` | no | `1`: step 3 FAILS where it would skip (no `ingest_id` on the task, or `/extraction` a plain 404). Set it once 193 has rolled |
 | `WALK_ONLY` | no | `pcn,haz,fracas,stale,broker` subset; default all |
 | `WALK_NOTICE` | no | default `PCN26-184` |
 | `WALK_EXPECT_PARTS` | no | default `5530-184,5530-185` (comma separated) |
@@ -215,6 +217,9 @@ npx playwright test e2e/walk e2e/staleBundle.spec.ts
 ```
 
 - `pcnWalk.mock.spec.ts`: a fresh drop, a duplicate drop, and a negative control (a plain-document answer must FAIL step 7).
+  Step 3 on its own: served (pass, the detail names title, rows, `ready`, outlined page); pre-193 (skipped, then
+  promote still passes); pre-193 with `requireReview` (FAILS); a coded `404 source_absent` on `/source` (FAILS naming
+  the code - this arm caught the arraybuffer error body being read as "not served").
 - `answerWalk.mock.spec.ts`: per answer walk, a card (pass), a named refusal (pass), an abstain (the step FAILS)
   and a not-grounded answer (the step FAILS); for the failing arms the test passes by asserting the walk's
   computed result is `fail`. Also a missing-credential arm (FAILS naming `WALK_BOB_USER`).

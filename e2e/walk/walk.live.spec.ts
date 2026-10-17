@@ -45,6 +45,7 @@ function makeCfg(tag: string): WalkConfig {
       submit: env.WALK_KC_SUBMIT_SELECTOR || DEFAULT_KC.submit,
     },
     timeouts: { login: 60_000, drop: 60_000, stage: 240_000, promote: 60_000, promoted: 60_000, ask: 150_000 },
+    requireReview: env.WALK_REQUIRE_REVIEW === "1",
   };
 }
 

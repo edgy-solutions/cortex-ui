@@ -18,6 +18,7 @@ import {
   seedFakeOidcSession,
 } from "../fridayRoutes";
 import { buildPcn26117Fixture } from "@/lib/ingestPcn26117Fixture";
+import { fixtureExtractionBody, fixturePdfBytes } from "@/lib/promotionReviewFixture";
 import { FAILURE_RECORD_SET_DERIVED } from "@/archetypes/contribution-ranking/fixtures/fracasFailureRecordSet.derived";
 import { CONTRIBUTION_RANKING_FIXTURES } from "@/archetypes/contribution-ranking/fixtures";
 import { FAILURE_TREND_DERIVED } from "@/archetypes/multi-series/fixtures/fracasFailureTrend.derived";
@@ -72,6 +73,13 @@ export interface WalkMock {
   answerTo: "alice" | "bob";
   /** The question text the answer row carries, when it is not the PCN question. */
   question?: string;
+  /**
+   * What the review card's two routes answer (Lane 1's 193 routes):
+   *   - `served`: the extraction fixture and its PDF;
+   *   - `pre193`: both a plain 404, as 192 answers;
+   *   - `source-absent`: the extraction is served, the source is `404 source_absent`.
+   */
+  review: ReviewMode;
   /** GET status calls so far (drives received -> extracting -> review). */
   statusCalls: number;
   promoted: boolean;
@@ -81,9 +89,12 @@ export interface WalkMock {
   unrouted: string[];
 }
 
+export type ReviewMode = "served" | "pre193" | "source-absent";
+
 export function newWalkMock(o: {
   drop: DropMode;
   answer: AnswerMode;
+  review?: ReviewMode;
   notice?: string;
   parts?: string[];
   answerTo?: "alice" | "bob";
@@ -98,6 +109,7 @@ export function newWalkMock(o: {
     parts: o.parts ?? ["5530-184", "5530-185"],
     answerTo: o.answerTo ?? "alice",
     question: o.question,
+    review: o.review ?? "served",
     statusCalls: 0,
     promoted: false,
     asked: false,
@@ -308,6 +320,21 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
         if (m.promoted) return json(route, 200, { ...promotedRow, ingest_id: WALK_INGEST_ID, sha256: WALK_SHA });
         const stage = m.statusCalls === 1 ? "received" : m.statusCalls === 2 ? "extracting" : "review";
         return json(route, 200, row(stage));
+      }
+      // The review card's routes, by the drop's ingest_id (the task's payload names it).
+      if (method === "GET" && p === `/ingest/${WALK_INGEST_ID}/extraction`) {
+        if (m.review === "pre193") return json(route, 404, { detail: "Not Found" });
+        return json(route, 200, fixtureExtractionBody(WALK_INGEST_ID));
+      }
+      if (method === "GET" && p === `/ingest/${WALK_INGEST_ID}/source`) {
+        if (m.review === "pre193") return json(route, 404, { detail: "Not Found" });
+        if (m.review === "source-absent") return json(route, 404, { detail: { error: "source_absent" } });
+        return route.fulfill({
+          status: 200,
+          headers: { ...CORS, "cache-control": "no-store" },
+          contentType: "application/pdf",
+          body: Buffer.from(fixturePdfBytes()),
+        });
       }
       if (method === "GET" && p === "/me/entitlements") {
         const cells = m.cells[who];
