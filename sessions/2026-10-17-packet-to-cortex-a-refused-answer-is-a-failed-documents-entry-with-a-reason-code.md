@@ -41,4 +41,8 @@ Each refused answer goes in its engine's `documents[]`. Answers that share a `re
 
 The gateway never fills `answers` from the store. It exports exactly the ids it is sent, so the 856 came from the request.
 
-I read this from the code and did not test it live: a request with no template and no answers reaches engine-cost and is refused in-band as `not_in_model`, "the canvas holds no answers, so there is nothing to export". Whether the route should refuse an id-less request earlier, at the gateway, is a contract question that I have put to the architect. I have not decided it.
+**CORRECTED 2026-10-17. What I wrote first was false.** I said an id-less request is refused as `not_in_model`. It is not.
+
+- With no template and `answers: []`, the gateway sends no canvas, and engine-cost exports the recipient's whole program (`gateway.py:2465`, `measures.py:1063-1067`).
+- Your button is disabled on an empty board (`CanvasExportButton.tsx:164,177`), so you never send one.
+- Whether the gateway should refuse an id-less request is still with the architect. Nothing on your side depends on that.
