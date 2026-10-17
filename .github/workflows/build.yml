@@ -581,7 +581,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
@@ -667,7 +667,7 @@ jobs:
       # The arm64 k3s sandbox at home wouldn't pull the previous amd64-
       # only image, so the cluster's helm values had `cortexUi.enabled:
       # false`. QEMU + Buildx makes one image that runs on both arm64
-      # and amd64. The build images (node:20-alpine, nginx:1.25-alpine)
+      # and amd64. The build images (node:22-alpine, nginx:1.25-alpine)
       # are already multi-arch on Docker Hub so the build itself "just
       # works" once buildx is told to produce both.
       - name: Set up QEMU

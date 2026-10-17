@@ -14,25 +14,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildPdf, fixturePdfBytes, fixtureExtractionBody, FIXTURE_PAGE_COUNT } from "./promotionReviewFixture";
 
-// pdfjs-dist 6 declares node >=22.13 and calls Promise.withResolvers, which Node 20 lacks. CI and
-// the Docker builder run Node 20 (this box runs 22, so it passed here and failed on 760a313's run).
-// The browser bundle is unaffected: only this test runs pdf.js under Node. Filled only if missing.
-if (typeof (Promise as { withResolvers?: unknown }).withResolvers !== "function") {
-  Object.defineProperty(Promise, "withResolvers", {
-    configurable: true,
-    writable: true,
-    value: function withResolvers<T>() {
-      let resolve!: (v: T | PromiseLike<T>) => void;
-      let reject!: (e?: unknown) => void;
-      const promise = new Promise<T>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      return { promise, resolve, reject };
-    },
-  });
-}
-
 type Item = { str: string; transform: number[]; width: number; height: number };
 let pages: Item[][] = [];
 let numPages = 0;

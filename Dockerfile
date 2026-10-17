@@ -12,7 +12,7 @@
 # This is safe because the build output is platform-agnostic — Vite
 # produces static JS/CSS/HTML that runs in any browser. Only the
 # nginx-based runtime stage below needs to be per-arch.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
 WORKDIR /app
 
