@@ -263,12 +263,13 @@ describe("send", () => {
     expect(document.querySelectorAll("[data-ingest-kind-sniffed]").length).toBe(1);
     expect(useIngestComposerStore.getState().kind).toBeNull();
     expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
-    // xml is not yet accepted: its radio is disabled, so clicking it selects nothing.
-    expect((document.querySelector('[data-ingest-kind="xml"] input') as HTMLInputElement).disabled).toBe(true);
+    // xml is accepted (lifted 2026-10-17): picking it is the person's choice, never a pre-selection.
+    expect((document.querySelector('[data-ingest-kind="xml"] input') as HTMLInputElement).disabled).toBe(false);
     fireEvent.click(document.querySelector('[data-ingest-kind="xml"] input')!);
-    expect(useIngestComposerStore.getState().kind).toBeNull();
-    expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(useIngestComposerStore.getState().kind).toBe("xml");
+    expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(document.querySelector('[data-ingest-kind="pdf"] input')!);
+    expect(useIngestComposerStore.getState().kind).toBe("pdf");
     expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
   });
 

@@ -149,18 +149,15 @@ export const INGEST_UPLOAD_KINDS = ["pdf", "cad", "xml"] as const satisfies read
 export type IngestUploadKind = (typeof INGEST_UPLOAD_KINDS)[number];
 
 /** Upload kinds the picker draws but does not accept yet, each with its own reason (shown as the
- *  option's `title`). Two different facts sit behind one grey:
+ *  option's `title`):
  *  - `cad`: no content_kind registry row (row "7f"); from pin 188 the door refuses it with 400
  *    `kind_unregistered`. Delete "cad" when 7f's registry row is live in BOTH doc-tools
  *    KIND_MAPPING and the overlay (Lane 1 says when).
- *  - `xml`: IS registered and the door answers 200 `received`, but doc-tools' user-drop sensor
- *    only takes `ingress-user/pdf/...pdf`, so an xml drop is never picked up and the watchdog
- *    fails it `timeout` 600 s later (measured live at 188). Delete "xml" when 7f's sensor pin
- *    lands (Lane 1 says when).
- *  pdf is the only enabled kind. */
+ *  `xml` was greyed here (registered, but no sensor took an xml drop, so it failed `timeout`). The
+ *  architect lifted it 2026-10-17: 7f's processable-kinds pin (`5846f877`) and the instance-write pin
+ *  (`2bf85719`) are both rolled, and the door has been ON since 190. pdf and xml are enabled. */
 export const INGEST_KIND_NOT_YET_ACCEPTED_REASON = {
   cad: "no registered content kind, so the door would refuse it (kind_unregistered).",
-  xml: "registered, but no sensor picks up an xml drop yet, so it would fail timeout.",
 } as const satisfies Partial<Record<IngestUploadKind, string>>;
 export const INGEST_KINDS_NOT_YET_ACCEPTED = Object.keys(
   INGEST_KIND_NOT_YET_ACCEPTED_REASON,

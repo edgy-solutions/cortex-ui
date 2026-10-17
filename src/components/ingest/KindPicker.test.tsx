@@ -50,7 +50,7 @@ describe("KindPicker — the closed INGEST_KINDS set only", () => {
   });
 });
 
-describe("KindPicker — kinds not yet accepted (cad: row 7f; xml: sensor pin)", () => {
+describe("KindPicker — kinds not yet accepted (cad: row 7f; xml lifted 2026-10-17)", () => {
   it("draws cad disabled, greyed and marked with its kind_unregistered reason; pdf stays enabled", () => {
     render(<KindPicker onConfirm={() => {}} />);
     const cad = document.querySelector('[data-ingest-kind="cad"]') as HTMLElement;
@@ -64,23 +64,23 @@ describe("KindPicker — kinds not yet accepted (cad: row 7f; xml: sensor pin)",
     expect(el.hasAttribute("data-ingest-kind-awaiting")).toBe(false);
     expect(el.textContent).not.toContain("not yet accepted");
   });
-  it("draws xml disabled, greyed and marked with the sensor/timeout reason, not cad's", () => {
+  it("draws xml enabled, with no grey and no reason (lifted 2026-10-17)", () => {
     render(<KindPicker onConfirm={() => {}} />);
     const xml = document.querySelector('[data-ingest-kind="xml"]') as HTMLElement;
-    expect((xml.querySelector("input") as HTMLInputElement).disabled).toBe(true);
-    expect(xml.getAttribute("data-ingest-kind-awaiting")).toBe("true");
-    expect(xml.getAttribute("aria-disabled")).toBe("true");
-    expect(xml.getAttribute("title")).toMatch(/sensor.*timeout/);
-    expect(xml.getAttribute("title")).not.toMatch(/kind_unregistered/);
-    expect(xml.textContent).toContain("not yet accepted");
+    expect((xml.querySelector("input") as HTMLInputElement).disabled).toBe(false);
+    expect(xml.hasAttribute("data-ingest-kind-awaiting")).toBe(false);
+    expect(xml.getAttribute("aria-disabled")).not.toBe("true");
+    expect(xml.getAttribute("title") ?? "").not.toMatch(/not yet accepted/);
+    expect(xml.textContent).not.toContain("not yet accepted");
   });
-  it("a suggestedKind of xml selects nothing and clicking xml does not select or confirm it", () => {
+  it("a suggestedKind of xml pre-selects xml and confirm sends xml", () => {
     const onConfirm = vi.fn();
     render(<KindPicker suggestedKind="xml" onConfirm={onConfirm} />);
-    fireEvent.click(document.querySelector('[data-ingest-kind="xml"] input')!);
-    for (const r of screen.getAllByRole("radio")) expect((r as HTMLInputElement).checked).toBe(false);
-    expect((document.querySelector('[data-ingest-kind-confirm]') as HTMLButtonElement).disabled).toBe(true);
-    expect(onConfirm).not.toHaveBeenCalled();
+    expect((document.querySelector('[data-ingest-kind="xml"] input') as HTMLInputElement).checked).toBe(true);
+    const confirm = document.querySelector('[data-ingest-kind-confirm]') as HTMLButtonElement;
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledWith("xml");
   });
   it("a suggestedKind of cad selects nothing and confirm stays disabled", () => {
     render(<KindPicker suggestedKind="cad" onConfirm={() => {}} />);

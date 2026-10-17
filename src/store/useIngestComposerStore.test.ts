@@ -1,6 +1,6 @@
 /**
- * The composer store's two doors for a refused drop: `cad` (no content_kind row yet, 7f) and `xml` (no sensor yet) are never
- * selectable or sendable, and a 4xx with a readable body becomes a `refused` turn, not an `error`.
+ * The composer store's two doors for a refused drop: `cad` (no content_kind row yet, 7f) is never selectable or sendable
+ * (`xml` was too, until the architect lifted it 2026-10-17: 7f's pins rolled, the door ON since 190), and a 4xx with a readable body becomes a `refused` turn, not an `error`.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -47,24 +47,24 @@ describe("cad is never selectable or sendable", () => {
   });
 });
 
-describe("xml is never selectable or sendable", () => {
-  it("attaching an .xml infers xml but leaves kind null", async () => {
+describe("xml is selectable and sendable (lifted 2026-10-17)", () => {
+  it("attaching an .xml infers xml and selects it", async () => {
     await useIngestComposerStore.getState().attach(xml());
     const s = useIngestComposerStore.getState();
     expect(s.inferred).toMatchObject({ kind: "xml", ambiguous: false });
-    expect(s.kind).toBeNull();
+    expect(s.kind).toBe("xml");
   });
-  it("setKind('xml') is rejected", () => {
+  it("setKind('xml') is taken", () => {
     useIngestComposerStore.getState().setKind("xml");
-    expect(useIngestComposerStore.getState().kind).toBeNull();
-    useIngestComposerStore.getState().setKind("pdf");
-    expect(useIngestComposerStore.getState().kind).toBe("pdf");
+    expect(useIngestComposerStore.getState().kind).toBe("xml");
   });
-  it("submit with kind forced to xml never calls upload", async () => {
-    useIngestComposerStore.setState({ file: xml(), kind: "xml" });
+  it("submit with xml uploads kind xml and content_kind xml (the format)", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"b".repeat(64)}` });
+    const file = xml();
+    useIngestComposerStore.setState({ file, kind: "xml" });
     await useIngestComposerStore.getState().submit("a@example.com", "");
-    expect(uploadIngest).not.toHaveBeenCalled();
-    expect(useIngestComposerStore.getState().turns).toHaveLength(0);
+    expect(uploadIngest).toHaveBeenCalledWith(file, "xml", "a@example.com", "xml");
+    expect(useIngestComposerStore.getState().turns).toHaveLength(1);
   });
 });
 

@@ -491,18 +491,17 @@ describe("readIngestErrorMessage — object detail with only an error code", () 
 });
 
 describe("INGEST_KINDS_NOT_YET_ACCEPTED", () => {
-  it("is exactly cad and xml, a subset of the upload kinds; pdf is accepted", () => {
-    expect([...INGEST_KINDS_NOT_YET_ACCEPTED]).toEqual(["cad", "xml"]);
+  it("is exactly cad, a subset of the upload kinds; pdf and xml are accepted (xml lifted 2026-10-17)", () => {
+    expect([...INGEST_KINDS_NOT_YET_ACCEPTED]).toEqual(["cad"]);
     expect(ingestKindNotYetAccepted("cad")).toBe(true);
-    expect(ingestKindNotYetAccepted("xml")).toBe(true);
+    expect(ingestKindNotYetAccepted("xml")).toBe(false);
     expect(ingestKindNotYetAccepted("pdf")).toBe(false);
     for (const k of INGEST_KINDS_NOT_YET_ACCEPTED) expect(INGEST_UPLOAD_KINDS).toContain(k);
     expect(INGEST_UPLOAD_KINDS).toContain("xml");
   });
-  it("each kind carries its own reason: cad kind_unregistered, xml sensor/timeout", () => {
+  it("cad carries its reason, kind_unregistered; an accepted kind has none", () => {
     expect(ingestKindNotYetAcceptedReason("cad")).toMatch(/kind_unregistered/);
-    expect(ingestKindNotYetAcceptedReason("xml")).toMatch(/sensor.*timeout/);
-    expect(ingestKindNotYetAcceptedReason("xml")).not.toMatch(/kind_unregistered/);
+    expect(ingestKindNotYetAcceptedReason("xml")).toBeNull();
     expect(ingestKindNotYetAcceptedReason("pdf")).toBeNull();
   });
 });

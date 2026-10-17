@@ -88,7 +88,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
   submit: async (email, text, owner = null) => {
     const { file, kind } = get();
     if (!file || !kind) return;
-    // Not yet accepted (cad: kind_unregistered at the door; xml: no sensor, fails timeout). Do not send.
+    // Not yet accepted (cad: kind_unregistered at the door). Do not send.
     if (ingestKindNotYetAccepted(kind)) return;
     const id = `ingest-turn-${++seq}`;
     const turn: IngestTurn = {
