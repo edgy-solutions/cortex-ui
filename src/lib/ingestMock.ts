@@ -15,6 +15,11 @@
  *                               the row's own `ingest_id` (no bridging needed — see
  *                               `promotionIngestId`'s doc comment), so the card's real lookup
  *                               logic is exercised end to end against the mock too.
+ *                               The task carries 193's payload header and title (the notice id),
+ *                               and `fetchIngestExtraction` / `fetchIngestSource` answer with the
+ *                               fixture notice's rows and the PDF they were extracted from
+ *                               (`promotionReviewFixture.ts`). Every drop gets the same notice,
+ *                               so the review card can be walked before 193 rolls.
  *   act (promoted/rejected)  → NOT intercepted here. `actOnHumanTask` (the real, already-served
  *                               route) resolves the mock task the same way it resolves a real one;
  *                               this module only seeds the task, never answers the act.
@@ -35,6 +40,7 @@
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { promotionIngestId, type IngestFailure, type IngestStage } from "./ingestWire";
 import type { IngestOrigin } from "./ingestOrigin";
+import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
   received: "extracting",
@@ -214,14 +220,41 @@ function seedReviewTask(row: MockRow): void {
     audience: "promotion:DATA_ENGINEERING",
     kind: "document_promotion",
     status: "pending",
-    title: "Promote or reject this document",
-    summary: row.ingest_id,
+    title: FIXTURE_NOTICE_ID,
+    summary: `PDN ${FIXTURE_NOTICE_ID} — Example Discretes Ltd, 2 parts, attempt 1.`,
     requestedBy: "mock-caller",
     subjectRef: row.ingest_id,
-    payload: { ingest_id: promotionIngestId(row) },
+    payload: {
+      ...fixturePromotionPayload(promotionIngestId(row)),
+      dropped_by: { authz_id: "mock-caller", on_behalf_of: null },
+    },
     createdAt: Date.now(),
   };
   useHumanTaskStore.getState().upsertTask(task);
+}
+
+function ingestNotFound(): Promise<never> {
+  const err = new Error("not found") as Error & { response?: unknown };
+  err.response = { status: 404, data: { detail: { error: "ingest_not_found" } } };
+  return Promise.reject(err);
+}
+
+/**
+ * `GET /ingest/{id}/extraction`'s mock: the fixture notice's rows for any row this tab dropped,
+ * whatever was dropped. An id it never saw is 404 `ingest_not_found`, as the route answers.
+ */
+export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
+  if (!STORE.has(ingestId)) return ingestNotFound();
+  return Promise.resolve(fixtureExtractionBody(ingestId));
+}
+
+/**
+ * `GET /ingest/{id}/source`'s mock: the PDF the fixture rows above were extracted from, not the
+ * file that was dropped. An id it never saw is a 404.
+ */
+export function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
+  if (!STORE.has(ingestId)) return ingestNotFound();
+  return Promise.resolve(fixturePdfBytes());
 }
 
 /**

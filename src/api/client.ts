@@ -7,7 +7,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { INGEST_MINE_PATH, ingestRetryPath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
+import { INGEST_MINE_PATH, ingestRetryPath, ingestExtractionPath, ingestSourcePath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -1039,6 +1039,25 @@ export async function fetchIngestMine(limit: number, before: string | null = nul
  */
 export async function retryIngest(ingestId: string): Promise<unknown> {
   const { data } = await api.post<unknown>(ingestRetryPath(ingestId));
+  return data;
+}
+
+/**
+ * `GET /ingest/{id}/extraction` (`ingestExtractionPath`; Lane 1, 193): the review card's rows
+ * and header. Returned RAW; `readExtraction` reads it.
+ */
+export async function fetchIngestExtraction(ingestId: string): Promise<unknown> {
+  const { data } = await api.get<unknown>(ingestExtractionPath(ingestId));
+  return data;
+}
+
+/**
+ * `GET /ingest/{id}/source` (`ingestSourcePath`; Lane 1, 193): the dropped document's bytes, for
+ * the review card's PDF pane. Raw bytes, never parsed here: `src/lib/pdfSource.ts` hands them to
+ * pdf.js. Until 193 rolls this 404s, and the pane says so while the rows still draw.
+ */
+export async function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
+  const { data } = await api.get<ArrayBuffer>(ingestSourcePath(ingestId), { responseType: "arraybuffer" });
   return data;
 }
 

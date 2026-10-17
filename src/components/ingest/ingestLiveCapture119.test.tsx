@@ -34,6 +34,10 @@ const fetchIngestStatus = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...args: unknown[]) => fetchIngestStatus(...args),
   disputeIngestOrigin: vi.fn(),
+  // This task's payload names an ingest_id, so it draws the promotion review card, which fetches
+  // both of these. They answer as they did on the rev this was captured on: not served (plain 404).
+  fetchIngestExtraction: () => Promise.reject({ response: { status: 404, data: { detail: "Not Found" } } }),
+  fetchIngestSource: () => Promise.reject({ response: { status: 404, data: { detail: "Not Found" } } }),
 }));
 
 const actOnHumanTask = vi.fn();

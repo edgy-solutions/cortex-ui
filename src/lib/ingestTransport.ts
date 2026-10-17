@@ -16,6 +16,8 @@ import {
   disputeIngestOrigin as realDisputeIngestOrigin,
   confirmIngestContentKind as realConfirmIngestContentKind,
   retryIngest as realRetryIngest,
+  fetchIngestSource as realFetchIngestSource,
+  fetchIngestExtraction as realFetchIngestExtraction,
 } from "@/api/client";
 import {
   uploadIngest as mockUploadIngest,
@@ -24,6 +26,8 @@ import {
   disputeIngestOrigin as mockDisputeIngestOrigin,
   confirmIngestContentKind as mockConfirmIngestContentKind,
   mockRetryIngest,
+  fetchIngestSource as mockFetchIngestSource,
+  fetchIngestExtraction as mockFetchIngestExtraction,
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
@@ -59,4 +63,14 @@ export function confirmIngestContentKind(ingestId: string, contentKind: string):
 /** `POST /ingest/{id}/retry`, no body — see `src/api/client.ts`'s `retryIngest`. */
 export function retryIngest(ingestId: string): Promise<unknown> {
   return isIngestMockEnabled() ? mockRetryIngest(ingestId) : realRetryIngest(ingestId);
+}
+
+/** `GET /ingest/{id}/extraction` — see `src/api/client.ts`'s `fetchIngestExtraction`. */
+export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
+  return isIngestMockEnabled() ? mockFetchIngestExtraction(ingestId) : realFetchIngestExtraction(ingestId);
+}
+
+/** `GET /ingest/{id}/source` — see `src/api/client.ts`'s `fetchIngestSource`. */
+export function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
+  return isIngestMockEnabled() ? mockFetchIngestSource(ingestId) : realFetchIngestSource(ingestId);
 }

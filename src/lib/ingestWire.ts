@@ -517,6 +517,40 @@ export function ingestRetryPath(id: string): string {
   return `/ingest/${encodeURIComponent(id)}/retry`;
 }
 
+/**
+ * The review card's two routes. Built on 193 by Lane 1 (`lane/01-193` at 71cdc40b), and NOT LIVE
+ * until 193 rolls; until then each answers a plain 404.
+ *
+ * Both are built HERE from the task's `ingest_id`, never read off a payload: the fetch carries the
+ * caller's bearer, and a payload path could point it anywhere (see `promotionReview.ts`).
+ *
+ * Both have one gate:
+ *   - allowed: the dropper, or a caller who can act on the audience of the OPEN
+ *     `document_promotion:<ingest_id>` task. A steward's access closes when the task resolves, and
+ *     the dropper's does not;
+ *   - 404 `ingest_not_found`, 403 `not_entitled` otherwise.
+ *
+ * `GET /ingest/{id}/extraction`: the extracted rows and the notice header (`readExtraction`).
+ * It also answers:
+ *   - 422 `no_extraction_ref`, `extraction_rows_absent`, `extraction_unbound`,
+ *     `extraction_unreadable`;
+ *   - 503 `artifact_store_unreachable`.
+ */
+export function ingestExtractionPath(id: string): string {
+  return `/ingest/${encodeURIComponent(id)}/extraction`;
+}
+
+/**
+ * `GET /ingest/{id}/source`: the dropped bytes, streamed, `no-store`. It has no `#page=` handling;
+ * the PDF pane jumps to the page itself. It also answers:
+ *   - 404 `source_absent`;
+ *   - 422 `source_unbound`;
+ *   - 503 `artifact_store_unreachable`.
+ */
+export function ingestSourcePath(id: string): string {
+  return `/ingest/${encodeURIComponent(id)}/source`;
+}
+
 // ── Errors — 400/403/413/422 on upload, 409/503 on act, 404 on status ──────────────────────
 
 /**
