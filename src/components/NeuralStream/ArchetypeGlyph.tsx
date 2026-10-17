@@ -30,6 +30,7 @@ import {
   GitBranch,
   Image,
   FileUp,
+  Shapes,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -166,6 +167,9 @@ export function glyphFor(t: AnswerArchetype): {
       // The one glyph in this table that is a literal picture, not a metaphor for one — a drawn
       // ICN with a hotspot, distinct from every chart/grid/tree glyph above it.
       return { Icon: Image, color: "text-neon-blue/80" };
+    case "MODEL_EXPLANATION":
+      // Network is taken (an earlier case); Shapes reads as "the kinds of thing the model holds".
+      return { Icon: Shapes, color: "text-neon-purple/80" };
     default:
       return { Icon: HelpCircle, color: "text-slate-500" };
   }

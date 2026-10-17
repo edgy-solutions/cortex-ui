@@ -11,6 +11,7 @@ import { RawFields } from "@/archetypes/RawFields";
 import { rawFieldsOf } from "@/lib/rawFields";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
+import { isFeatureEnabled } from "@/lib/featureFlags";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
 import { RefusalCard } from "./RefusalCard";
 import { readRefusalEnvelope } from "@/lib/refusalEnvelope";
@@ -617,6 +618,35 @@ const renderComponent = (
       );
     }
 
+    case "MODEL_EXPLANATION": {
+      // ADR-0057, cortex-proposed (see model-explanation/contract.ts). Behind the modelCanvas flag.
+      const pkg = archetypePackage("MODEL_EXPLANATION");
+      if (!pkg || !carriesItsRequest(comp, pkg.id)) break;
+      if (isFeatureEnabled("modelCanvas")) {
+        const ModelExplanation = pkg.Card;
+        return (
+          <ModelExplanation
+            {...{
+              [pkg.row.payload_key]: comp[pkg.row.payload_key],
+              ...pick(comp, pkg.reads),
+            }}
+          />
+        );
+      }
+      // Flag off: an honest panel, never a silent drop.
+      return (
+        <div data-model-canvas="off" className="p-4 glass-panel flex flex-col gap-2">
+          <p className="font-mono text-xs text-slate-300">MODEL_EXPLANATION · the model canvas is off in this build</p>
+          <p className="font-mono text-[10px] text-slate-500">
+            Behind the <code>modelCanvas</code> flag. Raw payload below.
+          </p>
+          <pre className="max-h-64 overflow-auto font-mono text-[10px] text-slate-400">
+            {JSON.stringify(comp, null, 2)}
+          </pre>
+        </div>
+      );
+    }
+
     case "CONTRIBUTION_RANKING": {
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -797,7 +827,9 @@ const isFullWidth = (archetype: string) =>
   archetype === "WORKFLOW_CASE" ||
   // ILLUSTRATION's contract declares "full-width" (contract.ts) — a drawn SVG wants the row,
   // same reasoning as the two above.
-  archetype === "ILLUSTRATION";
+  archetype === "ILLUSTRATION" ||
+  // MODEL_EXPLANATION declares "full-width" (contract.ts) — a question table wants the row.
+  archetype === "MODEL_EXPLANATION";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();

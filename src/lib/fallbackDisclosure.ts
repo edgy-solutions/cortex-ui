@@ -1,6 +1,7 @@
 import type { AnswerArchetype } from "./answerDisplay";
 import { WORKFLOW_CASE_ROW } from "@/archetypes/workflow-case/row";
 import { ILLUSTRATION_ROW } from "@/archetypes/illustration/row";
+import { MODEL_EXPLANATION_ROW } from "@/archetypes/model-explanation/row";
 import { presentFallbackReason, type FallbackReason, type RouteSeverity } from "./routing";
 
 /**
@@ -83,6 +84,8 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
    * `src/archetypes/illustration/contract.ts`'s header for why the shape is cortex-proposed.
    */
   ILLUSTRATION: true,
+  // States what the ratified model says about a subject — a claim, not a request (ADR-0057).
+  MODEL_EXPLANATION: true,
 
   // ── REQUESTS. These ask the reader for something and claim nothing. ──
   /** The menu. Withholding this strands the reader mid-elicitation — see the header. */
@@ -121,6 +124,8 @@ const REQUEST_PAYLOAD_KEY: Partial<Record<string, string>> = {
   // needs — this map is "does the component carry its declared payload key", independent of
   // whether `CLAIMS_AN_ANSWER` above calls that archetype a claim or a request.
   [ILLUSTRATION_ROW.archetype]: ILLUSTRATION_ROW.payload_key,
+  // Same presence-gating reason as ILLUSTRATION: no model_explanation object, nothing to draw.
+  [MODEL_EXPLANATION_ROW.archetype]: MODEL_EXPLANATION_ROW.payload_key,
 };
 
 export function carriesItsRequest(component: unknown, archetype: string): boolean {

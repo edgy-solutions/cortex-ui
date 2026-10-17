@@ -75,6 +75,9 @@ export type AnswerArchetype =
   // illustration with one hotspot highlighted by id. Added WITH its dispatch, its glyph and
   // its label in one change, for the same reason WORKFLOW_CASE's own comment above names.
   | "ILLUSTRATION"
+  // cortex-proposed (src/archetypes/model-explanation/contract.ts) — what the ratified model says
+  // about a class or property (ADR-0057). Dispatch, glyph and label land in one change, as above.
+  | "MODEL_EXPLANATION"
   // A DROP, as a turn on the rail (src/lib/ingestArtifact.ts). Client-made, never an answer.
   | "INGEST"
   | "UNKNOWN";
@@ -115,6 +118,7 @@ export const DISPLAY_ARCHETYPES = [
   "GROUPED_REVIEW",
   "WORKFLOW_CASE",
   "ILLUSTRATION",
+  "MODEL_EXPLANATION",
   "INGEST",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
@@ -265,6 +269,8 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Case";
     case "ILLUSTRATION":
       return "Illustration";
+    case "MODEL_EXPLANATION":
+      return "Model";
     case "INGEST":
       return "Ingest";
     default:
