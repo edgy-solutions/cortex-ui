@@ -48,6 +48,8 @@ export interface IngestComponent {
   attempt: number | null;
   /** The notice's own identifier from the status row; null when absent or null on the wire. */
   notice_id: string | null;
+  /** The row's leaf `content_kind` (191); null when absent, null or blank on the wire. */
+  content_kind: string | null;
   /** The kinds the door said it accepts, when the drop was refused with a list; null otherwise. */
   registered: string[] | null;
 }
@@ -103,6 +105,7 @@ export function ingestComponentOf(e: IngestEntry): IngestComponent {
     reason_code: refused ? (e.refusal?.code ?? null) : e.row?.stage === "failed" ? (e.row.failure?.reason_code ?? null) : null,
     attempt: e.row?.attempt ?? null,
     notice_id: e.row?.notice_id ?? null,
+    content_kind: e.row?.content_kind ?? null,
     registered: refused ? (e.refusal?.registered ?? null) : null,
   };
 }
@@ -138,7 +141,9 @@ export function ingestPlacedAt(e: Pick<IngestEntry, "droppedAt" | "row">): numbe
 
 export function ingestToArtifact(e: IngestEntry): Artifact {
   const comp = ingestComponentOf(e);
-  const kind = comp.kind;
+  // The chip names the leaf kind once the row carries one (a `pdf` drop confirmed as `pcn` says pcn),
+  // else the kind the drop was sent as.
+  const kind = comp.content_kind ?? comp.kind;
   const placedAt = ingestPlacedAt(e);
   return {
     id: ingestArtifactId(e.key),

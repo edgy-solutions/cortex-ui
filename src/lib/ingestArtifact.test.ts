@@ -209,3 +209,38 @@ describe("failed reason", () => {
     expect(reasonOf("review", null)).toBeNull();
   });
 });
+
+describe("content_kind: the chip names the leaf kind once the row carries one", () => {
+  const read = (over: Record<string, unknown>): IngestStatusRow => readIngestStatusRow(wireRow(over))!;
+  const chipOf = (row: IngestStatusRow | null) => ingestToArtifact(entry({ row })).question_text;
+
+  it("a string: kept verbatim, and the chip says it instead of the sent kind", () => {
+    const row = read({ content_kind: "pcn" });
+    expect(row.content_kind).toBe("pcn");
+    expect(ingestComponentFrom(ingestToArtifact(entry({ row })))!.content_kind).toBe("pcn");
+    expect(chipOf(row)).toBe("dropped as pcn");
+  });
+
+  it("null ('not known'): the key is present and null, the chip falls back to the sent kind", () => {
+    const row = read({ content_kind: null });
+    expect("content_kind" in row).toBe(true);
+    expect(row.content_kind).toBeNull();
+    expect(chipOf(row)).toBe("dropped as pdf");
+  });
+
+  it("absent (a fleet before 191): no claim, the chip says the sent kind", () => {
+    const row = read({});
+    expect("content_kind" in row).toBe(false);
+    expect(chipOf(row)).toBe("dropped as pdf");
+    expect(chipOf(null)).toBe("dropped as pdf");
+  });
+
+  it.each([["empty", ""], ["whitespace", "  "], ["a number", 7], ["an object", {}]])(
+    "%s: no claim -- the key is not on the row and the chip says the sent kind",
+    (_n, value) => {
+      const row = read({ content_kind: value });
+      expect("content_kind" in row).toBe(false);
+      expect(chipOf(row)).toBe("dropped as pdf");
+    },
+  );
+});

@@ -265,6 +265,16 @@ export interface IngestStatusRow {
    */
   notice_id?: string | null;
   /**
+   * `GET /ingest/{id}/status`'s `content_kind` (Lane 1 packet
+   * `sessions/2026-10-16-packet-to-cortex-ingest-mine-is-live-in-191-and-the-status-body-carries-content-kind.md`,
+   * live in 191): the row's LEAF kind, which a confirmation or a reclassification can correct after the
+   * drop (a `pdf` drop whose content_kind is `pcn`). Open vocabulary, kept verbatim. Three states, as
+   * `notice_id`: a non-blank string is the kind; `null` is "not known" (never an error); ABSENT (a
+   * fleet before 191) and anything else is no claim. `readIngestStatusRow` OMITS the key unless the
+   * wire carried a non-blank string or null.
+   */
+  content_kind?: string | null;
+  /**
    * `GET /ingest/{id}/status`'s `failure` (Lane 1 packet
    * `sessions/2026-10-12-packet-to-cortex-the-failure-field-is-failure-on-ingest-status-a-failed-drop-is-retryable.md` §1,
    * invincible-agent 33b80988): THREE states. An object is the producer's account of why the drop
@@ -411,6 +421,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   const suggested_content_kind = isNonEmptyString(raw.suggested_content_kind) ? raw.suggested_content_kind : null;
   const extraction_defect = readExtractionDefect(raw.extraction_defect);
   const notice_id = readNoticeId(raw.notice_id);
+  const content_kind = readNoticeId(raw.content_kind); // same three states as notice_id
   const failure = readIngestFailure(raw.failure);
   const attempt = typeof raw.attempt === "number" && Number.isInteger(raw.attempt) && raw.attempt > 0 ? raw.attempt : undefined;
 
@@ -430,6 +441,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     suggested_content_kind,
     ...(extraction_defect !== undefined ? { extraction_defect } : {}),
     ...(notice_id !== undefined ? { notice_id } : {}),
+    ...(content_kind !== undefined ? { content_kind } : {}),
     ...(failure !== undefined ? { failure } : {}),
     ...(attempt !== undefined ? { attempt } : {}),
   };
