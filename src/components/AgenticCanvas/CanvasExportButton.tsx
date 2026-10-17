@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 import { Download } from "lucide-react";
-import { useCanvasStore } from "@/store/useCanvasStore";
 import {
   fetchExportRecipients,
   startCanvasExport,
@@ -52,9 +51,19 @@ import {
  * `4c3b61a6`, `sessions/2026-10-04-payload-export-package-rev-171-*.json`): a full round trip
  * through a served artifact and the gated download proxy, including the no-bearer 401.
  */
-export function CanvasExportButton() {
-  const artifacts = useCanvasStore((s) => s.artifacts);
-  const answerIds = canvasAnswerIds(artifacts);
+export interface CanvasExportButtonProps {
+  /**
+   * THE BOARD BEING EXPORTED: the artifacts the stage DRAWS, in its order, never the canvas store.
+   * Chris's ruling (directive item 4, Lane 1 packet
+   * `sessions/2026-10-16-packet-to-cortex-ui-atlantia-holds-mechanic-maintenance-and-export-sends-the-board-in-190.md` §2):
+   * "export sends what is ON THE BOARD, never the whole store — 856 answers for a 3-card board is
+   * a bug". Required, so no mount can fall back to the store by omission.
+   */
+  board: { id: string }[];
+}
+
+export function CanvasExportButton({ board }: CanvasExportButtonProps) {
+  const answerIds = canvasAnswerIds(board);
 
   const [open, setOpen] = useState(false);
   const [recipients, setRecipients] = useState<ExportRecipient[] | null>(null);

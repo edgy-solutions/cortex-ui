@@ -71,7 +71,7 @@ afterEach(cleanup);
 
 describe("flag off", () => {
   it("renders nothing", () => {
-    const { container } = render(<CanvasExportButton />);
+    const { container } = render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     expect(container.innerHTML).toBe("");
   });
 });
@@ -81,7 +81,7 @@ describe("flag on", () => {
 
   it("zero answers on the canvas → disabled", () => {
     setArtifacts([TASK_ARTIFACT_PREFIX + "t1"]); // no real answers
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     const btn = document.querySelector("[data-canvas-export]");
     expect(btn).not.toBeNull();
     expect((btn as HTMLButtonElement).disabled).toBe(true);
@@ -92,7 +92,7 @@ describe("flag on", () => {
       { value: "legal", label: "Legal" },
       { value: "finance", label: "Finance" },
     ]);
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     fireEvent.click(document.querySelector("[data-canvas-export]")!);
     await waitFor(() =>
       expect(document.querySelectorAll("[data-export-recipient]").length).toBe(2),
@@ -108,7 +108,7 @@ describe("flag on", () => {
       status: "producing",
       recipient_scope: "legal",
     });
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(startCanvasExport).toHaveBeenCalledTimes(1));
@@ -116,6 +116,29 @@ describe("flag on", () => {
       answers: [{ artifact_id: "a1" }, { artifact_id: "a2" }],
       recipient_scope: "legal",
     });
+  });
+
+  it("THE BOARD, NOT THE STORE: a 3-card board over an 856-answer store posts 3 ids and says 3", async () => {
+    // fin's walk (2026-10-16): the picker said "Export 856 answers to…" for a 3-card board.
+    setArtifacts(Array.from({ length: 856 }, (_, i) => `s${i}`));
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockResolvedValue({ export_id: null, status: "producing", recipient_scope: "legal" });
+    const board = [{ id: "s7" }, { id: "task:t1" }, { id: "s3" }, { id: "s500" }];
+    render(<CanvasExportButton board={board} />);
+    await openAndPickLegal();
+    expect(document.body.textContent).toContain("Export 3 answers to…");
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(startCanvasExport).toHaveBeenCalledTimes(1));
+    expect(startCanvasExport).toHaveBeenCalledWith({
+      answers: [{ artifact_id: "s7" }, { artifact_id: "s3" }, { artifact_id: "s500" }],
+      recipient_scope: "legal",
+    });
+  });
+
+  it("an empty board over a full store is disabled: nothing is on the board to export", () => {
+    setArtifacts(["a1", "a2"]);
+    render(<CanvasExportButton board={[]} />);
+    expect((document.querySelector("[data-canvas-export]") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("failed with export_id null reads (not null itself) and shows the reason", async () => {
@@ -126,7 +149,7 @@ describe("flag on", () => {
       recipient_scope: "legal",
       reason: "engine returned no verifiable artifact hash",
     });
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
@@ -144,7 +167,7 @@ describe("flag on", () => {
   it("failed with NO reason (no-documents path) shows the fallback, never the word failed", async () => {
     fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
     startCanvasExport.mockResolvedValue({ export_id: null, status: "failed", recipient_scope: "legal" });
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
@@ -161,7 +184,7 @@ describe("flag on", () => {
       status: "producing",
       recipient_scope: "legal",
     });
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(startCanvasExport).toHaveBeenCalledTimes(1));
@@ -188,7 +211,7 @@ describe("flag on", () => {
       artifact_filename: "legal-2026-09-30.zip",
     });
     downloadExportArtifact.mockResolvedValue(new Blob(["x"]));
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-artifact]")).not.toBeNull());
@@ -207,7 +230,7 @@ describe("flag on", () => {
       artifact_uri: "/canvas/export/e1/artifact",
       artifact_sha256: GOOD_SHA,
     });
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-status]")).not.toBeNull());
@@ -225,7 +248,7 @@ describe("flag on", () => {
         ],
       }),
     );
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() =>
@@ -242,7 +265,7 @@ describe("flag on", () => {
         recipient_scope: "legal",
       }),
     );
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
@@ -254,7 +277,7 @@ describe("flag on", () => {
     startCanvasExport.mockRejectedValue(
       axiosError(502, { error: "cost_engine_unreachable", message: "connection refused" }),
     );
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
@@ -266,7 +289,7 @@ describe("flag on", () => {
   it("network error (no axios response) → visible error text, never a link", async () => {
     fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
     startCanvasExport.mockRejectedValue(new Error("network down"));
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
@@ -278,7 +301,7 @@ describe("flag on", () => {
     startCanvasExport.mockRejectedValue(
       axiosError(409, { reason: "recipient_required", options: [{ value: "finance" }] }),
     );
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());
@@ -298,7 +321,7 @@ describe("flag on", () => {
       artifact_sha256: GOOD_SHA,
     });
     downloadExportArtifact.mockRejectedValue(new Error("boom"));
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-artifact]")).not.toBeNull());
@@ -324,7 +347,7 @@ describe("roll-11 capture — drives the button through the captured bodies", ()
       .mockRejectedValueOnce(axiosError(409, conflictDetail))
       .mockResolvedValueOnce(failedBody);
 
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPick("notional-customer-alpha");
     fireEvent.click(screen.getByText("Start export"));
 
@@ -363,7 +386,7 @@ describe("mixed board — documents[] (rev 187)", () => {
   async function runWith(body: unknown) {
     fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
     startCanvasExport.mockResolvedValue(body);
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-document]")).not.toBeNull());
@@ -457,7 +480,7 @@ describe("mixed board — documents[] (rev 187)", () => {
     delete body.documents[1].engine;
     fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
     startCanvasExport.mockResolvedValue(body);
-    render(<CanvasExportButton />);
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
     await openAndPickLegal();
     fireEvent.click(screen.getByText("Start export"));
     await waitFor(() => expect(document.querySelector("[data-export-error]")).not.toBeNull());

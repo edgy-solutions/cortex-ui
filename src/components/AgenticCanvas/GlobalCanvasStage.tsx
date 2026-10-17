@@ -255,6 +255,9 @@ export function GlobalCanvasStage() {
       .filter((e) => e.a);
   }, [isGlobal, visibleArtifacts, globalLayout, activeCanvas, artifactById, folded]);
 
+  // What export sends: the cards this view draws (a slot drawing a superseded ask's answer sends the answer).
+  const boardArtifacts = useMemo(() => entries.map((e) => e.a), [entries]);
+
   const world = useMemo(() => {
     if (isGlobal) return globalLayout.world;
     return customWorld(activeCanvas!.items);
@@ -1013,7 +1016,7 @@ export function GlobalCanvasStage() {
           focus/group exits already contest (see the `right-32` note above). Hidden in
           focus/full-pane the same way the group-overview button is — both are whole-canvas
           controls with no meaning once a single card fills the view. */}
-      {!focusId && !fullPane && <CanvasExportButton />}
+      {!focusId && !fullPane && <CanvasExportButton board={boardArtifacts} />}
 
       {/* The dock — GLOBAL + custom canvases + NEW. */}
       {!fullPane && <DockBar />}
