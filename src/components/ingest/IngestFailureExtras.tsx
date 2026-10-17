@@ -48,11 +48,10 @@ export function IngestFailureExtras({ stage, ingestId, reasonCode, attempt, retr
     <>
       {(reasonCode !== null || (attempt !== null && attempt > 1) || failed) && (
         <span className="inline-flex flex-wrap items-center gap-1.5 mt-0.5">
+          {/* A reason code is a fact, not an action: plain muted text like `attempt`. Bordered = clickable,
+              so only Retry is a chip (architect, 2026-10-16). */}
           {reasonCode !== null && (
-            <span
-              className="px-1 py-px rounded text-[9px] font-mono text-amber-300 border border-amber-400/40 bg-amber-400/10"
-              data-ingest-reason-code
-            >
+            <span className="text-[9px] font-mono text-slate-400" data-ingest-reason-code>
               {reasonCode}
             </span>
           )}

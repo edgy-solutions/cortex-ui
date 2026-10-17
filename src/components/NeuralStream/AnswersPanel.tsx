@@ -600,11 +600,10 @@ function IngestBadge({ a }: { a: Artifact }) {
   if (!ing) return null;
   return (
     <span className="inline-flex items-center gap-1 mb-0.5">
+      {/* Text, not a chip: bordered = clickable on the rail, and a stage is not an action. */}
       <span
-        className={`px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
-          ing.badge === "failed" || ing.badge === "refused"
-            ? "text-amber-300 border-amber-400/40 bg-amber-400/10"
-            : "text-neon-cyan border-neon-cyan/30 bg-neon-cyan/10"
+        className={`text-[8px] font-mono font-bold uppercase tracking-widest ${
+          ing.badge === "failed" || ing.badge === "refused" ? "text-amber-300" : "text-neon-cyan"
         }`}
         data-ingest-stage={ing.badge}
       >
@@ -736,10 +735,8 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         <IngestBadge a={a} />
         {task && (
           <span
-            className={`inline-block mb-0.5 px-1 py-px rounded text-[8px] font-mono font-bold uppercase tracking-widest border ${
-              taskPending
-                ? "text-pink-300 border-pink-500/40 bg-pink-500/10"
-                : "text-slate-400 border-white/10 bg-white/5"
+            className={`inline-block mb-0.5 text-[8px] font-mono font-bold uppercase tracking-widest ${
+              taskPending ? "text-pink-300" : "text-slate-400"
             }`}
           >
             {taskKindLabel(task.kind)}
