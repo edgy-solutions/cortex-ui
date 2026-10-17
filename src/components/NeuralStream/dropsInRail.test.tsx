@@ -595,7 +595,7 @@ describe("GET /ingest/mine: the server's list is the record, browser storage the
     fetchIngestStatus.mockReturnValue(new Promise(() => {}));
     render(<Harness />);
     await tick(0);
-    expect(fetchIngestMine).toHaveBeenCalledWith(50);
+    expect(fetchIngestMine).toHaveBeenCalledWith(50, null);
     const art = useCanvasStore.getState().artifacts.find((a) => a.id === ingestArtifactId(LISTED));
     expect(art, "the listed drop never reached the store").toBeDefined();
     expect(art!.summary).toBe("PCN24-060");

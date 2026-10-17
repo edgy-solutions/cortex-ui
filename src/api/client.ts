@@ -1020,12 +1020,14 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
 }
 
 /**
- * `GET /ingest/mine?limit=` — the caller's own drops, newest first (191). Parsed by
- * `readIngestMinePage` in `src/lib/ingestWire.ts`. A fleet before 191 has no such route; the caller
- * treats any failure as "no server list" and keeps what browser storage holds.
+ * `GET /ingest/mine?limit=&before=` — the caller's own drops, newest first (191). Parsed by
+ * `readIngestMinePage` in `src/lib/ingestWire.ts`. Keyset paging: `before` is the previous page's
+ * `next`, passed back verbatim (opaque; never built here), and left off for the first page. A fleet
+ * before 191 has no such route; the caller treats any failure as "no server list" and keeps what
+ * browser storage holds.
  */
-export async function fetchIngestMine(limit: number): Promise<unknown> {
-  const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: { limit } });
+export async function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
+  const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: before === null ? { limit } : { limit, before } });
   return data;
 }
 

@@ -38,8 +38,8 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
 }
 
 /** `GET /ingest/mine` — see `src/api/client.ts`'s `fetchIngestMine`. */
-export function fetchIngestMine(limit: number): Promise<unknown> {
-  return isIngestMockEnabled() ? mockFetchIngestMine(limit) : realFetchIngestMine(limit);
+export function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
+  return isIngestMockEnabled() ? mockFetchIngestMine(limit, before) : realFetchIngestMine(limit, before);
 }
 
 /** CORTEX-PROPOSED — see `src/api/client.ts`'s `disputeIngestOrigin` doc comment. */

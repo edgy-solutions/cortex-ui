@@ -177,10 +177,13 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   return Promise.resolve({ ...row });
 }
 
-/** `GET /ingest/mine`'s mock: every row this tab uploaded, newest first, unadvanced; one page. */
-export function fetchIngestMine(limit: number): Promise<unknown> {
-  const items = [...STORE.values()].sort((a, b) => b.created_at - a.created_at).slice(0, limit).map((r) => ({ ...r }));
-  return Promise.resolve({ items, next: null });
+/** `GET /ingest/mine`'s mock: every row this tab uploaded, newest first, unadvanced. Its cursor is
+ *  the offset as a string — the real one is opaque, and the store never reads it, only passes it back. */
+export function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
+  const all = [...STORE.values()].sort((a, b) => b.created_at - a.created_at);
+  const from = before === null ? 0 : Number(before);
+  const items = all.slice(from, from + limit).map((r) => ({ ...r }));
+  return Promise.resolve({ items, next: from + limit < all.length ? String(from + limit) : null });
 }
 
 /**

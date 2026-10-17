@@ -12,9 +12,12 @@
  *  - a 404 ("not found, or not yours", existence-oracle safe) stops that id; any other transport
  *    error is tolerated and retried on the next tick.
  *
- * `loadMine` reads `GET /ingest/mine` once (191): the server's list of this person's drops, which seeds
- * `rows` and names the drops browser storage never held (`listed`). A row this tab already holds
- * wins while its `updated_at` is newer than the listed item's — the live poll is fresher than the page.
+ * `loadMine` reads `GET /ingest/mine` once per session (191): the server's list of this person's drops,
+ * which seeds `rows` and names the drops browser storage never held (`listed`). A row this tab already
+ * holds wins while its `updated_at` is newer than the listed item's — the live poll is fresher than the
+ * page. It follows `next` page by page (keyset: each page's `next` goes back as `before`): the first page
+ * draws at once, older pages are appended as they come, up to `INGEST_MINE_MAX_PAGES`. A failure on a
+ * LATER page stops the walk and keeps what was read; only the first page's failure is `failed`.
  *
  * The fetch is `fetchIngestStatus` from `ingestTransport` (the guarded transport) — no new site.
  * In-memory only; the sync hook drives it and `purgeUserScopedState` resets it, so A's rows never
@@ -35,8 +38,10 @@ import {
 } from "@/lib/ingestWire";
 
 export const INGEST_POLL_MS = 2000;
-/** One page of `GET /ingest/mine` on load: the same count browser storage kept (`MY_DROPS_CAP`). */
+/** One page of `GET /ingest/mine`: the same count browser storage kept (`MY_DROPS_CAP`). */
 export const INGEST_MINE_LIMIT = 50;
+/** Pages `loadMine` follows at most (500 drops): past that the rail shows the newest 500. */
+export const INGEST_MINE_MAX_PAGES = 10;
 
 /** The listed item, unless this tab already holds a NEWER read of the same row. */
 export function mergeListedRow(held: IngestStatusRow | undefined, listed: IngestStatusRow): IngestStatusRow {
@@ -48,12 +53,13 @@ interface State {
   notFound: Record<string, true>;
   /** The ingest ids `GET /ingest/mine` listed, in its order (newest first); [] until it answers. */
   listed: string[];
-  /** `idle` until `loadMine` runs; `failed` on any error (a fleet before 191 has no route). */
+  /** `idle` until `loadMine` runs; `loaded` once the FIRST page is read (older pages may still be
+   *  coming); `failed` if the first page errs (a fleet before 191 has no route). */
   mine: "idle" | "loading" | "loaded" | "failed";
   /** +1 on every `reset`. Only ever grows, so a reader keyed on it re-runs even when `mine` went
    *  idle → loading → idle inside one effect flush (which no subscriber sees as a change). */
   epoch: number;
-  /** Read `GET /ingest/mine` once per session (again after `reset`). */
+  /** Read `GET /ingest/mine` once per session (again after `reset`), following `next`. */
   loadMine: () => void;
   /** Fetch every id in `ids` that is due: never read, or read and still not terminal. */
   pollDue: (ids: readonly string[]) => void;
@@ -78,23 +84,35 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
     if (get().mine !== "idle") return;
     set({ mine: "loading" });
     const gen = generation;
-    void fetchIngestMine(INGEST_MINE_LIMIT)
-      .then((raw) => {
-        if (gen !== generation) return;
-        const page = readIngestMinePage(raw);
-        if (!page) {
-          set({ mine: "failed" });
-          return;
+    const seen = new Set<string>(); // a cursor handed back twice would page forever
+    const walk = async () => {
+      let before: string | null = null;
+      for (let n = 0; n < INGEST_MINE_MAX_PAGES; n++) {
+        let page: ReturnType<typeof readIngestMinePage>;
+        try {
+          page = readIngestMinePage(await fetchIngestMine(INGEST_MINE_LIMIT, before));
+        } catch {
+          page = null;
         }
+        if (gen !== generation) return;
+        if (!page) {
+          if (n === 0) set({ mine: "failed" });
+          return; // a later page's failure keeps what was read
+        }
+        const items = page.items;
         set((s) => {
           const rows = { ...s.rows };
-          for (const item of page.items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
-          return { rows, listed: page.items.map((i) => i.ingest_id), mine: "loaded" };
+          for (const item of items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
+          const listed = n === 0 ? [] : [...s.listed];
+          for (const item of items) if (!listed.includes(item.ingest_id)) listed.push(item.ingest_id);
+          return { rows, listed, mine: "loaded" };
         });
-      })
-      .catch(() => {
-        if (gen === generation) set({ mine: "failed" });
-      });
+        if (page.next === null || seen.has(page.next)) return;
+        seen.add(page.next);
+        before = page.next;
+      }
+    };
+    void walk();
   },
   pollDue: (ids) => {
     for (const id of ids) {
