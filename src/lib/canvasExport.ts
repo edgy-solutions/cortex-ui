@@ -83,7 +83,7 @@ export type CanvasExportStatus = "producing" | "exists" | "failed";
  * success + cost's `lots_disclosed`/`sections`), `_cost_refusal_section`, or
  * `_fin_ad_hoc_refusal_section` — so every field past the five required ones may be absent or
  * null, and a section's own `status` is only ever `exists` or `failed` (never `partial`).
- * The refusal fields (`reason`, `outcome`) belong to the EXPORTER'S view only.
+ * The refusal fields (`reason`, `reason_code`, `outcome`) belong to the EXPORTER'S view only.
  */
 export interface CanvasExportDocument {
   engine: string;
@@ -97,6 +97,7 @@ export interface CanvasExportDocument {
   artifact_filename?: string;
   algorithm_sha?: string;
   reason?: string;
+  reason_code?: string;
   outcome?: string;
   lots_disclosed?: number[] | null;
   sections?: string[] | null;
@@ -164,6 +165,7 @@ function readExportDocument(raw: unknown): CanvasExportDocument | null {
   if (typeof d.artifact_filename === "string") out.artifact_filename = d.artifact_filename;
   if (typeof d.algorithm_sha === "string") out.algorithm_sha = d.algorithm_sha;
   if (typeof d.reason === "string") out.reason = d.reason;
+  if (typeof d.reason_code === "string") out.reason_code = d.reason_code;
   if (typeof d.outcome === "string") out.outcome = d.outcome;
   if (d.template_id === null || typeof d.template_id === "string") out.template_id = d.template_id;
   if (d.lots_disclosed === null) out.lots_disclosed = null;

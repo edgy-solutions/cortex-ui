@@ -480,6 +480,20 @@ describe("mixed-board export — documents[]", () => {
     expect(row!.documents![0].outcome).toBeUndefined();
   });
 
+  // Fin's 10-17 packet: a refused answer is a failed documents[] entry keyed by reason_code.
+  it("a section's string reason_code is kept; a non-string one reads as absent", () => {
+    const docs = mixedDocs();
+    docs[1].reason_code = "not_a_ratified_template";
+    const kept = readCanvasExport({ ...loadMixed(), documents: docs });
+    expect(kept!.documents![1].reason_code).toBe("not_a_ratified_template");
+    expect(kept!.documents![1].reason).toBe("not a ratified template");
+
+    docs[1].reason_code = 7;
+    const dropped = readCanvasExport({ ...loadMixed(), documents: docs });
+    expect(dropped).not.toBeNull();
+    expect(dropped!.documents![1].reason_code).toBeUndefined();
+  });
+
   it("a document status of partial is not a section status → unreadable", () => {
     const docs = mixedDocs();
     docs[1].status = "partial";
