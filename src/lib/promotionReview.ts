@@ -278,6 +278,10 @@ export interface ReviewFlags {
   partsUnknown: boolean;
   /** `rows_without_evidence` disagrees with the absent rows drawn; null when it agrees or did not travel. */
   evidenceCountMismatch: { served: number; drawn: number } | null;
+  /** Rows whose outline is the enclosing table box, not the cell (`evidenceQuality` "region"). */
+  regionEvidence: number;
+  /** Rows with a box whose `obtained_via` is no method this card knows: the outline is not claimed exact. */
+  unknownMethod: number;
 }
 
 /** Null until the extraction has arrived: nothing can be counted before the rows are here. */
@@ -295,7 +299,38 @@ export function reviewFlags(review: PromotionReview): ReviewFlags | null {
       ex.rows_without_evidence !== null && ex.rows_without_evidence !== absent
         ? { served: ex.rows_without_evidence, drawn: absent }
         : null,
+    regionEvidence: ex.rows.filter((r) => r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "region").length,
+    unknownMethod: ex.rows.filter((r) => r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "unknown").length,
   };
+}
+
+/**
+ * What a row's outline actually IS. `obtained_via` is doc-tools' `match_method` (Lane 1's 193
+ * packet), and a has-a-bbox test passes all three qualities alike (7f, 2026-10-17, doc-tools #132):
+ *   cell       `text_layer_cell`: the exact cell.
+ *   region     `region_preferred` / `unique`: the enclosing TABLE box; every row on the page shares it.
+ *   inherited  `inherited_doc_level`: the sentence that states a document-level date (an LTB stated
+ *              once, in prose); often on a different page from the row, and one crop for every row.
+ * The safe set is enumerated: any other method is "unknown", never taken for the cell.
+ */
+export type EvidenceQuality = "cell" | "region" | "inherited" | "unknown";
+
+const QUALITY_BY_METHOD: Record<string, EvidenceQuality> = {
+  text_layer_cell: "cell",
+  region_preferred: "region",
+  unique: "region",
+  inherited_doc_level: "inherited",
+};
+
+export function evidenceQuality(obtainedVia: string | null): EvidenceQuality {
+  return (obtainedVia !== null && Object.hasOwn(QUALITY_BY_METHOD, obtainedVia) && QUALITY_BY_METHOD[obtainedVia]) || "unknown";
+}
+
+/** Rows whose evidence is this exact crop: an inherited date's one sentence clears them all at once. */
+export function rowsSharingEvidence(rows: ReviewRow[], ref: EvidenceRef): number {
+  const k = (e: EvidenceRef) => `${e.page}:${e.bbox.join(",")}`;
+  const want = k(ref);
+  return rows.filter((r) => r.evidence.state === "ok" && k(r.evidence.ref) === want).length;
 }
 
 /** `sha256:5b15f205…` or bare hex: the first 12 hex, for the top line. The full value goes in a title. */

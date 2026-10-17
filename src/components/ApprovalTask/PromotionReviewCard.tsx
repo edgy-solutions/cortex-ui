@@ -14,6 +14,8 @@ import {
   shaPrefix,
   type Extraction,
   type HeaderField,
+  evidenceQuality,
+  rowsSharingEvidence,
 } from "@/lib/promotionReview";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
@@ -106,6 +108,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const rows = review.rows;
   const selected = rows[sel] ?? null;
   const target = selected && selected.evidence.state === "ok" ? selected.evidence.ref : null;
+  const targetQuality = selected ? evidenceQuality(selected.obtained_via) : "unknown";
+  const targetShared = target ? rowsSharingEvidence(rows, target) : 0;
 
   const blocked = isActBlocked(a);
   const canAct = !blocked && !acting;
@@ -222,6 +226,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             flags.partsMismatch ||
             flags.partsUnknown ||
             flags.evidenceCountMismatch ||
+            flags.regionEvidence > 0 ||
+            flags.unknownMethod > 0 ||
             (ex?.droppedRows ?? 0) > 0))) && (
         <ul className="mb-3 space-y-0.5 text-[11px] text-amber-400/90" data-review-flags>
           {review.notice_id === null && extraction.phase !== "loading" && (
@@ -258,6 +264,18 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           )}
           {flags?.partsUnknown && (
             <li data-review-flag="parts-unknown">part_count did not travel, so the table cannot be shown to be whole.</li>
+          )}
+          {flags && flags.regionEvidence > 0 && (
+            <li data-review-flag="region-evidence">
+              {flags.regionEvidence} row{flags.regionEvidence === 1 ? "'s" : "s'"} outline is the whole table box, not the cell:
+              find the row inside it.
+            </li>
+          )}
+          {flags && flags.unknownMethod > 0 && (
+            <li data-review-flag="unknown-method">
+              {flags.unknownMethod} row{flags.unknownMethod === 1 ? "" : "s"} came by a method this card does not know; their
+              outline is not claimed to be the cell.
+            </li>
           )}
           {ex && ex.droppedRows > 0 && (
             <li data-review-flag="dropped-rows">
@@ -319,7 +337,19 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-1 text-slate-500" data-cell="via">{r.obtained_via ?? "—"}</td>
+                    <td className="px-2 py-1 text-slate-500" data-cell="via">
+                      {r.obtained_via ?? "—"}
+                      {r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "inherited" && (
+                        <span className="block text-[9px] text-violet-300/70" data-evidence-note="inherited">
+                          from the document-level date
+                        </span>
+                      )}
+                      {r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "region" && (
+                        <span className="block text-[9px] text-amber-400/70" data-evidence-note="region">
+                          table box, not the cell
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-1 whitespace-nowrap text-right">
                       {r.evidence.state === "ok" ? (
                         <button
@@ -355,7 +385,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         </div>
 
         {/* RIGHT — the source, at the selected row's evidence. */}
-        <PdfEvidencePane ingestId={ingestId} target={target} />
+        <PdfEvidencePane ingestId={ingestId} target={target} quality={targetQuality} sharedBy={targetShared} />
       </div>
 
       {/* BOTTOM — the decision. */}

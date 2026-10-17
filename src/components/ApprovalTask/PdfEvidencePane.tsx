@@ -2,7 +2,27 @@ import { useEffect, useRef, useState } from "react";
 import { fetchIngestSource } from "@/lib/ingestTransport";
 import { openPdf, RenderCancelled, type PdfDoc, type RenderedPage } from "@/lib/pdfSource";
 import { scaleBox } from "@/lib/bboxScale";
-import { reviewRouteFailure, type EvidenceRef } from "@/lib/promotionReview";
+import { reviewRouteFailure, type EvidenceQuality, type EvidenceRef } from "@/lib/promotionReview";
+
+/** The outline says what it is: solid for the cell, dashed for a box that is not the row's own. */
+const OUTLINE_CLASS: Record<EvidenceQuality, string> = {
+  cell: "border-2 border-pink-500 bg-pink-500/10 shadow-[0_0_0_2px_rgba(236,72,153,0.25)]",
+  region: "border-2 border-dashed border-amber-500 bg-amber-500/5",
+  inherited: "border-2 border-dashed border-violet-500 bg-violet-500/10",
+  unknown: "border-2 border-dashed border-slate-500 bg-slate-500/5",
+};
+
+function outlineCaption(quality: EvidenceQuality, page: number, sharedBy: number): string {
+  if (quality === "cell") return "Outlined: the cell this row was read from.";
+  if (quality === "region") {
+    return `Outlined: the whole table on p${page}, not the cell. Every row read from this table shares this box.`;
+  }
+  if (quality === "inherited") {
+    const all = sharedBy > 1 ? ` ${sharedBy} rows inherit it: confirming it once confirms them all.` : "";
+    return `Outlined: the sentence on p${page} that states the document-level date; the row inherits it.${all}`;
+  }
+  return "Outlined: a box from a method this card does not know. It is not claimed to be the cell.";
+}
 
 /**
  * The review card's right pane: the dropped document at the selected row's evidence page, with
@@ -24,7 +44,17 @@ type Phase =
 
 const DEFAULT_WIDTH = 560;
 
-export function PdfEvidencePane({ ingestId, target }: { ingestId: string | null; target: EvidenceRef | null }) {
+export function PdfEvidencePane({
+  ingestId,
+  target,
+  quality = "unknown",
+  sharedBy = 0,
+}: {
+  ingestId: string | null;
+  target: EvidenceRef | null;
+  quality?: EvidenceQuality;
+  sharedBy?: number;
+}) {
   const [state, setState] = useState<Phase>(ingestId ? { phase: "loading" } : { phase: "failed", why: "This task names no ingest_id, so there is no source to fetch." });
   const [rendered, setRendered] = useState<(RenderedPage & { page: number }) | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -137,15 +167,21 @@ export function PdfEvidencePane({ ingestId, target }: { ingestId: string | null;
             {box && (
               <div
                 ref={outlineRef}
-                className="absolute pointer-events-none rounded-sm border-2 border-pink-500 bg-pink-500/10 shadow-[0_0_0_2px_rgba(236,72,153,0.25)]"
+                className={`absolute pointer-events-none rounded-sm ${OUTLINE_CLASS[quality]}`}
                 style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
                 data-evidence-outline
                 data-evidence-outline-page={rendered?.page}
+                data-evidence-quality={quality}
               />
             )}
           </div>
         )}
       </div>
+      {box && rendered && (
+        <p className="mt-1.5 text-[10px] text-slate-400" data-evidence-caption={quality}>
+          {outlineCaption(quality, rendered.page, sharedBy)}
+        </p>
+      )}
     </div>
   );
 }

@@ -104,8 +104,8 @@ const row = (part: number, field: string, label: string, value: string, page: nu
   mpn: PARTS[part],
   field,
   extracted_value: value,
-  // `text_layer_cell` is the one served value Lane 1 named; `layout_prose` is invented here.
-  obtained_via: prose ? "layout_prose" : "text_layer_cell",
+  // Both are doc-tools match_methods (7f, 2026-10-17): the cell, and the enclosing table box (px).
+  obtained_via: prose ? "region_preferred" : "text_layer_cell",
   units: prose ? "px" : "pt",
   page,
   line: { text: `${PARTS[part].padEnd(12)}${label.padEnd(26)}${value}`, x: 72, y },

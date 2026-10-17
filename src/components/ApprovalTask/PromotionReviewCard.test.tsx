@@ -357,6 +357,65 @@ describe("rows and the source", () => {
   });
 });
 
+/**
+ * What the outline IS (7f, 2026-10-17, doc-tools #132): a has-a-bbox test passes three qualities
+ * alike. The card says which one the steward is looking at, in the outline and in words.
+ */
+describe("evidence quality", () => {
+  const quality = () => outline()?.getAttribute("data-evidence-quality");
+  const caption = () => document.querySelector("[data-evidence-caption]")?.textContent ?? "";
+
+  it("a text_layer_cell row is outlined solid and captioned as the cell; no note, no quality flag", async () => {
+    await mount();
+    await waitFor(() => expect(quality()).toBe("cell"));
+    expect(outline()!.className).not.toContain("border-dashed");
+    expect(caption()).toBe("Outlined: the cell this row was read from.");
+    expect(rowEls()[0].querySelector("[data-evidence-note]")).toBeNull();
+    expect(flag("unknown-method")).toBeNull();
+  });
+
+  it("a region row is noted, outlined dashed, captioned as the whole table, and counted in a flag", async () => {
+    await mount();
+    expect(flag("region-evidence")!.textContent).toMatch(/^2 rows' outline is the whole table box, not the cell/);
+    expect(rowEls()[5].querySelector('[data-evidence-note="region"]')!.textContent).toBe("table box, not the cell");
+    fireEvent.click(document.querySelector('[data-show-row="row-5"]')!);
+    await waitFor(() => expect(quality()).toBe("region"));
+    expect(outline()!.className).toContain("border-dashed");
+    expect(caption()).toMatch(/^Outlined: the whole table on p2, not the cell./);
+  });
+
+  it("inherited LTB rows: noted, jump to the stating sentence, and say one look clears all that share it", async () => {
+    const b = exBody();
+    // doc-tools #132: every inherited row carries the header date's ONE page + bbox.
+    const sentence = { ...b.rows[0].evidence_ref!, page: 2, bbox: [72, 100, 400, 114] };
+    for (const i of [0, 2]) {
+      b.rows[i].obtained_via = "inherited_doc_level";
+      b.rows[i].evidence_ref = { ...sentence };
+    }
+    fetchIngestExtraction.mockResolvedValue(b);
+    await mount();
+    expect(rowEls()[2].querySelector('[data-evidence-note="inherited"]')!.textContent).toBe("from the document-level date");
+    expect(rowEls()[1].querySelector("[data-evidence-note]")).toBeNull();
+    await waitFor(() => expect(quality()).toBe("inherited"));
+    expect(outline()!.getAttribute("data-evidence-outline-page")).toBe("2"); // not the row's page 1
+    expect(caption()).toBe(
+      "Outlined: the sentence on p2 that states the document-level date; the row inherits it. 2 rows inherit it: confirming it once confirms them all.",
+    );
+    expect(flag("unknown-method")).toBeNull();
+  });
+
+  it("a method the card does not know is never taken for the cell", async () => {
+    const b = exBody();
+    b.rows[0].obtained_via = "layout_prose";
+    fetchIngestExtraction.mockResolvedValue(b);
+    await mount();
+    await waitFor(() => expect(quality()).toBe("unknown"));
+    expect(outline()!.className).toContain("border-dashed");
+    expect(caption()).toMatch(/not claimed to be the cell/);
+    expect(flag("unknown-method")!.textContent).toMatch(/^1 row came by a method this card does not know/);
+  });
+});
+
 describe("keyboard", () => {
   it("j and k walk the rows, and the source follows", async () => {
     await mount();

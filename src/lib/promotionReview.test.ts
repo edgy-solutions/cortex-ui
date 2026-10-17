@@ -20,6 +20,8 @@ import {
   rejectReason,
   reviewRouteFailure,
   DEFAULT_REJECT_CODES,
+  evidenceQuality,
+  rowsSharingEvidence,
   type Extraction,
 } from "./promotionReview";
 import { fixtureExtractionBody, fixturePromotionPayload } from "./promotionReviewFixture";
@@ -78,6 +80,8 @@ describe("the extraction body", () => {
       partsMismatch: null,
       partsUnknown: false,
       evidenceCountMismatch: null,
+      regionEvidence: 2, // the two replacement rows on p2 are table-box evidence
+      unknownMethod: 0,
     });
   });
 
@@ -254,6 +258,41 @@ describe("route failures name the server's code", () => {
   it("no response at all: the source is unreadable bytes, the extraction a failed load", () => {
     expect(reviewRouteFailure(new Error("Invalid PDF structure"), "source")).toBe("The source could not be read as a PDF.");
     expect(reviewRouteFailure(new Error("network"), "extraction")).toBe("The extraction could not be loaded.");
+  });
+});
+
+describe("evidence quality: what the outline IS (7f, doc-tools #132)", () => {
+  it("names the three served qualities; every other method is unknown, never the cell", () => {
+    expect(evidenceQuality("text_layer_cell")).toBe("cell");
+    expect(evidenceQuality("region_preferred")).toBe("region");
+    expect(evidenceQuality("unique")).toBe("region");
+    expect(evidenceQuality("inherited_doc_level")).toBe("inherited");
+    for (const m of [null, "", "ambiguous", "not_found", "layout_prose", "TEXT_LAYER_CELL", "toString", "__proto__", "constructor"]) {
+      expect(evidenceQuality(m), String(m)).toBe("unknown");
+    }
+  });
+
+  it("counts region-only and unknown-method rows among rows WITH a box; absent rows count in neither", () => {
+    const row = (i: number, via: string | null, e: unknown = ev) => ({ row_index: i, part_index: 0, mpn: "A-1", field: "f", extracted_value: "v", obtained_via: via, evidence_ref: e });
+    const f = flagsOf(
+      read({
+        rows: [row(0, "text_layer_cell"), row(1, "region_preferred"), row(2, "unique"), row(3, "inherited_doc_level"), row(4, "layout_prose"), row(5, "region_preferred", null), row(6, null, null)],
+        rows_without_evidence: 2,
+      }),
+    );
+    expect(f.regionEvidence).toBe(2);
+    expect(f.unknownMethod).toBe(1);
+    expect(f.absentEvidence).toBe(2);
+  });
+
+  it("rowsSharingEvidence counts the rows on the SAME page and bbox, and only those", () => {
+    const row = (i: number, e: unknown) => ({ row_index: i, part_index: 0, mpn: "A-1", field: "ltb_date", extracted_value: "v", obtained_via: "inherited_doc_level", evidence_ref: e });
+    const ex = read({
+      rows: [row(0, ev), row(1, ev), row(2, { ...ev, page: 2 }), row(3, { ...ev, bbox: [10, 20, 110, 41] }), row(4, null)],
+      rows_without_evidence: 1,
+    });
+    const ref = ex.rows[0].evidence.state === "ok" ? ex.rows[0].evidence.ref : null;
+    expect(rowsSharingEvidence(ex.rows, ref!)).toBe(2);
   });
 });
 
