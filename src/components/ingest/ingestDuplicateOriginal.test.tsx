@@ -11,6 +11,7 @@ const fetchIngestStatus = vi.fn();
 const uploadIngest = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
+  fetchIngestMine: () => Promise.resolve({ items: [], next: null }),
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
   disputeIngestOrigin: vi.fn(),
   confirmIngestContentKind: vi.fn(),

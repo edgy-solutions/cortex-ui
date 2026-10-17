@@ -286,6 +286,9 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
       const u = new URL(req.url());
       const p = decodeURIComponent(u.pathname);
 
+      // A fresh walk's person has no drops on record: the "no drops" body, verbatim from
+      // sessions/2026-10-16-packet-to-cortex-ingest-mine-is-live-in-191-and-the-status-body-carries-content-kind.md.
+      if (method === "GET" && p === "/ingest/mine") return json(route, 200, { items: [], next: null });
       if (method === "POST" && p === "/ingest") {
         if (m.drop === "duplicate") {
           return json(route, 200, {

@@ -139,6 +139,18 @@ export function ingestPlacedAt(e: Pick<IngestEntry, "droppedAt" | "row">): numbe
   return r && (r.attempt ?? 1) >= 2 ? Math.max(e.droppedAt, r.updated_at) : e.droppedAt;
 }
 
+/**
+ * The rail's lead line: the filename. A drop known only from `GET /ingest/mine` has none (the status
+ * body carries no filename), so it leads with the notice's own id, else a short form of the ingest id.
+ */
+export function ingestLeadLine(filename: string, c: Pick<IngestComponent, "notice_id" | "ingest_id">): string {
+  if (filename) return filename;
+  if (c.notice_id) return c.notice_id;
+  const id = c.ingest_id ?? "";
+  const hex = id.startsWith("sha256:") ? id.slice(7) : id;
+  return hex ? `drop ${hex.slice(0, 12)}` : "drop";
+}
+
 export function ingestToArtifact(e: IngestEntry): Artifact {
   const comp = ingestComponentOf(e);
   // The chip names the leaf kind once the row carries one (a `pdf` drop confirmed as `pcn` says pcn),
@@ -152,7 +164,7 @@ export function ingestToArtifact(e: IngestEntry): Artifact {
     valid_as_of: e.droppedAt,
     valid_until: null,
     question_text: kind ? `dropped as ${kind}` : "",
-    summary: e.filename, // the timeline lead line (answerSummary reads this)
+    summary: ingestLeadLine(e.filename, comp), // the timeline lead line (answerSummary reads this)
     resolved_intent: {},
     message_id: "",
     status: "complete",

@@ -11,6 +11,7 @@ import type { Artifact } from "@/api/types";
 const uploadIngest = vi.fn();
 const fetchIngestStatus = vi.fn();
 const retryIngest = vi.fn();
+const fetchIngestMine = vi.fn();
 
 vi.mock("@/hooks/useAgent", () => ({
   useAgent: () => ({ sendMessage: vi.fn(), isConnected: true, isProcessing: false }),
@@ -36,6 +37,7 @@ vi.mock("react-oidc-context", () => ({
 vi.mock("@/lib/ingestTransport", () => ({
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
+  fetchIngestMine: (...a: unknown[]) => fetchIngestMine(...a),
   retryIngest: (...a: unknown[]) => retryIngest(...a),
   disputeIngestOrigin: vi.fn(),
   confirmIngestContentKind: vi.fn(),
@@ -116,6 +118,8 @@ beforeEach(() => {
   uploadIngest.mockReset();
   fetchIngestStatus.mockReset();
   retryIngest.mockReset();
+  fetchIngestMine.mockReset();
+  fetchIngestMine.mockResolvedValue({ items: [], next: null }); // a person with no drops on record
   useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
   useIngestStatusStore.getState().reset();
   useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
@@ -580,5 +584,73 @@ describe("a refused drop is drawn on the rail entry itself", () => {
     expect(row.querySelector("[data-ingest-refused]")).toBeNull();
     expect(row.querySelector("[data-ingest-registered]")).toBeNull();
     expect(row.querySelector("[data-ingest-retry]")).toBeNull();
+  });
+});
+
+describe("GET /ingest/mine: the server's list is the record, browser storage the cache (191)", () => {
+  const LISTED = `sha256:${"11570d".padEnd(64, "0")}`;
+
+  it("a drop storage never held is on the rail: led by its notice id, its chip the content_kind", async () => {
+    fetchIngestMine.mockResolvedValue({ items: [wire(LISTED, "failed", { notice_id: "PCN24-060", content_kind: "pcn", attempt: 2 })], next: null });
+    fetchIngestStatus.mockReturnValue(new Promise(() => {}));
+    render(<Harness />);
+    await tick(0);
+    expect(fetchIngestMine).toHaveBeenCalledWith(50);
+    const art = useCanvasStore.getState().artifacts.find((a) => a.id === ingestArtifactId(LISTED));
+    expect(art, "the listed drop never reached the store").toBeDefined();
+    expect(art!.summary).toBe("PCN24-060");
+    expect(art!.question_text).toBe("dropped as pcn");
+    expect(rail().textContent).toContain("PCN24-060");
+  });
+
+  it("no notice id: led by a short form of the ingest id, never blank", async () => {
+    fetchIngestMine.mockResolvedValue({ items: [wire(LISTED, "promoted")], next: null });
+    render(<Harness />);
+    await tick(0);
+    const art = useCanvasStore.getState().artifacts.find((a) => a.id === ingestArtifactId(LISTED));
+    expect(art!.summary).toBe("drop 11570d000000");
+  });
+
+  it("a stored drop the server also lists appears ONCE, with the stored filename", async () => {
+    recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null });
+    fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
+    render(<Harness />);
+    await tick(0);
+    const mine = useCanvasStore.getState().artifacts.filter((a) => a.id.startsWith("ingest:"));
+    expect(mine.map((a) => [a.id, a.summary])).toEqual([[ingestArtifactId(OLD), "old.pdf"]]);
+  });
+
+  it("a listed terminal row is not re-fetched by the poller: the page already read it", async () => {
+    fetchIngestMine.mockResolvedValue({ items: [wire(LISTED, "promoted")], next: null });
+    render(<Harness />);
+    await tick(0);
+    await tick();
+    expect(fetchIngestStatus).not.toHaveBeenCalled();
+  });
+
+  it("a fleet with no /ingest/mine (404): the stored drops still draw, nothing errors", async () => {
+    recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
+    fetchIngestMine.mockRejectedValue(Object.assign(new Error("404"), { response: { status: 404, data: { detail: "Not Found" } } }));
+    fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
+    render(<Harness />);
+    await tick(0);
+    expect(useIngestStatusStore.getState().mine).toBe("failed");
+    expect(useCanvasStore.getState().artifacts.map((a) => a.summary)).toEqual(["old.pdf"]);
+  });
+
+  it("an owner purge mid-read discards that read and the list is read AGAIN", async () => {
+    let first = true;
+    fetchIngestMine.mockImplementation(() => {
+      if (first) {
+        first = false;
+        useIngestStatusStore.getState().reset(); // the parent's reconcileSessionOwner, landing after this effect
+      }
+      return Promise.resolve({ items: [wire(LISTED, "promoted")], next: null });
+    });
+    render(<Harness />);
+    await tick(0);
+    expect(fetchIngestMine).toHaveBeenCalledTimes(2);
+    expect(useIngestStatusStore.getState().listed).toEqual([LISTED]);
   });
 });

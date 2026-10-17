@@ -5,6 +5,7 @@
  *   POST /ingest                         <- sessions/2026-10-06-payload-ingest-pcn26-117-rev-174.json hops[0].response.body
  *   GET  /ingest/{id}/status  (received) <- the same capture, hops[1].response.body
  *   GET  /ingest/{id}/status  (rest)     <- buildPcn26117Fixture hops 1-status-extracting, 2b-status-review, 5-status-promoted
+ *   GET  /ingest/mine                    <- the "no drops" body, verbatim from sessions/2026-10-16-packet-to-cortex-ingest-mine-is-live-in-191-and-the-status-body-carries-content-kind.md
  *   GET  /me/human_tasks                 <- fixture hop 3-human-task-row
  *   POST /human_tasks/{id}/act           <- fixture hop 4b (walk A) or 4a (walk B)
  *   GET  /task_kinds                     <- sessions/2026-10-02-payload-task-kinds-rev-165-bob.json .body
@@ -189,6 +190,8 @@ export async function installFridayRoutes(page: Page, opts: { act: "4a" | "4b" }
       const p = decodeURIComponent(u.pathname);
 
       if (method === "POST" && p === "/ingest") return json(route, 200, capture.hops[0]!.response!.body);
+      // The walk's person has no drops on record yet: Lane 1's "no drops" body (191), never a 404.
+      if (method === "GET" && p === "/ingest/mine") return json(route, 200, { items: [], next: null });
       if (method === "GET" && p === statusPath) {
         statusCalls += 1;
         const body = actSucceeded ? promoted : statusCalls === 1 ? received : statusCalls === 2 ? extracting : review;

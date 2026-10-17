@@ -7,7 +7,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { ingestRetryPath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
+import { INGEST_MINE_PATH, ingestRetryPath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -1016,6 +1016,16 @@ export async function uploadIngest(file: File, kind: string, onBehalfOf: string,
  */
 export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
   const { data } = await api.get<unknown>(ingestStatusPath(ingestId));
+  return data;
+}
+
+/**
+ * `GET /ingest/mine?limit=` — the caller's own drops, newest first (191). Parsed by
+ * `readIngestMinePage` in `src/lib/ingestWire.ts`. A fleet before 191 has no such route; the caller
+ * treats any failure as "no server list" and keeps what browser storage holds.
+ */
+export async function fetchIngestMine(limit: number): Promise<unknown> {
+  const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: { limit } });
   return data;
 }
 

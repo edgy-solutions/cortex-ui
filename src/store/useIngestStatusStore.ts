@@ -12,28 +12,49 @@
  *  - a 404 ("not found, or not yours", existence-oracle safe) stops that id; any other transport
  *    error is tolerated and retried on the next tick.
  *
+ * `loadMine` reads `GET /ingest/mine` once (191): the server's list of this person's drops, which seeds
+ * `rows` and names the drops browser storage never held (`listed`). A row this tab already holds
+ * wins while its `updated_at` is newer than the listed item's — the live poll is fresher than the page.
+ *
  * The fetch is `fetchIngestStatus` from `ingestTransport` (the guarded transport) — no new site.
  * In-memory only; the sync hook drives it and `purgeUserScopedState` resets it, so A's rows never
  * paint for B.
  */
 import { create } from "zustand";
-import { fetchIngestStatus, retryIngest } from "@/lib/ingestTransport";
+import { fetchIngestMine, fetchIngestStatus, retryIngest } from "@/lib/ingestTransport";
 import {
   INGEST_FAILED_TIMEOUT_POLL_MS,
   INGEST_FAILURE_TIMEOUT,
   ingestPollingDone,
   isIngestNotFoundError,
   readIngestErrorMessage,
+  readIngestMinePage,
   readIngestRetryRefusal,
   readIngestStatusRow,
   type IngestStatusRow,
 } from "@/lib/ingestWire";
 
 export const INGEST_POLL_MS = 2000;
+/** One page of `GET /ingest/mine` on load: the same count browser storage kept (`MY_DROPS_CAP`). */
+export const INGEST_MINE_LIMIT = 50;
+
+/** The listed item, unless this tab already holds a NEWER read of the same row. */
+export function mergeListedRow(held: IngestStatusRow | undefined, listed: IngestStatusRow): IngestStatusRow {
+  return held !== undefined && held.updated_at > listed.updated_at ? held : listed;
+}
 
 interface State {
   rows: Record<string, IngestStatusRow>;
   notFound: Record<string, true>;
+  /** The ingest ids `GET /ingest/mine` listed, in its order (newest first); [] until it answers. */
+  listed: string[];
+  /** `idle` until `loadMine` runs; `failed` on any error (a fleet before 191 has no route). */
+  mine: "idle" | "loading" | "loaded" | "failed";
+  /** +1 on every `reset`. Only ever grows, so a reader keyed on it re-runs even when `mine` went
+   *  idle → loading → idle inside one effect flush (which no subscriber sees as a change). */
+  epoch: number;
+  /** Read `GET /ingest/mine` once per session (again after `reset`). */
+  loadMine: () => void;
   /** Fetch every id in `ids` that is due: never read, or read and still not terminal. */
   pollDue: (ids: readonly string[]) => void;
   /** Re-open the person's own failed drop. The UI shows `message` on refusal. */
@@ -50,6 +71,31 @@ let generation = 0;
 export const useIngestStatusStore = create<State>()((set, get) => ({
   rows: {},
   notFound: {},
+  listed: [],
+  mine: "idle",
+  epoch: 0,
+  loadMine: () => {
+    if (get().mine !== "idle") return;
+    set({ mine: "loading" });
+    const gen = generation;
+    void fetchIngestMine(INGEST_MINE_LIMIT)
+      .then((raw) => {
+        if (gen !== generation) return;
+        const page = readIngestMinePage(raw);
+        if (!page) {
+          set({ mine: "failed" });
+          return;
+        }
+        set((s) => {
+          const rows = { ...s.rows };
+          for (const item of page.items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
+          return { rows, listed: page.items.map((i) => i.ingest_id), mine: "loaded" };
+        });
+      })
+      .catch(() => {
+        if (gen === generation) set({ mine: "failed" });
+      });
+  },
   pollDue: (ids) => {
     for (const id of ids) {
       const { rows, notFound } = get();
@@ -118,6 +164,6 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
     generation++;
     inFlight.clear();
     lastFetchedAt.clear();
-    set({ rows: {}, notFound: {} });
+    set((s) => ({ rows: {}, notFound: {}, listed: [], mine: "idle", epoch: s.epoch + 1 }));
   },
 }));

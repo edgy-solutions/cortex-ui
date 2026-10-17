@@ -484,6 +484,37 @@ export function ingestStatusPath(id: string): string {
   return `/ingest/${encodeURIComponent(id)}/status`;
 }
 
+/**
+ * `GET /ingest/mine` (Lane 1 packet
+ * `sessions/2026-10-16-packet-to-cortex-ingest-mine-is-live-in-191-and-the-status-body-carries-content-kind.md`,
+ * live in 191): the caller's own drops, newest first, as status-route bodies. The architect's ruling:
+ * "the rail reads it on load and merges with live entries; browser storage is a cache, never the record."
+ */
+export const INGEST_MINE_PATH = "/ingest/mine";
+
+/** One page of `GET /ingest/mine`. */
+export interface IngestMinePage {
+  /** Each item read by `readIngestStatusRow`, in the server's order; an unreadable item is left out. */
+  items: IngestStatusRow[];
+  /** How many items the page carried that could not be read (so a short list is not silent). */
+  unreadable: number;
+  /** The opaque cursor for the next page; null on the last. */
+  next: string | null;
+}
+
+/** `{items: [...], next}` → the page; null when `items` is not an array (not this route's body). */
+export function readIngestMinePage(raw: unknown): IngestMinePage | null {
+  if (!isRecord(raw) || !Array.isArray(raw.items)) return null;
+  const items: IngestStatusRow[] = [];
+  let unreadable = 0;
+  for (const it of raw.items) {
+    const row = readIngestStatusRow(it);
+    if (row) items.push(row);
+    else unreadable++;
+  }
+  return { items, unreadable, next: isNonEmptyString(raw.next) ? raw.next : null };
+}
+
 /** `POST /ingest/{id}/retry` — encoded exactly like `ingestStatusPath`. */
 export function ingestRetryPath(id: string): string {
   return `/ingest/${encodeURIComponent(id)}/retry`;

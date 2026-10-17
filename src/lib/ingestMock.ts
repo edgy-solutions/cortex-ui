@@ -177,6 +177,12 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   return Promise.resolve({ ...row });
 }
 
+/** `GET /ingest/mine`'s mock: every row this tab uploaded, newest first, unadvanced; one page. */
+export function fetchIngestMine(limit: number): Promise<unknown> {
+  const items = [...STORE.values()].sort((a, b) => b.created_at - a.created_at).slice(0, limit).map((r) => ({ ...r }));
+  return Promise.resolve({ items, next: null });
+}
+
 /**
  * `POST /ingest/{id}/retry`'s mock: a `failed` row goes back to `received`, attempt + 1, failure null;
  * anything else rejects with the wrapped 409 `not_failed` the real route answers.

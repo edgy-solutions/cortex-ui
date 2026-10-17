@@ -6,8 +6,11 @@
  * Sources, in order of authority:
  *  - the composer's in-memory turns (`useIngestComposerStore`): uploading, errored, duplicate;
  *  - `myDrops` (localStorage, per `sub`): the ids remembered across a reload, for drops no turn
- *    in this session covers.
- * A drop appears once: a turn that holds an ingest id hides the stored drop with that id.
+ *    in this session covers — a CACHE: it carries the filename the server does not send;
+ *  - `GET /ingest/mine` (`useIngestStatusStore.listed`, 191): the record — every drop of this
+ *    person's the server lists, including those made before browser storage remembered any.
+ * A drop appears once: a turn that holds an ingest id hides the stored and listed drop with that id,
+ * and a stored drop hides the listed one (it knows the filename).
  *
  * The entry's key is the INGEST id once the server has given one, so a drop keeps its
  * `ingest:` id across a reload (where only the stored list remains). Before that — uploading,
@@ -28,18 +31,29 @@ export function useIngestArtifactSync(): void {
   const turns = useIngestComposerStore((s) => s.turns);
   const rows = useIngestStatusStore((s) => s.rows);
   const notFound = useIngestStatusStore((s) => s.notFound);
+  const listed = useIngestStatusStore((s) => s.listed);
   const reconcile = useCanvasStore((s) => s.reconcileIngestArtifacts);
 
   // `submit` records the drop BEFORE it patches the turn, so a change of `turns` is when the
   // stored list has changed too.
   const drops = useMemo(() => readMyDrops(owner), [owner, turns]);
 
+  // Read the server's list once a person is signed in; storage is the cache, this is the record.
+  // Keyed on `epoch` too: the owner purge (`reconcileSessionOwner`, a PARENT effect, so it runs
+  // after this one) resets the store and discards the read in flight — this reads again. Not keyed
+  // on `mine`: it goes idle → loading → idle inside that one flush, which no subscriber sees.
+  const epoch = useIngestStatusStore((s) => s.epoch);
+  useEffect(() => {
+    if (owner) useIngestStatusStore.getState().loadMine();
+  }, [owner, epoch]);
+
   const ids = useMemo(() => {
     const out = new Set<string>();
     for (const t of turns) if (t.ingestId) out.add(t.ingestId);
     for (const d of drops) out.add(d.ingestId);
+    for (const id of listed) out.add(id);
     return [...out];
-  }, [turns, drops]);
+  }, [turns, drops, listed]);
   const idsKey = ids.join("\n");
 
   useEffect(() => {
@@ -53,6 +67,7 @@ export function useIngestArtifactSync(): void {
 
   useEffect(() => {
     const covered = new Set(turns.map((t) => t.ingestId).filter((x): x is string => x !== null));
+    const stored = new Set(drops.map((d) => d.ingestId));
     const keys = turnKeys(turns);
     const renamed: Record<string, string> = {};
     for (const t of turns) {
@@ -91,9 +106,25 @@ export function useIngestArtifactSync(): void {
           row: rows[d.ingestId] ?? null,
           notFound: !!notFound[d.ingestId],
         })),
+      ...listed
+        .filter((id) => !covered.has(id) && !stored.has(id) && rows[id] !== undefined)
+        .map((id) => ({
+          key: id,
+          filename: "", // the status body carries none; `ingestToArtifact` leads with the notice id or a short id
+          kind: null,
+          droppedAt: rows[id]!.created_at,
+          phase: "status" as const,
+          ingestId: id,
+          error: null,
+          acceptedThisSession: false,
+          duplicate: null,
+          note: null,
+          row: rows[id]!,
+          notFound: !!notFound[id],
+        })),
     ];
     reconcile(entries.map(ingestToArtifact), renamed);
-  }, [turns, drops, rows, notFound, reconcile]);
+  }, [turns, drops, listed, rows, notFound, reconcile]);
 }
 
 /**

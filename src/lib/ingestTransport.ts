@@ -12,6 +12,7 @@
 import {
   uploadIngest as realUploadIngest,
   fetchIngestStatus as realFetchIngestStatus,
+  fetchIngestMine as realFetchIngestMine,
   disputeIngestOrigin as realDisputeIngestOrigin,
   confirmIngestContentKind as realConfirmIngestContentKind,
   retryIngest as realRetryIngest,
@@ -19,6 +20,7 @@ import {
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
+  fetchIngestMine as mockFetchIngestMine,
   disputeIngestOrigin as mockDisputeIngestOrigin,
   confirmIngestContentKind as mockConfirmIngestContentKind,
   mockRetryIngest,
@@ -33,6 +35,11 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string, conte
 
 export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   return isIngestMockEnabled() ? mockFetchIngestStatus(ingestId) : realFetchIngestStatus(ingestId);
+}
+
+/** `GET /ingest/mine` — see `src/api/client.ts`'s `fetchIngestMine`. */
+export function fetchIngestMine(limit: number): Promise<unknown> {
+  return isIngestMockEnabled() ? mockFetchIngestMine(limit) : realFetchIngestMine(limit);
 }
 
 /** CORTEX-PROPOSED — see `src/api/client.ts`'s `disputeIngestOrigin` doc comment. */

@@ -5,10 +5,11 @@
  * card back after a reload the client must remember the ids; `GET /ingest/{id}/status` (caller-
  * scoped to submitted_by / on_behalf_of) then answers by id.
  *
- * THE PLATFORM HAS NO LIST ROUTE (measured: the only GET is `/ingest/{id}/status`), so this list
- * is client-side for now. A server list route is requested of Lane 1 — see
- * `sessions/2026-10-10-packet-to-lane-1-duplicate-mints-a-row-and-my-drops.md`. When it lands,
- * this module becomes a cache or goes away.
+ * A CACHE, NOT THE RECORD. The list route landed in 191 (`GET /ingest/mine`, read by
+ * `useIngestStatusStore.loadMine`); the architect's ruling: "browser storage is a cache, never the
+ * record." What this list still adds is the FILENAME, which the status body does not carry, and a
+ * rail on a fleet before 191. (Requested of Lane 1 in
+ * `sessions/2026-10-10-packet-to-lane-1-duplicate-mints-a-row-and-my-drops.md`.)
  *
  * Keyed by the authenticated user's stable id (the OIDC `sub` — the same identity
  * `reconcileSessionOwner` keys on): `cortex.myDrops.v1:<sub>`. No authenticated user means no
