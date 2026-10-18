@@ -57,10 +57,33 @@ export function safeReturnTo(state: unknown): string | null {
   return link ? deepLinkPath(link) : null;
 }
 
+/**
+ * THE BROKER MARKER (the architect, 2026-10-17, approved as proposed): `?idp=openddil` on either
+ * link shape selects OpenDDIL's login (Keycloak's `kc_idp_hint`) and starts it without the button
+ * click (`RequireAuth`). Opt-in and ENUMERATED: any other value, any other spelling, or the marker
+ * on a path that is not a link is ignored, and a link without it keeps the local login, because
+ * cortex cannot tell a brokered person from a local one before login.
+ *
+ * The marker never rides in `returnTo` (`deepLinkPath` rebuilds the link without it), and the
+ * redirect URI is the bare origin, so the return trip cannot start a second login.
+ */
+const IDP_HINTS = ["openddil"] as const;
+export type IdpHint = (typeof IDP_HINTS)[number];
+
+export function idpHintFor(loc: { pathname: string; search: string }): IdpHint | null {
+  if (!readDeepLink(loc.pathname, loc.search)) return null;
+  const v = new URLSearchParams(loc.search).get("idp");
+  return IDP_HINTS.find((h) => h === v) ?? null;
+}
+
+export type SigninArgs = { state: { returnTo: string }; extraQueryParams?: { kc_idp_hint: IdpHint } };
+
 /** Argument for every `signinRedirect`: undefined off a deep link, so a plain `/` login is unchanged. */
-export function signinArgs(): { state: { returnTo: string } } | undefined {
+export function signinArgs(): SigninArgs | undefined {
   const returnTo = returnToFor(window.location);
-  return returnTo === undefined ? undefined : { state: { returnTo } };
+  if (returnTo === undefined) return undefined;
+  const hint = idpHintFor(window.location);
+  return hint ? { state: { returnTo }, extraQueryParams: { kc_idp_hint: hint } } : { state: { returnTo } };
 }
 
 /** `onSigninCallback`: strip code/state from the URL, landing on the carried deep link if safe. */

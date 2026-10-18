@@ -1,31 +1,49 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { LogIn, ShieldAlert } from "lucide-react";
 import { config } from "@/config";
-import { signinArgs } from "@/lib/deepLink";
+import { idpHintFor, signinArgs } from "@/lib/deepLink";
 
 /**
  * RequireAuth guard component.
  * Ensures the user is authenticated before rendering children.
  * Features a Dark Glass & Neon themed login screen.
+ *
+ * A deep link carrying the broker marker (`?idp=openddil`, `deepLink.ts`) starts its login on its
+ * own, once, with the IdP hint: the person's open OpenDDIL session completes it with no click. If
+ * that start fails, or the login comes back with an error, the usual screen and button are shown;
+ * nothing retries by itself.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const disableAuth = config.VITE_NO_AUTH === "true";
+  const hinted = !disableAuth && idpHintFor(window.location) !== null;
+  const started = useRef(false);
+  const [autoFailed, setAutoFailed] = useState(false);
+  const waiting = auth.isLoading || !!auth.error || auth.isAuthenticated || !!auth.activeNavigator;
+
+  useEffect(() => {
+    if (!hinted || waiting || started.current) return;
+    started.current = true;
+    auth.signinRedirect(signinArgs()).catch((e) => {
+      console.error("[auth] brokered signinRedirect failed:", e);
+      setAutoFailed(true);
+    });
+  }, [hinted, waiting, auth]);
 
   if (disableAuth) {
     return <>{children}</>;
   }
 
-  if (auth.isLoading) {
+  if (auth.isLoading || (hinted && !auth.error && !auth.isAuthenticated && !autoFailed)) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#020617] font-mono">
         <div className="flex flex-col items-center gap-4 animate-pulse">
             <div className="h-1 w-48 bg-neon-blue/20 overflow-hidden relative">
                 <div className="absolute inset-0 bg-neon-blue animate-[scan_2s_ease-in-out_infinite]" />
             </div>
-            <div className="text-neon-blue text-xs tracking-widest uppercase">
-                Authenticating Session...
+            <div className="text-neon-blue text-xs tracking-widest uppercase" data-auth-pending={hinted ? "brokered" : "session"}>
+                {hinted ? "Signing in through OpenDDIL..." : "Authenticating Session..."}
             </div>
         </div>
       </div>

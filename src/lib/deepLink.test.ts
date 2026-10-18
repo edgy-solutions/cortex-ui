@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readDeepLink, deepLinkPath, returnToFor, safeReturnTo, signinArgs, afterSignin } from "./deepLink";
+import { readDeepLink, deepLinkPath, returnToFor, safeReturnTo, signinArgs, afterSignin, idpHintFor } from "./deepLink";
 
 describe("readDeepLink", () => {
   it("reads /case/<seg> with and without trailing slash, decoding the id", () => {
@@ -63,6 +63,33 @@ describe("safeReturnTo", () => {
   });
 });
 
+describe("idpHintFor: the broker marker", () => {
+  const at = (u: string) => {
+    const x = new URL(u, "https://c.example");
+    return idpHintFor({ pathname: x.pathname, search: x.search });
+  };
+  it("is openddil on either link shape, wherever the parameter sits", () => {
+    expect(at("/case/C1?idp=openddil")).toBe("openddil");
+    expect(at("/case/C1/?idp=openddil")).toBe("openddil");
+    expect(at("/ask?q=Why&idp=openddil")).toBe("openddil");
+    expect(at("/ask?idp=openddil&q=Why")).toBe("openddil");
+  });
+  it("is null for every other value, spelling, or path that is not a link", () => {
+    for (const u of [
+      "/case/C1",
+      "/case/C1?idp=",
+      "/case/C1?idp=OpenDDIL",
+      "/case/C1?idp=openddil%20",
+      "/case/C1?idp=keycloak",
+      "/case/C1?IDP=openddil",
+      "/?idp=openddil",
+      "/elsewhere?idp=openddil",
+      "/ask?idp=openddil",
+      "/case/?idp=openddil",
+    ]) expect(at(u), u).toBeNull();
+  });
+});
+
 describe("signinArgs / afterSignin", () => {
   afterEach(() => window.history.replaceState({}, "", "/"));
   it("signinArgs is undefined off a link and carries the canonical path on one", () => {
@@ -72,6 +99,14 @@ describe("signinArgs / afterSignin", () => {
     expect(signinArgs()).toEqual({ state: { returnTo: "/case/a%3Ab" } });
     window.history.replaceState({}, "", "/ask?q=Why%20X%3F");
     expect(signinArgs()).toEqual({ state: { returnTo: "/ask?q=Why%20X%3F" } });
+  });
+  it("with the marker, signinArgs adds the IdP hint and returnTo does NOT carry the marker", () => {
+    window.history.replaceState({}, "", "/case/a%3Ab?idp=openddil");
+    expect(signinArgs()).toEqual({ state: { returnTo: "/case/a%3Ab" }, extraQueryParams: { kc_idp_hint: "openddil" } });
+    window.history.replaceState({}, "", "/ask?q=Why&idp=openddil");
+    expect(signinArgs()).toEqual({ state: { returnTo: "/ask?q=Why" }, extraQueryParams: { kc_idp_hint: "openddil" } });
+    window.history.replaceState({}, "", "/case/x?idp=keycloak");
+    expect(signinArgs()).toEqual({ state: { returnTo: "/case/x" } });
   });
   it("afterSignin restores a good link, else the current pathname", () => {
     window.history.replaceState({}, "", "/?code=1&state=2");
@@ -106,7 +141,7 @@ describe("every login carries the link", () => {
     const calls = files.flatMap(({ p, src }) =>
       [...src.matchAll(/\.signinRedirect\(([^)]*\)?)\)/g)].map((m) => ({ p, arg: m[1] })),
     );
-    expect(calls.length, "the census found the three known sites at least").toBeGreaterThanOrEqual(3);
+    expect(calls.length, "the census found the four known sites at least").toBeGreaterThanOrEqual(4);
     expect(calls.filter((c) => c.arg !== "signinArgs()").map((c) => `${c.p}: (${c.arg})`)).toEqual([]);
   });
 
