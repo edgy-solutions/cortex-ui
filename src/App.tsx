@@ -53,6 +53,7 @@ import "@/lib/seedPortfolioCanvas";
 import "@/lib/debugGlobals";
 
 import { Toaster } from "sonner";
+import { DeepLinkLanding } from "@/components/DeepLink/DeepLinkLanding";
 import { useFileDropGuard } from "@/lib/fileDropGuard";
 
 /**
@@ -470,6 +471,7 @@ function SessionSurface({
           className: "glass-panel-sm border-neon-blue/20 bg-slate-950/90 text-slate-200",
         }}
       />
+      <DeepLinkLanding />
       <Layout
         stream={<NeuralStream />}
         canvas={

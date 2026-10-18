@@ -2,6 +2,7 @@ import React from "react";
 import { useAuth } from "react-oidc-context";
 import { LogIn, ShieldAlert } from "lucide-react";
 import { config } from "@/config";
+import { signinArgs } from "@/lib/deepLink";
 
 /**
  * RequireAuth guard component.
@@ -39,7 +40,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
           <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">Authentication Error</h1>
           <p className="text-slate-400 mb-6 text-sm">{auth.error.message}</p>
           <button
-            onClick={() => auth.signinRedirect()}
+            onClick={() => auth.signinRedirect(signinArgs())}
             className="w-full px-6 py-3 bg-neon-pink/10 border border-neon-pink/50 text-neon-pink hover:bg-neon-pink/20 transition-all uppercase tracking-widest text-xs font-bold"
           >
             Retry Connection
@@ -71,7 +72,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
             </p>
 
             <button
-              onClick={() => auth.signinRedirect()}
+              onClick={() => auth.signinRedirect(signinArgs())}
               className="group relative w-full px-8 py-4 bg-neon-blue/10 border border-neon-blue/50 text-neon-blue hover:bg-neon-blue/20 transition-all overflow-hidden"
             >
               <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-neon-cyan to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { AuthProvider as OidcProvider, useAuth } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
 import { config } from "@/config";
+import { afterSignin, signinArgs } from "@/lib/deepLink";
 
 const oidcConfig = {
   authority: config.VITE_KEYCLOAK_REALM_URL,
@@ -30,10 +31,7 @@ const oidcConfig = {
   // Renew 60 s before access token expiry so a request that's just
   // starting doesn't race the refresh.
   accessTokenExpiringNotificationTimeInSeconds: 60,
-  onSigninCallback: () => {
-    // Remove the code and state from the URL after successful login
-    window.history.replaceState({}, document.title, window.location.pathname);
-  },
+  onSigninCallback: afterSignin,
 };
 
 // Recovers automatically from silent-renewal failures instead of
@@ -69,7 +67,7 @@ function SilentRenewRecovery() {
       recovering.current = true;
       console.warn("[auth] silent renew failed — re-authenticating:", err?.message ?? err);
       void auth.removeUser().finally(() => {
-        auth.signinRedirect().catch((e) => {
+        auth.signinRedirect(signinArgs()).catch((e) => {
           console.error("[auth] signinRedirect after silent-renew failure also failed:", e);
           recovering.current = false;
         });

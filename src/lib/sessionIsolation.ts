@@ -20,6 +20,7 @@ import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
 const OWNER_KEY = "cortex-session-owner";
@@ -84,6 +85,7 @@ export function purgeUserScopedState(): void {
     useEvidenceStore.getState().dismiss();
     // Ingest turns + the composer's attached draft: A's filenames and notes must not paint for B.
     useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+    useComposerPrefillStore.setState({ text: null });
     // The polled status rows behind those turns (and behind remembered drops): same reason.
     useIngestStatusStore.getState().reset();
     // Conversation content: A's questions and the agent's answers to them. Nothing

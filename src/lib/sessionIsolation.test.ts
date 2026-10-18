@@ -168,6 +168,7 @@ describe("sessionIsolation — the purge list stays complete", () => {
     const KNOWN_STORES = [
       "useAnswerPanelStore",
       "useCanvasStore",
+      "useComposerPrefillStore",
       "useEvidenceStore",
       "useHumanTaskStore",
       "useIngestComposerStore",

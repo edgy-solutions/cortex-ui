@@ -13,6 +13,7 @@ import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { ingestComponentFrom, ingestInFlight } from "@/lib/ingestArtifact";
@@ -23,6 +24,20 @@ export function InputBar() {
   const { value, setValue, clearDraft } = useComposerDraft();
   const { sendMessage, isConnected, isProcessing } = useAgent();
   const phase = useInterviewStore((s) => s.phase);
+  const textInputRef = useRef<HTMLInputElement>(null);
+
+  // The `/ask?q=` deep link: the question is TYPED into the composer and nothing is sent. Replaces
+  // any existing draft (the link is the person's explicit intent). The draft restore keeps a
+  // non-empty current value, so this survives it whichever of the two runs first.
+  const prefill = useComposerPrefillStore((s) => s.text);
+  useEffect(() => {
+    if (prefill === null) return;
+    const t = useComposerPrefillStore.getState().take();
+    if (t !== null) {
+      setValue(t);
+      textInputRef.current?.focus();
+    }
+  }, [prefill, setValue]);
 
   // "The drop is the prompt": a dropped/chosen file becomes a chip here and Send submits an
   // INGEST turn (POST /ingest), not an /interview question. See useIngestComposerStore.
@@ -257,6 +272,7 @@ export function InputBar() {
               row overflows and pushes the send button off the composer.
               min-w-0 lets flex-1 actually absorb the pill's growth. */}
             <input
+              ref={textInputRef}
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
