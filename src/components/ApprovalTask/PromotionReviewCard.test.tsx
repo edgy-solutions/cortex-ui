@@ -93,12 +93,22 @@ const outline = () => document.querySelector("[data-evidence-outline]") as HTMLE
 const flag = (k: string) => document.querySelector(`[data-review-flag="${k}"]`);
 const key = (k: string, target: Element = card()) => fireEvent.keyDown(target, { key: k });
 const lastPage = () => renderPage.mock.calls.at(-1)?.[0];
+const promoteBtn = () => document.querySelector('[data-verb="promoted"]') as HTMLButtonElement;
+const rejectBtn = () => document.querySelector('[data-verb="rejected"]') as HTMLButtonElement;
+const hold = () => promoteBtn().getAttribute("data-promote-hold");
 const topline = (k: string) => document.querySelector(`[data-topline="${k}"]`)?.textContent?.replace(/^ · /, "");
 
 /** Render, and wait until the extraction's rows are drawn. */
 async function mount(t: ApprovalTaskPayload = task(), rows = 6) {
   const r = render(<ApprovalTaskCard task={t} />);
   await waitFor(() => expect(rowEls()).toHaveLength(rows));
+  return r;
+}
+
+/** Mount, and wait until Promote is offered: rows drawn AND a page of the source drawn. */
+async function mountPromotable(t: ApprovalTaskPayload = task(), rows = 6) {
+  const r = await mount(t, rows);
+  await waitFor(() => expect(promoteBtn().disabled).toBe(false));
   return r;
 }
 
@@ -318,7 +328,7 @@ describe("rows and the source", () => {
     expect(document.querySelector('[data-pdf-state="failed"]')).not.toBeNull();
   });
 
-  it("an extraction route not served yet (a plain 404, before 193) says so; the source and the decision remain", async () => {
+  it("an extraction route not served yet (a plain 404, before 193) says so; the source and Reject remain", async () => {
     fetchIngestExtraction.mockRejectedValue({ response: { status: 404, data: { detail: "Not Found" } } });
     render(<ApprovalTaskCard task={task()} />);
     await waitFor(() => expect(document.querySelector("[data-extraction-failed]")).not.toBeNull());
@@ -326,7 +336,8 @@ describe("rows and the source", () => {
     expect(rowEls()).toHaveLength(0);
     expect(document.querySelector("[data-review-title]")!.textContent).toBe(FIXTURE_NOTICE_ID); // the payload's
     await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
-    expect(document.querySelector('[data-verb="promoted"]')).not.toBeNull();
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(false);
   });
 
   it("an extraction refused with a code names it (403 not_entitled)", async () => {
@@ -438,7 +449,7 @@ describe("keyboard", () => {
 
   it("one p only ARMS promote; a second p sends it", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
-    await mount();
+    await mountPromotable();
     key("p");
     expect(actOnHumanTask).not.toHaveBeenCalled();
     expect(document.querySelector("[data-promote-armed]")).not.toBeNull();
@@ -449,7 +460,7 @@ describe("keyboard", () => {
 
   it("p then Enter sends it too; Esc disarms", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
-    await mount();
+    await mountPromotable();
     key("p");
     key("Escape");
     expect(document.querySelector("[data-promote-armed]")).toBeNull();
@@ -468,19 +479,19 @@ describe("keyboard", () => {
     expect(document.querySelector("[data-reject-codes]")).not.toBeNull();
     key("Enter");
     expect(actOnHumanTask).not.toHaveBeenCalled(); // no code yet, no reason, nothing sent
-    key("2");
+    key("3");
     key("Enter");
-    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "rejected", "wrong_part"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "rejected", "parts_unusable"));
   });
 
   it("the note rides with the code", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
     await mount();
-    fireEvent.change(document.querySelector("[data-review-note]")!, { target: { value: "row 3 says 2028" } });
+    fireEvent.change(document.querySelector("[data-review-note]")!, { target: { value: "same notice as drop 4f" } });
     key("r");
-    fireEvent.click(document.querySelector('[data-reject-code="wrong_value"] input')!);
+    fireEvent.click(document.querySelector('[data-reject-code="duplicate"] input')!);
     fireEvent.click(document.querySelector("[data-reject-confirm]")!);
-    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "rejected", "wrong_value: row 3 says 2028"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "rejected", "duplicate: same notice as drop 4f"));
   });
 
   it("keys typed into the note are text, not commands", async () => {
@@ -502,21 +513,142 @@ describe("keyboard", () => {
     expect(selectedKey()).toBe("row-0");
   });
 
-  it("p and r still work while the extraction is failed: the decision does not wait on the rows", async () => {
+  it("while the extraction is failed, p does nothing and r still rejects: Reject does not wait on the rows", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
     fetchIngestExtraction.mockRejectedValue({ response: { status: 503, data: { detail: { error: "artifact_store_unreachable" } } } });
     render(<ApprovalTaskCard task={task()} />);
     await waitFor(() => expect(document.querySelector("[data-extraction-failed]")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
     key("p");
     key("p");
-    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "promoted", ""));
+    expect(document.querySelector("[data-promote-armed]")).toBeNull();
+    key("r");
+    key("1");
+    key("Enter");
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(actOnHumanTask.mock.calls[0][1]).toBe("rejected");
+  });
+});
+
+/**
+ * PROMOTE ONLY ON WHAT THE STEWARD CAN SEE (the architect, 2026-10-17, rows fa231498 and 0096a523:
+ * no rows, and a source that would not render, sat promotable in bob's queue). Promote needs a
+ * drawn row AND a drawn page; Reject needs neither. Each arm is one missing half, so the near side
+ * of each condition is a case of its own.
+ */
+describe("Promote is offered only on what the steward can see", () => {
+  it("rows and a drawn page: Promote is enabled and holds nothing", async () => {
+    await mount();
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    expect(hold()).toBeNull();
+    expect(document.querySelector("[data-promote-held]")).toBeNull();
+  });
+
+  it("rows=0: Promote is off and says why; Reject stays enabled and rejects not_a_notice", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    fetchIngestExtraction.mockResolvedValue({ ...exBody(), rows: [] });
+    render(<ApprovalTaskCard task={task()} />);
+    await waitFor(() => expect(document.querySelector('[data-extraction-state="empty"]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("no-rows");
+    expect(document.querySelector('[data-promote-held="no-rows"]')!.textContent).toContain("no extracted rows to vet");
+    expect(rejectBtn().disabled).toBe(false);
+    key("p");
+    key("p");
+    key("Enter");
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+    fireEvent.click(rejectBtn());
+    fireEvent.click(document.querySelector('[data-reject-code="not_a_notice"] input')!);
+    fireEvent.click(document.querySelector("[data-reject-confirm]")!);
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "rejected", "not_a_notice"));
+  });
+
+  it("a row dropped for having no mpn is not a row to vet: all dropped is rows=0", async () => {
+    const b = exBody();
+    b.rows = b.rows.slice(0, 1).map((r) => ({ ...r, mpn: null }));
+    fetchIngestExtraction.mockResolvedValue(b);
+    render(<ApprovalTaskCard task={task()} />);
+    await waitFor(() => expect(flag("dropped-rows")).not.toBeNull());
+    expect(hold()).toBe("no-rows");
+  });
+
+  it("a source the server refuses: Promote is off and says why; Reject stays enabled", async () => {
+    fetchIngestSource.mockRejectedValue({ response: { status: 404, data: { detail: { error: "source_absent" } } } });
+    await mount();
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="failed"]')).not.toBeNull());
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("no-source");
+    expect(document.querySelector('[data-promote-held="no-source"]')!.textContent).toContain("cannot vet what they cannot see");
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("bytes that are not a PDF (openPdf throws): no-source", async () => {
+    openPdf.mockRejectedValue(new Error("Invalid PDF structure."));
+    await mount();
+    await waitFor(() => expect(hold()).toBe("no-source"));
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("a page that will not draw: no-source", async () => {
+    renderPage.mockRejectedValue(new Error("draw failed"));
+    await mount();
+    await waitFor(() => expect(hold()).toBe("no-source"));
+  });
+
+  it("an opened document whose page has not drawn yet is still loading: Promote waits, with no off line", async () => {
+    renderPage.mockReturnValue(new Promise(() => {}));
+    await mount();
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("source-loading");
+    expect(document.querySelector("[data-promote-held]")).toBeNull();
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("p pressed while the page is still drawing arms nothing: once it draws, Promote is not already armed", async () => {
+    let draw!: (v: { width: number; height: number }) => void;
+    renderPage.mockReturnValueOnce(new Promise((r) => (draw = r)));
+    await mount();
+    await waitFor(() => expect(hold()).toBe("source-loading"));
+    key("p");
+    draw({ width: W, height: (W * 792) / 612 });
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    expect(document.querySelector("[data-promote-armed]")).toBeNull();
+    key("Enter");
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+  });
+
+  it("rows not yet arrived: Promote waits; Reject does not", async () => {
+    fetchIngestExtraction.mockReturnValue(new Promise(() => {}));
+    render(<ApprovalTaskCard task={task()} />);
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
+    expect(hold()).toBe("rows-loading");
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("armed while promotable, then the next row's page fails to draw: Enter sends nothing", async () => {
+    await mount();
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    renderPage.mockRejectedValue(new Error("draw failed"));
+    key("p");
+    expect(document.querySelector("[data-promote-armed]")).not.toBeNull();
+    const onPage2 = exBody().rows.findIndex((r) => r.evidence_ref?.page === 2);
+    expect(onPage2).toBeGreaterThan(0);
+    fireEvent.click(rowEls()[onPage2]);
+    await waitFor(() => expect(hold()).toBe("no-source"));
+    expect(document.querySelector("[data-promote-armed]")).toBeNull();
+    key("Enter");
+    key("p");
+    expect(actOnHumanTask).not.toHaveBeenCalled();
   });
 });
 
 describe("the decision is the generic card's", () => {
   it("a click on Promote sends at once (a click is already deliberate)", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
-    await mount();
+    await mountPromotable();
     fireEvent.click(document.querySelector('[data-verb="promoted"]')!);
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "promoted", ""));
   });
@@ -539,11 +671,16 @@ describe("the decision is the generic card's", () => {
     expect(actOnHumanTask).not.toHaveBeenCalled();
   });
 
-  it("the codes say they are cortex's proposal (nothing serves codes)", async () => {
+  it("the codes say they are cortex's proposal until Lane 1 confirms the server takes them", async () => {
     await mount();
     key("r");
     expect(document.querySelector("[data-reject-codes] legend")!.textContent).toContain("cortex-proposed");
-    expect(document.querySelectorAll("[data-reject-code]")).toHaveLength(6);
+    expect([...document.querySelectorAll("[data-reject-code]")].map((e) => e.getAttribute("data-reject-code"))).toEqual([
+      "not_a_notice",
+      "unreadable",
+      "parts_unusable",
+      "duplicate",
+    ]);
   });
 
   it("a declaration that does not offer promoted gets no Promote, and p does nothing", async () => {
@@ -557,7 +694,7 @@ describe("the decision is the generic card's", () => {
 
   it("a recorded-but-not-resumed promote says so, as the generic card does", async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: false });
-    await mount();
+    await mountPromotable();
     fireEvent.click(document.querySelector('[data-verb="promoted"]')!);
     await waitFor(() => expect(document.querySelector('[data-act-outcome="recorded"]')).not.toBeNull());
     key("p");
@@ -569,7 +706,7 @@ describe("the decision is the generic card's", () => {
     actOnHumanTask.mockRejectedValue({
       response: { status: 422, data: { detail: { error: "promotion_payload_invalid", message: "missing object_ref" } } },
     });
-    await mount();
+    await mountPromotable();
     fireEvent.click(document.querySelector('[data-verb="promoted"]')!);
     await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
     expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("promotion_payload_invalid");

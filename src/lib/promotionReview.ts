@@ -126,16 +126,21 @@ export interface PromotionReview {
 }
 
 /**
- * Narrow reject codes, PROPOSED by cortex. Nothing serves codes: `document_promotion.yaml`
- * declares `reason_required: [rejected]` and names none, so the chosen code IS the reason sent,
- * plus any note.
+ * The reject codes, ruled final by the architect (2026-10-17): these four, in this order. The
+ * chosen code IS the reason sent, plus any note.
+ *
+ * A wrong value, a wrong part or a missing row is NOT a reject. It is a CORRECTION: the steward
+ * fixes the row in place against the evidence (row_edits, flag-gated), and the correction files
+ * extraction_defect itself. A reject for a wrong value sends nothing back to the extractor and
+ * loses the correction, so those three codes are gone from here on purpose.
+ *
+ * Lane 1's server accepts exactly these four and refuses the rest with the code list. Until Lane 1
+ * confirms that, the card still labels them cortex-proposed.
  */
 export const DEFAULT_REJECT_CODES: RejectCode[] = [
-  { code: "wrong_value", label: "a value does not match the source" },
-  { code: "wrong_part", label: "an mpn is not in the notice" },
-  { code: "missing_rows", label: "the notice lists parts not extracted" },
   { code: "not_a_notice", label: "not a PCN/PDN" },
   { code: "unreadable", label: "the source cannot be read" },
+  { code: "parts_unusable", label: "the parts list cannot be used" },
   { code: "duplicate", label: "already promoted under another drop" },
 ];
 

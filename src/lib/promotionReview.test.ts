@@ -303,7 +303,12 @@ describe("helpers", () => {
   });
 
   it("rejectReason is the code, then the note if any", () => {
-    expect(rejectReason("wrong_value", "")).toBe("wrong_value");
-    expect(rejectReason("wrong_value", "  row 3 says 2028  ")).toBe("wrong_value: row 3 says 2028");
+    expect(rejectReason("unreadable", "")).toBe("unreadable");
+    expect(rejectReason("unreadable", "  page 2 is a scan  ")).toBe("unreadable: page 2 is a scan");
+  });
+
+  // The whole list, in order: a containment check would pass with a correction code crept back in.
+  it("the reject codes are exactly the architect's four, in order; no correction is a reject", () => {
+    expect(DEFAULT_REJECT_CODES.map((c) => c.code)).toEqual(["not_a_notice", "unreadable", "parts_unusable", "duplicate"]);
   });
 });

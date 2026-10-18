@@ -247,7 +247,13 @@ describe("PCN26-119 live capture (rev 175) — review, the real task, the captur
           }}
         />,
       );
-      fireEvent.click(document.querySelector('[data-verb="promoted"]')!);
+      // Promote is held on this capture's rev: neither the rows nor the source was served (the architect,
+      // 2026-10-17: a steward cannot vet what they cannot see). The 422 is the producer's answer to ANY
+      // verb on this kind, so the reader is driven through Reject, which never waits on either.
+      expect((document.querySelector('[data-verb="promoted"]') as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(document.querySelector('[data-verb="rejected"]')!);
+      fireEvent.click(document.querySelector('[data-reject-code="not_a_notice"] input')!);
+      fireEvent.click(document.querySelector('[data-reject-confirm]')!);
 
       await waitFor(() => {
         const note = document.querySelector("[data-decision-corrected]");

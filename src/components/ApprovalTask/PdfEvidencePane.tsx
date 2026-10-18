@@ -37,6 +37,8 @@ function outlineCaption(quality: EvidenceQuality, page: number, sharedBy: number
  * An outline is drawn only once the page it belongs to has rendered. An outline from the last
  * row drawn over the next row's page would point at the wrong text with full confidence.
  */
+export type SourcePhase = "loading" | "ready" | "failed";
+
 type Phase =
   | { phase: "loading" }
   | { phase: "ready"; doc: PdfDoc }
@@ -49,11 +51,18 @@ export function PdfEvidencePane({
   target,
   quality = "unknown",
   sharedBy = 0,
+  onPhase,
 }: {
   ingestId: string | null;
   target: EvidenceRef | null;
   quality?: EvidenceQuality;
   sharedBy?: number;
+  /**
+   * The source as the steward sees it: "ready" only once a page has DRAWN (an opened document with
+   * nothing on screen is still "loading"), "failed" for a refused fetch, an unreadable file or a page
+   * that would not draw. The card offers Promote only on "ready".
+   */
+  onPhase?: (phase: SourcePhase) => void;
 }) {
   const [state, setState] = useState<Phase>(ingestId ? { phase: "loading" } : { phase: "failed", why: "This task names no ingest_id, so there is no source to fetch." });
   const [rendered, setRendered] = useState<(RenderedPage & { page: number }) | null>(null);
@@ -100,6 +109,11 @@ export function PdfEvidencePane({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  const shown: SourcePhase = state.phase === "ready" ? (rendered ? "ready" : "loading") : state.phase;
+  useEffect(() => {
+    onPhase?.(shown);
+  }, [shown, onPhase]);
 
   const doc = state.phase === "ready" ? state.doc : null;
   const outOfRange = doc !== null && target !== null && target.page > doc.numPages;

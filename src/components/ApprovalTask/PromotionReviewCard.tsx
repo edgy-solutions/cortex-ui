@@ -20,7 +20,7 @@ import {
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
-import { PdfEvidencePane } from "./PdfEvidencePane";
+import { PdfEvidencePane, type SourcePhase } from "./PdfEvidencePane";
 
 /**
  * THE PROMOTION REVIEW CARD — a `document_promotion` task vetted "in a few looks" (the
@@ -52,8 +52,22 @@ import { PdfEvidencePane } from "./PdfEvidencePane";
  *
  * DATA: the top line from the task payload (193's header) and `GET /ingest/{id}/extraction`,
  * merged by `mergeReview`; the rows from the extraction alone; the PDF from `/source`. Each of the
- * two fetches fails on its own and says why, and the decision stays available either way.
+ * two fetches fails on its own and says why.
+ *
+ * PROMOTE IS OFFERED ONLY ON WHAT THE STEWARD CAN SEE (the architect, 2026-10-17, after rows
+ * fa231498 and 0096a523 sat in bob's queue with no rows and an unrenderable source): at least one
+ * row drawn AND a page of the source drawn. That is the safe set, enumerated: a phase this card
+ * does not know holds Promote rather than passing it. Reject waits on neither, because "this is not
+ * a notice" is exactly the decision a steward makes about a drop with no rows or no readable source.
  */
+type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source";
+
+const HOLD_TEXT: Record<PromoteHold, string> = {
+  "rows-loading": "Promote waits for the extracted rows.",
+  "no-rows": "Promote is off: there are no extracted rows to vet. Reject is still open.",
+  "source-loading": "Promote waits for the source to draw.",
+  "no-source": "Promote is off: the source cannot be shown, and a steward cannot vet what they cannot see. Reject is still open.",
+};
 type ExtractionPhase = { phase: "loading" } | { phase: "ready"; ex: Extraction } | { phase: "failed"; why: string };
 
 const HEADER_LABEL: Record<HeaderField, string> = {
@@ -80,6 +94,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const rootRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const [extraction, setExtraction] = useState<ExtractionPhase>({ phase: "loading" });
+  const [sourcePhase, setSourcePhase] = useState<SourcePhase>("loading");
 
   useEffect(() => {
     let live = true;
@@ -116,6 +131,17 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const promoteVerb = verbs.includes("promoted") ? "promoted" : null;
   const rejectVerb = verbs.includes("rejected") ? "rejected" : null;
   const otherVerbs = verbs.filter((v) => v !== promoteVerb && v !== rejectVerb);
+  const promoteHold: PromoteHold | null =
+    extraction.phase === "loading"
+      ? "rows-loading"
+      : rows.length === 0
+        ? "no-rows"
+        : sourcePhase === "ready"
+          ? null
+          : sourcePhase === "loading"
+            ? "source-loading"
+            : "no-source";
+  const canPromote = canAct && promoteVerb !== null && promoteHold === null;
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
@@ -128,7 +154,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const move = (d: number) => setSel((s) => Math.min(Math.max(s + d, 0), Math.max(rows.length - 1, 0)));
 
   const promote = () => {
-    if (!canAct || !promoteVerb) return;
+    if (!canPromote || !promoteVerb) return;
     setArmed(false);
     void act(promoteVerb, note);
   };
@@ -151,7 +177,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     if (typing) return;
     if (e.key === "j") move(1);
     else if (e.key === "k") move(-1);
-    else if (e.key === "p" && canAct && promoteVerb) {
+    else if (e.key === "p" && canPromote) {
       setRejectOpen(false);
       if (armed) promote();
       else setArmed(true);
@@ -385,7 +411,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         </div>
 
         {/* RIGHT — the source, at the selected row's evidence. */}
-        <PdfEvidencePane ingestId={ingestId} target={target} quality={targetQuality} sharedBy={targetShared} />
+        <PdfEvidencePane
+          ingestId={ingestId}
+          target={target}
+          quality={targetQuality}
+          sharedBy={targetShared}
+          onPhase={setSourcePhase}
+        />
       </div>
 
       {/* BOTTOM — the decision. */}
@@ -395,7 +427,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         ) : (
           <div className="flex flex-col gap-2" data-review-actions>
             <TaskActNotices a={a} />
-            {armed && (
+            {armed && canPromote && (
               <p className="text-[11px] font-mono text-neon-green" role="status" data-promote-armed>
                 Press p again, or Enter, to promote. Esc cancels.
               </p>
@@ -413,8 +445,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 <button
                   type="button"
                   onClick={promote}
-                  disabled={!canAct}
+                  disabled={!canPromote}
                   data-verb={promoteVerb}
+                  data-promote-hold={promoteHold ?? undefined}
+                  title={promoteHold ? HOLD_TEXT[promoteHold] : undefined}
                   className="flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" /> {verbLabel(promoteVerb)}
@@ -449,6 +483,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </button>
               ))}
             </div>
+            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source") && (
+              <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
+                {HOLD_TEXT[promoteHold]}
+              </p>
+            )}
             {rejectOpen && rejectVerb && (
               <fieldset className="rounded border border-pink-500/20 bg-pink-500/5 px-3 py-2" data-reject-codes>
                 <legend className="px-1 text-[10px] font-mono uppercase tracking-widest text-pink-300/80">
