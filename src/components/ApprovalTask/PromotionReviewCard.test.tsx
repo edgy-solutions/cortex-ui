@@ -75,9 +75,17 @@ const task = (over: Partial<ApprovalTaskPayload> = {}): ApprovalTaskPayload => (
 // jsdom measures every element 0 wide, so the pane draws at its default width.
 const W = 560;
 
+/** A /source answer whose bytes start like a PDF (pdf.js itself is stubbed). */
+const pdfSource = (head = "%PDF-1.4\n%\xe2\xe3", contentType: string | null = "application/pdf") => ({
+  bytes: new Uint8Array([...head].map((c) => c.charCodeAt(0))).buffer,
+  status: 200,
+  contentType,
+});
+const failedText = () => document.querySelector("[data-pdf-failed]")!.textContent!;
+
 beforeEach(() => {
   actOnHumanTask.mockReset();
-  fetchIngestSource.mockReset().mockResolvedValue(new ArrayBuffer(8));
+  fetchIngestSource.mockReset().mockResolvedValue(pdfSource());
   fetchIngestExtraction.mockReset().mockImplementation(async () => exBody());
   renderPage.mockReset().mockImplementation(async (_n: number, _c: HTMLCanvasElement, w: number) => ({ width: w, height: (w * 792) / 612 }));
   destroy.mockReset();
@@ -583,17 +591,49 @@ describe("Promote is offered only on what the steward can see", () => {
     expect(rejectBtn().disabled).toBe(false);
   });
 
-  it("bytes that are not a PDF (openPdf throws): no-source", async () => {
+  it("bytes that are not a PDF (openPdf throws): no-source, and the pane shows what came back", async () => {
+    fetchIngestSource.mockResolvedValue(pdfSource("<!doctype html>", "text/html"));
     openPdf.mockRejectedValue(new Error("Invalid PDF structure."));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await mount();
     await waitFor(() => expect(hold()).toBe("no-source"));
     expect(rejectBtn().disabled).toBe(false);
+    expect(failedText()).toContain('The source answered 200 text/html, 15 bytes, but they are not a PDF: they begin "<!doctype html>".');
+    err.mockRestore();
   });
 
-  it("a page that will not draw: no-source", async () => {
-    renderPage.mockRejectedValue(new Error("draw failed"));
+  // THE P0 (10-18/19): a real PDF, refused by pdf.js because the browser would not load its worker.
+  // The pane said "could not be read as a PDF" and hid this. It must show pdf.js's own words.
+  it("a PDF pdf.js cannot open: the pane names the answer AND pdf.js's error, never the generic sentence", async () => {
+    openPdf.mockRejectedValue(new Error("Setting up fake worker failed: \"Failed to fetch dynamically imported module: http://localhost:18080/assets/pdf.worker.min-Dswkl-cV.mjs\"."));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await mount();
     await waitFor(() => expect(hold()).toBe("no-source"));
+    const t = failedText();
+    expect(t).toContain('The source answered 200 application/pdf, 12 bytes beginning "%PDF-1.4\\x0a%\\xe2\\xe3", and pdf.js could not open it: Error: Setting up fake worker failed');
+    expect(t).toContain("pdf.worker.min-Dswkl-cV.mjs");
+    expect(t).not.toContain("could not be read as a PDF");
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it("a page that will not draw: no-source, and the pane carries the render error", async () => {
+    renderPage.mockRejectedValue(new Error("draw failed"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await mount();
+    await waitFor(() => expect(hold()).toBe("no-source"));
+    expect(failedText()).toContain("Page 1 could not be drawn: Error: draw failed");
+    err.mockRestore();
+  });
+
+  it("a fetch with no answer at all names the request failure, not the bytes", async () => {
+    fetchIngestSource.mockRejectedValue(new TypeError("Failed to fetch"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await mount();
+    await waitFor(() => expect(hold()).toBe("no-source"));
+    expect(failedText()).toContain("The source request failed before any answer (TypeError: Failed to fetch).");
+    expect(openPdf).not.toHaveBeenCalled();
+    err.mockRestore();
   });
 
   it("an opened document whose page has not drawn yet is still loading: Promote waits, with no off line", async () => {

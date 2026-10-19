@@ -384,5 +384,46 @@ export function reviewRouteFailure(err: unknown, route: "extraction" | "source")
   if (status === 404 && code === null) return `${what} route is not served here yet (404). It lands with 193.`;
   if (status === 403) return `You are not entitled to this task's ${route} (403${code ? ` ${code}` : ""}). A steward's access closes when the task resolves.`;
   if (status !== null) return `${what} could not be loaded (${status}${code ? ` ${code}` : ""}).`;
-  return route === "source" ? "The source could not be read as a PDF." : "The extraction could not be loaded.";
+  if (route === "extraction") return "The extraction could not be loaded.";
+  return `The source request failed before any answer (${errorText(err)}).`;
+}
+
+/** `Name: message`, capped, for a thrown value of any shape. Never a stack. */
+export function errorText(err: unknown): string {
+  const name = isObj(err) && typeof err.name === "string" && err.name ? err.name : "Error";
+  const msg = isObj(err) && typeof err.message === "string" ? err.message : String(err);
+  const s = `${name}: ${msg}`.replace(/\s+/g, " ").trim();
+  return s.length > 300 ? `${s.slice(0, 299)}…` : s;
+}
+
+/** The first bytes, printable ASCII as-is and everything else as \xHH, quoted. */
+export function bytesPreview(bytes: ArrayBuffer, n = 16): string {
+  const head = new Uint8Array(bytes, 0, Math.min(n, bytes.byteLength));
+  let s = "";
+  for (const b of head) s += b >= 0x20 && b < 0x7f && b !== 0x22 && b !== 0x5c ? String.fromCharCode(b) : `\\x${b.toString(16).padStart(2, "0")}`;
+  return `"${s}"${bytes.byteLength > n ? "…" : ""}`;
+}
+
+/** pdf.js accepts a `%PDF-` header anywhere in the first 1024 bytes. */
+function hasPdfHeader(bytes: ArrayBuffer): boolean {
+  const head = new Uint8Array(bytes, 0, Math.min(1024, bytes.byteLength));
+  for (let i = 0; i + 5 <= head.length; i++) {
+    if (head[i] === 0x25 && head[i + 1] === 0x50 && head[i + 2] === 0x44 && head[i + 3] === 0x46 && head[i + 4] === 0x2d) return true;
+  }
+  return false;
+}
+
+/**
+ * Why a `/source` that ANSWERED could not be opened, naming what it answered. THE P0 THIS IS FOR
+ * (2026-10-18): real PDFs showed "could not be read as a PDF" because pdf.js's worker was refused
+ * by the browser (served as octet-stream); the sentence blamed the bytes and hid pdf.js's own
+ * message, which named the worker. So the pane never guesses: bytes that are not a PDF say so with
+ * their first bytes, and a PDF pdf.js could not open carries pdf.js's error verbatim.
+ */
+export function sourceOpenFailure(err: unknown, src: { bytes: ArrayBuffer; status: number; contentType: string | null }): string {
+  const got = `${src.status} ${src.contentType ?? "with no content-type"}`;
+  const n = src.bytes.byteLength;
+  if (n === 0) return `The source answered ${got} with no bytes.`;
+  if (!hasPdfHeader(src.bytes)) return `The source answered ${got}, ${n} bytes, but they are not a PDF: they begin ${bytesPreview(src.bytes)}.`;
+  return `The source answered ${got}, ${n} bytes beginning ${bytesPreview(src.bytes)}, and pdf.js could not open it: ${errorText(err)}`;
 }

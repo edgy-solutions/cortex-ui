@@ -40,6 +40,7 @@
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { promotionIngestId, type IngestFailure, type IngestStage } from "./ingestWire";
 import type { IngestOrigin } from "./ingestOrigin";
+import type { IngestSource } from "@/api/client";
 import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
@@ -252,9 +253,9 @@ export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
  * `GET /ingest/{id}/source`'s mock: the PDF the fixture rows above were extracted from, not the
  * file that was dropped. An id it never saw is a 404.
  */
-export function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
+export function fetchIngestSource(ingestId: string): Promise<IngestSource> {
   if (!STORE.has(ingestId)) return ingestNotFound();
-  return Promise.resolve(fixturePdfBytes());
+  return Promise.resolve({ bytes: fixturePdfBytes(), status: 200, contentType: "application/pdf" });
 }
 
 /**

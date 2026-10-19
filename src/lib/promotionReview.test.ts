@@ -19,6 +19,9 @@ import {
   shaPrefix,
   rejectReason,
   reviewRouteFailure,
+  sourceOpenFailure,
+  bytesPreview,
+  errorText,
   DEFAULT_REJECT_CODES,
   evidenceQuality,
   rowsSharingEvidence,
@@ -255,9 +258,49 @@ describe("route failures name the server's code", () => {
     expect(reviewRouteFailure(raw(502, new TextEncoder().encode("<html>bad gateway").buffer), "source")).toBe("The source could not be loaded (502).");
   });
 
-  it("no response at all: the source is unreadable bytes, the extraction a failed load", () => {
-    expect(reviewRouteFailure(new Error("Invalid PDF structure"), "source")).toBe("The source could not be read as a PDF.");
+  it("no response at all: the request failed before an answer, and its error is named", () => {
+    expect(reviewRouteFailure(new TypeError("Failed to fetch"), "source")).toBe("The source request failed before any answer (TypeError: Failed to fetch).");
     expect(reviewRouteFailure(new Error("network"), "extraction")).toBe("The extraction could not be loaded.");
+  });
+});
+
+describe("sourceOpenFailure: a /source that answered, and could not be drawn (P0 2026-10-18)", () => {
+  const src = (s: string | number[], contentType: string | null = "application/pdf", status = 200) => ({
+    bytes: new Uint8Array(typeof s === "string" ? [...s].map((c) => c.charCodeAt(0)) : s).buffer,
+    status,
+    contentType,
+  });
+  const P0 = new Error('Setting up fake worker failed: \"Failed to fetch dynamically imported module: http://localhost:18080/assets/pdf.worker.min-Dswkl-cV.mjs\".');
+
+  it("a PDF pdf.js could not open: what came back, then pdf.js's own error verbatim", () => {
+    expect(sourceOpenFailure(P0, src("%PDF-1.4\n1 0 obj"))).toBe(
+      'The source answered 200 application/pdf, 16 bytes beginning "%PDF-1.4\\x0a1 0 obj", and pdf.js could not open it: ' +
+        'Error: Setting up fake worker failed: "Failed to fetch dynamically imported module: http://localhost:18080/assets/pdf.worker.min-Dswkl-cV.mjs".',
+    );
+  });
+
+  it("bytes that are not a PDF say so, with their first bytes, and never blame pdf.js", () => {
+    const t = sourceOpenFailure(new Error("Invalid PDF structure."), src("<!doctype html><html>", "text/html"));
+    expect(t).toBe('The source answered 200 text/html, 21 bytes, but they are not a PDF: they begin "<!doctype html><"….');
+    expect(t).not.toContain("pdf.js");
+  });
+
+  it("a header pdf.js would accept late in the first 1024 bytes counts as a PDF; at 1024 it does not", () => {
+    const pad = (n: number) => [...Array(n).fill(0x20), ...[..."%PDF-1.7"].map((c) => c.charCodeAt(0))];
+    expect(sourceOpenFailure(new Error("x"), src(pad(1000)))).toContain("pdf.js could not open it");
+    expect(sourceOpenFailure(new Error("x"), src(pad(1024)))).toContain("they are not a PDF");
+  });
+
+  it("no bytes, and no content-type, are each said plainly", () => {
+    expect(sourceOpenFailure(new Error("x"), src(""))).toBe("The source answered 200 application/pdf with no bytes.");
+    expect(sourceOpenFailure(new Error("x"), src("GIF89a", null))).toContain("answered 200 with no content-type, 6 bytes");
+  });
+
+  it("non-printable bytes, quotes and backslashes are escaped; a long error is capped", () => {
+    expect(bytesPreview(new Uint8Array([0x25, 0x00, 0x22, 0x5c, 0xff]).buffer)).toBe('"%\\x00\\x22\\x5c\\xff"');
+    expect(errorText(new Error("y".repeat(400))).length).toBe(300);
+    expect(errorText("plain")).toBe("Error: plain");
+    expect(errorText({ name: "TypeError", message: "a\n  b" })).toBe("TypeError: a b");
   });
 });
 

@@ -1056,9 +1056,21 @@ export async function fetchIngestExtraction(ingestId: string): Promise<unknown> 
  * the review card's PDF pane. Raw bytes, never parsed here: `src/lib/pdfSource.ts` hands them to
  * pdf.js. Until 193 rolls this 404s, and the pane says so while the rows still draw.
  */
-export async function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
-  const { data } = await api.get<ArrayBuffer>(ingestSourcePath(ingestId), { responseType: "arraybuffer" });
-  return data;
+/**
+ * What `/source` answered, kept whole so a pane that cannot draw it can say WHAT it got: the
+ * status and content-type travel with the bytes (P0 2026-10-18: a generic sentence hid a refused
+ * pdf.js worker behind "could not be read as a PDF").
+ */
+export interface IngestSource {
+  bytes: ArrayBuffer;
+  status: number;
+  contentType: string | null;
+}
+
+export async function fetchIngestSource(ingestId: string): Promise<IngestSource> {
+  const res = await api.get<ArrayBuffer>(ingestSourcePath(ingestId), { responseType: "arraybuffer" });
+  const ct = res.headers?.["content-type"];
+  return { bytes: res.data, status: res.status, contentType: typeof ct === "string" && ct ? ct : null };
 }
 
 /**

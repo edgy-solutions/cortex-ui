@@ -28,6 +28,7 @@ export const SOURCE_SCANS = [
   "src/lib/sessionIsolation.test.ts",
   "src/lib/askFold.test.ts",
   "src/components/registry/projectedTupleParity.test.ts",
+  "src/lib/nginxModuleMime.test.ts",
 ];
 
 export default defineConfig({

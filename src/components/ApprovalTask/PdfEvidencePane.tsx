@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchIngestSource } from "@/lib/ingestTransport";
+import type { IngestSource } from "@/api/client";
 import { openPdf, RenderCancelled, type PdfDoc, type RenderedPage } from "@/lib/pdfSource";
 import { scaleBox } from "@/lib/bboxScale";
-import { reviewRouteFailure, type EvidenceQuality, type EvidenceRef } from "@/lib/promotionReview";
+import { errorText, reviewRouteFailure, sourceOpenFailure, type EvidenceQuality, type EvidenceRef } from "@/lib/promotionReview";
 
 /** The outline says what it is: solid for the cell, dashed for a box that is not the row's own. */
 const OUTLINE_CLASS: Record<EvidenceQuality, string> = {
@@ -79,15 +80,23 @@ export function PdfEvidencePane({
     let doc: PdfDoc | null = null;
     setState({ phase: "loading" });
     setRendered(null);
+    // Which stage failed decides what the pane can say: before an answer, the HTTP status; after
+    // one, what came back and pdf.js's own error. Never one sentence for both.
+    let got: IngestSource | null = null;
     fetchIngestSource(ingestId)
-      .then((bytes) => openPdf(bytes))
+      .then((src) => {
+        got = src;
+        return openPdf(src.bytes);
+      })
       .then((d) => {
         doc = d;
         if (live) setState({ phase: "ready", doc: d });
         else d.destroy();
       })
       .catch((err) => {
-        if (live) setState({ phase: "failed", why: reviewRouteFailure(err, "source") });
+        const why = got ? sourceOpenFailure(err, got) : reviewRouteFailure(err, "source");
+        console.error(`[source] ${ingestId}: ${why}`, err);
+        if (live) setState({ phase: "failed", why });
       });
     return () => {
       live = false;
@@ -129,7 +138,9 @@ export function PdfEvidencePane({
       })
       .catch((err) => {
         if (err instanceof RenderCancelled || !live) return;
-        setState({ phase: "failed", why: `Page ${page} could not be drawn.` });
+        const why = `Page ${page} could not be drawn: ${errorText(err)}`;
+        console.error(`[source] ${why}`, err);
+        setState({ phase: "failed", why });
       });
     return () => {
       live = false;

@@ -19,6 +19,7 @@ import {
   fetchIngestSource as realFetchIngestSource,
   fetchIngestExtraction as realFetchIngestExtraction,
 } from "@/api/client";
+import type { IngestSource } from "@/api/client";
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
@@ -71,6 +72,6 @@ export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
 }
 
 /** `GET /ingest/{id}/source` — see `src/api/client.ts`'s `fetchIngestSource`. */
-export function fetchIngestSource(ingestId: string): Promise<ArrayBuffer> {
+export function fetchIngestSource(ingestId: string): Promise<IngestSource> {
   return isIngestMockEnabled() ? mockFetchIngestSource(ingestId) : realFetchIngestSource(ingestId);
 }
