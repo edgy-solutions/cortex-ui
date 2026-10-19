@@ -273,3 +273,62 @@ describe("flag ON — narrow Reject", () => {
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith("Reject is not wired on the platform yet"));
   });
 });
+
+describe("flag ON — a refused /act names the platform's reasons and keeps the draft (197)", () => {
+  const del = (c: HTMLElement) => {
+    fireEvent.click(qa(c, "data-review-row-delete")[0]!);
+    type(q(c, "data-review-row-delete-reason"), "not a part");
+  };
+
+  it("422 row_edits_invalid: every problem in the toast, the deletion still on screen, Resolve still live", async () => {
+    flag(true);
+    const problems = ["mpn 'AAA-1' is not a row of this review", "added mpn 'X' collides with an extracted row"];
+    mockPost.mockRejectedValueOnce({ response: { status: 422, data: { detail: { error: "row_edits_invalid", message: problems[0], problems } } } });
+    const { container } = render(<GroupedReviewTable batch={batch()} />);
+    del(container);
+    fireEvent.click(resolveBtn(container));
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Row edits refused — 2 problems; nothing was applied", {
+        description: problems.join("\n"),
+        duration: 15000,
+      }),
+    );
+    expect(q(container, "data-review-row-deleted", "AAA-1"), "the draft survives a refusal").not.toBeNull();
+    expect(resolveBtn(container).disabled, "the steward can fix and resend").toBe(false);
+  });
+
+  it("a 500 on Resolve names the status, never a bare 'Resolve failed'", async () => {
+    flag(true);
+    mockPost.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+    const { container } = render(<GroupedReviewTable batch={batch()} />);
+    fireEvent.click(resolveBtn(container));
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith("Resolve failed (HTTP 500)"));
+  });
+
+  it("422 reason_code_required on Reject names the codes the server takes", async () => {
+    flag(true);
+    mockPost.mockRejectedValueOnce({ response: { status: 422, data: { detail: {
+      error: "reason_code_required", message: "a grouped-review reject needs a reason_code",
+      codes: ["not_a_notice", "parts_list_unusable", "superseded_or_duplicate"] } } } });
+    const { container } = render(<GroupedReviewTable batch={batch()} />);
+    fireEvent.click(q(container, "data-review-reject")!);
+    fireEvent.click(q(container, "data-review-reject-reason", "not_a_notice")!);
+    fireEvent.click(q(container, "data-review-reject-confirm")!);
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "a grouped-review reject needs a reason_code (one of: not_a_notice, parts_list_unusable, superseded_or_duplicate)",
+        undefined,
+      ),
+    );
+  });
+
+  it("a Reject with no answer at all says so", async () => {
+    flag(true);
+    mockPost.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const { container } = render(<GroupedReviewTable batch={batch()} />);
+    fireEvent.click(q(container, "data-review-reject")!);
+    fireEvent.click(q(container, "data-review-reject-reason", "not_a_notice")!);
+    fireEvent.click(q(container, "data-review-reject-confirm")!);
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith("Reject failed before any answer (Failed to fetch)"));
+  });
+});

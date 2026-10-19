@@ -80,3 +80,64 @@ export function buildRowEdits(d: RowEditDraft): RowEdits {
   if (bad.length) throw new Error(`row_edits incomplete: ${bad.join("; ")}`);
   return { deleted, added, corrected };
 }
+
+/** What a refused /act said, for the toast: a title, and the itemised problems when there are any. */
+export interface ActRefusal {
+  title: string;
+  description?: string;
+}
+
+const str = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+
+/**
+ * Read a refused grouped-review /act. NEVER one sentence for every refusal: on 196 a generic line hid
+ * the real cause of the source P0, and a 422 here carries the steward's own fix. The platform's
+ * shapes (gateway.py, 197):
+ *  - `row_edits_invalid`: `problems[]`, every one of them (an added MPN colliding with an extracted
+ *    row, a deleted/corrected MPN that is not a row of this review);
+ *  - `row_edits_not_for_kind`, `reason_code_required` (+ `codes`): their `message`;
+ *  - FastAPI's validation list `[{loc, msg}]`, which is how `RowEdits`'s own rules arrive;
+ *  - any other `{error, message}`.
+ * Returns null for anything else, so the caller keeps its status-specific lines.
+ */
+export function actRefusal(err: unknown): ActRefusal | null {
+  const resp = (err as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response;
+  const detail = resp?.data?.detail;
+  if (Array.isArray(detail)) {
+    const lines = detail
+      .map((d) => {
+        const e = d as { loc?: unknown; msg?: unknown };
+        const loc = Array.isArray(e.loc) ? e.loc.filter((p) => p !== "body").join(".") : "";
+        return str(e.msg) ? (loc ? `${loc}: ${e.msg}` : e.msg) : null;
+      })
+      .filter((l): l is string => l !== null);
+    if (!lines.length) return null;
+    return { title: `Refused by the platform (${resp?.status ?? "no status"}): ${lines[0]}`, description: lines.length > 1 ? lines.join("\n") : undefined };
+  }
+  if (!detail || typeof detail !== "object") return null;
+  const d = detail as { error?: unknown; message?: unknown; problems?: unknown; codes?: unknown };
+  if (d.error === "row_edits_invalid") {
+    const problems = Array.isArray(d.problems) ? d.problems.filter(str) : [];
+    const all = problems.length ? problems : str(d.message) ? [d.message] : [];
+    return {
+      title: `Row edits refused — ${all.length || "no"} problem${all.length === 1 ? "" : "s"}; nothing was applied`,
+      description: all.length ? all.join("\n") : undefined,
+    };
+  }
+  if (d.error === "reason_code_required") {
+    const codes = Array.isArray(d.codes) ? d.codes.filter(str) : [];
+    return { title: `${str(d.message) ? d.message : "A reject needs a reason code"}${codes.length ? ` (one of: ${codes.join(", ")})` : ""}` };
+  }
+  if (str(d.error) || str(d.message)) {
+    return { title: [d.error, d.message].filter(str).join(": ") };
+  }
+  return null;
+}
+
+/** The last resort, which still names what happened: the HTTP status, or that no answer came. */
+export function actFailureFallback(verb: "Resolve" | "Reject", err: unknown): string {
+  const status = (err as { response?: { status?: number } } | null)?.response?.status;
+  if (typeof status === "number") return `${verb} failed (HTTP ${status})`;
+  const msg = (err as { message?: unknown } | null)?.message;
+  return `${verb} failed before any answer${str(msg) ? ` (${msg})` : ""}`;
+}

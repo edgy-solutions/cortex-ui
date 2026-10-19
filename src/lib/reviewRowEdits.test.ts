@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildActBody } from "@/api/client";
 import {
   REVIEW_ROW_EDITS_DEFAULT,
+  actFailureFallback,
+  actRefusal,
   buildRowEdits,
   isReviewRowEditsEnabled,
   resolveReviewRowEdits,
@@ -110,5 +112,57 @@ describe("buildActBody", () => {
     const b = buildActBody("rejected", "c", undefined, edits, "superseded_or_duplicate");
     expect(b.reason_code).toBe("superseded_or_duplicate");
     expect("row_edits" in b).toBe(false);
+  });
+});
+
+// The platform's refusal bodies, verbatim from invincible-agent gateway.py at 8516762e (197).
+const refusal = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
+
+describe("actRefusal: a refused /act says what the platform said (197)", () => {
+  it("row_edits_invalid lists EVERY problem, not just the first", () => {
+    const problems = [
+      "added mpn 'AAA-1' collides with an extracted row",
+      "mpn 'ZZZ-9' is not a row of this review",
+    ];
+    expect(actRefusal(refusal(422, { error: "row_edits_invalid", message: problems[0], problems }))).toEqual({
+      title: "Row edits refused — 2 problems; nothing was applied",
+      description: problems.join("\n"),
+    });
+  });
+  it("row_edits_invalid with one problem is singular; with none it falls back to message", () => {
+    expect(actRefusal(refusal(422, { error: "row_edits_invalid", message: "m", problems: ["m"] }))?.title).toBe(
+      "Row edits refused — 1 problem; nothing was applied",
+    );
+    expect(actRefusal(refusal(422, { error: "row_edits_invalid", message: "only m" }))?.description).toBe("only m");
+  });
+  it("reason_code_required names the codes the server will take", () => {
+    const codes = ["not_a_notice", "parts_list_unusable", "superseded_or_duplicate"];
+    expect(actRefusal(refusal(422, { error: "reason_code_required", message: "a grouped-review reject needs a reason_code", codes }))).toEqual({
+      title: "a grouped-review reject needs a reason_code (one of: not_a_notice, parts_list_unusable, superseded_or_duplicate)",
+    });
+  });
+  it("row_edits_not_for_kind, and any other {error, message}, say both", () => {
+    expect(actRefusal(refusal(422, {
+      error: "row_edits_not_for_kind", kind: "document_promotion",
+      message: "row edits are read only on a grouped review; sent here they would be lost",
+    }))?.title).toBe("row_edits_not_for_kind: row edits are read only on a grouped review; sent here they would be lost");
+  });
+  it("FastAPI's validation list (how RowEdits's own rules arrive) names the field and every message", () => {
+    const r = actRefusal(refusal(422, [
+      { loc: ["body", "row_edits"], msg: "Value error, corrected_mpn must differ from mpn for 'A' (ignoring case)", type: "value_error" },
+      { loc: ["body", "row_edits", "added", 0, "evidence"], msg: "Field required", type: "missing" },
+    ]));
+    expect(r?.title).toBe("Refused by the platform (422): row_edits: Value error, corrected_mpn must differ from mpn for 'A' (ignoring case)");
+    expect(r?.description).toContain("row_edits.added.0.evidence: Field required");
+  });
+  it("nothing it can read is null, so the caller keeps its own line", () => {
+    for (const e of [refusal(404, "Not Found"), refusal(500, {}), refusal(422, []), { message: "x" }, null, undefined]) {
+      expect(actRefusal(e)).toBeNull();
+    }
+  });
+  it("the fallback names the status, or that no answer came — never a bare 'failed'", () => {
+    expect(actFailureFallback("Resolve", refusal(500, {}))).toBe("Resolve failed (HTTP 500)");
+    expect(actFailureFallback("Reject", new TypeError("Failed to fetch"))).toBe("Reject failed before any answer (Failed to fetch)");
+    expect(actFailureFallback("Resolve", null)).toBe("Resolve failed before any answer");
   });
 });

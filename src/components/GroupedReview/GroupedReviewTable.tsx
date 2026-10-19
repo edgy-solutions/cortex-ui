@@ -26,7 +26,7 @@ import {
   type Disposition,
 } from "@/lib/dispositions";
 import { actOnHumanTask, type GroupedRejectCode, type RowEdits } from "@/api/client";
-import { buildRowEdits, isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
+import { actFailureFallback, actRefusal, buildRowEdits, isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
 import type { ReviewBatch, ReviewItem } from "./types";
 
 interface OverrideDraft {
@@ -66,6 +66,14 @@ interface ReviewDraft {
   correctedEvidence: Record<string, string>;
 }
 const reviewDraftCache = new Map<string, ReviewDraft>();
+
+/** A refused /act names what the platform said (row_edits_invalid lists every problem); the draft is
+ *  kept, since only the success path consumes it. Nothing recognisable: the status, or "no answer". */
+function refused(verb: "Resolve" | "Reject", err: unknown) {
+  const r = actRefusal(err);
+  if (!r) toast.error(actFailureFallback(verb, err));
+  else toast.error(r.title, r.description ? { description: r.description, duration: 15000 } : undefined);
+}
 
 /** The three reasons a whole notice can be rejected for. Order is the display order. */
 export const REJECT_REASONS = [
@@ -365,13 +373,9 @@ export function GroupedReviewTable({
         setResolved(true);
         return;
       }
-      toast.error(
-        status === 403
-          ? "Not authorized to resolve this batch"
-          : status === 404
-            ? "Review no longer available"
-            : "Resolve failed"
-      );
+      if (status === 403) toast.error("Not authorized to resolve this batch");
+      else if (status === 404) toast.error("Review no longer available");
+      else refused("Resolve", err);
     } finally {
       setSubmitting(false);
     }
@@ -404,15 +408,10 @@ export function GroupedReviewTable({
       onResolved?.({ items_resolved: 0 });
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(
-        status === 403
-          ? "Not authorized to reject this batch"
-          : status === 404
-            ? "Review no longer available"
-            : status === 501
-              ? "Reject is not wired on the platform yet"
-              : "Reject failed"
-      );
+      if (status === 403) toast.error("Not authorized to reject this batch");
+      else if (status === 404) toast.error("Review no longer available");
+      else if (status === 501) toast.error("Reject is not wired on the platform yet");
+      else refused("Reject", err);
     } finally {
       setSubmitting(false);
     }
