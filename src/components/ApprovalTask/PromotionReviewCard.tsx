@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { verbLabel } from "@/lib/taskDeclaration";
-import { isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
+import { buildHeaderEdits, buildRowEdits, isReviewRowEditsEnabled, type RowEditDraft } from "@/lib/reviewRowEdits";
+import type { HeaderEdit } from "@/api/client";
+import { DISPOSITIONS, presentDisposition } from "@/lib/dispositions";
 import { fetchIngestExtraction } from "@/lib/ingestTransport";
 import {
   mergeReview,
@@ -50,6 +52,20 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  *             already deliberate and sends at once.
  *   r         opens the reject codes; 1–9 picks one; Enter sends it.
  *
+ * ROW EDITS (flag `VITE_REVIEW_ROW_EDITS`, on by default). A steward can fix an extracted mpn, delete a
+ * row, or add a missed part before promoting; the drafts ride the promote as `row_edits` (the grouped
+ * review's RowEdits shape, `buildRowEdits`) and the platform files them as an extraction_defect. The
+ * checks the server would 422 on (blanks, a correction equal to its mpn, an added or corrected mpn that
+ * collides with an extracted row, the same added mpn twice) run here first and hold Promote. A reject
+ * sends no edits. A 503 `extraction_defect_not_filed` means the decision IS recorded and the task is
+ * still pending: the editor LOCKS, so promoting again re-sends byte-identical edits, which files them.
+ *
+ * HEADER EDITS, same flag and same gate: a `fix` beside the notice id, manufacturer and notice date opens
+ * value / evidence (prefilled with the pane's current page, `p<n>`) / reason. They ride the promote as the
+ * top-level `header_edits` (wire field `mfr` for the manufacturer), are compared against the EXTRACTED
+ * value (not the task payload's, which the top line prefers), and count toward "Promote with N edits".
+ * The topline's kind is the extraction's leaf (PCN or PDN) when it names one.
+ *
  * CHIP RULE: bordered means clickable. Kind, codes and every fact on the top line are muted text.
  *
  * DATA: the top line from the task payload (193's header) and `GET /ingest/{id}/extraction`,
@@ -85,6 +101,97 @@ function isObj(v: unknown): v is Record<string, unknown> {
 }
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v : null);
 
+type HeaderDraft = Partial<Record<HeaderEdit["field"], { value: string; evidence_ref: string; reason: string }>>;
+const HEADER_FIELDS: ReadonlyArray<HeaderEdit["field"]> = ["notice_id", "mfr", "notice_date"];
+const EDIT_BTN =
+  "px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-[9px] uppercase tracking-widest cursor-pointer disabled:opacity-40";
+const EDIT_INPUT =
+  "px-2 py-1 rounded bg-black/30 border border-white/10 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 disabled:opacity-40";
+
+/** The "add a missed part" form and the list of what has been added. Drafts go through the card's RowEditDraft. */
+function RowAddForm({
+  disabled,
+  draft,
+  setDraft,
+}: {
+  disabled: boolean;
+  draft: RowEditDraft;
+  setDraft: (f: (d: RowEditDraft) => RowEditDraft) => void;
+}) {
+  const [mpn, setMpn] = useState("");
+  const [disposition, setDisposition] = useState<(typeof DISPOSITIONS)[number]>(DISPOSITIONS[0]);
+  const [reason, setReason] = useState("");
+  const [evidence, setEvidence] = useState("");
+  const m = mpn.trim();
+  const dup = draft.addedMpns.includes(m);
+  const ready = m !== "" && reason.trim() !== "" && evidence.trim() !== "" && !dup;
+  const add = () => {
+    if (!ready) return;
+    setDraft((d) => ({
+      ...d,
+      addedMpns: [...d.addedMpns, m],
+      overrides: { ...d.overrides, [m]: { disposition, reason: reason.trim() } },
+      addedEvidence: { ...d.addedEvidence, [m]: evidence.trim() },
+    }));
+    setMpn("");
+    setReason("");
+    setEvidence("");
+  };
+  return (
+    <div className="mt-2 rounded border border-white/5 px-2 py-1.5" data-row-add-form>
+      <p className="text-[9px] font-mono uppercase tracking-widest text-slate-500 mb-1">add a missed part</p>
+      <div className="flex flex-wrap gap-1.5">
+        <input value={mpn} disabled={disabled} onChange={(e) => setMpn(e.target.value)} placeholder="mpn" aria-label="Added mpn" data-add-mpn className={EDIT_INPUT} />
+        <select
+          value={disposition}
+          disabled={disabled}
+          onChange={(e) => setDisposition(e.target.value as (typeof DISPOSITIONS)[number])}
+          aria-label="Added disposition"
+          data-add-disposition
+          className={EDIT_INPUT}
+        >
+          {DISPOSITIONS.map((d) => (
+            <option key={d} value={d}>
+              {presentDisposition(d).label}
+            </option>
+          ))}
+        </select>
+        <input value={reason} disabled={disabled} onChange={(e) => setReason(e.target.value)} placeholder="reason" aria-label="Added reason" data-add-reason className={EDIT_INPUT} />
+        <input value={evidence} disabled={disabled} onChange={(e) => setEvidence(e.target.value)} placeholder="evidence" aria-label="Added evidence" data-add-evidence className={EDIT_INPUT} />
+        <button type="button" disabled={disabled || !ready} onClick={add} className={EDIT_BTN} data-row-add>
+          add
+        </button>
+      </div>
+      {draft.addedMpns.length > 0 && (
+        <ul className="mt-1 space-y-0.5 text-[11px] font-mono text-slate-300">
+          {draft.addedMpns.map((p) => (
+            <li key={p} className="flex items-center gap-2" data-row-added={p}>
+              <span>
+                + {p} · {presentDisposition(draft.overrides[p].disposition as (typeof DISPOSITIONS)[number]).label} · {draft.addedEvidence[p]}
+              </span>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  setDraft((d) => {
+                    const { [p]: _o, ...overrides } = d.overrides;
+                    const { [p]: _e, ...addedEvidence } = d.addedEvidence;
+                    return { ...d, addedMpns: d.addedMpns.filter((x) => x !== p), overrides, addedEvidence };
+                  })
+                }
+                className={EDIT_BTN}
+                data-row-undo={p}
+              >
+                undo
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayload; ingestId: string }) {
   const a = useTaskAct(task);
   const { acting, act, verbs, needsReason } = a;
@@ -94,6 +201,16 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const [rejectOpen, setRejectOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const editsOn = isReviewRowEditsEnabled();
+  const [headerDraft, setHeaderDraft] = useState<HeaderDraft>({});
+  const [draft, setDraft] = useState<RowEditDraft>({
+    deleted: {},
+    addedMpns: [],
+    corrected: {},
+    overrides: {},
+    addedEvidence: {},
+    correctedEvidence: {},
+  });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const paneRef = useRef<PdfPaneHandle | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
@@ -145,11 +262,135 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           : sourcePhase === "loading"
             ? "source-loading"
             : "no-source";
-  const canPromote = canAct && promoteVerb !== null && promoteHold === null;
+  const locked = a.refusal?.code === "extraction_defect_not_filed";
+  const editsActive = editsOn && promoteVerb !== null;
+  const headerCount = editsActive ? Object.keys(headerDraft).length : 0;
+  const rowCount = editsActive
+    ? Object.keys(draft.deleted).length +
+      draft.addedMpns.length +
+      Object.keys(draft.corrected).filter((m) => !draft.deleted[m]).length
+    : 0;
+  const editCount = rowCount + headerCount;
+  const extractedHeader = {
+    mfr: ex?.manufacturer ?? null,
+    notice_id: ex?.notice_id ?? null,
+    notice_date: ex?.notice_date ?? null,
+  };
+  // The server's checks, mirrored so the steward sees them before the wire. Matching is case-insensitive.
+  const problems = useMemo(() => {
+    if (!editsActive) return [];
+    const out: string[] = [];
+    const norm = (v: string) => v.trim().toLowerCase();
+    const extracted = new Set(rows.map((r) => norm(r.mpn)));
+    const seenAdded = new Set<string>();
+    for (const m of draft.addedMpns) {
+      if (extracted.has(norm(m))) out.push(`added ${m} collides with an extracted row`);
+      if (seenAdded.has(norm(m))) out.push(`added ${m} appears twice`);
+      seenAdded.add(norm(m));
+    }
+    for (const [m, to] of Object.entries(draft.corrected)) {
+      if (draft.deleted[m] || norm(to) === "") continue;
+      if (norm(to) === norm(m)) out.push(`corrected ${m} equals its mpn`);
+      else if (extracted.has(norm(to))) out.push(`corrected ${m} -> ${to} collides with an extracted row`);
+    }
+    try {
+      buildRowEdits(draft);
+    } catch (e) {
+      out.push(String((e as Error).message).replace(/^row_edits incomplete: /, "blank: "));
+    }
+    try {
+      buildHeaderEdits(headerDraft, extractedHeader);
+    } catch (e) {
+      out.push(String((e as Error).message).replace(/^header_edits incomplete: /, "header: "));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editsActive, draft, rows, headerDraft, ex]);
+  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0;
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
   }, [sel]);
+
+  const startHeaderFix = (wire: HeaderEdit["field"]) =>
+    setHeaderDraft((h) => ({
+      ...h,
+      [wire]: { value: "", evidence_ref: `p${paneRef.current?.page() ?? 1}`, reason: "" },
+    }));
+  const undoHeader = (wire: HeaderEdit["field"]) =>
+    setHeaderDraft((h) => {
+      const { [wire]: _x, ...rest } = h;
+      return rest;
+    });
+  const setHeaderField = (wire: HeaderEdit["field"], k: "value" | "evidence_ref" | "reason", v: string) =>
+    setHeaderDraft((h) => (h[wire] ? { ...h, [wire]: { ...h[wire]!, [k]: v } } : h));
+  /** A header value on the title line: the shown value, struck through to the drafted one, and its fix / undo. */
+  const headerValue = (field: HeaderEdit["field"], shown: string) => {
+    const d = editsActive ? headerDraft[field] : undefined;
+    return (
+      <>
+        {d ? (
+          <>
+            <span className="line-through text-slate-500">{shown}</span>
+            <span className="text-cyan-300" data-header-corrected={field}> {d.value || "…"}</span>
+          </>
+        ) : (
+          shown
+        )}
+        {editsActive && (
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => (d ? undoHeader(field) : startHeaderFix(field))}
+            // The label is drawn by CSS, so the title line's text stays the value alone.
+            className={`ml-1 ${EDIT_BTN} ${d ? "after:content-['undo']" : "after:content-['fix']"}`}
+            aria-label={`${d ? "Undo the correction of" : "Correct"} ${field}`}
+            {...(d ? { "data-header-undo": field } : { "data-header-fix": field })}
+          />
+        )}
+      </>
+    );
+  };
+  const headerForm = (field: HeaderEdit["field"]) => {
+    const d = headerDraft[field]!;
+    const was = extractedHeader[field];
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-1.5" data-header-form={field}>
+        <span className="text-[10px] font-mono text-slate-500">
+          {field} extracted: {was ?? "—"}
+        </span>
+        <input value={d.value} disabled={locked} onChange={(e) => setHeaderField(field, "value", e.target.value)} placeholder="value" aria-label={`Corrected ${field}`} data-header-value={field} className={EDIT_INPUT} />
+        <input value={d.evidence_ref} disabled={locked} onChange={(e) => setHeaderField(field, "evidence_ref", e.target.value)} placeholder="evidence" aria-label={`Evidence for ${field}`} data-header-evidence={field} className={EDIT_INPUT} />
+        <input value={d.reason} disabled={locked} onChange={(e) => setHeaderField(field, "reason", e.target.value)} placeholder="reason" aria-label={`Reason for ${field}`} data-header-reason={field} className={EDIT_INPUT} />
+      </div>
+    );
+  };
+
+  // Several rows share one mpn (one per change field): the edit controls sit on the FIRST of each.
+  const firstOfMpn = useMemo(() => {
+    const seen = new Set<string>();
+    const out = new Set<number>();
+    rows.forEach((r, i) => {
+      if (!seen.has(r.mpn)) {
+        seen.add(r.mpn);
+        out.add(i);
+      }
+    });
+    return out;
+  }, [rows]);
+  const startFix = (mpn: string, evidence: string) =>
+    setDraft((d) => ({
+      ...d,
+      corrected: { ...d.corrected, [mpn]: "" },
+      correctedEvidence: { ...d.correctedEvidence, [mpn]: evidence },
+    }));
+  const undoRow = (mpn: string) =>
+    setDraft((d) => {
+      const { [mpn]: _d, ...deleted } = d.deleted;
+      const { [mpn]: _c, ...corrected } = d.corrected;
+      const { [mpn]: _e, ...correctedEvidence } = d.correctedEvidence;
+      return { ...d, deleted, corrected, correctedEvidence };
+    });
 
   const select = (i: number) => {
     setSel(i);
@@ -161,7 +402,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const promote = () => {
     if (!canPromote || !promoteVerb) return;
     setArmed(false);
-    void act(promoteVerb, note);
+    void act(
+      promoteVerb,
+      note,
+      rowCount > 0 ? buildRowEdits(draft) : undefined,
+      headerCount > 0 ? buildHeaderEdits(headerDraft, extractedHeader) : undefined,
+    );
   };
   const reject = () => {
     if (!canAct || !rejectVerb || !code) return;
@@ -200,7 +446,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   };
 
   const topline: Array<[string, string]> = [
-    ["kind", "kind ?"],
+    ["kind", ex?.leaf ? ex.leaf.toUpperCase() : "kind ?"],
     ["manufacturer", review.manufacturer ?? "—"],
     ["notice-date", review.notice_date ?? "—"],
     ["parts", `${review.part_count ?? "?"} parts`],
@@ -222,7 +468,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         <div className="flex items-center gap-2 mb-1">
           <FileSearch className="w-4 h-4 text-neon-pink shrink-0" />
           <h3 className="text-lg font-bold text-white tracking-tight leading-none flex-1 break-all" data-review-title>
-            {review.notice_id ?? "Document promotion"}
+            {headerValue("notice_id", review.notice_id ?? "Document promotion")}
           </h3>
           <span className="text-[9px] font-mono uppercase tracking-widest text-slate-400" data-review-state>
             {a.done ? (a.done.resumed ? verbLabel(a.done.decision) : "recorded") : (task.task_state ?? "pending")}
@@ -230,9 +476,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         </div>
         <p className="text-[11px] font-mono text-slate-300" data-review-topline>
           {topline.map(([k, v], i) => (
-            <span key={k} data-topline={k} title={k === "kind" ? "PCN or PDN: not served by the payload or the extraction (asked of Lane 1)" : undefined}>
+            <span key={k} data-topline={k} title={k === "kind" ? (ex?.leaf ? `${ex.leaf} from ${ex.leaf_source ?? "the extraction"}` : "PCN or PDN: the extraction did not name it (a defaulted doc_type is not shown)") : undefined}>
               {i > 0 && <span className="text-slate-600"> · </span>}
-              {v}
+              {k === "manufacturer" || k === "notice-date" ? (
+                headerValue(k === "manufacturer" ? "mfr" : "notice_date", v)
+              ) : (
+                v
+              )}
             </span>
           ))}
           {sha && (
@@ -242,6 +492,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             </span>
           )}
         </p>
+        {editsActive &&
+          HEADER_FIELDS.map((wire) =>
+            headerDraft[wire] ? (
+              <Fragment key={wire}>{headerForm(wire)}</Fragment>
+            ) : null,
+          )}
         <p className="mt-1 text-[10px] font-mono text-slate-500 break-all" data-review-provenance>
           {sha}
           {task.requested_by && <> · requested by {formatRequestedBy(task.requested_by)}</>}
@@ -345,12 +601,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   <th className="px-2 py-1 font-normal">value</th>
                   <th className="px-2 py-1 font-normal">via</th>
                   <th className="px-2 py-1 font-normal" />
+                  {editsActive && <th className="px-2 py-1 font-normal" />}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
+                  <Fragment key={r.key}>
                   <tr
-                    key={r.key}
                     ref={(el) => {
                       rowRefs.current[i] = el;
                     }}
@@ -360,7 +617,18 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                     data-selected={i === sel ? "" : undefined}
                     className={`cursor-pointer align-top ${i === sel ? "bg-pink-500/10 text-slate-100" : "text-slate-300 hover:bg-white/5"}`}
                   >
-                    <td className="px-2 py-1 whitespace-nowrap" data-cell="mpn">{r.mpn}</td>
+                    <td className="px-2 py-1 whitespace-nowrap" data-cell="mpn">
+                      {editsActive && draft.deleted[r.mpn] ? (
+                        <span className="line-through text-slate-500" data-deleted>{r.mpn}</span>
+                      ) : editsActive && Object.hasOwn(draft.corrected, r.mpn) ? (
+                        <>
+                          <span className="line-through text-slate-500">{r.mpn}</span>
+                          <span className="text-cyan-300" data-corrected-to> {draft.corrected[r.mpn] || "…"}</span>
+                        </>
+                      ) : (
+                        r.mpn
+                      )}
+                    </td>
                     <td className="px-2 py-1 text-slate-400" data-cell="field">{r.field ?? "—"}</td>
                     <td className="px-2 py-1 break-all" data-cell="value">
                       {r.extracted_value ?? "—"}
@@ -402,7 +670,95 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                         </span>
                       )}
                     </td>
+                    {editsActive && (
+                      <td className="px-2 py-1 whitespace-nowrap text-right">
+                        {firstOfMpn.has(i) &&
+                          (draft.deleted[r.mpn] || Object.hasOwn(draft.corrected, r.mpn) ? (
+                            <button
+                              type="button"
+                              disabled={locked}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                undoRow(r.mpn);
+                              }}
+                              className={EDIT_BTN}
+                              data-row-undo={r.mpn}
+                            >
+                              undo
+                            </button>
+                          ) : (
+                            <span className="inline-flex gap-1">
+                              <button
+                                type="button"
+                                disabled={locked}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startFix(r.mpn, r.evidence.state === "ok" ? `p.${r.evidence.ref.page}` : "");
+                                }}
+                                className={EDIT_BTN}
+                                data-row-fix={r.mpn}
+                              >
+                                fix
+                              </button>
+                              <button
+                                type="button"
+                                disabled={locked}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDraft((d) => ({ ...d, deleted: { ...d.deleted, [r.mpn]: { reason: "" } } }));
+                                }}
+                                className={EDIT_BTN}
+                                data-row-delete={r.mpn}
+                              >
+                                delete
+                              </button>
+                            </span>
+                          ))}
+                      </td>
+                    )}
                   </tr>
+                  {editsActive && firstOfMpn.has(i) && Object.hasOwn(draft.corrected, r.mpn) && !draft.deleted[r.mpn] && (
+                    <tr data-fix-row={r.mpn}>
+                      <td colSpan={6} className="px-2 pb-1.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          <input
+                            value={draft.corrected[r.mpn]}
+                            disabled={locked}
+                            onChange={(e) => setDraft((d) => ({ ...d, corrected: { ...d.corrected, [r.mpn]: e.target.value } }))}
+                            placeholder="corrected mpn"
+                            aria-label={`Corrected mpn for ${r.mpn}`}
+                            data-fix-mpn={r.mpn}
+                            className={EDIT_INPUT}
+                          />
+                          <input
+                            value={draft.correctedEvidence[r.mpn] ?? ""}
+                            disabled={locked}
+                            onChange={(e) => setDraft((d) => ({ ...d, correctedEvidence: { ...d.correctedEvidence, [r.mpn]: e.target.value } }))}
+                            placeholder="evidence"
+                            aria-label={`Evidence for the correction of ${r.mpn}`}
+                            data-fix-evidence={r.mpn}
+                            className={EDIT_INPUT}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {editsActive && firstOfMpn.has(i) && draft.deleted[r.mpn] && (
+                    <tr data-delete-row={r.mpn}>
+                      <td colSpan={6} className="px-2 pb-1.5">
+                        <input
+                          value={draft.deleted[r.mpn].reason}
+                          disabled={locked}
+                          onChange={(e) => setDraft((d) => ({ ...d, deleted: { ...d.deleted, [r.mpn]: { reason: e.target.value } } }))}
+                          placeholder="reason for deleting"
+                          aria-label={`Reason for deleting ${r.mpn}`}
+                          data-delete-reason={r.mpn}
+                          className={EDIT_INPUT}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -410,10 +766,18 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           <p className="mt-1.5 text-[9px] font-mono uppercase tracking-widest text-slate-600">
             j/k rows · [ ] pages · p promote · r reject
           </p>
-          {isReviewRowEditsEnabled() && (
-            <p className="mt-1 text-[10px] text-slate-500" data-review-row-edits="no-wire">
-              Row edits are on, but document_promotion has no row-edit wire yet; asked of Lane 1.
+          {editsActive && <RowAddForm disabled={locked} draft={draft} setDraft={setDraft} />}
+          {editsActive && locked && (
+            <p className="mt-1 text-[11px] text-amber-400/90" role="status" data-row-edits-locked>
+              The promotion and these edits are recorded; the extraction_defect was not filed. Promote again — the same edits are sent.
             </p>
+          )}
+          {editsActive && problems.length > 0 && (
+            <ul className="mt-1 text-[11px] text-amber-400/90" data-row-edits-incomplete>
+              {problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
           )}
         </div>
 
@@ -457,10 +821,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   disabled={!canPromote}
                   data-verb={promoteVerb}
                   data-promote-hold={promoteHold ?? undefined}
+                  data-row-edit-count={editCount > 0 ? editCount : undefined}
                   title={promoteHold ? HOLD_TEXT[promoteHold] : undefined}
                   className="flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {verbLabel(promoteVerb)}
+                  <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                  {editCount > 0 ? `Promote with ${editCount} edit${editCount === 1 ? "" : "s"}` : verbLabel(promoteVerb)}
                 </button>
               )}
               {rejectVerb && (
@@ -495,6 +861,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
                 {HOLD_TEXT[promoteHold]}
+              </p>
+            )}
+            {rejectOpen && rejectVerb && editCount > 0 && (
+              <p className="text-[11px] text-amber-400/90" data-reject-drops-edits>
+                A reject sends no row edits; the drafted edits are not sent.
               </p>
             )}
             {rejectOpen && rejectVerb && (

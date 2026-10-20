@@ -1,5 +1,5 @@
 import { readRuntimeConfig } from "@/config";
-import type { RowEdits } from "@/api/client";
+import type { HeaderEdit, RowEdits } from "@/api/client";
 
 /**
  * Grouped-review ROW EDITS (delete / add / correct an MPN) and the Reject control.
@@ -79,6 +79,32 @@ export function buildRowEdits(d: RowEditDraft): RowEdits {
     });
   if (bad.length) throw new Error(`row_edits incomplete: ${bad.join("; ")}`);
   return { deleted, added, corrected };
+}
+
+export const HEADER_EDIT_FIELDS: ReadonlyArray<HeaderEdit["field"]> = ["mfr", "notice_id", "notice_date"];
+
+/**
+ * The `header_edits` wire list, from the card's drafts, in field order. Typed strings are trimmed.
+ * THROWS (as buildRowEdits does) on a blank value / evidence_ref / reason, or a value equal to the
+ * EXTRACTED one ignoring case (the platform refuses that as header_edits_refused).
+ */
+export function buildHeaderEdits(
+  drafts: Partial<Record<HeaderEdit["field"], { value: string; evidence_ref: string; reason: string }>>,
+  extracted: { mfr: string | null; notice_id: string | null; notice_date: string | null },
+): HeaderEdit[] {
+  const bad: string[] = [];
+  const out: HeaderEdit[] = [];
+  for (const field of HEADER_EDIT_FIELDS) {
+    const d = drafts[field];
+    if (!d) continue;
+    if (blank(d.value) || blank(d.evidence_ref) || blank(d.reason)) bad.push(`header ${field}: value/evidence/reason`);
+    else if (extracted[field] !== null && d.value.trim().toLowerCase() === extracted[field]!.trim().toLowerCase()) {
+      bad.push(`header ${field}: value equals the extracted value`);
+    }
+    out.push({ field, value: d.value.trim(), evidence_ref: d.evidence_ref.trim(), reason: d.reason.trim() });
+  }
+  if (bad.length) throw new Error(`header_edits incomplete: ${bad.join("; ")}`);
+  return out;
 }
 
 /** What a refused /act said, for the toast: a title, and the itemised problems when there are any. */

@@ -143,7 +143,16 @@ env:
   #   -> 7e513c36 (v0.9.10); iagent_mesh/rows.py diff EMPTY (control: 20 files changed). Gate: the
   #   full suite against a git-archive export of 016473bb placed as the sibling (the disk checkout
   #   still stands on e2207468).
-  PRODUCER_REF: 016473bbd7a6e919c61e11f4dc37ebbaa2476a96
+  # 2026-10-20 BUMP AHEAD to b7100fda — ⚠ NOT read off the pods: the fleet still runs 016473bb
+  #   (198). b7100fda is Lane 1's leaf on origin/lane/01-197, built for 199; Lane 1's 899f121f
+  #   says master fast-forwards to it (no rebase), so the sha survives the merge. Why: the
+  #   header_edits seal in rowEditsWireParity.test.ts reads class HeaderEdit, its `field` Literal
+  #   and the act request's header_edits guard, none of which exists at 016473bb, so against the
+  #   old pin those arms throw "class HeaderEdit not found". RE-PIN to 199's BFF sha, read off
+  #   the pods, once 199 rolls — this entry is a promise until then. Check 2: task_kinds diff
+  #   EMPTY (control: 13 files changed). Check 3: uv.lock iagent-mesh 7e513c36 (v0.9.10) at both.
+  #   Gate: the full suite against a git-archive export of b7100fda placed as the sibling.
+  PRODUCER_REF: b7100fdaac80d35bfe37f99573c48d61c84a41ba
 
 permissions:
   contents: read

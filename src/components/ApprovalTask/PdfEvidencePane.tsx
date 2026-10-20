@@ -49,6 +49,8 @@ export type SourcePhase = "loading" | "ready" | "failed";
 /** What the card drives from its keyboard (`[` / `]`). */
 export interface PdfPaneHandle {
   step(delta: number): void;
+  /** The page the pane is showing (1-based). */
+  page(): number;
 }
 
 type Phase =
@@ -237,7 +239,7 @@ export function PdfEvidencePane({
     scrollToPage(p);
   };
 
-  useImperativeHandle(ref, () => ({ step: (d: number) => goTo(current + d) }));
+  useImperativeHandle(ref, () => ({ step: (d: number) => goTo(current + d), page: () => current }));
 
   // The jump: on a new target (or "show" again), bring its page into view at once, then centre the
   // outline once the page has drawn. Paging away cancels a jump still waiting on its page.

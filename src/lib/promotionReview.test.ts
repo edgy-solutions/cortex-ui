@@ -94,6 +94,13 @@ describe("the extraction body", () => {
     expect(read({ notice_id: 42, attempt: 0, part_count: -1 })).toMatchObject({ notice_id: null, attempt: null, part_count: null });
   });
 
+  it("reads the leaf (pcn|pdn) and its source; anything else is null", () => {
+    expect(read({ leaf: "pcn", leaf_source: "ingest" })).toMatchObject({ leaf: "pcn", leaf_source: "ingest" });
+    expect(read({ leaf: "pdn", leaf_source: "extraction-title" })).toMatchObject({ leaf: "pdn", leaf_source: "extraction-title" });
+    expect(read({ leaf: "PCN", leaf_source: "guess" })).toMatchObject({ leaf: null, leaf_source: null });
+    expect(read()).toMatchObject({ leaf: null, leaf_source: null });
+  });
+
   it("part_count 0 is a count, not an absence", () => {
     expect(read({ part_count: 0 }).part_count).toBe(0);
   });

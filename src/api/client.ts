@@ -133,6 +133,11 @@ export interface ActOnTaskResult {
   // (e.g. an unverified row riding accept-all) comes back accepted:false + status "still_pending".
   accepted?: boolean;
   status?: string;
+  /** A promotion promote with row_edits: counts of what the server applied. */
+  row_edits?: { corrected: number; added: number; deleted: number; header?: number };
+  corrections?: unknown[];
+  /** The key of the extraction_defect task the corrections were filed as. */
+  extraction_defect?: string;
   review_dispatched?: boolean;
   resolved_count?: number;
   reason?: string;
@@ -170,6 +175,14 @@ export const SEED_TASK_DECISIONS = ["approved", "rejected", "acknowledged", "red
  * DeletedRow / AddedRow / CorrectedRow, `extra="forbid"`, every string non-blank). Accepted by the
  * live fleet since 49aa5e28 (Lane 1 packet 2026-10-12). Sealed key-for-key by rowEditsWireParity.test.ts.
  */
+/** A steward correction of one header field of a promotion (gateway.py HeaderEdit, extra="forbid", every string non-blank). Sent top-level as `header_edits`, promote only. */
+export interface HeaderEdit {
+  field: "mfr" | "notice_id" | "notice_date";
+  value: string;
+  evidence_ref: string;
+  reason: string;
+}
+
 export interface RowEdits {
   deleted: { mpn: string; reason: string }[];
   added: { mpn: string; disposition: string; reason: string; evidence: string }[];
@@ -183,7 +196,7 @@ export type GroupedRejectCode = "not_a_notice" | "unreadable" | "parts_unusable"
 
 /**
  * The /act request body. `HumanTaskActRequest` refuses `reason_code` on anything but `rejected` and
- * `row_edits` on anything but `approved` (its `_verb_fields` validator), so each is emitted ONLY for
+ * `row_edits` on anything but `approved`/`promoted` (its `_verb_fields` validator), so each is emitted ONLY for
  * its own verb, whatever the caller passes. NOTE the request model itself is plain `_BaseModel` and
  * DROPS an undeclared key silently; only the row models are `extra="forbid"`. So a misspelt
  * top-level key is not a 422, it is lost: rowEditsWireParity.test.ts checks each key is declared. Empty `row_edits` is omitted (the platform defaults it).
@@ -193,14 +206,16 @@ export function buildActBody(
   comment = "",
   overrides?: Record<string, { disposition: string; reason: string }>,
   rowEdits?: RowEdits,
-  reasonCode?: GroupedRejectCode
+  reasonCode?: GroupedRejectCode,
+  headerEdits?: HeaderEdit[]
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
-  if (decision === "approved" && rowEdits && (rowEdits.deleted.length || rowEdits.added.length || rowEdits.corrected.length)) {
+  if ((decision === "approved" || decision === "promoted") && rowEdits && (rowEdits.deleted.length || rowEdits.added.length || rowEdits.corrected.length)) {
     body.row_edits = rowEdits;
   }
   if (decision === "rejected" && reasonCode) body.reason_code = reasonCode;
+  if (decision === "promoted" && headerEdits && headerEdits.length > 0) body.header_edits = headerEdits;
   return body;
 }
 
@@ -210,12 +225,14 @@ export async function actOnHumanTask(
   comment = "",
   // grouped_review only: per-part exceptions {mpn: {disposition, reason}}. Absent/empty = accept-all.
   overrides?: Record<string, { disposition: string; reason: string }>,
-  // grouped_review approve only: steward row edits, sent as `row_edits` only when non-empty.
+  // grouped_review approve or document_promotion promote: steward row edits, sent as `row_edits` only when non-empty.
   rowEdits?: RowEdits,
   // grouped_review reject only: REQUIRED by the platform (422 reason_code_required without it).
-  reasonCode?: GroupedRejectCode
+  reasonCode?: GroupedRejectCode,
+  // document_promotion promote only: steward corrections of mfr / notice_id / notice_date.
+  headerEdits?: HeaderEdit[]
 ): Promise<ActOnTaskResult> {
-  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode);
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits);
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
     body
@@ -717,7 +734,7 @@ export async function registerFrontendCapabilities(payload: {
   frontend_id: string;
   frontend_version: string;
   capabilities: FrontendCapabilityPayload[];
-}): Promise<{ accepted: number; frontend_id: string }> {
+}): Promise<{ accepted: number; frontend_id: string; unchanged?: boolean }> {
   const { data } = await api.post("/register_frontend_capabilities", payload);
   return data;
 }

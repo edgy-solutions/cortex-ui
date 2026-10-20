@@ -911,3 +911,289 @@ describe("the steward can read every page (the architect, 197: PAGE 1 / 2 with n
     }
   });
 });
+
+// ── the steward row editor ──────────────────────────────────────────────────────────────────
+describe("row edits on a promote", () => {
+  const setFlag = (v: string | null) => {
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_REVIEW_ROW_EDITS: v };
+  };
+  afterEach(() => setFlag(null));
+  const q = (attr: string, val?: string) =>
+    document.querySelector(val === undefined ? `[${attr}]` : `[${attr}="${val}"]`) as HTMLElement | null;
+  const type = (el: HTMLElement | null, value: string) => fireEvent.change(el!, { target: { value } });
+  const click = (el: HTMLElement | null) => fireEvent.click(el!);
+  const lastCall = () => actOnHumanTask.mock.calls[actOnHumanTask.mock.calls.length - 1] as unknown[];
+  const failWith = (status: number, detail: unknown) =>
+    actOnHumanTask.mockRejectedValueOnce({ response: { status, data: { detail } } });
+
+  it("flag ON: fix a row, then promote, sends the correction with the evidence page", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    click(q("data-row-fix", "BYV34-400"));
+    expect((q("data-fix-evidence", "BYV34-400") as HTMLInputElement).value).toBe("p.1");
+    type(q("data-fix-mpn", "BYV34-400"), "BYV34-4000");
+    expect(q("data-corrected-to")!.textContent).toContain("BYV34-4000");
+    expect(promoteBtn().getAttribute("data-row-edit-count")).toBe("1");
+    expect(promoteBtn().textContent).toContain("Promote with 1 edit");
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "promoted", "", undefined, {
+      deleted: [],
+      added: [],
+      corrected: [{ mpn: "BYV34-400", corrected_mpn: "BYV34-4000", evidence: "p.1" }],
+    });
+  });
+
+  it("delete with a reason is sent in deleted[]; undo takes the edit back", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    click(q("data-row-delete", "BYV34-500"));
+    expect(q("data-deleted")).not.toBeNull();
+    expect(q("data-row-edits-incomplete")).not.toBeNull();
+    expect(promoteBtn().disabled).toBe(true);
+    type(q("data-delete-reason", "BYV34-500"), "not a part");
+    expect(promoteBtn().disabled).toBe(false);
+    click(q("data-row-undo", "BYV34-500"));
+    expect(q("data-deleted")).toBeNull();
+    click(q("data-row-delete", "BYV34-500"));
+    type(q("data-delete-reason", "BYV34-500"), "not a part");
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalled());
+    expect(lastCall()[4]).toEqual({ deleted: [{ mpn: "BYV34-500", reason: "not a part" }], added: [], corrected: [] });
+  });
+
+  it("add a missed part sends it in added[] with its disposition", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    type(q("data-add-mpn"), "NEW-1");
+    type(q("data-add-disposition"), "archive");
+    type(q("data-add-reason"), "missed in table 2");
+    expect((q("data-row-add") as HTMLButtonElement).disabled).toBe(true);
+    type(q("data-add-evidence"), "p.2");
+    click(q("data-row-add"));
+    expect(q("data-row-added", "NEW-1")).not.toBeNull();
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalled());
+    expect(lastCall()[4]).toEqual({
+      deleted: [],
+      corrected: [],
+      added: [{ mpn: "NEW-1", disposition: "archive", reason: "missed in table 2", evidence: "p.2" }],
+    });
+  });
+
+  it("a blank evidence disables Promote and says why; p does not arm", async () => {
+    setFlag("true");
+    await mountPromotable();
+    click(q("data-row-fix", "BYV34-400"));
+    type(q("data-fix-mpn", "BYV34-400"), "BYV34-4000");
+    type(q("data-fix-evidence", "BYV34-400"), "  ");
+    expect(promoteBtn().disabled).toBe(true);
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/blank/);
+    key("p");
+    expect(q("data-promote-armed")).toBeNull();
+  });
+
+  it("a corrected or added mpn colliding (other case) with an extracted row holds Promote", async () => {
+    setFlag("true");
+    await mountPromotable();
+    click(q("data-row-fix", "BYV34-400"));
+    type(q("data-fix-mpn", "BYV34-400"), "byv34-500");
+    expect(promoteBtn().disabled).toBe(true);
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/collides with an extracted row/);
+    type(q("data-fix-mpn", "BYV34-400"), "byv34-400");
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/equals its mpn/);
+    click(q("data-row-undo", "BYV34-400"));
+    type(q("data-add-mpn"), "byv34-500");
+    type(q("data-add-reason"), "r");
+    type(q("data-add-evidence"), "p.1");
+    click(q("data-row-add"));
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/added byv34-500 collides with an extracted row/);
+    expect(promoteBtn().disabled).toBe(true);
+  });
+
+  it("two rows sharing an mpn show one fix control, and a delete marks every one of them", async () => {
+    setFlag("true");
+    await mountPromotable();
+    expect(document.querySelectorAll('[data-row-fix="BYV34-400"]')).toHaveLength(1);
+    expect(document.querySelectorAll("[data-row-fix]")).toHaveLength(2);
+    click(q("data-row-delete", "BYV34-400"));
+    expect(document.querySelectorAll("[data-deleted]")).toHaveLength(3);
+  });
+
+  it("typing in an editor input does not trigger the card's keys", async () => {
+    setFlag("true");
+    await mountPromotable();
+    click(q("data-row-fix", "BYV34-400"));
+    key("p", q("data-fix-mpn", "BYV34-400")!);
+    key("j", q("data-fix-mpn", "BYV34-400")!);
+    expect(q("data-promote-armed")).toBeNull();
+    expect(selectedKey()).toBe("row-0");
+  });
+
+  it("a reject with drafted edits sends no row_edits and says the edits are dropped", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    click(q("data-row-delete", "BYV34-500"));
+    type(q("data-delete-reason", "BYV34-500"), "x");
+    expect(q("data-reject-drops-edits")).toBeNull();
+    click(rejectBtn());
+    expect(q("data-reject-drops-edits")!.textContent).toMatch(/sends no row edits/);
+    click(document.querySelector("[data-reject-code] input") as HTMLElement);
+    click(q("data-reject-confirm"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalled());
+    expect(lastCall()[1]).toBe("rejected");
+    expect(lastCall()[4]).toBeUndefined();
+  });
+
+  it("a 503 extraction_defect_not_filed locks the editor; promoting again sends equal row_edits", async () => {
+    setFlag("true");
+    failWith(503, { error: "extraction_defect_not_filed", task_id: "t-promo", record_id: "r", message: "not filed" });
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    click(q("data-row-fix", "BYV34-400"));
+    type(q("data-fix-mpn", "BYV34-400"), "BYV34-4000");
+    click(promoteBtn());
+    await waitFor(() => expect(q("data-row-edits-locked")).not.toBeNull());
+    expect((q("data-fix-mpn", "BYV34-400") as HTMLInputElement).disabled).toBe(true);
+    expect((q("data-row-add") as HTMLButtonElement).disabled).toBe(true);
+    expect((q("data-add-mpn") as HTMLInputElement).disabled).toBe(true);
+    expect(promoteBtn().disabled).toBe(false);
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(2));
+    expect(actOnHumanTask.mock.calls[1][4]).toEqual(actOnHumanTask.mock.calls[0][4]);
+    expect(JSON.stringify(actOnHumanTask.mock.calls[1][4])).toBe(JSON.stringify(actOnHumanTask.mock.calls[0][4]));
+  });
+
+  it("a FastAPI validation list is read, not shown as a bare Refused (422)", async () => {
+    setFlag("true");
+    failWith(422, [{ loc: ["body", "row_edits", "added", 0, "mpn"], msg: "must not be blank" }]);
+    await mountPromotable();
+    click(q("data-row-delete", "BYV34-500"));
+    type(q("data-delete-reason", "BYV34-500"), "x");
+    click(promoteBtn());
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
+    expect(document.querySelector("[data-act-refusal]")!.textContent).toMatch(/must not be blank/);
+  });
+
+  it("the success toast names the extraction_defect", async () => {
+    setFlag("true");
+    const { toast } = await import("sonner");
+    actOnHumanTask.mockResolvedValue({
+      workflow_resumed: true,
+      row_edits: { corrected: 1, added: 0, deleted: 1 },
+      extraction_defect: "ed-77",
+    });
+    await mountPromotable();
+    click(q("data-row-delete", "BYV34-500"));
+    type(q("data-delete-reason", "BYV34-500"), "x");
+    click(q("data-row-fix", "BYV34-400"));
+    type(q("data-fix-mpn", "BYV34-400"), "Z-1");
+    click(promoteBtn());
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("2 correction(s) filed as ed-77")));
+  });
+
+  it("flag OFF: no editor, and a promote sends no row_edits", async () => {
+    setFlag("false");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    expect(q("data-row-fix")).toBeNull();
+    expect(q("data-row-add-form")).toBeNull();
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledWith("t-promo", "promoted", ""));
+    expect(lastCall()[4]).toBeUndefined();
+  });
+});
+
+// ── header edits and the leaf ───────────────────────────────────────────────────────────────
+describe("header edits and the leaf on the promotion card", () => {
+  const setFlag = (v: string | null) => {
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_REVIEW_ROW_EDITS: v };
+  };
+  afterEach(() => setFlag(null));
+  const q = (attr: string, val?: string) =>
+    document.querySelector(val === undefined ? `[${attr}]` : `[${attr}="${val}"]`) as HTMLElement | null;
+  const type = (el: HTMLElement | null, value: string) => fireEvent.change(el!, { target: { value } });
+  const click = (el: HTMLElement | null) => fireEvent.click(el!);
+  const lastCall = () => actOnHumanTask.mock.calls[actOnHumanTask.mock.calls.length - 1] as unknown[];
+
+  it("a header-only promote sends header_edits and no row_edits in the BODY", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    click(q("data-header-fix", "mfr"));
+    expect(q("data-header-form", "mfr")!.textContent).toContain("extracted: Example Discretes Ltd");
+    expect((q("data-header-evidence", "mfr") as HTMLInputElement).value).toBe("p1");
+    expect(promoteBtn().disabled).toBe(true);
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/header/);
+    type(q("data-header-value", "mfr"), "example discretes ltd");
+    type(q("data-header-reason", "mfr"), "logo reads Acme");
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/equals the extracted value/);
+    type(q("data-header-value", "mfr"), "Acme Ltd");
+    expect(q("data-header-corrected", "mfr")!.textContent).toContain("Acme Ltd");
+    expect(promoteBtn().getAttribute("data-row-edit-count")).toBe("1");
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    const args = lastCall();
+    expect(args.slice(0, 4)).toEqual(["t-promo", "promoted", "", undefined]);
+    expect(args[4]).toBeUndefined();
+    expect(args[5]).toBeUndefined();
+    const headerEdits = [{ field: "mfr", value: "Acme Ltd", evidence_ref: "p1", reason: "logo reads Acme" }];
+    expect(args[6]).toEqual(headerEdits);
+    const { buildActBody } = await vi.importActual<typeof import("@/api/client")>("@/api/client");
+    const body = buildActBody("promoted", "", undefined, args[4] as undefined, args[5] as undefined, args[6] as never);
+    expect("row_edits" in body).toBe(false);
+    expect(body.header_edits).toEqual(headerEdits);
+  });
+
+  it("header and row edits count together; undo removes a header draft", async () => {
+    setFlag("true");
+    await mountPromotable();
+    key("]");
+    click(q("data-header-fix", "notice_date"));
+    expect((q("data-header-evidence", "notice_date") as HTMLInputElement).value).toBe("p2");
+    click(q("data-row-delete", "BYV34-500"));
+    expect(promoteBtn().getAttribute("data-row-edit-count")).toBe("2");
+    click(q("data-header-undo", "notice_date"));
+    expect(q("data-header-form", "notice_date")).toBeNull();
+    expect(promoteBtn().getAttribute("data-row-edit-count")).toBe("1");
+  });
+
+  it("the 503 lock covers the header editor, and a reject notes the dropped header drafts", async () => {
+    setFlag("true");
+    actOnHumanTask.mockRejectedValueOnce({
+      response: { status: 503, data: { detail: { error: "extraction_defect_not_filed", task_id: "t-promo", record_id: "r", message: "m" } } },
+    });
+    await mountPromotable();
+    click(q("data-header-fix", "notice_id"));
+    type(q("data-header-value", "notice_id"), "EOL-99");
+    type(q("data-header-reason", "notice_id"), "typo");
+    click(rejectBtn());
+    expect(q("data-reject-drops-edits")).not.toBeNull();
+    click(rejectBtn());
+    click(promoteBtn());
+    await waitFor(() => expect(q("data-row-edits-locked")).not.toBeNull());
+    expect((q("data-header-value", "notice_id") as HTMLInputElement).disabled).toBe(true);
+    expect((q("data-header-fix", "mfr") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("flag OFF: no header fix controls", async () => {
+    setFlag("false");
+    await mountPromotable();
+    expect(q("data-header-fix")).toBeNull();
+  });
+
+  it("the topline kind is the leaf upper-cased with its source, or the unnamed text", async () => {
+    await mountPromotable();
+    expect(topline("kind")).toBe("kind ?");
+    expect(q("data-topline", "kind")!.getAttribute("title")).toMatch(/did not name it/);
+    cleanup();
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pdn", leaf_source: "extraction-title" }));
+    await mountPromotable();
+    expect(topline("kind")).toBe("PDN");
+    expect(q("data-topline", "kind")!.getAttribute("title")).toBe("pdn from extraction-title");
+  });
+});

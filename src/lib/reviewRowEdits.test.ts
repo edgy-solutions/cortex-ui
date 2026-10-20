@@ -9,6 +9,7 @@ import {
   REVIEW_ROW_EDITS_DEFAULT,
   actFailureFallback,
   actRefusal,
+  buildHeaderEdits,
   buildRowEdits,
   isReviewRowEditsEnabled,
   resolveReviewRowEdits,
@@ -164,5 +165,37 @@ describe("actRefusal: a refused /act says what the platform said (197)", () => {
     expect(actFailureFallback("Resolve", refusal(500, {}))).toBe("Resolve failed (HTTP 500)");
     expect(actFailureFallback("Reject", new TypeError("Failed to fetch"))).toBe("Reject failed before any answer (Failed to fetch)");
     expect(actFailureFallback("Resolve", null)).toBe("Resolve failed before any answer");
+  });
+});
+
+describe("buildHeaderEdits", () => {
+  const ext = { mfr: "Example Ltd", notice_id: "EOL-36", notice_date: "2026-09-30" };
+  const d = { value: " Other Ltd ", evidence_ref: " p1 ", reason: " logo " };
+  it("trims, and orders by field (mfr, notice_id, notice_date) whatever the draft order", () => {
+    expect(buildHeaderEdits({ notice_date: { ...d, value: "2026-10-01" }, mfr: d }, ext)).toEqual([
+      { field: "mfr", value: "Other Ltd", evidence_ref: "p1", reason: "logo" },
+      { field: "notice_date", value: "2026-10-01", evidence_ref: "p1", reason: "logo" },
+    ]);
+  });
+  it("throws on a blank value, evidence or reason", () => {
+    for (const k of ["value", "evidence_ref", "reason"] as const) {
+      expect(() => buildHeaderEdits({ mfr: { ...d, [k]: "  " } }, ext)).toThrow(/header_edits incomplete: header mfr/);
+    }
+  });
+  it("throws on a value equal to the extracted one, ignoring case", () => {
+    expect(() => buildHeaderEdits({ notice_id: { ...d, value: "eol-36" } }, ext)).toThrow(/equals the extracted value/);
+  });
+  it("an extracted value that is absent equals nothing", () => {
+    expect(buildHeaderEdits({ mfr: d }, { ...ext, mfr: null })).toHaveLength(1);
+  });
+  it("buildActBody sends header_edits only on promoted, only when non-empty, and no row_edits key for a header-only promote", () => {
+    const h = buildHeaderEdits({ mfr: d }, ext);
+    const body = buildActBody("promoted", "c", undefined, undefined, undefined, h);
+    expect(body).toEqual({ decision: "promoted", comment: "c", header_edits: h });
+    expect("row_edits" in body).toBe(false);
+    for (const v of ["approved", "rejected", "acknowledged"]) {
+      expect("header_edits" in buildActBody(v, "", undefined, undefined, undefined, h)).toBe(false);
+    }
+    expect("header_edits" in buildActBody("promoted", "", undefined, undefined, undefined, [])).toBe(false);
   });
 });

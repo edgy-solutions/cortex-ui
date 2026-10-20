@@ -7,6 +7,12 @@
  * is key-set EQUALITY (not containment) for each row-edit entry type: a key cortex omits is a 422
  * (required field missing), a key cortex adds is a 422 (`extra="forbid"`).
  *
+ * The send is for BOTH verbs the receiver keeps `row_edits` for (`approved` on a grouped review,
+ * `promoted` on a document_promotion task); the keep-condition itself is parsed from gateway.py.
+ *
+ * HEADER EDITS: `HeaderEdit`'s key set and `field` Literal, `header_edits` declared on the request, and the
+ * verb its guard keeps it for, are all parsed from the producer (gateway.py at b7100fda or later).
+ *
  * RUN WITH `npm run test`, never bare `npx vitest run` (same reason as taskKindParity.test.tsx).
  * Producer lookup follows the sibling parity tests: `<repo>/../<invincible-agent|ia-01>/src/iagent/
  * gateway.py`, plus `CORTEX_PRODUCER_ROOT` (a dir holding `src/iagent/gateway.py`) when set. The
@@ -22,7 +28,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildActBody } from "@/api/client";
-import { buildRowEdits, type RowEditDraft } from "./reviewRowEdits";
+import { buildHeaderEdits, buildRowEdits, HEADER_EDIT_FIELDS, type RowEditDraft } from "./reviewRowEdits";
 import { REJECT_REASONS } from "@/components/GroupedReview/GroupedReviewTable";
 import { DEFAULT_REJECT_CODES } from "./promotionReview";
 
@@ -62,6 +68,29 @@ function reasonCodeLiteral(src: string): string[] {
   return [...lit[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 }
 
+/** The verbs in the receiver's keep-condition `self.row_edits is not None and self.decision not in (...)`. */
+function rowEditsDecisions(src: string): string[] {
+  const m = /self\.row_edits is not None and self\.decision not in \(([^)]*)\)/.exec(src);
+  if (!m) throw new Error("row_edits decision guard not found");
+  return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
+}
+
+/** The members of `field: Literal[...]` in the class body of `className`, in order. */
+function classFieldLiteral(src: string, className: string): string[] {
+  const line = classBody(src, className).find((l) => /^ {4}field\s*:/.test(l));
+  if (!line) throw new Error(`${className}.field not found`);
+  const lit = /Literal\[([^\]]*)\]/.exec(line);
+  if (!lit) throw new Error(`${className}.field is no longer a Literal[...]`);
+  return [...lit[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+}
+
+/** The one verb `header_edits` is kept for: `if self.header_edits is not None:` then `if self.decision != "<verb>":`. */
+function headerEditsVerb(src: string): string {
+  const m = /if self\.header_edits is not None:\s*\n\s*if self\.decision != "([^"]*)"/.exec(src);
+  if (!m) throw new Error("header_edits decision guard not found");
+  return m[1];
+}
+
 /** `<name> = ("a", "b", ...)` at column 0, as a tuple LITERAL (an alias of another name reads as "not found"). */
 function codesTuple(src: string, name: string): string[] {
   const m = new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, "m").exec(src);
@@ -70,6 +99,20 @@ function codesTuple(src: string, name: string): string[] {
 }
 
 describe("the parser, unit-tested on fixtures", () => {
+  it("reads a field Literal and the header_edits verb guard, and throws when either is absent", () => {
+    const lit = 'class HeaderEdit(_M):\n    field: Literal["mfr", "notice_id"]\n    value: str\n';
+    expect(classFieldLiteral(lit, "HeaderEdit")).toEqual(["mfr", "notice_id"]);
+    expect(() => classFieldLiteral(lit.replace("Literal", "Str"), "HeaderEdit")).toThrow(/no longer a Literal/);
+    expect(() => classFieldLiteral("class Other(_M):\n    x: str\n", "Other")).toThrow(/field not found/);
+    const g = '        if self.header_edits is not None:\n            if self.decision != "promoted":\n                raise ValueError("x")\n';
+    expect(headerEditsVerb(g)).toBe("promoted");
+    expect(() => headerEditsVerb("x = 1\n")).toThrow(/header_edits decision guard not found/);
+  });
+  it("reads the row_edits decision guard, and throws when the line is absent", () => {
+    const ok = '        if self.row_edits is not None and self.decision not in ("approved", "promoted"):\n';
+    expect(rowEditsDecisions(ok)).toEqual(["approved", "promoted"]);
+    expect(() => rowEditsDecisions("x = 1\n")).toThrow(/row_edits decision guard not found/);
+  });
   const fx =
     'class _M(B):\n    model_config = {"extra": "forbid"}\n\n\nclass Row(_M):\n    mpn: str\n    # a comment: here\n' +
     "    reason: str   # trailing: note\n\n    def f(self):\n        x: int = 1\n\nclass Next(_M):\n    other: str\n";
@@ -140,6 +183,40 @@ describe.skipIf(GATEWAY === null)("cortex's grouped-review send equals the produ
     expect(sorted(keys), AT).toEqual(["comment", "decision", "row_edits"]);
     const declared = fieldNames(src(), "HumanTaskActRequest");
     for (const k of keys) expect(declared, `${AT}: "${k}" is not a declared field, it would be dropped`).toContain(k);
+  });
+  it("a promote with edits sends {decision, comment, row_edits}, all declared on HumanTaskActRequest", () => {
+    const keys = Object.keys(buildActBody("promoted", "", undefined, edits()));
+    expect(sorted(keys), AT).toEqual(["comment", "decision", "row_edits"]);
+    const declared = fieldNames(src(), "HumanTaskActRequest");
+    for (const k of keys) expect(declared, `${AT}: "${k}" is not a declared field, it would be dropped`).toContain(k);
+  });
+  it("row_edits is sent for exactly the verbs the receiver keeps it for", () => {
+    const kept = rowEditsDecisions(src());
+    const verbs = [...new Set([...kept, "approved", "promoted", "rejected", "acknowledged", "redriven", "dismissed"])];
+    for (const v of verbs) {
+      expect("row_edits" in buildActBody(v as never, "", undefined, edits()), `${AT}: verb ${v}`).toBe(kept.includes(v));
+    }
+  });
+  it("header_edits entries carry exactly HeaderEdit's fields", () => {
+    const h = buildHeaderEdits({ mfr: { value: "X", evidence_ref: "p1", reason: "r" } }, { mfr: null, notice_id: null, notice_date: null });
+    expect(sorted(Object.keys(h[0]!)), AT).toEqual(sorted(fieldNames(src(), "HeaderEdit")));
+  });
+  it("HeaderEdit.field's Literal is exactly cortex's header fields, in order", () => {
+    expect([...HEADER_EDIT_FIELDS], AT).toEqual(classFieldLiteral(src(), "HeaderEdit"));
+  });
+  it("header_edits is declared on HumanTaskActRequest, and a header-only promote sends no row_edits", () => {
+    const h = buildHeaderEdits({ mfr: { value: "X", evidence_ref: "p1", reason: "r" } }, { mfr: null, notice_id: null, notice_date: null });
+    const keys = Object.keys(buildActBody("promoted", "", undefined, undefined, undefined, h));
+    expect(sorted(keys), AT).toEqual(["comment", "decision", "header_edits"]);
+    const declared = fieldNames(src(), "HumanTaskActRequest");
+    for (const k of keys) expect(declared, `${AT}: "${k}" is not a declared field, it would be dropped`).toContain(k);
+  });
+  it("header_edits is sent for exactly the verb the receiver keeps it for", () => {
+    const keep = headerEditsVerb(src());
+    const h = buildHeaderEdits({ mfr: { value: "X", evidence_ref: "p1", reason: "r" } }, { mfr: null, notice_id: null, notice_date: null });
+    for (const v of ["approved", "promoted", "rejected", "acknowledged", "redriven", "dismissed", keep]) {
+      expect("header_edits" in buildActBody(v as never, "", undefined, edits(), undefined, h), `${AT}: verb ${v}`).toBe(v === keep);
+    }
   });
   it("a reject sends {decision, comment, reason_code} and no row_edits, all declared", () => {
     const keys = Object.keys(buildActBody("rejected", "c", undefined, edits(), "not_a_notice"));

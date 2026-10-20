@@ -95,6 +95,10 @@ export interface Extraction {
   rows_without_evidence: number | null;
   rows: ReviewRow[];
   droppedRows: number;
+  /** PCN or PDN, when the extraction names it; anything else reads as null (a defaulted doc_type is not shown). */
+  leaf: "pcn" | "pdn" | null;
+  /** Where the leaf came from: the ingest, or the extraction's title. */
+  leaf_source: "ingest" | "extraction-title" | null;
 }
 
 /** The 193 payload header, read. Every field null on a task filed before 193 (except notice_id). */
@@ -221,6 +225,8 @@ export function readExtraction(body: unknown): Extraction | null {
     rows_without_evidence: count(body.rows_without_evidence),
     rows,
     droppedRows,
+    leaf: body.leaf === "pcn" || body.leaf === "pdn" ? body.leaf : null,
+    leaf_source: body.leaf_source === "ingest" || body.leaf_source === "extraction-title" ? body.leaf_source : null,
   };
 }
 

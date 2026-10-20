@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { actOnHumanTask } from "@/api/client";
+import { actOnHumanTask, type HeaderEdit, type RowEdits } from "@/api/client";
+import { actRefusal } from "@/lib/reviewRowEdits";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction } from "@/lib/taskDeclaration";
@@ -88,7 +89,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
 
   // `reasonOverride`: a card that composes its reason at the press (the review card's reject code plus
   // note) passes it here, so it is not left waiting a render for `setReason` to land.
-  const act = async (decision: string, reasonOverride?: string) => {
+  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[]) => {
     const said = (reasonOverride ?? reason).trim();
     // A REASON-REQUIRED VERB IS NOT SUBMITTED WITHOUT ONE. Dismissing a reported hazard with no
     // stated rationale is the erasure this domain cares about most; the gate refuses it, and a
@@ -100,7 +101,13 @@ export function useTaskAct(task: ApprovalTaskPayload) {
     // to a decision that has not been retried yet and could be misread as describing this press.
     setRefusal(null);
     try {
-      const res = await actOnHumanTask(task.task_id, decision, said);
+      // No edits: the call is the three-argument one it always was.
+      const res =
+        headerEdits
+          ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits, undefined, headerEdits)
+          : rowEdits
+            ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits)
+            : await actOnHumanTask(task.task_id, decision, said);
       /**
        * HONEST ON SUCCESS: the verb is shown ONLY when `workflow_resumed === true`.
        *
@@ -112,8 +119,13 @@ export function useTaskAct(task: ApprovalTaskPayload) {
       const resumed = res.workflow_resumed === true;
       setDone({ decision, resumed });
       markTaskResolvedByTaskId(task.task_id);
+      // A promote with row edits files them as an extraction_defect; the toast names it.
+      const filed =
+        typeof res.extraction_defect === "string" && res.extraction_defect.trim() !== ""
+          ? ` — ${(res.row_edits?.corrected ?? 0) + (res.row_edits?.added ?? 0) + (res.row_edits?.deleted ?? 0) + (res.row_edits?.header ?? 0)} correction(s) filed as ${res.extraction_defect}`
+          : "";
       toast.success(
-        resumed ? verbLabel(decision) : `Recorded: ${verbLabel(decision)} — workflow not resumed`,
+        (resumed ? verbLabel(decision) : `Recorded: ${verbLabel(decision)} — workflow not resumed`) + filed,
       );
     } catch (err) {
       const res = (err as { response?: { status?: number; data?: unknown } })?.response;
@@ -193,7 +205,9 @@ export function useTaskAct(task: ApprovalTaskPayload) {
               ? errorCode
               : typeof detail === "string"
                 ? detail
-                : `Refused (${status})`;
+                : Array.isArray(detail)
+                  ? (actRefusal(err)?.title ?? `Refused (${status})`)
+                  : `Refused (${status})`;
         setRefusal({ message, code: errorCode });
         return;
       }

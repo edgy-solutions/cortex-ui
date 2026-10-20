@@ -234,6 +234,10 @@ export function useFrontendCapabilityRegistration() {
           resp.accepted,
           "for",
           resp.frontend_id,
+          // Q9: true when the BFF already held this menu and emitted nothing. "absent" is a BFF
+          // that predates the field, and must not read as false.
+          "unchanged:",
+          resp.unchanged ?? "absent",
           names,
         );
         if (resp.accepted !== sent.length) {
