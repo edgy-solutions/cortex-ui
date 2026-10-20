@@ -727,10 +727,10 @@ describe("the decision is the generic card's", () => {
     expect(actOnHumanTask).not.toHaveBeenCalled();
   });
 
-  it("the codes say they are cortex's proposal until Lane 1 confirms the server takes them", async () => {
+  it("offers the producer's four codes, in order, and no longer calls them a proposal (c1dbbf6c, served from 198)", async () => {
     await mount();
     key("r");
-    expect(document.querySelector("[data-reject-codes] legend")!.textContent).toContain("cortex-proposed");
+    expect(document.querySelector("[data-reject-codes] legend")!.textContent).not.toContain("proposed");
     expect([...document.querySelectorAll("[data-reject-code]")].map((e) => e.getAttribute("data-reject-code"))).toEqual([
       "not_a_notice",
       "unreadable",

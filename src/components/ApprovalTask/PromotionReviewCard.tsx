@@ -500,7 +500,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             {rejectOpen && rejectVerb && (
               <fieldset className="rounded border border-pink-500/20 bg-pink-500/5 px-3 py-2" data-reject-codes>
                 <legend className="px-1 text-[10px] font-mono uppercase tracking-widest text-pink-300/80">
-                  reject: why (cortex-proposed codes)
+                  reject: why
                 </legend>
                 <div className="flex flex-col gap-1">
                   {review.rejectCodes.map((c, i) => (

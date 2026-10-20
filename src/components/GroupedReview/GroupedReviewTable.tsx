@@ -75,11 +75,14 @@ function refused(verb: "Resolve" | "Reject", err: unknown) {
   else toast.error(r.title, r.description ? { description: r.description, duration: 15000 } : undefined);
 }
 
-/** The three reasons a whole notice can be rejected for. Order is the display order. */
+/** The four reasons a whole notice can be rejected for, the promotion card's four (the architect: one set
+ *  for every reject surface). Order is the display order AND the producer's order. A wrong value or a missing
+ *  part is not a reject; it is a row edit, which files the extraction_defect itself. */
 export const REJECT_REASONS = [
   { code: "not_a_notice", label: "Not a PCN/PDN" },
-  { code: "parts_list_unusable", label: "Parts list unusable" },
-  { code: "superseded_or_duplicate", label: "Superseded or duplicate notice" },
+  { code: "unreadable", label: "The source cannot be read" },
+  { code: "parts_unusable", label: "The parts list cannot be used" },
+  { code: "duplicate", label: "Already promoted under another drop" },
 ] as const;
 
 type Row = ReviewItem & { added?: boolean };

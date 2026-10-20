@@ -134,8 +134,9 @@ export interface PromotionReview {
  * extraction_defect itself. A reject for a wrong value sends nothing back to the extractor and
  * loses the correction, so those three codes are gone from here on purpose.
  *
- * Lane 1's server accepts exactly these four and refuses the rest with the code list. Until Lane 1
- * confirms that, the card still labels them cortex-proposed.
+ * The producer takes exactly these four: promotion.py's PROMOTION_REJECT_CODES, and since c1dbbf6c (served
+ * from 198) the grouped act's _GROUPED_REJECT_CODES too. rowEditsWireParity.test.ts seals this list and the
+ * grouped table's against both, in order.
  */
 export const DEFAULT_REJECT_CODES: RejectCode[] = [
   { code: "not_a_notice", label: "not a PCN/PDN" },

@@ -235,16 +235,16 @@ describe("flag ON — correct", () => {
 });
 
 describe("flag ON — narrow Reject", () => {
-  it("offers exactly three reasons, in order, and Confirm waits for a pick", () => {
+  it("offers exactly the four reasons, in order, and Confirm waits for a pick", () => {
     flag(true);
     const { container } = render(<GroupedReviewTable batch={batch()} />);
     fireEvent.click(q(container, "data-review-reject")!);
     const codes = qa(container, "data-review-reject-reason").map((e) => e.getAttribute("data-review-reject-reason"));
-    expect(codes).toEqual(["not_a_notice", "parts_list_unusable", "superseded_or_duplicate"]);
-    expect(REJECT_REASONS.length).toBe(3);
+    expect(codes).toEqual(["not_a_notice", "unreadable", "parts_unusable", "duplicate"]);
+    expect(REJECT_REASONS.length).toBe(4);
     const confirm = q(container, "data-review-reject-confirm") as HTMLButtonElement;
     expect(confirm.disabled, "no reason picked").toBe(true);
-    fireEvent.click(q(container, "data-review-reject-reason", "parts_list_unusable")!);
+    fireEvent.click(q(container, "data-review-reject-reason", "parts_unusable")!);
     expect(confirm.disabled).toBe(false);
   });
 
@@ -252,13 +252,13 @@ describe("flag ON — narrow Reject", () => {
     flag(true);
     const { container } = render(<GroupedReviewTable batch={batch()} />);
     fireEvent.click(q(container, "data-review-reject")!);
-    fireEvent.click(q(container, "data-review-reject-reason", "parts_list_unusable")!);
+    fireEvent.click(q(container, "data-review-reject-reason", "parts_unusable")!);
     fireEvent.click(q(container, "data-review-reject-confirm")!);
     await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
     expect(body()).toEqual({
       decision: "rejected",
-      comment: "parts_list_unusable: Parts list unusable",
-      reason_code: "parts_list_unusable",
+      comment: "parts_unusable: The parts list cannot be used",
+      reason_code: "parts_unusable",
     });
     expect(Object.keys(body()).sort()).toEqual(["comment", "decision", "reason_code"]);
   });
@@ -309,14 +309,14 @@ describe("flag ON — a refused /act names the platform's reasons and keeps the 
     flag(true);
     mockPost.mockRejectedValueOnce({ response: { status: 422, data: { detail: {
       error: "reason_code_required", message: "a grouped-review reject needs a reason_code",
-      codes: ["not_a_notice", "parts_list_unusable", "superseded_or_duplicate"] } } } });
+      codes: ["not_a_notice", "unreadable", "parts_unusable", "duplicate"] } } } });
     const { container } = render(<GroupedReviewTable batch={batch()} />);
     fireEvent.click(q(container, "data-review-reject")!);
     fireEvent.click(q(container, "data-review-reject-reason", "not_a_notice")!);
     fireEvent.click(q(container, "data-review-reject-confirm")!);
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        "a grouped-review reject needs a reason_code (one of: not_a_notice, parts_list_unusable, superseded_or_duplicate)",
+        "a grouped-review reject needs a reason_code (one of: not_a_notice, unreadable, parts_unusable, duplicate)",
         undefined,
       ),
     );

@@ -177,8 +177,9 @@ export interface RowEdits {
   corrected: { mpn: string; corrected_mpn: string; evidence: string }[];
 }
 
-/** The three `reason_code` values a grouped-review REJECT may carry (gateway.py _GROUPED_REJECT_CODES). */
-export type GroupedRejectCode = "not_a_notice" | "parts_list_unusable" | "superseded_or_duplicate";
+/** The four `reason_code` values a grouped-review REJECT may carry: gateway.py _GROUPED_REJECT_CODES, which the
+ *  architect ruled equal to promotion.py's PROMOTION_REJECT_CODES (every reject surface takes the same four). */
+export type GroupedRejectCode = "not_a_notice" | "unreadable" | "parts_unusable" | "duplicate";
 
 /**
  * The /act request body. `HumanTaskActRequest` refuses `reason_code` on anything but `rejected` and

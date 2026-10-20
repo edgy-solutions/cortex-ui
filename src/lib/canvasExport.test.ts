@@ -542,18 +542,23 @@ const GATEWAY_FILES = GATEWAY_ROOTS.map((n) =>
   path.join(__dirname, "../../..", n, "src/iagent/gateway.py"),
 ).filter((f) => existsSync(f));
 
-/** The string literals of the expression assigned to `status` on the mixed path. */
+/** The string literals of the expression assigned to `status` on the mixed path. Anchored on the
+ *  `ok = [...] for d in documents]` line BEFORE it: the line after (`refused = ...`) was rewritten by
+ *  c219526a (refused answers became their own documents[] entries) while the status set stayed. */
 function mixedStatusLiterals(text: string): string[] {
-  const m = text.match(/status = (.+)\n\s+refused = len\(ok\)/);
+  const m = text.match(/ok = \[d\["status"\] == "exists" for d in documents\]\r?\n\s+status = (.+)/);
   if (!m) throw new Error("mixed-path `status = ...` line not found in gateway.py");
   return [...m[1].matchAll(/"([a-z]+)"/g)].map((x) => x[1]);
 }
 
 describe("mixed-path status parser — fixture, always runs", () => {
+  const ok = '    ok = [d["status"] == "exists" for d in documents]\n';
   it("fires on a drifted line", () => {
-    expect(
-      mixedStatusLiterals('status = "exists" if all(ok) else "mixed"\n    refused = len(ok)'),
-    ).toEqual(["exists", "mixed"]);
+    expect(mixedStatusLiterals(`${ok}    status = "exists" if all(ok) else "mixed"\n`)).toEqual(["exists", "mixed"]);
+  });
+  it("reads past a CRLF checkout, and finds nothing without its anchor", () => {
+    expect(mixedStatusLiterals(`${ok.replace("\n", "\r\n")}    status = "exists"\r\n`)).toEqual(["exists"]);
+    expect(() => mixedStatusLiterals('    status = "exists" if all(ok) else "mixed"\n')).toThrow(/not found/);
   });
 });
 

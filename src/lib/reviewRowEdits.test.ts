@@ -109,8 +109,8 @@ describe("buildActBody", () => {
     expect(Object.keys(b)).toEqual(["decision", "comment"]);
   });
   it("a reject sends reason_code, and never row_edits", () => {
-    const b = buildActBody("rejected", "c", undefined, edits, "superseded_or_duplicate");
-    expect(b.reason_code).toBe("superseded_or_duplicate");
+    const b = buildActBody("rejected", "c", undefined, edits, "duplicate");
+    expect(b.reason_code).toBe("duplicate");
     expect("row_edits" in b).toBe(false);
   });
 });
@@ -136,9 +136,9 @@ describe("actRefusal: a refused /act says what the platform said (197)", () => {
     expect(actRefusal(refusal(422, { error: "row_edits_invalid", message: "only m" }))?.description).toBe("only m");
   });
   it("reason_code_required names the codes the server will take", () => {
-    const codes = ["not_a_notice", "parts_list_unusable", "superseded_or_duplicate"];
+    const codes = ["not_a_notice", "unreadable", "parts_unusable", "duplicate"];
     expect(actRefusal(refusal(422, { error: "reason_code_required", message: "a grouped-review reject needs a reason_code", codes }))).toEqual({
-      title: "a grouped-review reject needs a reason_code (one of: not_a_notice, parts_list_unusable, superseded_or_duplicate)",
+      title: "a grouped-review reject needs a reason_code (one of: not_a_notice, unreadable, parts_unusable, duplicate)",
     });
   });
   it("row_edits_not_for_kind, and any other {error, message}, say both", () => {

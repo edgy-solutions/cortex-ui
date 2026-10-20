@@ -1,7 +1,9 @@
 /**
  * THE ROW-EDITS WIRE SEAL: what cortex SENDS on `POST /human_tasks/{id}/act` for a grouped review,
  * against the producer's own models in `src/iagent/gateway.py`: `DeletedRow`, `AddedRow`,
- * `CorrectedRow`, `RowEdits`, `HumanTaskActRequest` and the `reason_code` Literal. The comparison
+ * `CorrectedRow`, `RowEdits`, `HumanTaskActRequest` and the `reason_code` Literal; and both reject
+ * code lists (grouped table, promotion card) against the producer's tuples, `_GROUPED_REJECT_CODES`
+ * there and `PROMOTION_REJECT_CODES` in `promotion.py` beside it. The comparison
  * is key-set EQUALITY (not containment) for each row-edit entry type: a key cortex omits is a 422
  * (required field missing), a key cortex adds is a 422 (`extra="forbid"`).
  *
@@ -22,6 +24,7 @@ import path from "node:path";
 import { buildActBody } from "@/api/client";
 import { buildRowEdits, type RowEditDraft } from "./reviewRowEdits";
 import { REJECT_REASONS } from "@/components/GroupedReview/GroupedReviewTable";
+import { DEFAULT_REJECT_CODES } from "./promotionReview";
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
 
@@ -59,10 +62,10 @@ function reasonCodeLiteral(src: string): string[] {
   return [...lit[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 }
 
-/** `_GROUPED_REJECT_CODES = ("a", "b", ...)`. */
-function rejectCodesTuple(src: string): string[] {
-  const m = /^_GROUPED_REJECT_CODES\s*=\s*\(([^)]*)\)/m.exec(src);
-  if (!m) throw new Error("_GROUPED_REJECT_CODES not found");
+/** `<name> = ("a", "b", ...)` at column 0, as a tuple LITERAL (an alias of another name reads as "not found"). */
+function codesTuple(src: string, name: string): string[] {
+  const m = new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, "m").exec(src);
+  if (!m) throw new Error(`${name} not found`);
   return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
 }
 
@@ -81,6 +84,12 @@ describe("the parser, unit-tested on fixtures", () => {
     const ok = 'class HumanTaskActRequest(B):\n    reason_code: Optional[Literal["a", "b"]] = None\n';
     expect(reasonCodeLiteral(ok)).toEqual(["a", "b"]);
     expect(() => reasonCodeLiteral(ok.replace("Literal", "Str"))).toThrow(/no longer a Literal/);
+  });
+  it("reads a named tuple literal at column 0, and an alias is not one", () => {
+    const ok = 'X = 1\nCODES = ("a", "b")\n  NESTED = ("z",)\n';
+    expect(codesTuple(ok, "CODES")).toEqual(["a", "b"]);
+    expect(() => codesTuple(ok, "NESTED")).toThrow(/NESTED not found/);
+    expect(() => codesTuple("CODES = OTHER_CODES\n", "CODES")).toThrow(/CODES not found/);
   });
 });
 
@@ -141,7 +150,12 @@ describe.skipIf(GATEWAY === null)("cortex's grouped-review send equals the produ
   it("the reject reason_code values are exactly the producer's Literal and _GROUPED_REJECT_CODES, in order", () => {
     const ours = REJECT_REASONS.map((r) => r.code);
     expect(ours, AT).toEqual(reasonCodeLiteral(src()));
-    expect(ours, AT).toEqual(rejectCodesTuple(src()));
+    expect(ours, AT).toEqual(codesTuple(src(), "_GROUPED_REJECT_CODES"));
+  });
+  it("the promotion card's codes are exactly promotion.py's PROMOTION_REJECT_CODES, in order", () => {
+    // The card dropped its "cortex-proposed" legend on this claim; this arm is what makes it one.
+    const promotion = readFileSync(path.join(path.dirname(GATEWAY!), "promotion.py"), "utf8");
+    expect(DEFAULT_REJECT_CODES.map((c) => c.code), AT).toEqual(codesTuple(promotion, "PROMOTION_REJECT_CODES"));
   });
 });
 
