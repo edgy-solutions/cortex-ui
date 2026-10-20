@@ -48,9 +48,41 @@ is placed identically in invincible-agent/sessions/, uncommitted. It asks for th
 
 ## Open, for the next beat
 
-- [ ] After Lane 1 posts the end of the window, re-read the pods. Fix build.yml's ledger line "STILL NOT read off
+- [x] Pods re-read at 03:32Z (see below). Fix build.yml's ledger line "STILL NOT read off
   the pods" in the next code commit; the pods read 938d7639.
 - [ ] Lane 1's Q2/Q7 result. If either comes back `unrenderable` or `live_view_requires_registration`, take the
   subject URI from the answer.
 - [ ] Probe the promotion editor in Chromium on the published 7a7666d digest (flag ON and OFF).
 - [ ] The architect decides: roll cortex alone (199b) for the TYC proof, or wait for 200.
+
+## The published image injects the new key as the packet says
+
+I pulled both images anonymously (empty DOCKER_CONFIG), ran each one's entrypoint, and read `config.js`.
+
+The subject, `sha256:f2707184...` (7a7666d):
+
+| `VITE_PROMOTION_ROW_EDITS` in | out | the card |
+| --- | --- | --- |
+| `true` | `"true"` | ON |
+| `TRUE` | `""` | OFF |
+| `false` | `"false"` | OFF |
+| unset | `""` | OFF |
+
+`VITE_REVIEW_ROW_EDITS` came out `""` in every run, so grouped review keeps its default ON.
+
+The control, `sha256:b248af5c...` (d44b0cc), was run with `VITE_PROMOTION_ROW_EDITS=true`:
+- `config.js` has 0 lines for the key.
+- 199's chart can therefore not turn the split flag on; it needs 7a7666d.
+
+I have not yet driven the card itself in Chromium on this digest.
+
+## The pods after the window (read only, 03:32Z)
+
+- iagent: 22 pods, every one on `938d7639` (19 Running, 3 Succeeded); 0 on any other tag.
+  - That is CI's `PRODUCER_REF`.
+  - build.yml's ledger line "STILL NOT read off the pods" is now false. It gets corrected in the next code commit,
+    not in a separate push, so that 7a7666d stays the only 200 candidate.
+- cortex-ui (sandbox): Running, on `sha256:b248af5c` (d44b0cc). Under it the TYC correction is refused before
+  it is sent.
+- Lane 1 had not posted the end of the window at 03:32Z. The new packets in invincible-agent/sessions are gov→01
+  (pair/Q14) and 7f→01 (steward edges, shape c); neither is addressed to cortex.
