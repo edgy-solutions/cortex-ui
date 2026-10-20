@@ -20,7 +20,7 @@ import {
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
-import { PdfEvidencePane, type SourcePhase } from "./PdfEvidencePane";
+import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 
 /**
  * THE PROMOTION REVIEW CARD — a `document_promotion` task vetted "in a few looks" (the
@@ -30,7 +30,8 @@ import { PdfEvidencePane, type SourcePhase } from "./PdfEvidencePane";
  *              attempt, dropped_by, sha prefix
  *   left       the extracted rows: mpn, change/field, extracted_value, obtained_via, and a "show"
  *              that jumps the PDF to the row's evidence
- *   right      the source PDF at the evidence page, the evidence box outlined; row 1's on open
+ *   right      the source PDF, every page, scrolled to the evidence with its box outlined; row 1's on
+ *              open. It pages and scrolls too, since a steward must be able to read every page.
  *   bottom     Promote / Reject (narrow codes)
  *
  * The test it is built to pass: a steward who has never seen the notice can confirm mpn + value
@@ -43,6 +44,7 @@ import { PdfEvidencePane, type SourcePhase } from "./PdfEvidencePane";
  *
  * KEYBOARD, while the card has focus and no text field does:
  *   j / k     next / previous row
+ *   [ / ]     previous / next page of the source
  *   p         ARMS promote; a second p, or Enter, sends it; Esc disarms. One key is too easy to hit
  *             on a surface whose every decision is archived (ADR-0034); a click on Promote is
  *             already deliberate and sends at once.
@@ -87,11 +89,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const a = useTaskAct(task);
   const { acting, act, verbs, needsReason } = a;
   const [sel, setSel] = useState(0);
+  const [jumpKey, setJumpKey] = useState(0);
   const [armed, setArmed] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const paneRef = useRef<PdfPaneHandle | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const [extraction, setExtraction] = useState<ExtractionPhase>({ phase: "loading" });
   const [sourcePhase, setSourcePhase] = useState<SourcePhase>("loading");
@@ -149,6 +153,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
 
   const select = (i: number) => {
     setSel(i);
+    setJumpKey((k) => k + 1);
     rootRef.current?.focus({ preventScroll: true });
   };
   const move = (d: number) => setSel((s) => Math.min(Math.max(s + d, 0), Math.max(rows.length - 1, 0)));
@@ -177,6 +182,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     if (typing) return;
     if (e.key === "j") move(1);
     else if (e.key === "k") move(-1);
+    else if (e.key === "[") paneRef.current?.step(-1);
+    else if (e.key === "]") paneRef.current?.step(1);
     else if (e.key === "p" && canPromote) {
       setRejectOpen(false);
       if (armed) promote();
@@ -401,7 +408,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             </table>
           </div>
           <p className="mt-1.5 text-[9px] font-mono uppercase tracking-widest text-slate-600">
-            j/k rows · p promote · r reject
+            j/k rows · [ ] pages · p promote · r reject
           </p>
           {isReviewRowEditsEnabled() && (
             <p className="mt-1 text-[10px] text-slate-500" data-review-row-edits="no-wire">
@@ -417,6 +424,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           quality={targetQuality}
           sharedBy={targetShared}
           onPhase={setSourcePhase}
+          jumpKey={jumpKey}
+          ref={paneRef}
         />
       </div>
 

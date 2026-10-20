@@ -100,7 +100,12 @@ const selectedKey = () => document.querySelector("[data-review-row][data-selecte
 const outline = () => document.querySelector("[data-evidence-outline]") as HTMLElement | null;
 const flag = (k: string) => document.querySelector(`[data-review-flag="${k}"]`);
 const key = (k: string, target: Element = card()) => fireEvent.keyDown(target, { key: k });
-const lastPage = () => renderPage.mock.calls.at(-1)?.[0];
+/** The pages renderPage was asked for, in order; and whether page n was drawn into page n's OWN slot. */
+const drewPages = () => renderPage.mock.calls.map((c) => c[0] as number);
+const drewInOwnSlot = (n: number) =>
+  renderPage.mock.calls.some((c) => c[0] === n && (c[1] as HTMLElement).closest(`[data-pdf-slot="${n}"]`) !== null);
+const shownPage = () => document.querySelector("[data-pdf-page]")?.getAttribute("data-pdf-page");
+const pageSize = (w: number) => ({ width: w, height: (w * 792) / 612 });
 const promoteBtn = () => document.querySelector('[data-verb="promoted"]') as HTMLButtonElement;
 const rejectBtn = () => document.querySelector('[data-verb="rejected"]') as HTMLButtonElement;
 const hold = () => promoteBtn().getAttribute("data-promote-hold");
@@ -245,7 +250,8 @@ describe("rows and the source", () => {
     await mount();
     expect(selectedKey()).toBe("row-0");
     await waitFor(() => expect(outline()).not.toBeNull());
-    expect(lastPage()).toBe(1);
+    expect(drewPages()[0]).toBe(1); // the page in front of the steward draws first
+    expect(drewInOwnSlot(1)).toBe(true);
     expectOutlineOn(0);
     expect(document.querySelector("[data-pdf-page]")!.getAttribute("data-pdf-page")).toBe("1");
   });
@@ -256,7 +262,9 @@ describe("rows and the source", () => {
     fireEvent.click(document.querySelector('[data-show-row="row-5"]')!);
     expect(selectedKey()).toBe("row-5");
     await waitFor(() => expect(outline()?.getAttribute("data-evidence-outline-page")).toBe("2"));
-    expect(lastPage()).toBe(2);
+    expect(drewInOwnSlot(2)).toBe(true);
+    expect(outline()!.closest('[data-pdf-slot="2"]')).not.toBeNull();
+    expect(shownPage()).toBe("2");
     expectOutlineOn(5);
   });
 
@@ -269,14 +277,15 @@ describe("rows and the source", () => {
 
   it("no outline is drawn over a page that has not finished drawing", async () => {
     let finish!: () => void;
+    renderPage.mockImplementation((n: number, _c: HTMLCanvasElement, w: number) =>
+      n === 2 ? new Promise((r) => (finish = () => r(pageSize(w)))) : Promise.resolve(pageSize(w)),
+    );
     await mount();
     await waitFor(() => expect(outline()).not.toBeNull());
-    renderPage.mockImplementationOnce(
-      (_n: number, _c: HTMLCanvasElement, w: number) => new Promise((r) => (finish = () => r({ width: w, height: (w * 792) / 612 }))),
-    );
     fireEvent.click(document.querySelector('[data-show-row="row-4"]')!);
-    await waitFor(() => expect(lastPage()).toBe(2));
-    expect(outline()).toBeNull(); // row 4's box is NOT drawn on page 1's canvas
+    expect(selectedKey()).toBe("row-4");
+    await waitFor(() => expect(drewPages()).toContain(2));
+    expect(outline()).toBeNull(); // row 4's box is NOT drawn while page 2 is still drawing, nor left on page 1
     finish();
     await waitFor(() => expectOutlineOn(4));
   });
@@ -292,7 +301,7 @@ describe("rows and the source", () => {
     expect(flag("absent-evidence")!.textContent).toContain("1 row");
     expect(flag("evidence-count-mismatch")).toBeNull();
     fireEvent.click(rowEls()[1]);
-    await waitFor(() => expect(lastPage()).toBe(1));
+    await waitFor(() => expect(drewInOwnSlot(1)).toBe(true));
     expect(outline()).toBeNull();
   });
 
@@ -322,8 +331,9 @@ describe("rows and the source", () => {
     fetchIngestExtraction.mockResolvedValue(b);
     await mount();
     await waitFor(() => expect(document.querySelector("[data-evidence-page-out-of-range]")).not.toBeNull());
-    await waitFor(() => expect(lastPage()).toBe(1));
+    await waitFor(() => expect(drewInOwnSlot(1)).toBe(true));
     expect(outline()).toBeNull();
+    expect(shownPage()).toBe("1");
   });
 
   it("a source the server will not serve names its code, and the rows still draw", async () => {
@@ -668,16 +678,22 @@ describe("Promote is offered only on what the steward can see", () => {
     expect(rejectBtn().disabled).toBe(false);
   });
 
-  it("armed while promotable, then the next row's page fails to draw: Enter sends nothing", async () => {
+  it("armed while promotable, then another page fails to draw: Enter sends nothing, and that page says why", async () => {
+    let fail!: (e: Error) => void;
+    renderPage.mockImplementation((n: number, _c: HTMLCanvasElement, w: number) =>
+      n === 2 ? new Promise((_r, j) => (fail = j)) : Promise.resolve(pageSize(w)),
+    );
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await mount();
     await waitFor(() => expect(promoteBtn().disabled).toBe(false));
-    renderPage.mockRejectedValue(new Error("draw failed"));
     key("p");
     expect(document.querySelector("[data-promote-armed]")).not.toBeNull();
-    const onPage2 = exBody().rows.findIndex((r) => r.evidence_ref?.page === 2);
-    expect(onPage2).toBeGreaterThan(0);
-    fireEvent.click(rowEls()[onPage2]);
+    fail(new Error("draw failed"));
     await waitFor(() => expect(hold()).toBe("no-source"));
+    // A steward who cannot read page 2 cannot vet the document; page 1 stays readable beside it.
+    expect(document.querySelector('[data-pdf-slot="2"] [data-pdf-failed]')!.textContent).toContain("Page 2 could not be drawn: Error: draw failed");
+    expect(document.querySelector('[data-pdf-slot="1"]')!.hasAttribute("data-pdf-slot-drawn")).toBe(true);
+    err.mockRestore();
     expect(document.querySelector("[data-promote-armed]")).toBeNull();
     key("Enter");
     key("p");
@@ -751,5 +767,147 @@ describe("the decision is the generic card's", () => {
     await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
     expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("promotion_payload_invalid");
     expect(document.querySelector('[data-verb="promoted"]')).not.toBeNull();
+  });
+});
+
+describe("the steward can read every page (the architect, 197: PAGE 1 / 2 with no way to page)", () => {
+  // jsdom lays nothing out: each page slot stands 1000px below the last, and the scroller is given
+  // a real scrollTop and a 700px view over the two pages.
+  const H = 1000;
+  let restore: () => void;
+  beforeEach(() => {
+    const d = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetTop")!;
+    Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+      configurable: true,
+      get(this: HTMLElement) {
+        const n = this.dataset.pdfSlot;
+        return n ? (Number(n) - 1) * H : 0;
+      },
+    });
+    restore = () => Object.defineProperty(HTMLElement.prototype, "offsetTop", d);
+  });
+  afterEach(() => restore());
+
+  const scroller = () => {
+    const el = document.querySelector("[data-pdf-scroller]") as HTMLElement;
+    Object.defineProperty(el, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(el, "clientHeight", { value: 700, configurable: true });
+    Object.defineProperty(el, "scrollHeight", { value: 2 * H, configurable: true });
+    return el;
+  };
+  const input = () => document.querySelector("[data-pdf-page-input]") as HTMLInputElement;
+  const prevBtn = () => document.querySelector("[data-pdf-prev]") as HTMLButtonElement;
+  const nextBtn = () => document.querySelector("[data-pdf-next]") as HTMLButtonElement;
+  const typePage = (v: string, k = "Enter") => {
+    fireEvent.change(input(), { target: { value: v } });
+    fireEvent.keyDown(input(), { key: k });
+  };
+
+  it("every page is drawn, each into its own slot", async () => {
+    await mount();
+    await waitFor(() => expect(drewInOwnSlot(2)).toBe(true));
+    expect(drewInOwnSlot(1)).toBe(true);
+    expect(document.querySelectorAll("[data-pdf-slot]")).toHaveLength(2);
+    expect(document.querySelector("[data-pdf-pages]")!.getAttribute("data-pdf-pages")).toBe("2");
+  });
+
+  it("prev / next page the source, and stop at the ends", async () => {
+    await mountPromotable();
+    const sc = scroller();
+    expect(shownPage()).toBe("1");
+    expect(prevBtn().disabled).toBe(true);
+    fireEvent.click(nextBtn());
+    expect(shownPage()).toBe("2");
+    expect(sc.scrollTop).toBe(H);
+    expect(nextBtn().disabled).toBe(true);
+    fireEvent.click(prevBtn());
+    expect(shownPage()).toBe("1");
+    expect(sc.scrollTop).toBe(0);
+  });
+
+  it("[ and ] page from the keyboard; typed into the page box they are text, not paging", async () => {
+    await mountPromotable();
+    const sc = scroller();
+    key("]");
+    expect(shownPage()).toBe("2");
+    expect(sc.scrollTop).toBe(H);
+    key("]");
+    expect(shownPage()).toBe("2");
+    key("[");
+    expect(shownPage()).toBe("1");
+    expect(sc.scrollTop).toBe(0);
+    key("]", input());
+    expect(shownPage()).toBe("1");
+  });
+
+  it("the page box goes to the page typed, clamps to the document, and ignores what is not a number", async () => {
+    await mountPromotable();
+    const sc = scroller();
+    typePage("2");
+    expect(shownPage()).toBe("2");
+    expect(sc.scrollTop).toBe(H);
+    expect(input().value).toBe("2");
+    typePage("9");
+    expect(shownPage()).toBe("2");
+    typePage("0");
+    expect(shownPage()).toBe("1");
+    typePage("x");
+    expect(shownPage()).toBe("1");
+    expect(input().value).toBe("1");
+    typePage("2", "Escape");
+    expect(shownPage()).toBe("1");
+    expect(input().value).toBe("1");
+  });
+
+  it("the indicator follows a scroll by hand, and names the last page at the bottom", async () => {
+    await mountPromotable();
+    const sc = scroller();
+    sc.scrollTop = 900; // the upper quarter of the view is on page 2
+    fireEvent.scroll(sc);
+    expect(shownPage()).toBe("2");
+    sc.scrollTop = 100;
+    fireEvent.scroll(sc);
+    expect(shownPage()).toBe("1");
+    sc.scrollTop = 2 * H - 700;
+    fireEvent.scroll(sc);
+    expect(shownPage()).toBe("2");
+  });
+
+  it("Promote waits on the page IN FRONT of the steward: a row on a page still drawing holds it, whatever else has drawn", async () => {
+    let finish!: () => void;
+    renderPage.mockImplementation((n: number, _c: HTMLCanvasElement, w: number) =>
+      n === 2 ? new Promise((r) => (finish = () => r(pageSize(w)))) : Promise.resolve(pageSize(w)),
+    );
+    await mountPromotable(); // page 1 drawn, row 0 on it
+    fireEvent.click(document.querySelector('[data-show-row="row-5"]')!); // row 5 is on page 2
+    await waitFor(() => expect(hold()).toBe("source-loading"));
+    expect(promoteBtn().disabled).toBe(true);
+    finish();
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    expectOutlineOn(5);
+  });
+
+  it("show jumps back to the crop after the steward paged away, even on the row already selected", async () => {
+    const centred: Element[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element) {
+      centred.push(this);
+    };
+    try {
+      await mountPromotable();
+      await waitFor(() => expect(outline()).not.toBeNull());
+      const sc = scroller();
+      key("]");
+      expect(shownPage()).toBe("2");
+      centred.length = 0;
+      fireEvent.click(document.querySelector('[data-show-row="row-0"]')!);
+      expect(selectedKey()).toBe("row-0");
+      expect(shownPage()).toBe("1");
+      expect(sc.scrollTop).toBe(0);
+      expect(centred).toContain(outline());
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 });
