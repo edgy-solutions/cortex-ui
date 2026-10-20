@@ -12,7 +12,7 @@
  *     `attempt`. All four new keys are always present, and `null` when unknown. A task filed BEFORE
  *     193 keeps its old payload; `notice_id` was already on it.
  *   `GET /ingest/{ingest_id}/extraction` (`ingestExtractionPath`):
- *       { ingest_id, notice_id, content_kind, attempt, notice: {mfr, mfr_parent, notice_date},
+ *       { ingest_id, notice_id, content_kind, attempt, notice: {mfr, mfr_source, mfr_parent, notice_date},
  *         part_count, rows_without_evidence, review_ref,
  *         rows: [{ row_index, part_index, mpn, field, extracted_value, obtained_via,
  *                  match_confidence, needs_review, review_reason, source_snippet,
@@ -89,6 +89,8 @@ export interface RejectCode {
 export interface Extraction {
   notice_id: string | null;
   manufacturer: string | null;
+  /** Which value `manufacturer` is: the header's own, or the `notice_identity` fallback for a blank header (`MfrSource`). */
+  manufacturer_source: MfrSource;
   notice_date: string | null;
   attempt: number | null;
   part_count: number | null;
@@ -99,6 +101,31 @@ export interface Extraction {
   leaf: "pcn" | "pdn" | null;
   /** Where the leaf came from: the ingest, or the extraction's title. */
   leaf_source: "ingest" | "extraction-title" | null;
+}
+
+/**
+ * `notice.mfr_source` (199 on, `_review_notice_summary`): `"header"` when `notice.mfr` is the
+ * header's own value, `"identity"` when the header was blank and `notice.mfr` is the
+ * `notice_identity` fallback, null when there is no value. A BFF without the key is read as
+ * `"header"` (what `notice.mfr` always meant before 199); any other value reads as null.
+ */
+export type MfrSource = "header" | "identity" | null;
+
+/**
+ * The sources whose `notice.mfr` the server compares a header edit against. The act route passes
+ * `extracted.mfr` only `if _hdr.get("mfr_source") == "header"`, else None: a steward value equal to
+ * the identity FALLBACK fills a missing header field and is accepted (the TYC ruling). Sealed against
+ * gateway.py in rowEditsWireParity.test.ts.
+ */
+export const MFR_COMPARED_SOURCES: readonly MfrSource[] = ["header"];
+
+/** What a header edit is refused for equalling, per field: the extraction's values, mfr only when the server compares it. */
+export function headerEditComparands(ex: Extraction | null): { mfr: string | null; notice_id: string | null; notice_date: string | null } {
+  return {
+    mfr: ex && MFR_COMPARED_SOURCES.includes(ex.manufacturer_source) ? ex.manufacturer : null,
+    notice_id: ex?.notice_id ?? null,
+    notice_date: ex?.notice_date ?? null,
+  };
 }
 
 /** The 193 payload header, read. Every field null on a task filed before 193 (except notice_id). */
@@ -219,6 +246,11 @@ export function readExtraction(body: unknown): Extraction | null {
   return {
     notice_id: str(body.notice_id),
     manufacturer: str(notice.mfr),
+    manufacturer_source: !("mfr_source" in notice)
+      ? "header"
+      : notice.mfr_source === "header" || notice.mfr_source === "identity"
+        ? notice.mfr_source
+        : null,
     notice_date: str(notice.notice_date),
     attempt: posInt(body.attempt),
     part_count: count(body.part_count),

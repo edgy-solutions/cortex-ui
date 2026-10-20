@@ -11,6 +11,8 @@ import {
   actRefusal,
   buildHeaderEdits,
   buildRowEdits,
+  PROMOTION_ROW_EDITS_DEFAULT,
+  isPromotionRowEditsEnabled,
   isReviewRowEditsEnabled,
   resolveReviewRowEdits,
   type RowEditDraft,
@@ -197,5 +199,38 @@ describe("buildHeaderEdits", () => {
       expect("header_edits" in buildActBody(v, "", undefined, undefined, undefined, h)).toBe(false);
     }
     expect("header_edits" in buildActBody("promoted", "", undefined, undefined, undefined, [])).toBe(false);
+  });
+});
+
+describe("the promotion flag (VITE_PROMOTION_ROW_EDITS)", () => {
+  it("defaults OFF", () => {
+    expect(PROMOTION_ROW_EDITS_DEFAULT).toBe(false);
+  });
+  it("unset (no runtime config) and empty are OFF", () => {
+    setRuntime(undefined);
+    expect(isPromotionRowEditsEnabled()).toBe(false);
+    setRuntime({ VITE_PROMOTION_ROW_EDITS: "" });
+    expect(isPromotionRowEditsEnabled()).toBe(false);
+  });
+  it('"true" is ON', () => {
+    setRuntime({ VITE_PROMOTION_ROW_EDITS: "true" });
+    expect(isPromotionRowEditsEnabled()).toBe(true);
+  });
+  it.each(["false", "TRUE", " true", "true "])("%j is OFF", (v) => {
+    setRuntime({ VITE_PROMOTION_ROW_EDITS: v });
+    expect(isPromotionRowEditsEnabled()).toBe(false);
+  });
+  it("cross-key: the grouped flag alone does not turn the promotion editor on", () => {
+    setRuntime({ VITE_REVIEW_ROW_EDITS: "true" });
+    expect(isPromotionRowEditsEnabled()).toBe(false);
+  });
+  it("cross-key: the promotion flag alone leaves the grouped flag at its default (ON)", () => {
+    setRuntime({ VITE_PROMOTION_ROW_EDITS: "true" });
+    expect(isReviewRowEditsEnabled()).toBe(true);
+  });
+  it("cross-key: promotion ON with grouped OFF", () => {
+    setRuntime({ VITE_PROMOTION_ROW_EDITS: "true", VITE_REVIEW_ROW_EDITS: "false" });
+    expect(isPromotionRowEditsEnabled()).toBe(true);
+    expect(isReviewRowEditsEnabled()).toBe(false);
   });
 });

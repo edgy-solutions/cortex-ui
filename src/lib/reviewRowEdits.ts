@@ -4,7 +4,8 @@ import type { HeaderEdit, RowEdits } from "@/api/client";
 /**
  * Grouped-review ROW EDITS (delete / add / correct an MPN) and the Reject control.
  *
- * FLAG. `VITE_REVIEW_ROW_EDITS`, default ON. ONLY the exact string "false" turns it off; unset and
+ * FLAG. `VITE_REVIEW_ROW_EDITS`, default ON. Gates GROUPED REVIEW only; the promotion card has its own
+ * flag (`VITE_PROMOTION_ROW_EDITS`, below). ONLY the exact string "false" turns it off; unset and
  * "" (what docker-entrypoint.sh writes for an unset env) are ON, and so is every other value.
  * "FALSE" and " false" are deliberately NOT off (strict, as the spec says) — note the entrypoint
  * strips everything outside `a-z0-9`, so "FALSE" reaches the browser as "" = ON; only lowercase
@@ -25,6 +26,25 @@ export function resolveReviewRowEdits(raw: string): boolean {
 
 export function isReviewRowEditsEnabled(): boolean {
   return resolveReviewRowEdits(readRuntimeConfig("VITE_REVIEW_ROW_EDITS"));
+}
+
+/**
+ * PROMOTION-card editors (row editor + title-line header editor). Gated by their OWN flag
+ * `VITE_PROMOTION_ROW_EDITS`, separate from VITE_REVIEW_ROW_EDITS above, because the scopes differ:
+ * the grouped-review flag is default ON with no server flag, while the promotion editor's server half
+ * (`IAGENT_PROMOTION_ROW_EDITS`) is ON only for "true" and set only in the sandbox. This flag takes the
+ * server's rule: ONLY the exact lowercase "true" is ON; unset, "", "false", "TRUE" and " true" are OFF.
+ * "TRUE" is off because docker-entrypoint.sh strips uppercase (charset `a-z0-9`), so it reaches the
+ * browser as "". The server lowercases, so the two differ on "TRUE"; set values in lowercase "true".
+ */
+export const PROMOTION_ROW_EDITS_DEFAULT = false;
+
+export function resolvePromotionRowEdits(raw: string): boolean {
+  return raw === "true";
+}
+
+export function isPromotionRowEditsEnabled(): boolean {
+  return resolvePromotionRowEdits(readRuntimeConfig("VITE_PROMOTION_ROW_EDITS"));
 }
 
 /** Everything the grouped-review card has drafted, keyed as the card keys it (by EXTRACTED mpn). */

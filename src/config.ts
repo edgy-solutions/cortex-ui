@@ -34,6 +34,8 @@ interface RuntimeConfig {
   VITE_SEND_FRONTEND_VERSION: string;
   // Exactly "false" disables grouped-review row edits + Reject; anything else (incl. unset) enables. See src/lib/reviewRowEdits.ts.
   VITE_REVIEW_ROW_EDITS: string;
+  // Exactly "true" enables the promotion card's row + header editors; anything else (incl. unset) is OFF.
+  VITE_PROMOTION_ROW_EDITS: string;
 }
 
 declare global {
@@ -66,6 +68,7 @@ export const config: RuntimeConfig = {
   VITE_MOCK_GROUNDING: resolve("VITE_MOCK_GROUNDING", ""),
   VITE_SEND_FRONTEND_VERSION: resolve("VITE_SEND_FRONTEND_VERSION", ""),
   VITE_REVIEW_ROW_EDITS: resolve("VITE_REVIEW_ROW_EDITS", ""),
+  VITE_PROMOTION_ROW_EDITS: resolve("VITE_PROMOTION_ROW_EDITS", ""),
 };
 
 /**

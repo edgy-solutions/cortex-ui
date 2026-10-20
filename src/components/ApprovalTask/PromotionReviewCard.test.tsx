@@ -915,7 +915,7 @@ describe("the steward can read every page (the architect, 197: PAGE 1 / 2 with n
 // ── the steward row editor ──────────────────────────────────────────────────────────────────
 describe("row edits on a promote", () => {
   const setFlag = (v: string | null) => {
-    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_REVIEW_ROW_EDITS: v };
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_PROMOTION_ROW_EDITS: v };
   };
   afterEach(() => setFlag(null));
   const q = (attr: string, val?: string) =>
@@ -1111,7 +1111,7 @@ describe("row edits on a promote", () => {
 // ── header edits and the leaf ───────────────────────────────────────────────────────────────
 describe("header edits and the leaf on the promotion card", () => {
   const setFlag = (v: string | null) => {
-    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_REVIEW_ROW_EDITS: v };
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_PROMOTION_ROW_EDITS: v };
   };
   afterEach(() => setFlag(null));
   const q = (attr: string, val?: string) =>
@@ -1147,6 +1147,42 @@ describe("header edits and the leaf on the promotion card", () => {
     const body = buildActBody("promoted", "", undefined, args[4] as undefined, args[5] as undefined, args[6] as never);
     expect("row_edits" in body).toBe(false);
     expect(body.header_edits).toEqual(headerEdits);
+  });
+
+  /** The extraction's notice with `mfr: "TYC"` from the given source; the payload's mfr agrees. */
+  const tycMount = async (mfr_source: string) => {
+    fetchIngestExtraction.mockImplementation(async () => ({
+      ...exBody(),
+      notice: { mfr: "TYC", mfr_source, mfr_parent: null, notice_date: "2026-09-30" },
+    }));
+    await mountPromotable(task({ payload: payload193({ mfr: "TYC" }) }));
+  };
+
+  it("TYC: a value equal to the identity FALLBACK is the correction, shown as a fallback and sent", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await tycMount("identity");
+    expect(topline("manufacturer")).toBe("TYC (from identity, header blank)");
+    click(q("data-header-fix", "mfr"));
+    expect(q("data-header-extracted", "mfr")!.textContent).toBe("mfr: TYC (from identity, header blank)");
+    type(q("data-header-value", "mfr"), "TYC");
+    type(q("data-header-reason", "mfr"), "header blank; the notice names TYC");
+    expect(q("data-row-edits-incomplete")).toBeNull();
+    click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(lastCall()[6]).toEqual([{ field: "mfr", value: "TYC", evidence_ref: "p1", reason: "header blank; the notice names TYC" }]);
+  });
+
+  it("the same value is refused when the mfr is the header's own (mfr_source header)", async () => {
+    setFlag("true");
+    await tycMount("header");
+    expect(topline("manufacturer")).toBe("TYC");
+    click(q("data-header-fix", "mfr"));
+    expect(q("data-header-extracted", "mfr")!.textContent).toBe("mfr extracted: TYC");
+    type(q("data-header-value", "mfr"), "tyc");
+    type(q("data-header-reason", "mfr"), "r");
+    expect(q("data-row-edits-incomplete")!.textContent).toMatch(/equals the extracted value/);
+    expect(promoteBtn().disabled).toBe(true);
   });
 
   it("header and row edits count together; undo removes a header draft", async () => {
@@ -1195,5 +1231,33 @@ describe("header edits and the leaf on the promotion card", () => {
     await mountPromotable();
     expect(topline("kind")).toBe("PDN");
     expect(q("data-topline", "kind")!.getAttribute("title")).toBe("pdn from extraction-title");
+  });
+});
+
+// ── the promotion editor has its own flag ───────────────────────────────────────────────────
+describe("the promotion editor flag", () => {
+  const setCfg = (v: Record<string, string> | null) => {
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : v;
+  };
+  afterEach(() => setCfg(null));
+  const q = (attr: string) => document.querySelector(`[${attr}]`) as HTMLElement | null;
+
+  it("unset: no header fix and no row fix controls", async () => {
+    setCfg(null);
+    await mountPromotable();
+    expect(q("data-header-fix")).toBeNull();
+    expect(q("data-row-fix")).toBeNull();
+  });
+  it("VITE_REVIEW_ROW_EDITS alone: still no editor", async () => {
+    setCfg({ VITE_REVIEW_ROW_EDITS: "true" });
+    await mountPromotable();
+    expect(q("data-header-fix")).toBeNull();
+    expect(q("data-row-fix")).toBeNull();
+  });
+  it("VITE_PROMOTION_ROW_EDITS true: the editor is present", async () => {
+    setCfg({ VITE_PROMOTION_ROW_EDITS: "true" });
+    await mountPromotable();
+    expect(q("data-header-fix")).not.toBeNull();
+    expect(q("data-row-fix")).not.toBeNull();
   });
 });

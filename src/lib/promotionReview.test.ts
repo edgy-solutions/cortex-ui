@@ -25,6 +25,8 @@ import {
   DEFAULT_REJECT_CODES,
   evidenceQuality,
   rowsSharingEvidence,
+  headerEditComparands,
+  MFR_COMPARED_SOURCES,
   type Extraction,
 } from "./promotionReview";
 import { fixtureExtractionBody, fixturePromotionPayload } from "./promotionReviewFixture";
@@ -103,6 +105,32 @@ describe("the extraction body", () => {
 
   it("part_count 0 is a count, not an absence", () => {
     expect(read({ part_count: 0 }).part_count).toBe(0);
+  });
+
+  it("reads notice.mfr_source; a BFF without the key is header-sourced, an unknown value is null", () => {
+    const n = (mfr_source?: unknown) => ({ notice: { mfr: "TYC", ...(mfr_source === undefined ? {} : { mfr_source }) } });
+    expect(read(n()).manufacturer_source).toBe("header");
+    expect(read(n("header")).manufacturer_source).toBe("header");
+    expect(read(n("identity")).manufacturer_source).toBe("identity");
+    expect(read(n(null)).manufacturer_source).toBeNull();
+    expect(read(n("IDENTITY")).manufacturer_source).toBeNull();
+    expect(read({ notice: null }).manufacturer_source).toBe("header");
+  });
+});
+
+describe("what a header edit is refused for equalling (the TYC ruling)", () => {
+  const ex = (mfr_source?: unknown) =>
+    read({ notice: { mfr: "TYC", notice_date: "2026-09-30", ...(mfr_source === undefined ? {} : { mfr_source }) } });
+  it("mfr is compared only when it is the header's own value", () => {
+    expect(headerEditComparands(ex("header")).mfr).toBe("TYC");
+    expect(headerEditComparands(ex()).mfr).toBe("TYC"); // an older BFF: today's behaviour
+    expect(headerEditComparands(ex("identity")).mfr).toBeNull(); // the fallback: an equal value FILLS the miss
+    expect(headerEditComparands(ex(null)).mfr).toBeNull();
+    expect([...MFR_COMPARED_SOURCES]).toEqual(["header"]);
+  });
+  it("notice_id and notice_date are compared whatever the mfr source; no extraction compares nothing", () => {
+    expect(headerEditComparands(ex("identity"))).toEqual({ mfr: null, notice_id: "EOL-36", notice_date: "2026-09-30" });
+    expect(headerEditComparands(null)).toEqual({ mfr: null, notice_id: null, notice_date: null });
   });
 });
 

@@ -26,8 +26,11 @@ MOCK_GROUNDING=$(printf '%s' "${VITE_MOCK_GROUNDING:-}" | tr -cd "${MOCK_GROUNDI
 # VITE_SEND_FRONTEND_VERSION: same unquoted interpolation, same treatment (value is only ever "true"/"").
 SEND_FRONTEND_VERSION=$(printf '%s' "${VITE_SEND_FRONTEND_VERSION:-}" | tr -cd "${MOCK_GROUNDING_CHARSET}")
 
-# VITE_REVIEW_ROW_EDITS: same treatment (only the exact lowercase "false" disables; the charset strips uppercase, so "FALSE" arrives as "" = ON).
+# VITE_REVIEW_ROW_EDITS (grouped review): same treatment (only the exact lowercase "false" disables; the charset strips uppercase, so "FALSE" arrives as "" = ON).
 REVIEW_ROW_EDITS=$(printf '%s' "${VITE_REVIEW_ROW_EDITS:-}" | tr -cd "${MOCK_GROUNDING_CHARSET}")
+
+# VITE_PROMOTION_ROW_EDITS (promotion card editors): only exact lowercase "true" enables.
+PROMOTION_ROW_EDITS=$(printf '%s' "${VITE_PROMOTION_ROW_EDITS:-}" | tr -cd "${MOCK_GROUNDING_CHARSET}")
 
 cat > "${CONFIG_PATH}" <<EOF
 window.__RUNTIME_CONFIG__ = {
@@ -40,6 +43,7 @@ window.__RUNTIME_CONFIG__ = {
   VITE_MOCK_GROUNDING: "${MOCK_GROUNDING}",
   VITE_SEND_FRONTEND_VERSION: "${SEND_FRONTEND_VERSION}",
   VITE_REVIEW_ROW_EDITS: "${REVIEW_ROW_EDITS}",
+  VITE_PROMOTION_ROW_EDITS: "${PROMOTION_ROW_EDITS}",
 };
 EOF
 

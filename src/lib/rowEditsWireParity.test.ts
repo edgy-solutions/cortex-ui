@@ -13,6 +13,11 @@
  * HEADER EDITS: `HeaderEdit`'s key set and `field` Literal, `header_edits` declared on the request, and the
  * verb its guard keeps it for, are all parsed from the producer (gateway.py at b7100fda or later).
  *
+ * MFR SOURCE (the TYC ruling, gateway.py at ad5f3f58 or later): the act route compares a header mfr edit
+ * against `notice.mfr` only `if _hdr.get("mfr_source") == "<source>"`. That keep-condition is parsed and
+ * must equal cortex's `MFR_COMPARED_SOURCES`; the `/extraction` notice block must carry `mfr_source`; and
+ * every value `_review_notice_summary` assigns it must be one cortex reads as itself (not null).
+ *
  * RUN WITH `npm run test`, never bare `npx vitest run` (same reason as taskKindParity.test.tsx).
  * Producer lookup follows the sibling parity tests: `<repo>/../<invincible-agent|ia-01>/src/iagent/
  * gateway.py`, plus `CORTEX_PRODUCER_ROOT` (a dir holding `src/iagent/gateway.py`) when set. The
@@ -30,7 +35,7 @@ import path from "node:path";
 import { buildActBody } from "@/api/client";
 import { buildHeaderEdits, buildRowEdits, HEADER_EDIT_FIELDS, type RowEditDraft } from "./reviewRowEdits";
 import { REJECT_REASONS } from "@/components/GroupedReview/GroupedReviewTable";
-import { DEFAULT_REJECT_CODES } from "./promotionReview";
+import { DEFAULT_REJECT_CODES, MFR_COMPARED_SOURCES, readExtraction } from "./promotionReview";
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
 
@@ -91,6 +96,30 @@ function headerEditsVerb(src: string): string {
   return m[1];
 }
 
+/** The sources the act route compares a header mfr edit for: `"mfr": (_hdr.get("mfr") if _hdr.get("mfr_source") == "<s>" else None)`. */
+function mfrComparedSources(src: string): string[] {
+  const m = /extracted=\{"mfr":\s*\(_hdr\.get\("mfr"\)\s+if\s+_hdr\.get\("mfr_source"\)\s*==\s*"([^"]+)"\s+else\s+None\)/.exec(src);
+  if (!m) throw new Error("mfr comparison guard not found: the act route compares the identity fallback too (pre-ad5f3f58)");
+  return [m[1]];
+}
+
+/** Every literal `_review_notice_summary` assigns to `mfr_source` (`mfr_source = "<s>"`), in order. */
+function mfrSourceValues(src: string): string[] {
+  const start = src.search(/^def _review_notice_summary\(/m);
+  if (start < 0) throw new Error("_review_notice_summary not found");
+  const rest = src.slice(src.indexOf("\n", start) + 1); // the body starts on the line AFTER the def
+  const end = rest.search(/^\S/m);
+  const body = end < 0 ? rest : rest.slice(0, end);
+  const vals = [...body.matchAll(/\bmfr_source = "([^"]+)"/g)].map((x) => x[1]);
+  if (vals.length === 0) throw new Error("_review_notice_summary assigns no mfr_source");
+  return vals;
+}
+
+/** `/extraction`'s notice block carries `"mfr_source": summ["mfr_source"]`. */
+function noticeCarriesMfrSource(src: string): boolean {
+  return /"notice":\s*\{[^}]*"mfr_source":\s*summ\["mfr_source"\]/.test(src);
+}
+
 /** `<name> = ("a", "b", ...)` at column 0, as a tuple LITERAL (an alias of another name reads as "not found"). */
 function codesTuple(src: string, name: string): string[] {
   const m = new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, "m").exec(src);
@@ -107,6 +136,16 @@ describe("the parser, unit-tested on fixtures", () => {
     const g = '        if self.header_edits is not None:\n            if self.decision != "promoted":\n                raise ValueError("x")\n';
     expect(headerEditsVerb(g)).toBe("promoted");
     expect(() => headerEditsVerb("x = 1\n")).toThrow(/header_edits decision guard not found/);
+  });
+  it("reads the mfr comparison guard, the summary's mfr_source values and the notice block, and fails on their absence", () => {
+    const act = '  extracted={"mfr": (_hdr.get("mfr")\n                   if _hdr.get("mfr_source") == "header" else None),\n';
+    expect(mfrComparedSources(act)).toEqual(["header"]);
+    expect(() => mfrComparedSources('  extracted={"mfr": _hdr.get("mfr"),\n')).toThrow(/mfr comparison guard not found/);
+    const summ = 'def _review_notice_summary(r):\n    if a:\n        mfr_source = "header"\n    else:\n        mfr_source = "identity"\n\n\ndef other():\n    mfr_source = "x"\n';
+    expect(mfrSourceValues(summ)).toEqual(["header", "identity"]);
+    expect(() => mfrSourceValues("def _review_notice_summary(r):\n    return {}\n")).toThrow(/assigns no mfr_source/);
+    expect(noticeCarriesMfrSource('"notice": {"mfr": summ["mfr"], "mfr_source": summ["mfr_source"],\n  "x": 1}')).toBe(true);
+    expect(noticeCarriesMfrSource('"notice": {"mfr": summ["mfr"], "mfr_parent": summ["mfr_parent"]}')).toBe(false);
   });
   it("reads the row_edits decision guard, and throws when the line is absent", () => {
     const ok = '        if self.row_edits is not None and self.decision not in ("approved", "promoted"):\n';
@@ -216,6 +255,16 @@ describe.skipIf(GATEWAY === null)("cortex's grouped-review send equals the produ
     const h = buildHeaderEdits({ mfr: { value: "X", evidence_ref: "p1", reason: "r" } }, { mfr: null, notice_id: null, notice_date: null });
     for (const v of ["approved", "promoted", "rejected", "acknowledged", "redriven", "dismissed", keep]) {
       expect("header_edits" in buildActBody(v as never, "", undefined, edits(), undefined, h), `${AT}: verb ${v}`).toBe(v === keep);
+    }
+  });
+  it("a header mfr edit is refused for equalling notice.mfr for exactly the sources the receiver compares", () => {
+    expect([...MFR_COMPARED_SOURCES], AT).toEqual(mfrComparedSources(src()));
+  });
+  it("/extraction's notice carries mfr_source, and cortex reads every value the summary assigns as itself", () => {
+    expect(noticeCarriesMfrSource(src()), `${AT}: the notice block has no "mfr_source": summ["mfr_source"]`).toBe(true);
+    for (const s of mfrSourceValues(src())) {
+      const ex = readExtraction({ rows: [], notice: { mfr: "TYC", mfr_source: s } })!;
+      expect(ex.manufacturer_source, `${AT}: mfr_source "${s}" reads as ${ex.manufacturer_source}`).toBe(s);
     }
   });
   it("a reject sends {decision, comment, reason_code} and no row_edits, all declared", () => {

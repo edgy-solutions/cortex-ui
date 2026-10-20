@@ -152,7 +152,16 @@ env:
   #   the pods, once 199 rolls — this entry is a promise until then. Check 2: task_kinds diff
   #   EMPTY (control: 13 files changed). Check 3: uv.lock iagent-mesh 7e513c36 (v0.9.10) at both.
   #   Gate: the full suite against a git-archive export of b7100fda placed as the sibling.
-  PRODUCER_REF: b7100fdaac80d35bfe37f99573c48d61c84a41ba
+  # 2026-10-20 BUMP AHEAD again, to 938d7639 (origin/lane/01-197 head; f3f988a3 is 199's pin
+  #   commit, so this is what 199 deploys) — ⚠ STILL NOT read off the pods: the sandbox BFF reads
+  #   016473bb at the time of writing. Why: ad5f3f58 (the TYC ruling) compares a header mfr edit
+  #   against notice.mfr only `if _hdr.get("mfr_source") == "header"`, and /extraction's notice
+  #   gains mfr_source; the new arms in rowEditsWireParity.test.ts parse both, so against b7100fda
+  #   they throw "mfr comparison guard not found" and "the notice block has no mfr_source". RE-PIN
+  #   to 199's BFF sha, read off the pods, once 199 rolls. Check 2: task_kinds diff (every
+  #   task_kinds dir) EMPTY (control 3f27c7cb..938d7639: 5 files changed). Check 3: uv.lock
+  #   iagent-mesh 7e513c36 at both. Gate: the full suite against a git-archive export of 938d7639.
+  PRODUCER_REF: 938d7639f89695ee88fc768739c7a3faf360a40b
 
 permissions:
   contents: read

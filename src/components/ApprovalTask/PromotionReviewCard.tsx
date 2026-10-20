@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } fr
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { verbLabel } from "@/lib/taskDeclaration";
-import { buildHeaderEdits, buildRowEdits, isReviewRowEditsEnabled, type RowEditDraft } from "@/lib/reviewRowEdits";
+import { buildHeaderEdits, buildRowEdits, isPromotionRowEditsEnabled, type RowEditDraft } from "@/lib/reviewRowEdits";
 import type { HeaderEdit } from "@/api/client";
 import { DISPOSITIONS, presentDisposition } from "@/lib/dispositions";
 import { fetchIngestExtraction } from "@/lib/ingestTransport";
@@ -18,6 +18,7 @@ import {
   type HeaderField,
   evidenceQuality,
   rowsSharingEvidence,
+  headerEditComparands,
 } from "@/lib/promotionReview";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
@@ -52,7 +53,7 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  *             already deliberate and sends at once.
  *   r         opens the reject codes; 1–9 picks one; Enter sends it.
  *
- * ROW EDITS (flag `VITE_REVIEW_ROW_EDITS`, on by default). A steward can fix an extracted mpn, delete a
+ * ROW EDITS (flag `VITE_PROMOTION_ROW_EDITS`, OFF by default: only exact "true" enables). A steward can fix an extracted mpn, delete a
  * row, or add a missed part before promoting; the drafts ride the promote as `row_edits` (the grouped
  * review's RowEdits shape, `buildRowEdits`) and the platform files them as an extraction_defect. The
  * checks the server would 422 on (blanks, a correction equal to its mpn, an added or corrected mpn that
@@ -64,6 +65,9 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  * value / evidence (prefilled with the pane's current page, `p<n>`) / reason. They ride the promote as the
  * top-level `header_edits` (wire field `mfr` for the manufacturer), are compared against the EXTRACTED
  * value (not the task payload's, which the top line prefers), and count toward "Promote with N edits".
+ * The mfr is compared only when `notice.mfr_source` is "header" (`headerEditComparands`): when the
+ * header was blank, `notice.mfr` is the notice_identity FALLBACK, shown as "(from identity, header
+ * blank)", and a steward value equal to it fills the missing field, which the server accepts.
  * The topline's kind is the extraction's leaf (PCN or PDN) when it names one.
  *
  * CHIP RULE: bordered means clickable. Kind, codes and every fact on the top line are muted text.
@@ -201,7 +205,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const [rejectOpen, setRejectOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const editsOn = isReviewRowEditsEnabled();
+  const editsOn = isPromotionRowEditsEnabled();
   const [headerDraft, setHeaderDraft] = useState<HeaderDraft>({});
   const [draft, setDraft] = useState<RowEditDraft>({
     deleted: {},
@@ -271,11 +275,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       Object.keys(draft.corrected).filter((m) => !draft.deleted[m]).length
     : 0;
   const editCount = rowCount + headerCount;
-  const extractedHeader = {
-    mfr: ex?.manufacturer ?? null,
-    notice_id: ex?.notice_id ?? null,
-    notice_date: ex?.notice_date ?? null,
-  };
+  const extractedHeader = headerEditComparands(ex);
+  const mfrFallback = ex?.manufacturer_source === "identity" && ex.manufacturer !== null ? ex.manufacturer : null;
   // The server's checks, mirrored so the steward sees them before the wire. Matching is case-insensitive.
   const problems = useMemo(() => {
     if (!editsActive) return [];
@@ -356,8 +357,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     const was = extractedHeader[field];
     return (
       <div className="mt-1 flex flex-wrap items-center gap-1.5" data-header-form={field}>
-        <span className="text-[10px] font-mono text-slate-500">
-          {field} extracted: {was ?? "—"}
+        <span className="text-[10px] font-mono text-slate-500" data-header-extracted={field}>
+          {field === "mfr" && mfrFallback !== null
+            ? `mfr: ${mfrFallback} (from identity, header blank)`
+            : `${field} extracted: ${was ?? "—"}`}
         </span>
         <input value={d.value} disabled={locked} onChange={(e) => setHeaderField(field, "value", e.target.value)} placeholder="value" aria-label={`Corrected ${field}`} data-header-value={field} className={EDIT_INPUT} />
         <input value={d.evidence_ref} disabled={locked} onChange={(e) => setHeaderField(field, "evidence_ref", e.target.value)} placeholder="evidence" aria-label={`Evidence for ${field}`} data-header-evidence={field} className={EDIT_INPUT} />
@@ -447,7 +450,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
 
   const topline: Array<[string, string]> = [
     ["kind", ex?.leaf ? ex.leaf.toUpperCase() : "kind ?"],
-    ["manufacturer", review.manufacturer ?? "—"],
+    // The identity fallback is labelled as one, but only when it is what the top line shows (the payload's value wins).
+    ["manufacturer", review.manufacturer === null ? "—" : review.manufacturer === mfrFallback ? `${review.manufacturer} (from identity, header blank)` : review.manufacturer],
     ["notice-date", review.notice_date ?? "—"],
     ["parts", `${review.part_count ?? "?"} parts`],
     ["attempt", `attempt ${review.attempt ?? "?"}`],
