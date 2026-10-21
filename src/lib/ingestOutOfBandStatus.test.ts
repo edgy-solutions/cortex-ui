@@ -157,6 +157,10 @@ describe("reader: leaf_candidates", () => {
   it("0 items is undefined", () => expect(cand([])).toBeUndefined());
   it("an empty candidate list is no claim", () => expect(cand([])).toBeUndefined());
   it("a null candidate list is no claim", () => expect(cand(null)).toBeUndefined());
+  it("a candidate with a null bbox is kept", () => {
+    const out = cand([good("pdn"), { ...good("pcn"), evidence_ref: { page: 2, bbox: null } }]);
+    expect(out?.map((c) => c.evidence_ref)).toEqual([{ page: 1, bbox: [0.07, 0.03, 0.92, 0.07] }, { page: 2, bbox: null }]);
+  });
   it("a candidate with a pixel bbox drops the whole list", () => {
     expect(cand([good("pdn"), { ...good("pcn"), evidence_ref: { ...ref, bbox: [40, 60, 560, 110] } }])).toBeUndefined();
   });

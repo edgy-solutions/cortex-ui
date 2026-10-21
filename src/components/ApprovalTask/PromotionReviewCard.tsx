@@ -94,8 +94,20 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   // Unlike the holds above this one also turns Reject off: see `sentBack` in the card.
   "sent-back": "",
 };
-const sentBackText = (leaf: IngestLeaf | null): string =>
-  `The kind changed to ${leaf ? leaf.toUpperCase() : "?"}: the document went back to extraction for the new kind. A new review replaces this one; Promote and Reject are off here.`;
+/** One hold, three causes: the kind sent the document back, a re-class superseded this task, or the server said stale. */
+type ReviewHold = { leaf: IngestLeaf | null; cause: "sent-back" | "superseded" | "stale"; newTaskId: string | null };
+const sentBackText = (h: ReviewHold): string => {
+  const LEAF = h.leaf ? h.leaf.toUpperCase() : "?";
+  if (h.cause === "stale") {
+    return h.newTaskId
+      ? `This review is stale. Review ${h.newTaskId} replaces it and appears as its own card; Promote and Reject are off here.`
+      : "This review is stale: the document is being extracted again, and a new review will replace this one. Promote and Reject are off here.";
+  }
+  if (h.cause === "superseded" && h.newTaskId) {
+    return `The kind changed to ${LEAF}. Review ${h.newTaskId} replaces this one and appears as its own card; Promote and Reject are off here.`;
+  }
+  return `The kind changed to ${LEAF}: the document went back to extraction for the new kind. A new review replaces this one; Promote and Reject are off here.`;
+};
 type ExtractionPhase = { phase: "loading" } | { phase: "ready"; ex: Extraction } | { phase: "failed"; why: string };
 
 const HEADER_LABEL: Record<HeaderField, string> = {
@@ -230,10 +242,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   // leaf/source/corrected_by change. Anywhere else (the server sent the row back to `extracting`
   // because the kind changed after parts extraction): this review is stale, see `sentBack`.
   const [leafPick, setLeafPick] = useState<{ leaf: IngestLeaf | null; source: IngestLeafSource | null; by: string | null } | null>(null);
-  const [sentBackTo, setSentBackTo] = useState<{ leaf: IngestLeaf | null } | null>(null);
+  const [sentBackTo, setSentBackTo] = useState<ReviewHold | null>(null);
   const onLeafRow = (row: IngestStatusRow) => {
     setLeafPick({ leaf: row.leaf ?? null, source: row.leaf_source ?? null, by: row.corrected_by ?? null });
-    if (row.stage !== "review") setSentBackTo({ leaf: row.leaf ?? null });
+    if (row.superseded_task_id === task.task_id) {
+      // 204's re-class: this task is replaced, even when the stage is still `review`.
+      setSentBackTo({ leaf: row.leaf ?? null, cause: "superseded", newTaskId: row.task_id ?? null });
+    } else if (row.stage !== "review") {
+      setSentBackTo({ leaf: row.leaf ?? null, cause: "sent-back", newTaskId: null });
+    }
   };
 
   useEffect(() => {
@@ -269,7 +286,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const blocked = isActBlocked(a);
   // WHY sent-back disables Reject too (the other holds leave it open): once the row has left review
   // the task is stale; any decision recorded on it would be a decision on a review that no longer exists.
-  const sentBack = sentBackTo !== null;
+  const hold: ReviewHold | null =
+    sentBackTo ??
+    (a.refusal?.code === "stale_extraction" ? { leaf: null, cause: "stale", newTaskId: a.refusal.newTaskId ?? null } : null);
+  const sentBack = hold !== null;
   const canAct = !blocked && !acting && !sentBack;
   const promoteVerb = verbs.includes("promoted") ? "promoted" : null;
   const rejectVerb = verbs.includes("rejected") ? "rejected" : null;
@@ -504,6 +524,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       className="glass-panel p-5 my-4 border-cyan-500/20 outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40"
       data-promotion-review
       data-leaf-sent-back={sentBack ? "" : undefined}
+      data-review-replaced-by={hold?.newTaskId ?? undefined}
       aria-label={`Review ${review.notice_id ?? "document"}: j and k move between rows, p promotes, r rejects`}
     >
       {/* TOP LINE. The notice id is the title; the sha never is (it sits in the provenance line). */}
@@ -693,12 +714,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                     </td>
                     <td className="px-2 py-1 text-slate-500" data-cell="via">
                       {r.obtained_via ?? "—"}
-                      {r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "inherited" && (
+                      {r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "inherited" && (
                         <span className="block text-[9px] text-violet-300/70" data-evidence-note="inherited">
                           from the document-level date
                         </span>
                       )}
-                      {r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "region" && (
+                      {r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "region" && (
                         <span className="block text-[9px] text-amber-400/70" data-evidence-note="region">
                           table box, not the cell
                         </span>
@@ -714,8 +735,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                           }}
                           className="px-1.5 py-0.5 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 text-[9px] uppercase tracking-widest cursor-pointer"
                           data-show-row={r.key}
+                          data-show-no-box={r.evidence.ref.bbox === null ? "" : undefined}
                         >
                           show p{r.evidence.ref.page}
+                          {r.evidence.ref.bbox === null ? " · no box" : ""}
                         </button>
                       ) : (
                         <span className="text-[9px] uppercase tracking-widest text-amber-400/80" data-evidence-state={r.evidence.state}>
@@ -875,7 +898,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   data-verb={promoteVerb}
                   data-promote-hold={promoteHold ?? undefined}
                   data-row-edit-count={editCount > 0 ? editCount : undefined}
-                  title={promoteHold === "sent-back" ? sentBackText(sentBackTo?.leaf ?? null) : promoteHold ? HOLD_TEXT[promoteHold] : undefined}
+                  title={promoteHold === "sent-back" ? sentBackText(hold!) : promoteHold ? HOLD_TEXT[promoteHold] : undefined}
                   className="flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />{" "}
@@ -913,7 +936,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             </div>
             {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
-                {promoteHold === "sent-back" ? sentBackText(sentBackTo?.leaf ?? null) : HOLD_TEXT[promoteHold]}
+                {promoteHold === "sent-back" ? sentBackText(hold!) : HOLD_TEXT[promoteHold]}
               </p>
             )}
             {rejectOpen && rejectVerb && editCount > 0 && (

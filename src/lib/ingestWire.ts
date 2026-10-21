@@ -231,7 +231,9 @@ export const INGEST_OOB_DOCUMENT_STATUSES = [
 ] as const;
 export type IngestOobDocumentStatus = (typeof INGEST_OOB_DOCUMENT_STATUSES)[number];
 
-/** The leaf content kinds the chip can name (PROPOSED, 10-21 packet §3). */
+/** The leaf content kinds the chip can name (PROPOSED, 10-21 packet §3). This literal list stands for Thursday's
+ *  dry run (architect 10-21); after it the allowed leaves are read from the content-kind registry's
+ *  domain-declaring kinds, never widened by hand. */
 export const INGEST_LEAVES = ["pcn", "pdn"] as const;
 export type IngestLeaf = (typeof INGEST_LEAVES)[number];
 /** Where a leaf came from (architect ruling 10-21, one enum on the status row, the review route and
@@ -341,6 +343,16 @@ export interface IngestStatusRow {
    * `readIngestStatusRow` OMITS the key unless the wire carried a valid null or object.
    */
   extraction_defect?: ExtractionDefect | null;
+  /**
+   * Lane 1 204 (`d0f80092`), on the status row and `/ingest/mine`: the current review task's id at `review`, else
+   * null. Use it, never build `document_promotion:<id>` (wrong from `:g1` on). Nothing in cortex reads it yet.
+   * Non-blank string, `null`, or ABSENT (anything else reads as absent).
+   */
+  review_task_id?: string | null;
+  /** On the `/leaf` answer only (204): the new open review task's id, or null when the row went back to extraction. */
+  task_id?: string | null;
+  /** On the `/leaf` answer only (204): the review task this change replaced. */
+  superseded_task_id?: string | null;
   /**
    * `GET /ingest/{id}/status`'s `notice_id` (Lane 1 packet
    * `sessions/2026-10-12-packet-to-cortex-f3617a9-is-live-notice-id-named-row-edits-accepted-flip-it.md` §2):
@@ -530,6 +542,9 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   const leafPair = readLeafPair(raw);
   const leafCandidates = readLeafCandidates(raw);
   const extraction_defect = readExtractionDefect(raw.extraction_defect);
+  const review_task_id = readNoticeId(raw.review_task_id);
+  const task_id = readNoticeId(raw.task_id);
+  const superseded_task_id = readNoticeId(raw.superseded_task_id);
   const notice_id = readNoticeId(raw.notice_id);
   const content_kind = readNoticeId(raw.content_kind); // same three states as notice_id
   const failure = readIngestFailure(raw.failure);
@@ -551,6 +566,9 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     ...(leafPair ?? {}),
     ...(leafCandidates !== undefined ? { leaf_candidates: leafCandidates } : {}),
     ...(extraction_defect !== undefined ? { extraction_defect } : {}),
+    ...(review_task_id !== undefined ? { review_task_id } : {}),
+    ...(task_id !== undefined ? { task_id } : {}),
+    ...(superseded_task_id !== undefined ? { superseded_task_id } : {}),
     ...(notice_id !== undefined ? { notice_id } : {}),
     ...(content_kind !== undefined ? { content_kind } : {}),
     ...(failure !== undefined ? { failure } : {}),

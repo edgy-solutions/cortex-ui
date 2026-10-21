@@ -27,7 +27,7 @@ function outlineCaption(quality: EvidenceQuality, page: number, sharedBy: number
 
 /**
  * The review card's right pane: the dropped document, every page of it, scrolled to the selected
- * row's evidence with the evidence box outlined. Selecting a row (or its "show") jumps there, so
+ * row's evidence with the evidence box outlined (a null bbox jumps to the page with no outline and says "no box"). Selecting a row (or its "show") jumps there, so
  * the steward never hunts for a row's crop (the review standard's "few looks" test); and the whole
  * document scrolls, with prev/next, a page box and `[` / `]`, because a steward must be able to
  * read every page before promoting (the architect, 197: "PAGE 1 / 2 with no way to page").
@@ -257,7 +257,7 @@ export function PdfEvidencePane({
   }, [doc, targetPage, target, jumpKey]);
 
   const targetDrawn = targetPage !== null ? drawn[targetPage] : undefined;
-  const box = target && targetDrawn ? scaleBox(target.bbox, target.page_dims, targetDrawn) : null;
+  const box = target && target.bbox !== null && targetDrawn ? scaleBox(target.bbox, target.page_dims, targetDrawn) : null;
 
   const boxKey = box ? `${targetPage}:${box.left}:${box.top}:${box.width}` : null;
   useEffect(() => {
@@ -399,6 +399,11 @@ export function PdfEvidencePane({
           </div>
         )}
       </div>
+      {target && target.bbox === null && targetPage !== null && targetDrawn && (
+        <p className="mt-1.5 text-[10px] text-slate-400" data-evidence-caption="no-box">
+          {`on page ${targetPage}, no box: the value is stated on this page, with no box to outline.`}
+        </p>
+      )}
       {box && targetPage !== null && (
         <p className="mt-1.5 text-[10px] text-slate-400" data-evidence-caption={quality}>
           {caption ?? outlineCaption(quality, targetPage, sharedBy)}

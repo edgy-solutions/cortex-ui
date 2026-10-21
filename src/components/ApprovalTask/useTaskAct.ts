@@ -29,7 +29,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
    * deliberately. See `act()` for the three-field precedence (`message`, `error`, the bare
    * string) and why this never auto-retries.
    */
-  const [refusal, setRefusal] = useState<{ message: string; code?: string } | null>(null);
+  const [refusal, setRefusal] = useState<{ message: string; code?: string; newTaskId?: string | null } | null>(null);
 
   /**
    * WHAT THE SERVER SAID IT ACTUALLY ACCEPTS, after refusing what we offered.
@@ -208,6 +208,13 @@ export function useTaskAct(task: ApprovalTaskPayload) {
                 : Array.isArray(detail)
                   ? (actRefusal(err)?.title ?? `Refused (${status})`)
                   : `Refused (${status})`;
+        // 204 `stale_extraction`: new_task_id is the open replacement, or null (the row is re-extracting).
+        // Never the task acted on.
+        if (errorCode === "stale_extraction") {
+          const nt = d !== null && typeof d.new_task_id === "string" && d.new_task_id.trim() !== "" ? d.new_task_id : null;
+          setRefusal({ message, code: errorCode, newTaskId: nt !== null && nt !== task.task_id ? nt : null });
+          return;
+        }
         setRefusal({ message, code: errorCode });
         return;
       }

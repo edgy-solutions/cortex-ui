@@ -272,6 +272,38 @@ describe("rows and the source", () => {
     expectOutlineOn(5);
   });
 
+  it("a null-bbox row's show button says no box", async () => {
+    fetchIngestExtraction.mockImplementation(async () => {
+      const b = exBody();
+      b.rows[1] = { ...b.rows[1], evidence_ref: { page: 2, bbox: null } as unknown as Row["evidence_ref"] };
+      return b;
+    });
+    await mount();
+    const btn = document.querySelector('[data-show-row="row-1"]') as HTMLElement;
+    expect(btn.textContent).toBe("show p2 · no box");
+    expect(btn.hasAttribute("data-show-no-box")).toBe(true);
+    expect((document.querySelector('[data-show-row="row-0"]') as HTMLElement).hasAttribute("data-show-no-box")).toBe(false);
+    fireEvent.click(btn);
+    await waitFor(() => expect(shownPage()).toBe("2"));
+    expect(outline()).toBeNull();
+  });
+
+  it("a no-box row carries no region or inherited note: there is no outline to qualify", async () => {
+    fetchIngestExtraction.mockImplementation(async () => {
+      const b = exBody();
+      b.rows[0] = { ...b.rows[0], obtained_via: "region_preferred" };
+      b.rows[1] = { ...b.rows[1], obtained_via: "region_preferred", evidence_ref: { page: 2, bbox: null } as unknown as Row["evidence_ref"] };
+      b.rows[2] = { ...b.rows[2], obtained_via: "inherited_doc_level", evidence_ref: { page: 2, bbox: null } as unknown as Row["evidence_ref"] };
+      return b;
+    });
+    await mount();
+    const note = (i: number, q: string) => rowEls()[i].querySelector(`[data-evidence-note="${q}"]`);
+    // Control: a boxed region row keeps its note, so the selector is live.
+    expect(note(0, "region")).not.toBeNull();
+    expect(note(1, "region")).toBeNull();
+    expect(note(2, "inherited")).toBeNull();
+  });
+
   it("clicking the row itself selects it too", async () => {
     await mount();
     fireEvent.click(rowEls()[2]);
@@ -1293,6 +1325,85 @@ describe("header edits and the leaf on the promotion card", () => {
     expect(q("data-leaf-verb", "change"), "a sent-back task offers no further leaf change").toBeNull();
   });
 
+  const holdText = () => document.querySelector("[data-promote-held]")?.textContent ?? "";
+  const replacedBy = () => card().getAttribute("data-review-replaced-by");
+
+  it("a re-class at review supersedes this task: Promote and Reject go off and the new task is named", async () => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
+    correctIngestLeaf.mockResolvedValue(
+      statusWire({ stage: "review", leaf: "pdn", leaf_source: "corrected", corrected_by: "ana", task_id: "document_promotion:x:g1", superseded_task_id: "t-promo" }),
+    );
+    await mountPromotable();
+    await pickPdn();
+    await waitFor(() => expect(document.querySelector("[data-leaf-sent-back]")).not.toBeNull());
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(true);
+    expect(q("data-leaf-verb", "change"), "chip locked").toBeNull();
+    expect(holdText()).toContain("document_promotion:x:g1");
+    expect(replacedBy()).toBe("document_promotion:x:g1");
+  });
+
+  it("a leaf answer at review that supersedes another task does not hold this card", async () => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
+    correctIngestLeaf.mockResolvedValue(
+      statusWire({ stage: "review", leaf: "pdn", leaf_source: "corrected", corrected_by: "ana", task_id: "document_promotion:x:g1", superseded_task_id: "some-other-task" }),
+    );
+    await mountPromotable();
+    await pickPdn();
+    await waitFor(() => expect(topline("kind")).toBe("PDN · corrected by ana"));
+    expect(document.querySelector("[data-leaf-sent-back]")).toBeNull();
+    expect(promoteBtn().disabled).toBe(false);
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  const staleWire = (new_task_id: string | null) => ({
+    response: { status: 409, data: { detail: { error: "stale_extraction", task_id: "t-promo", new_task_id, stage: "review", message: "This review was replaced." } } },
+  });
+  const tryPromote = async () => {
+    await mountPromotable();
+    fireEvent.click(promoteBtn());
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
+  };
+
+  it("a stale_extraction refusal with a new task holds the card and names it", async () => {
+    actOnHumanTask.mockRejectedValue(staleWire("document_promotion:x:g1"));
+    await tryPromote();
+    expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("This review was replaced.");
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(true);
+    expect(holdText()).toBe(
+      "This review is stale. Review document_promotion:x:g1 replaces it and appears as its own card; Promote and Reject are off here.",
+    );
+    expect(replacedBy()).toBe("document_promotion:x:g1");
+  });
+
+  it("a stale_extraction refusal with no new task holds the card as re-extracting", async () => {
+    actOnHumanTask.mockRejectedValue(staleWire(null));
+    await tryPromote();
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(true);
+    expect(holdText()).toBe(
+      "This review is stale: the document is being extracted again, and a new review will replace this one. Promote and Reject are off here.",
+    );
+    expect(replacedBy()).toBeNull();
+  });
+
+  it("a stale_extraction refusal naming the acted task as new is treated as no new task", async () => {
+    actOnHumanTask.mockRejectedValue(staleWire("t-promo"));
+    await tryPromote();
+    expect(holdText()).toContain("the document is being extracted again");
+    expect(replacedBy()).toBeNull();
+  });
+
+  it("a 409 that is not stale_extraction holds nothing", async () => {
+    actOnHumanTask.mockRejectedValue({ response: { status: 409, data: { detail: { error: "leaf_changed", new_task_id: "document_promotion:x:g1", message: "m" } } } });
+    await tryPromote();
+    expect(document.querySelector("[data-leaf-sent-back]")).toBeNull();
+    expect(replacedBy()).toBeNull();
+    expect(promoteBtn().disabled).toBe(false);
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
   it.each(["approved", "rejected", "expired"] as const)("a decided task (%s) shows the leaf but offers no change", async (task_state) => {
     fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
     await mount(task({ task_state }));
@@ -1344,6 +1455,25 @@ describe("the promotion editor flag", () => {
     await mountPromotable();
     expect(q("data-header-fix")).not.toBeNull();
     expect(q("data-row-fix")).not.toBeNull();
+  });
+});
+
+describe("PdfEvidencePane with no box", () => {
+  const nullTarget = { page: 2, bbox: null, page_dims: { width: 1, height: 1 }, units: null };
+  const noBox = () => document.querySelector('[data-evidence-caption="no-box"]');
+
+  it("a null bbox jumps to the page, draws no outline and says no box", async () => {
+    render(<PdfEvidencePane ingestId={SHA} target={nullTarget} quality="cell" />);
+    await waitFor(() => expect(noBox()).not.toBeNull());
+    expect(noBox()!.textContent!.startsWith("on page 2, no box")).toBe(true);
+    expect(shownPage()).toBe("2");
+    expect(outline()).toBeNull();
+  });
+
+  it("the no-box caption wins over a given caption", async () => {
+    render(<PdfEvidencePane ingestId={SHA} target={nullTarget} quality="cell" caption="Outlined: the title the read used on p2." />);
+    await waitFor(() => expect(noBox()).not.toBeNull());
+    expect(document.body.textContent).not.toContain("Outlined: the title");
   });
 });
 

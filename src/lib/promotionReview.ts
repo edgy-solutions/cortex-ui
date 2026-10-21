@@ -46,6 +46,8 @@
  * - An evidence_ref arrives in one of two forms. With `page_dims` present: today's form below. With `page_dims`
  *   ABSENT: the ruled form (architect 10-21), `{page, bbox}` with the bbox in page fractions, read on a 1x1 page
  *   (`FRACTION_PAGE`); a bbox outside 0..1 or with no area is malformed.
+ * - In EITHER form, `bbox: null` with a valid page is "stated on this page, no box we can draw" (architect 10-21):
+ *   read as page-only, `page_dims` not validated. A missing `bbox` key, or a bad page, is malformed.
  * - `bbox` (with `page_dims`) is in `page_dims` units: `pt` for `text_layer_cell`, layout `px` otherwise. The card
  *   scales by `page_dims` (the evidence pane's sealed rule, `bboxScale.ts`), so `units` is carried
  *   but never needed to place the box.
@@ -60,8 +62,9 @@ import { readCorrectedBy, readLeafSource, type IngestLeafSource } from "./ingest
 export interface EvidenceRef {
   /** 1-based page number in the source PDF. */
   page: number;
-  /** Top-left origin, in `page_dims` units (the evidence pane's rule, `bboxScale.ts`). */
-  bbox: Bbox;
+  /** Top-left origin, in `page_dims` units (the evidence pane's rule, `bboxScale.ts`). null = no box (page only);
+   *  `page_dims` is then unused (nothing is scaled). */
+  bbox: Bbox | null;
   page_dims: PageDims;
   /** `pt` or `px` as served, else null. Carried, never needed: the box is scaled by `page_dims`. */
   units: string | null;
@@ -199,6 +202,11 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
   const e = raw.evidence_ref;
   if (!isObj(e)) return { state: "malformed" };
   const page = posInt(e.page);
+  // A null bbox: stated on this page, no box we can draw. Either form; page_dims is not validated.
+  if (Object.hasOwn(e, "bbox") && e.bbox === null) {
+    if (page === null) return { state: "malformed" };
+    return { state: "ok", ref: { page, bbox: null, page_dims: FRACTION_PAGE, units: str(e.units) } };
+  }
   const b = e.bbox;
   const d = e.page_dims;
   // The ruled form (architect 10-21): page fractions, no page_dims. The page's own size is 1x1.
@@ -337,9 +345,9 @@ export interface ReviewFlags {
   partsUnknown: boolean;
   /** `rows_without_evidence` disagrees with the absent rows drawn; null when it agrees or did not travel. */
   evidenceCountMismatch: { served: number; drawn: number } | null;
-  /** Rows whose outline is the enclosing table box, not the cell (`evidenceQuality` "region"). */
+  /** Rows whose outline is the enclosing table box, not the cell (`evidenceQuality` "region"). Counts only rows with a box: no box, no outline to warn about. */
   regionEvidence: number;
-  /** Rows with a box whose `obtained_via` is no method this card knows: the outline is not claimed exact. */
+  /** Rows with a box whose `obtained_via` is no method this card knows: the outline is not claimed exact. Rows with a null bbox are not counted. */
   unknownMethod: number;
 }
 
@@ -358,8 +366,8 @@ export function reviewFlags(review: PromotionReview): ReviewFlags | null {
       ex.rows_without_evidence !== null && ex.rows_without_evidence !== absent
         ? { served: ex.rows_without_evidence, drawn: absent }
         : null,
-    regionEvidence: ex.rows.filter((r) => r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "region").length,
-    unknownMethod: ex.rows.filter((r) => r.evidence.state === "ok" && evidenceQuality(r.obtained_via) === "unknown").length,
+    regionEvidence: ex.rows.filter((r) => r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "region").length,
+    unknownMethod: ex.rows.filter((r) => r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "unknown").length,
   };
 }
 
@@ -387,7 +395,10 @@ export function evidenceQuality(obtainedVia: string | null): EvidenceQuality {
 
 /** Rows whose evidence is this exact crop: an inherited date's one sentence clears them all at once. */
 export function rowsSharingEvidence(rows: ReviewRow[], ref: EvidenceRef): number {
-  const k = (e: EvidenceRef) => `${e.page}:${e.bbox.join(",")}`;
+  // A page with no box is not "this exact crop": a null-bbox ref matches nothing. A row's null bbox keys as
+  // "<page>:none", which no boxed ref's key can equal.
+  if (ref.bbox === null) return 0;
+  const k = (e: EvidenceRef) => `${e.page}:${e.bbox ? e.bbox.join(",") : "none"}`;
   const want = k(ref);
   return rows.filter((r) => r.evidence.state === "ok" && k(r.evidence.ref) === want).length;
 }

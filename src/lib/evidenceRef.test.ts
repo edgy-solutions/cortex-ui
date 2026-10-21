@@ -33,6 +33,18 @@ describe("readFractionEvidenceRef", () => {
     expect(readFractionEvidenceRef({ page: 1, bbox })).toBeUndefined();
   });
 
+  it("a null bbox is read: stated on this page, no box", () => {
+    expect(readFractionEvidenceRef({ page: 3, bbox: null })).toEqual({ page: 3, bbox: null });
+  });
+
+  it("a missing bbox key is refused", () => {
+    expect(readFractionEvidenceRef({ page: 3 })).toBeUndefined();
+  });
+
+  it("a null bbox with page 0 is refused", () => {
+    expect(readFractionEvidenceRef({ page: 0, bbox: null })).toBeUndefined();
+  });
+
   it.each([
     ["an extra key", { page: 1, bbox: [0.1, 0.2, 0.5, 0.3], extra: 1 }],
     ["a blank note", { page: 1, bbox: [0.1, 0.2, 0.5, 0.3], note: "  " }],

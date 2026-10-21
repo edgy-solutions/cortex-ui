@@ -24,17 +24,19 @@ export function isFractionBox(b: unknown): b is Bbox {
 
 export interface FractionEvidenceRef {
   page: number;
-  bbox: Bbox;
+  /** null = "stated on this page, no box we can draw" (architect 10-21). */
+  bbox: Bbox | null;
   note?: string;
 }
 
-/** Strict reader: keys only page / bbox / note; page an integer >= 1; bbox page fractions; a present note non-blank. */
+/** Strict reader: keys only page / bbox / note; page an integer >= 1; bbox page fractions or null (page-only); a present note non-blank. */
 export function readFractionEvidenceRef(v: unknown): FractionEvidenceRef | undefined {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (k !== "page" && k !== "bbox" && k !== "note") return undefined;
   if (typeof o.page !== "number" || !Number.isInteger(o.page) || o.page < 1) return undefined;
-  if (!isFractionBox(o.bbox)) return undefined;
+  // A missing bbox key is refused too: undefined is neither null nor a box.
+  if (o.bbox !== null && !isFractionBox(o.bbox)) return undefined;
   if ("note" in o) {
     if (typeof o.note !== "string" || o.note.trim() === "") return undefined;
     return { page: o.page, bbox: o.bbox, note: o.note };

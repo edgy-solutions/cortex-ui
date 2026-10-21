@@ -185,6 +185,31 @@ describe("evidence has three states, with different owners", () => {
     });
   });
 
+  it("a row evidence_ref with a null bbox and no page_dims is read as page-only", () => {
+    expect(one({ evidence_ref: { page: 4, bbox: null } })).toEqual({
+      state: "ok",
+      ref: { page: 4, bbox: null, page_dims: { width: 1, height: 1 }, units: null },
+    });
+  });
+
+  it("a row evidence_ref with a null bbox beside page_dims is read as page-only", () => {
+    // page_dims is deliberately INVALID: it must not be validated when there is no box.
+    expect(one({ evidence_ref: { page: 4, bbox: null, page_dims: { width: 0, height: 0 }, units: "pt" } })).toEqual({
+      state: "ok",
+      ref: { page: 4, bbox: null, page_dims: { width: 1, height: 1 }, units: "pt" },
+    });
+  });
+
+  it("a row evidence_ref with a null bbox and no page is malformed", () => {
+    expect(one({ evidence_ref: { bbox: null } })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: { bbox: null, page_dims: { width: 612, height: 792 } } })).toEqual({ state: "malformed" });
+  });
+
+  it("a row evidence_ref with no bbox key is malformed", () => {
+    expect(one({ evidence_ref: { page: 1 } })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: { page: 1, page_dims: { width: 612, height: 792 } } })).toEqual({ state: "malformed" });
+  });
+
   it("a row evidence_ref with no page_dims and a pixel bbox is malformed", () => {
     expect(one({ evidence_ref: { page: 1, bbox: [40, 60, 560, 110] } })).toEqual({ state: "malformed" });
   });
@@ -390,6 +415,32 @@ describe("evidence quality: what the outline IS (7f, doc-tools #132)", () => {
     });
     const ref = ex.rows[0].evidence.state === "ok" ? ex.rows[0].evidence.ref : null;
     expect(rowsSharingEvidence(ex.rows, ref!)).toBe(2);
+  });
+});
+
+describe("a page with no box (architect 10-21)", () => {
+  const row = (i: number, via: string, e: unknown) => ({ row_index: i, part_index: 0, mpn: "A-1", field: "f", extracted_value: "v", obtained_via: via, evidence_ref: e });
+  const NB = { page: 1, bbox: null };
+
+  it("a page with no box shares its crop with no row", () => {
+    const ex = read({ rows: [row(0, "inherited_doc_level", NB), row(1, "inherited_doc_level", NB), row(2, "inherited_doc_level", ev)] });
+    const ev0 = ex.rows[0].evidence;
+    const ev2 = ex.rows[2].evidence;
+    expect(rowsSharingEvidence(ex.rows, ev0.state === "ok" ? ev0.ref : null!)).toBe(0);
+    // A boxed ref does not count a null-bbox row on its page.
+    expect(rowsSharingEvidence(ex.rows, ev2.state === "ok" ? ev2.ref : null!)).toBe(1);
+  });
+
+  it("a region row with no box raises no region warning", () => {
+    const f = flagsOf(read({ rows: [row(0, "region_preferred", NB), row(1, "unique", NB)] }));
+    expect(f.regionEvidence).toBe(0);
+    expect(flagsOf(read({ rows: [row(0, "region_preferred", NB), row(1, "unique", ev)] })).regionEvidence).toBe(1);
+  });
+
+  it("an unknown-method row with no box raises no unknown-method warning", () => {
+    const f = flagsOf(read({ rows: [row(0, "layout_prose", NB)] }));
+    expect(f.unknownMethod).toBe(0);
+    expect(flagsOf(read({ rows: [row(0, "layout_prose", NB), row(1, "layout_prose", ev)] })).unknownMethod).toBe(1);
   });
 });
 

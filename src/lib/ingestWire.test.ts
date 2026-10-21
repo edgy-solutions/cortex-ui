@@ -45,6 +45,26 @@ describe("readIngestStatusRow", () => {
     expect(r?.stage).toBe("received");
   });
 
+  it("review_task_id is read", () => {
+    expect(readIngestStatusRow(row({ review_task_id: "document_promotion:x:g1" }))?.review_task_id).toBe("document_promotion:x:g1");
+    expect(readIngestStatusRow(row({ review_task_id: null }))?.review_task_id).toBeNull();
+    expect(readIngestStatusRow(row())).not.toHaveProperty("review_task_id");
+  });
+
+  it("task_id and superseded_task_id are read from a leaf answer", () => {
+    const r = readIngestStatusRow(row({ task_id: "document_promotion:x:g1", superseded_task_id: "document_promotion:x" }));
+    expect(r?.task_id).toBe("document_promotion:x:g1");
+    expect(r?.superseded_task_id).toBe("document_promotion:x");
+    const n = readIngestStatusRow(row({ task_id: null, superseded_task_id: "document_promotion:x" }));
+    expect(n?.task_id).toBeNull();
+  });
+
+  it.each(["review_task_id", "task_id", "superseded_task_id"])("a blank or non-string task id is not read (%s)", (key) => {
+    for (const bad of ["", "  ", 5, {}, ["a"], true]) {
+      expect(readIngestStatusRow(row({ [key]: bad })), String(bad)).not.toHaveProperty(key);
+    }
+  });
+
   it("rejects non-record input", () => {
     expect(readIngestStatusRow(null)).toBeNull();
     expect(readIngestStatusRow({})).toBeNull();
