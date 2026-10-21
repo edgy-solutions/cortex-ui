@@ -73,9 +73,10 @@ interface MockRow {
    * carry, so it would be dishonest to sniff it the same way.
    */
   origin?: IngestOrigin | null;
-  /** PROPOSED wire pair (see `IngestStatusRow.leaf`): both null until extraction ends, then read from
-   *  the filename — /pcn/i → "pcn", /pdn/i → "pdn" (source "extraction-title"); neither parks the
-   *  row at `awaiting_kind`. A correction sets source "ingest". Absent on a duplicate's row. */
+  /** PROPOSED wire pair (see `IngestStatusRow.leaf`): both null while `received`. The title read is
+   *  extraction's first step (architect, 10-21), so entering `extracting` reads the filename —
+   *  /pcn/i → "pcn", /pdn/i → "pdn" (source "extraction-title"); neither parks the row at
+   *  `awaiting_kind` before parts extraction. A correction sets source "ingest". Absent on a duplicate's row. */
   leaf?: IngestLeaf | null;
   leaf_source?: IngestLeafSource | null;
   /** Mirrors the wire's `failure`/`attempt` (33b80988). Set only by `__seedMockFailedFixture` — the mock never fails a drop on its own. */
@@ -184,18 +185,19 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
     if (next) {
       row.stage = next;
       row.updated_at = Date.now();
-      if (next === "review") {
+      if (next === "extracting") {
+        // The title read is extraction's first step: a leaf from it carries on into parts extraction;
+        // none parks the row before parts extraction until someone picks (it does not advance).
         const name = FILE_NAMES.get(row.ingest_id) ?? "";
         const leaf: IngestLeaf | null = /pcn/i.test(name) ? "pcn" : /pdn/i.test(name) ? "pdn" : null;
         if (leaf) {
           row.leaf = leaf;
           row.leaf_source = "extraction-title";
-          seedReviewTask(row);
         } else {
-          // Nothing in the title names a leaf: park until the dropper picks one (it does not advance).
           row.stage = INGEST_AWAITING_KIND_STATUS;
         }
       }
+      if (row.stage === "review") seedReviewTask(row);
     }
   }
 
@@ -292,7 +294,8 @@ const LEAF_LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected",
 /**
  * PROPOSED — `POST /ingest/{id}/leaf`'s mock (10-21 packet §3b). Unknown id → 404; a terminal row →
  * the wrapped 409 `leaf_locked` (`readActRefusal`'s shape); else sets the leaf with source "ingest",
- * moving an `awaiting_kind` row on to `review`. Resolves with the status body.
+ * resuming an `awaiting_kind` row's extraction (back to `extracting`; the next poll reaches `review`).
+ * Resolves with the status body.
  */
 export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
   const row = STORE.get(ingestId);
@@ -318,10 +321,7 @@ export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<u
   row.leaf = leaf;
   row.leaf_source = "ingest";
   row.updated_at = Date.now();
-  if (row.stage === INGEST_AWAITING_KIND_STATUS) {
-    row.stage = "review";
-    seedReviewTask(row);
-  }
+  if (row.stage === INGEST_AWAITING_KIND_STATUS) row.stage = "extracting";
   return Promise.resolve({ ...row });
 }
 

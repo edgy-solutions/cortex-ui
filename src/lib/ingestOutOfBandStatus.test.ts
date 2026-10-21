@@ -49,9 +49,11 @@ describe("reader: out-of-band stages", () => {
 });
 
 describe("ladder and polling", () => {
+  // awaiting_origin parks after extraction; awaiting_kind after the title read, BEFORE parts
+  // extraction (architect, 10-21), so its extracting rung has not finished.
   const parked = (s: "awaiting_origin" | "awaiting_kind") => [
     { stage: "received", state: "done" },
-    { stage: "extracting", state: "done" },
+    { stage: "extracting", state: s === "awaiting_origin" ? "done" : "pending" },
     { stage: "review", state: "pending" },
     { stage: "promoted", state: "pending" },
     { stage: s, state: "current" },

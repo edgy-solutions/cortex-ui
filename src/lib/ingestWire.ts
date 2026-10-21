@@ -772,11 +772,13 @@ export interface StageRung {
  * support, so they stay `pending` and `failed` is the current rung on its own.
  */
 export function ingestStageLadder(stage: IngestStage | IngestOobDocumentStatus): StageRung[] {
-  // Parked after extraction, waiting on a person: received/extracting happened, review has not.
+  // Parked waiting on a person. awaiting_origin sits after extraction (received/extracting happened,
+  // review has not). awaiting_kind sits after the title read, BEFORE parts extraction (architect,
+  // 10-21): extraction has started but not finished, so it stays pending until a pick resumes it.
   if (stage === INGEST_AWAITING_ORIGIN_STATUS || stage === INGEST_AWAITING_KIND_STATUS) {
     const rungs: StageRung[] = MAIN_STAGES.map((s) => ({
       stage: s,
-      state: s === "received" || s === "extracting" ? "done" : "pending",
+      state: s === "received" || (s === "extracting" && stage === INGEST_AWAITING_ORIGIN_STATUS) ? "done" : "pending",
     }));
     rungs.push({ stage, state: "current" });
     return rungs;
