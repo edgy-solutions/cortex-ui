@@ -48,7 +48,7 @@ interface State {
   setKind: (kind: IngestKind | null) => void;
   clearDraft: () => void;
   /** `owner` is the OIDC sub that keys "My drops"; null records nothing. */
-  submit: (email: string, text: string, owner?: string | null) => Promise<void>;
+  submit: (onBehalfOf: string, text: string, owner?: string | null) => Promise<void>;
 }
 
 let seq = 0;
@@ -85,7 +85,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     set({ kind });
   },
   clearDraft: () => set({ file: null, kind: null, inferred: null }),
-  submit: async (email, text, owner = null) => {
+  submit: async (onBehalfOf, text, owner = null) => {
     const { file, kind } = get();
     if (!file || !kind) return;
     // Not yet accepted (cad: kind_unregistered at the door). Do not send.
@@ -107,7 +107,7 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {
       // content_kind = the format: no leaf kind can be confirmed before the upload (see `uploadIngest`).
-      const raw = await uploadIngest(file, kind, email, kind);
+      const raw = await uploadIngest(file, kind, onBehalfOf, kind);
       const duplicate = readDuplicate(raw);
       if (duplicate) {
         // A duplicate is a RESULT about the ORIGINAL. Today's server answers with a fresh row id

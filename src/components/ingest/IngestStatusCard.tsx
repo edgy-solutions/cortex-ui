@@ -196,9 +196,8 @@ export interface IngestStatusCardProps {
    *  specific status synchronously. */
   initialRow?: IngestStatusRow;
   /**
-   * CORTEX-PROPOSED — the dispute route's own `on_behalf_of`. Threaded down from `IngestPanel`
-   * (which already resolves it from the OIDC profile email for the upload itself — see its doc
-   * comment) rather than this card calling `useAuth()` a second time, so a standalone render of
+   * CORTEX-PROPOSED — the dispute route's own `on_behalf_of`: the caller's `authz_id` (see
+   * `src/lib/dropIdentity.ts`), threaded down from `IngestEntryBody`'s `useDropIdentity()` rather than this card calling `useAuth()` a second time, so a standalone render of
    * this card — every existing test here — needs no `<AuthProvider>` just to show a status row.
    */
   onBehalfOf?: string | null;
@@ -450,7 +449,7 @@ export function IngestStatusCard({
                 type="button"
                 data-ingest-origin-dispute
                 disabled={disputing || !onBehalfOf}
-                title={!onBehalfOf ? "No verified email available" : undefined}
+                title={!onBehalfOf ? "No drop identity (authz_id or verified email) available" : undefined}
                 className="mt-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-amber-600/30 text-amber-200 disabled:opacity-40"
                 onClick={() => void handleDispute(row.ingest_id)}
               >

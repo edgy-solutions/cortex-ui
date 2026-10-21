@@ -1036,6 +1036,13 @@ export interface EntitlementCell {
 /** Response body for GET /me/entitlements */
 export interface Entitlements {
   user_id: string;
+  /**
+   * The key a drop's `on_behalf_of` must echo to be a self-drop (gateway `_admit_on_behalf_of`).
+   * NOT the email: at work `USER_ENTITLEMENT_CLAIM` is `preferred_username`. Absent from a BFF
+   * older than invincible-agent `7a98f7bd` — see `src/lib/dropIdentity.ts` for the fallback.
+   */
+  authz_id?: string;
+  /** Display only — never an `on_behalf_of`. */
   email: string;
   cells: EntitlementCell[];
   default: EntitlementCell | null;

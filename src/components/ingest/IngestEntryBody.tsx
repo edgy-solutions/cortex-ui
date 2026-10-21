@@ -10,14 +10,14 @@
  * A duplicate is a RESULT, never the error styling (reserved for a refused upload); one that named
  * its original opens the original's status, so "original is at {stage}" reads as the card draws it.
  */
-import { useAuth } from "react-oidc-context";
 import { FileText } from "lucide-react";
 import { IngestStatusCard } from "./IngestStatusCard";
 import { duplicatePhrase } from "@/lib/ingestWire";
+import { useDropIdentity } from "@/hooks/useDropIdentity";
 import type { IngestComponent } from "@/lib/ingestArtifact";
 
 export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
-  const email = useAuth().user?.profile.email ?? null;
+  const onBehalfOf = useDropIdentity();
   return (
     <div className="glass-panel p-3 border-cyan-500/20" data-ingest-entry={ingest.ingest_id ?? ""}>
       <div className="flex items-center gap-2 text-[11px] font-mono text-slate-200" data-ingest-turn-header>
@@ -58,7 +58,7 @@ export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
         <IngestStatusCard
           ingestId={ingest.ingest_id}
           fromStore
-          onBehalfOf={email}
+          onBehalfOf={onBehalfOf}
           duplicatePhraseDrawn={ingest.duplicate_message !== null}
         />
       )}

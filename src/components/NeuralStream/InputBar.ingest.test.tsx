@@ -35,7 +35,9 @@ vi.mock("@/lib/ingestTransport", () => ({
 }));
 // The status card polls the network on its own; the turn tests only need to know it mounted.
 vi.mock("@/components/ingest/IngestStatusCard", () => ({
-  IngestStatusCard: ({ ingestId }: { ingestId: string }) => <div data-testid="status-card">{ingestId}</div>,
+  IngestStatusCard: ({ ingestId, onBehalfOf }: { ingestId: string; onBehalfOf?: string | null }) => (
+    <div data-testid="status-card" data-on-behalf-of={onBehalfOf ?? ""}>{ingestId}</div>
+  ),
 }));
 // The HUD arm needs the HUD to mount without its stores' network side.
 vi.mock("@/components/HUD/OntologyMap", () => ({ OntologyMap: () => null }));
@@ -57,6 +59,10 @@ import { HUD } from "@/components/HUD/HUD";
 import { useIngestComposerStore } from "@/store/useIngestComposerStore";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
 import { DRAG_IDLE_MS } from "@/lib/fileDropGuard";
+import { usePersonaStore } from "@/store/usePersonaStore";
+import { NO_DROP_IDENTITY } from "@/lib/dropIdentity";
+import type { Entitlements } from "@/api/types";
+import type { IngestComponent } from "@/lib/ingestArtifact";
 
 const pdf = () => new File(["%PDF-1.4\n"], "PCN26-117.pdf", { type: "application/pdf" });
 
@@ -88,6 +94,7 @@ beforeEach(() => {
   sendMessage.mockReset();
   uploadIngest.mockReset();
   useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+  usePersonaStore.setState({ entitlements: null });
 });
 afterEach(cleanup);
 
@@ -492,5 +499,66 @@ describe("a drag can never leave the composer or overlay stuck open", () => {
       });
       expect(overlay(), "at " + t + "ms").not.toBeNull();
     }
+  });
+});
+
+/**
+ * Lane 1, 2026-10-21: at work every drop was refused `not_a_delegate`. The gateway reads an
+ * `on_behalf_of` that is not the caller's `authz_id` as a delegation, and the UI sent the OIDC
+ * email, which equals `authz_id` only while USER_ENTITLEMENT_CLAIM is "email". Every fixture
+ * above has them equal-by-construction (no entitlements, so the email), which passes with either
+ * value — these arms make them DIFFER.
+ */
+describe("the drop identity is authz_id, not the email (not_a_delegate at work)", () => {
+  const ENT = (extra: Partial<Entitlements>): Entitlements =>
+    ({ user_id: "sub-e12345", email: "steward@example.com", cells: [], default: null, source: "topaz", ...extra }) as Entitlements;
+
+  async function attachPdf(r: ReturnType<typeof render>) {
+    act(() => {
+      fireEvent(composer(), dragEvent("drop", composer(), { files: [pdf()] }));
+    });
+    await waitFor(() => expect(useIngestComposerStore.getState().inferred).not.toBeNull());
+    return r.getByRole("button", { name: "Send" }) as HTMLButtonElement;
+  }
+
+  it("the upload's on_behalf_of is /me/entitlements' authz_id when it differs from the token's email", async () => {
+    usePersonaStore.setState({ entitlements: ENT({ authz_id: "E12345" }) });
+    uploadIngest.mockResolvedValue({ ingest_id: "ing-w", stage: "received", duplicate: null });
+    const r = render(<InputBar />);
+    const send = await attachPdf(r);
+    expect(send.disabled).toBe(false);
+    fireEvent.click(send);
+    expect(uploadIngest).toHaveBeenCalledTimes(1);
+    expect(uploadIngest.mock.calls[0][2], "on_behalf_of must be authz_id, never the email").toBe("E12345");
+    await waitFor(() => expect(useIngestComposerStore.getState().turns[0].phase).toBe("status"));
+  });
+
+  it("the dispute route gets the same authz_id, threaded from the entry body", () => {
+    usePersonaStore.setState({ entitlements: ENT({ authz_id: "E12345" }) });
+    const ingest = {
+      ingest_id: "ing-w", filename: "PCN26-117.pdf", kind: "pdf", note: null, badge: "received", duplicate_of: null,
+      error: null, reason: null, duplicate_message: null,
+    } as unknown as IngestComponent;
+    const r = render(<IngestEntryBody ingest={ingest} />);
+    expect(r.getByTestId("status-card").getAttribute("data-on-behalf-of")).toBe("E12345");
+  });
+
+  it("a BFF older than 7a98f7bd (no authz_id key) falls back to the email: today's behaviour", async () => {
+    usePersonaStore.setState({ entitlements: ENT({}) });
+    uploadIngest.mockResolvedValue({ ingest_id: "ing-s", stage: "received", duplicate: null });
+    const r = render(<InputBar />);
+    fireEvent.click(await attachPdf(r));
+    expect(uploadIngest.mock.calls[0][2]).toBe("steward@example.com");
+    await waitFor(() => expect(useIngestComposerStore.getState().turns[0].phase).toBe("status"));
+  });
+
+  it("a blank authz_id disables the upload with its reason, even though an email is present", async () => {
+    usePersonaStore.setState({ entitlements: ENT({ authz_id: "  " }) });
+    const r = render(<InputBar />);
+    const send = await attachPdf(r);
+    expect(send.disabled).toBe(true);
+    expect(document.querySelector("[data-ingest-kind-blocked]")?.textContent).toBe(NO_DROP_IDENTITY);
+    fireEvent.click(send);
+    expect(uploadIngest).not.toHaveBeenCalled();
   });
 });

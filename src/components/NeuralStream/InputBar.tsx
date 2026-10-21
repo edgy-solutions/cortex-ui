@@ -17,6 +17,8 @@ import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { ingestComponentFrom, ingestInFlight } from "@/lib/ingestArtifact";
+import { NO_DROP_IDENTITY } from "@/lib/dropIdentity";
+import { useDropIdentity } from "@/hooks/useDropIdentity";
 
 export function InputBar() {
   // Draft-backed instead of plain useState: a failed silent renew unmounts this whole
@@ -43,9 +45,9 @@ export function InputBar() {
   // INGEST turn (POST /ingest), not an /interview question. See useIngestComposerStore.
   const ingestEnabled = isIngestUiEnabled();
   const auth = useAuth();
-  // on_behalf_of must equal the caller's authz_id; the OIDC profile email is that value only
-  // while USER_ENTITLEMENT_CLAIM stays "email" (the same coincidence IngestPanel documented).
-  const email = auth.user?.profile.email ?? null;
+  // on_behalf_of must equal the caller's authz_id — read from /me/entitlements, NOT the OIDC email,
+  // which equals it only while USER_ENTITLEMENT_CLAIM stays "email" (not at work). See dropIdentity.
+  const onBehalfOf = useDropIdentity();
   const chipFile = useIngestComposerStore((s) => s.file);
   const chipKind = useIngestComposerStore((s) => s.kind);
   const chipInferred = useIngestComposerStore((s) => s.inferred);
@@ -115,9 +117,9 @@ export function InputBar() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (hasChip) {
-      // An ingest turn: needs the human-confirmed kind and a verified email; never an interview.
-      if (!chipKind || !email) return;
-      void useIngestComposerStore.getState().submit(email, value.trim(), auth.user?.profile?.sub ?? null);
+      // An ingest turn: needs the human-confirmed kind and a drop identity; never an interview.
+      if (!chipKind || !onBehalfOf) return;
+      void useIngestComposerStore.getState().submit(onBehalfOf, value.trim(), auth.user?.profile?.sub ?? null);
       clearDraft();
       return;
     }
@@ -133,7 +135,7 @@ export function InputBar() {
   // surfacing the disabled state here makes the rate-limit visible to the
   // user instead of a button that looks active but does nothing.
   const isDisabled = phase !== "active" || isProcessing;
-  const sendDisabled = hasChip ? !chipKind || !email : !value.trim() || isDisabled;
+  const sendDisabled = hasChip ? !chipKind || !onBehalfOf : !value.trim() || isDisabled;
 
   return (
     <div className="px-6 pb-5 pt-2">
@@ -200,7 +202,7 @@ export function InputBar() {
                     onConfirm={() => {}}
                     onSelect={(k) => useIngestComposerStore.getState().setKind(k)}
                     blockedReason={
-                      email ? null : "No verified email available — upload is disabled until one is."
+                      onBehalfOf ? null : NO_DROP_IDENTITY
                     }
                   />
                 </>
@@ -212,9 +214,9 @@ export function InputBar() {
                   >
                     {chipInferred.kind} · detected
                   </span>
-                  {!email && (
+                  {!onBehalfOf && (
                     <p className="text-[10px] font-mono text-amber-400" data-ingest-kind-blocked>
-                      No verified email available — upload is disabled until one is.
+                      {NO_DROP_IDENTITY}
                     </p>
                   )}
                 </>
