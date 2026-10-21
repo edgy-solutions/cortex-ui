@@ -36,20 +36,23 @@ describe("RawFields", () => {
     expect(keys).toEqual(["a", "b", "c"]);
   });
 
-  it("seal 4 — raw means raw: 1234.5 is `1234.5`, not `1,234.5`, not `$`; a string keeps its quotes", () => {
+  it("seal 4 — raw means raw: 1234.5 is `1234.5`, not `1,234.5`, not `$`; a string is verbatim", () => {
     const { container } = render(<RawFields fields={{ n: 1234.5, s: "hours" }} />);
-    const n = container.querySelector('[data-raw-field="n"] pre')!.textContent;
-    const s = container.querySelector('[data-raw-field="s"] pre')!.textContent;
+    const n = container.querySelector('[data-raw-field="n"] div')!.textContent;
+    const s = container.querySelector('[data-raw-field="s"] div')!.textContent;
     expect(n).toBe("1234.5");
     expect(n).not.toContain(",");
     expect(n).not.toContain("$");
-    expect(s).toBe('"hours"');
+    expect(s).toBe("hours");
   });
 
-  it("undefined shows as the literal text `undefined`; objects are indented JSON", () => {
+  it("undefined shows as the literal text `undefined`; an object collapses to a summary, not JSON", () => {
     const { container } = render(<RawFields fields={{ u: undefined, o: { x: 1 } }} />);
-    expect(container.querySelector('[data-raw-field="u"] pre')!.textContent).toBe("undefined");
-    expect(container.querySelector('[data-raw-field="o"] pre')!.textContent).toBe('{\n  "x": 1\n}');
+    expect(container.querySelector('[data-raw-field="u"] div')!.textContent).toBe("undefined");
+    const o = container.querySelector('[data-raw-field="o"]')!;
+    expect(o.querySelector("details")!.hasAttribute("open")).toBe(false);
+    expect(o.querySelector("summary")!.textContent).toBe("{1 keys}");
+    expect(o.querySelector("pre")).toBeNull();
   });
 
   it("stops pointerdown on the summary so opening it does not start a canvas drag", () => {

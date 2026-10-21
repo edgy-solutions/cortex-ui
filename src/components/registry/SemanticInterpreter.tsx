@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 
 // Lazy-loaded or imported directly for interpretation
 import { WarningCard } from "../NeuralStream/WarningCard";
@@ -8,6 +8,7 @@ import { CanvasSeedReceipt } from "./CanvasSeedReceipt";
 import { ForecastMeasure } from "../planning/ForecastMeasure";
 import { archetypePackage } from "@/archetypes/registry";
 import { RawFields } from "@/archetypes/RawFields";
+import { StructuredFields } from "@/archetypes/StructuredFields";
 import { rawFieldsOf } from "@/lib/rawFields";
 import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
@@ -218,23 +219,10 @@ const renderComponent = (
         scopeLabel={typeof comp.scope_label === "string" ? comp.scope_label : undefined}
       />
     );
-    // Platform rev 186: a refused engine body drawn as a document keeps its `markdown_content`
-    // (often the engine's own explanation). Draw the refusal first, then the prose beneath it,
-    // through the SAME renderer the ungated KNOWLEDGE_DOCUMENT path uses (recursion with the
-    // envelope stripped). Every other archetype stays refusal-only.
-    if (comp.archetype !== "KNOWLEDGE_DOCUMENT") return card;
-    const hasProse = typeof comp.markdown_content === "string" && comp.markdown_content.trim() !== "";
-    const { refusal: _dropped, ...unrefused } = comp;
-    return (
-      <div data-refusal-document>
-        {card}
-        {hasProse && (
-          <div data-refusal-prose className="mt-2 text-xs opacity-70">
-            {renderComponent(unrefused, onPublish, previewRows, artifactId)}
-          </div>
-        )}
-      </div>
-    );
+    // Platform rev 186's "prose beneath" is SUPERSEDED (201, 2026-10-20): the prose of a refused
+    // KNOWLEDGE_DOCUMENT is the engine's fenced reply, i.e. the refusal again. A refused answer is
+    // the refusal block and nothing else.
+    return card;
   }
 
   switch (comp.archetype) {
@@ -565,7 +553,7 @@ const renderComponent = (
       // the rows — see the contract's `spreadIsUpstream`.
       const pkg = archetypePackage("COMPETING_MEASURES");
       if (!pkg) break; // Should not happen outside a test that stubs the registry — falls to the
-      // "UI COMPONENT NOT FOUND" panel below, same as any other unregistered archetype.
+      // "no render registered" card (StructuredFields) after the switch, same as any other unregistered archetype.
       // Bound to the package's own component name, not a generic placeholder — not only for
       // readability: `assembleCapabilities.test.ts` derives "what the interpreter dispatches" by
       // scanning this file's source for the JSX tag opened after each `case`, and a shared
@@ -638,11 +626,9 @@ const renderComponent = (
         <div data-model-canvas="off" className="p-4 glass-panel flex flex-col gap-2">
           <p className="font-mono text-xs text-slate-300">MODEL_EXPLANATION · the model canvas is off in this build</p>
           <p className="font-mono text-[10px] text-slate-500">
-            Behind the <code>modelCanvas</code> flag. Raw payload below.
+            Behind the <code>modelCanvas</code> flag. Fields below.
           </p>
-          <pre className="max-h-64 overflow-auto font-mono text-[10px] text-slate-400">
-            {JSON.stringify(comp, null, 2)}
-          </pre>
+          <StructuredFields fields={comp} archetype="MODEL_EXPLANATION" notDrawn="the model canvas flag is off" />
         </div>
       );
     }
@@ -721,7 +707,7 @@ const renderComponent = (
     }
 
     // DIGITAL_TWIN_3D dispatch removed 2026-06-26 — falls through to
-    // the "UI COMPONENT NOT FOUND" default render (honest: tells the
+    // the "no render registered" default render (honest: tells the
     // truth about archetypes the registry doesn't currently handle).
     // The widget file at `../mesh/DigitalTwinWidget.tsx` is preserved
     // for the future revisit.
@@ -768,23 +754,17 @@ const renderComponent = (
           </div>
         );
       }
-      return (
-        <div className="p-4 glass-panel border-amber-500/30 flex flex-col gap-3">
-          <div className="flex items-start gap-3 border-b border-amber-500/20 pb-3">
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-mono text-xs text-amber-500 font-bold">UI COMPONENT NOT FOUND: {comp.archetype}</p>
-              <p className="font-mono text-[10px] text-slate-400">
-                The mesh returned a new UI widget type. Raw data payload is displayed below:
-              </p>
-            </div>
-          </div>
-          <div className="bg-black/50 p-3 rounded text-[10px] font-mono text-slate-300 overflow-x-auto max-h-60 overflow-y-auto">
-            <pre>{JSON.stringify(comp, null, 2)}</pre>
-          </div>
-        </div>
-      );
+      return <StructuredFields fields={comp} archetype={comp.archetype ?? "(no archetype)"} />;
   }
+  // Every `if (!pkg …) break;` above lands here: a card that cannot be drawn is still a card, never
+  // a silent nothing (201).
+  return (
+    <StructuredFields
+      fields={comp}
+      archetype={comp.archetype}
+      notDrawn="its package is missing or the payload lacks the key it draws"
+    />
+  );
 };
 
 // Full-width archetypes — the components that need ROW space (a
@@ -914,6 +894,8 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 (ADR-0055 amendment requested of Lane 1). `no_declaration` draws nothing. */}
             {(() => {
               const raw = rawFieldsOf(comp);
+              // A refused answer is the refusal block and nothing else (201).
+              if (readRefusalEnvelope(comp)) return null;
               return raw.status === "raw" ? <RawFields fields={raw.fields} /> : null;
             })()}
           </div>

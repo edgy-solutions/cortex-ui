@@ -224,6 +224,15 @@ describe("the safety bindings carry the right authority", () => {
     expect(by("RiskAssessmentDraft").archetype).toBe("KNOWLEDGE_DOCUMENT");
   });
 
+  it("FailureRecordSet is bound to KNOWLEDGE_DOCUMENT (201), not the ranking whose passthrough drops the part and dates", () => {
+    const row = assembleDerivedCapabilities().find((c) => c.subject_uri === `${SAFETY}FailureRecordSet`)!;
+    expect(row, "FailureRecordSet is not bound").toBeDefined();
+    expect(row.archetype).toBe("KNOWLEDGE_DOCUMENT");
+    expect(row.object_uri).toBe("mesh:KnowledgeDocument");
+    expect(row.domain_fit).toEqual(["SUSTAINMENT"]);
+    expect(row.persona_fit).toEqual(["SAFETY_ENGINEER"]);
+  });
+
   it("claims SUSTAINMENT and SAFETY_ENGINEER — both DERIVED from the engine", () => {
     // Both come from safety_agent/main.py:108-109 — OWNER_PERSONA and DOMAINS — and are passed
     // at the engine own registration sites. An earlier version asserted an EMPTY persona on the

@@ -29,7 +29,7 @@ afterEach(() => {
   useStageStore.setState({ canvases: [] } as never);
 });
 
-const NOT_FOUND = /UI COMPONENT NOT FOUND/i;
+const NOT_FOUND = /no render registered for|render not drawn/i; // 201: the not-found panel became the structured card; BOTH its lines (unknown archetype, package fall-through) count
 
 describe("the interpreter knows the difference between undrawn and missing", () => {
   it("the registry declares at least one acted-on archetype — positive control", () => {

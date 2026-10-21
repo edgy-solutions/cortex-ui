@@ -211,7 +211,7 @@ describe("the SemanticInterpreter dispatches ILLUSTRATION through the registry",
       />,
     );
     expect(document.querySelector('[data-archetype="ILLUSTRATION"]')).not.toBeNull();
-    expect(screen.queryByText(/UI COMPONENT NOT FOUND/)).toBeNull();
+    expect(screen.queryByText(/no render registered for|render not drawn/)).toBeNull();
   });
 
   it("an envelope with NO illustration object does not draw the card (and does not throw)", () => {

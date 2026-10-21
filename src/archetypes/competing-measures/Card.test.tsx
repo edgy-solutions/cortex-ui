@@ -485,7 +485,7 @@ describe("the payload arrives under the key the projector registers", () => {
     // And the "not found" fallback — what a wrong or absent payload key would fall to — is not
     // what rendered. Rules out the dispatch silently missing and the default panel reading as a
     // false positive on `getByText` alone.
-    expect(screen.queryByText(/UI COMPONENT NOT FOUND/)).toBeNull();
+    expect(screen.queryByText(/no render registered for|render not drawn/)).toBeNull();
   });
 });
 

@@ -621,12 +621,21 @@ const DERIVED_BINDINGS = [
   // ("failures"), not a currency: formatAmount prints it bare. `favourable` is absent upstream.
   // A refused body ({refused:true, outcome:"source_unavailable"}, no rows) must NEVER be drawn
   // as an empty card from either of these two subjects.
+  //
+  // REBOUND TO KNOWLEDGE_DOCUMENT (201, 2026-10-20). The ranking projection's passthrough
+  // (`main.py:951`) carries rows only: no part_number, failure_count or dated failures. So the
+  // card the human asked for (part, count, records by date with source refs) cannot be drawn from
+  // it. The document binding delivers the whole reply and cortex draws it by `output_uri`
+  // (`src/renders/`). When the producer adds a FAILURE_RECORD_SET archetype (KNOWN_ARCHETYPES
+  // first) this row moves to it. NOTE this flips the producer's `capabilities.py` mirror row
+  // (`safety:FailureRecordSet -> mesh:ContributionRanking`), which their
+  // `test_the_two_MIRRORS_agree_FLEET_WIDE` reads from a sibling checkout.
   {
     subject_uri: "http://internal/sustainment/safety#FailureRecordSet",
-    object_uri: "mesh:ContributionRanking",
+    object_uri: "mesh:KnowledgeDocument",
     persona_fit: ["SAFETY_ENGINEER"],
     domain_fit: ["SUSTAINMENT"],
-    contract: CONTRIBUTION_RANKING_CONTRACT,
+    contract: MARKDOWN_RENDERER_CONTRACT,
   },
   {
     subject_uri: "http://internal/sustainment/safety#FailureTrend",
@@ -649,9 +658,9 @@ const DERIVED_BINDINGS = [
     contract: MARKDOWN_RENDERER_CONTRACT,
   },
   {
-    // A DRAFTED severity and probability with the matrix cell that produced the level. Prose is
-    // the honest treatment for a draft that is explicitly NOT a decision: no archetype should
-    // make it look like one.
+    // A DRAFTED severity and probability with the matrix cell that produced the level. "Prose is
+    // the honest treatment" is SUPERSEDED (201, 2026-10-20): the document carries the reply and
+    // cortex draws `RiskAssessmentDraftCard` by `output_uri` (`src/renders/`).
     subject_uri: "http://internal/sustainment/safety#RiskAssessmentDraft",
     object_uri: "mesh:KnowledgeDocument",
     persona_fit: ["SAFETY_ENGINEER"],

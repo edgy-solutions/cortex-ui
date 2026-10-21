@@ -159,7 +159,7 @@ describe("the SemanticInterpreter dispatches WORKFLOW_CASE through the registry"
       />,
     );
     expect(document.querySelector('[data-archetype="WORKFLOW_CASE"]')).not.toBeNull();
-    expect(screen.queryByText(/UI COMPONENT NOT FOUND/)).toBeNull();
+    expect(screen.queryByText(/no render registered for|render not drawn/)).toBeNull();
   });
 
   it("an envelope with NO case object does not draw the card (and does not throw)", () => {

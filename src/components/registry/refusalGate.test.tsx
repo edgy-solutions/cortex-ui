@@ -94,24 +94,24 @@ describe("the refusal gate", () => {
     expect(container.textContent).toMatch(/no contributors recorded/i);
   });
 
-  describe("a refused KNOWLEDGE_DOCUMENT keeps its prose (rev 186)", () => {
-    const PROSE = "Hazard H-12 is closed; no assessment can be drafted.";
+  describe("a refused KNOWLEDGE_DOCUMENT is the refusal block and nothing else (201 supersedes rev 186)", () => {
+    const PROSE = "Hazard H-12 is closed; no assessment can be drawn.";
     const doc = (extra: object) => ({ archetype: "KNOWLEDGE_DOCUMENT", ...extra });
 
-    it("draws the refusal, then the prose beneath it", () => {
-      const { container } = draw(doc({ markdown_content: PROSE, refusal: canonical }));
+    it("draws the refusal ONLY: no prose container, no document text, no raw section", () => {
+      const { container } = draw(doc({ markdown_content: PROSE, extra_key: "x", refusal: canonical }));
       const el = refusalEl();
       expect(el, "no [data-refusal]").not.toBeNull();
       expect(el!.getAttribute("role")).toBe("status");
       expect(el!.getAttribute("data-refusal-outcome")).toBe("source_unavailable");
       expect(container.textContent).toContain(REASON);
-      const prose = container.querySelector("[data-refusal-document] [data-refusal-prose]");
-      expect(prose, "prose container missing").not.toBeNull();
-      expect(prose!.textContent).toContain(PROSE);
-      expect(el!.compareDocumentPosition(prose!) & Node.DOCUMENT_POSITION_FOLLOWING, "prose not after card").toBeTruthy();
+      expect(container.querySelector("[data-refusal-prose]")).toBeNull();
+      expect(container.querySelector("[data-refusal-document]")).toBeNull();
+      expect(container.textContent).not.toContain(PROSE);
+      expect(container.querySelector("[data-raw-fields]")).toBeNull();
     });
 
-    it.each([[undefined], [""], ["   \n"]])("no prose (%j): card alone, no empty prose box", (md) => {
+    it.each([[undefined], [""], ["   \n"]])("no prose (%j): card alone", (md) => {
       const { container } = draw(doc({ ...(md === undefined ? {} : { markdown_content: md }), refusal: canonical }));
       expect(refusalEl()).not.toBeNull();
       expect(container.querySelector("[data-refusal-prose]")).toBeNull();
@@ -127,9 +127,40 @@ describe("the refusal gate", () => {
     it("a non-document archetype with a prose-like field stays refusal-only", () => {
       const { container } = draw({ archetype: "SHORTFALL_GRID", rows: [], markdown_content: PROSE, refusal: canonical });
       expect(refusalEl()).not.toBeNull();
-      // (the card itself lists undeclared fields under "Raw"; that is today's behaviour)
       expect(container.querySelector("[data-refusal-prose]")).toBeNull();
       expect(container.querySelector("[data-refusal-document]")).toBeNull();
+      expect(container.querySelector("[data-raw-fields]")).toBeNull();
+    });
+
+    it("the screenshot shape (part 5530-184): the reason appears once; no JSON layers beneath", () => {
+      const reason = "no failures recorded for part '5530-184': no source this engine reads holds a failure for it";
+      const reply = {
+        refused: true,
+        outcome: "no_failures_recorded",
+        part_number: "5530-184",
+        reason,
+        output_uri: "http://internal/sustainment/safety#FailureRecordSet",
+      };
+      const { container } = draw(
+        doc({
+          refusal: { refused: true, outcome: "no_failures_recorded", reason },
+          markdown_content: "```json\n" + JSON.stringify(reply, null, 2) + "\n```",
+          undeclared_extra: { a: 1 },
+        }),
+      );
+      expect(refusalEl()).not.toBeNull();
+      const carrying = [...container.querySelectorAll("*")].filter(
+        (e) => [...e.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? "").includes(reason)),
+      );
+      expect(carrying.length, "reason text must sit in exactly one element").toBe(1);
+      expect(refusalEl()!.contains(carrying[0])).toBe(true);
+      const outside = [...container.querySelectorAll("*")].filter(
+        (e) => !refusalEl()!.contains(e) && !e.contains(refusalEl()!) && (e.textContent ?? "").includes("5530-184"),
+      );
+      expect(outside).toEqual([]);
+      expect(container.querySelector("[data-raw-fields]")).toBeNull();
+      expect(container.querySelector("pre")).toBeNull();
+      expect(container.querySelector("[data-structured-fields]")).toBeNull();
     });
   });
 
@@ -197,7 +228,7 @@ describe("the refusal gate", () => {
       expect(container.textContent).toContain("Refused");
     });
 
-    it("KNOWLEDGE_DOCUMENT: not_assessed card with its headline, prose beneath", () => {
+    it("KNOWLEDGE_DOCUMENT: not_assessed card with its headline, and NO prose (201)", () => {
       const PROSE = "No assessment draft can be written for this hazard.";
       const { container } = draw({
         archetype: "KNOWLEDGE_DOCUMENT",
@@ -205,12 +236,11 @@ describe("the refusal gate", () => {
         refusal: { refused: true, outcome: "not_assessed", reason: reasonFor("HAZ-1006"), hazard_id: "HAZ-1006", gap: GAP },
       });
       const el = refusalEl()!;
-      expect(el.textContent).toContain("Hazard not assessed \u2014 no risk level, no authority");
+      expect(el.textContent).toContain("Hazard not assessed — no risk level, no authority");
       expect(el.querySelector("[data-refusal-gap]")!.textContent).toBe(GAP);
-      const prose = container.querySelector("[data-refusal-document] [data-refusal-prose]");
-      expect(prose, "prose missing").not.toBeNull();
-      expect(prose!.textContent).toContain(PROSE);
-      expect(el.compareDocumentPosition(prose!) & Node.DOCUMENT_POSITION_FOLLOWING, "prose not after card").toBeTruthy();
+      expect(container.querySelector("[data-refusal-prose]")).toBeNull();
+      expect(container.textContent).not.toContain(PROSE);
+      expect(container.querySelector("[data-raw-fields]")).toBeNull();
     });
   });
 });

@@ -4,6 +4,11 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
 import { knowledgeDocumentView } from "./knowledgeDocumentView";
+import { StructuredFields, StructuredValue } from "@/archetypes/StructuredFields";
+import { RefusalCard } from "@/components/registry/RefusalCard";
+import { decodeFencedPayload } from "@/lib/fencedPayload";
+import { readRefusalEnvelope } from "@/lib/refusalEnvelope";
+import { outputRenderFor } from "@/renders/outputRenders";
 
 /**
  * MarkdownRenderer — KNOWLEDGE_DOCUMENT archetype render.
@@ -42,6 +47,18 @@ import { knowledgeDocumentView } from "./knowledgeDocumentView";
  * this card, unlike a caption or a footer note, so it gets the brighter of the two "readable"
  * lines — slate-200 keeps long-form content scannable.
  */
+/** A `language-json` block whose text parses to an object or array; otherwise undefined. */
+function parseJsonBlock(className: string | undefined, children: unknown): object | undefined {
+  if (!(className || "").includes("language-json")) return undefined;
+  const text = (Array.isArray(children) ? children.join("") : String(children ?? "")).replace(/\n$/, "");
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const MarkdownDocumentBody = ({
   content,
   subject,
@@ -132,6 +149,15 @@ const MarkdownDocumentBody = ({
             // inline styling when nested inside it.
             code: ({ className, children, ...rest }) => {
               const isBlock = (className || "").includes("language-");
+              // 201: a JSON block that parses is a structured view, never a code block.
+              const json = isBlock ? parseJsonBlock(className, children) : undefined;
+              if (json !== undefined) {
+                return (
+                  <span data-json-block-structured className="block font-mono text-[11px] text-slate-200">
+                    <StructuredValue value={json} />
+                  </span>
+                );
+              }
               if (isBlock) {
                 // Inside <pre>; let pre's styling drive the block.
                 return (
@@ -149,11 +175,16 @@ const MarkdownDocumentBody = ({
                 </code>
               );
             },
-            pre: ({ children }) => (
+            pre: ({ children }) => {
+              // A parseable json block is drawn structured by `code` above; no <pre> around it.
+              const only = Array.isArray(children) ? undefined : (children as { props?: { className?: string; children?: unknown } });
+              if (only?.props && parseJsonBlock(only.props.className, only.props.children) !== undefined) return <>{children}</>;
+              return (
               <pre className="bg-slate-950/60 border border-cyan-500/10 rounded-lg p-4 my-4 overflow-x-auto">
                 {children}
               </pre>
-            ),
+              );
+            },
             blockquote: ({ children }) => (
               <blockquote className="border-l-2 border-cyan-500/40 pl-4 my-4 text-slate-300 italic">
                 {children}
@@ -276,6 +307,29 @@ export const MarkdownRenderer = (props: any) => {
       <div data-doc-abstained>
         <MarkdownDocumentBody content={view.body} subject={view.subject} />
       </div>
+    );
+  }
+  // 201: the engine's fenced flat reply is drawn by its `output_uri`, never as a JSON fence.
+  const decoded = decodeFencedPayload(view.content);
+  if (decoded) {
+    const { prose, payload } = decoded;
+    if (payload.refused === true) {
+      // A refused body that reached us without an envelope: the refusal block and nothing else.
+      return <RefusalCard envelope={readRefusalEnvelope({ refusal: payload })!} archetype="KNOWLEDGE_DOCUMENT" />;
+    }
+    const uri = payload.output_uri;
+    const Render = outputRenderFor(uri);
+    return (
+      <>
+        {prose !== "" && <MarkdownDocumentBody content={prose} subject={view.subject} />}
+        {Render ? (
+          <div data-output-render={uri as string}>
+            <Render payload={payload} />
+          </div>
+        ) : (
+          <StructuredFields fields={payload} archetype={typeof uri === "string" ? uri : "KNOWLEDGE_DOCUMENT"} />
+        )}
+      </>
     );
   }
   return <MarkdownDocumentBody content={view.content} subject={view.subject} />;

@@ -161,6 +161,8 @@ env:
   #   to 199's BFF sha, read off the pods, once 199 rolls. Check 2: task_kinds diff (every
   #   task_kinds dir) EMPTY (control 3f27c7cb..938d7639: 5 files changed). Check 3: uv.lock
   #   iagent-mesh 7e513c36 at both. Gate: the full suite against a git-archive export of 938d7639.
+  # 2026-10-20 READ OFF THE PODS after 199's window: all 22 iagent pods on 938d7639 (03:32Z,
+  #   uniform). The "STILL NOT read off the pods" above is now false; the pin is the fleet's.
   PRODUCER_REF: 938d7639f89695ee88fc768739c7a3faf360a40b
 
 permissions:
