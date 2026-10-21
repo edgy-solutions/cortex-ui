@@ -59,7 +59,10 @@ import {
   isIngestNotFoundError,
   ingestStageLadder,
   ingestEventLadder,
+  INGEST_AWAITING_KIND_STATUS,
+  INGEST_AWAITING_ORIGIN_STATUS,
   INGEST_CASE_OPENED_STATUS,
+  INGEST_REVIEW_REJECTED_STATUS,
   ingestPollingDone,
   INGEST_FAILED_TIMEOUT_POLL_MS,
   INGEST_FAILURE_TIMEOUT,
@@ -67,10 +70,9 @@ import {
   promotionIngestId,
   payloadMatchesIngestId,
   type IngestStatusRow,
-  type IngestStage,
 } from "@/lib/ingestWire";
 import { IngestFailureExtras } from "./IngestFailureExtras";
-import { IngestKindSuggestion } from "./IngestKindSuggestion";
+import { IngestLeafChip } from "./IngestLeafChip";
 import { duplicatePhrase } from "@/lib/ingestWire";
 import { originSummary } from "@/lib/ingestOrigin";
 
@@ -476,7 +478,7 @@ export function IngestStatusCard({
         </div>
       )}
 
-      <IngestKindSuggestion row={row} />
+      <IngestLeafChip row={row} onRow={setRow} />
 
       {/* Drawn ONLY for the object. Absent (no claim) and null (no defect on record) draw nothing. */}
       {row.extraction_defect && (
@@ -515,14 +517,14 @@ export function IngestStatusCard({
       ) : (
         <>
           <ul className="flex items-center gap-2" data-ingest-ladder>
-            {ingestStageLadder(row.stage as IngestStage).map((rung) => (
+            {ingestStageLadder(row.stage as Parameters<typeof ingestStageLadder>[0]).map((rung) => (
               <li
                 key={rung.stage}
                 className="flex items-center gap-1 text-[10px] font-mono text-slate-300"
                 data-ingest-ladder-stage={rung.stage}
                 data-ingest-ladder-state={rung.state}
               >
-                <span className={rung.stage === "rejected" || rung.stage === "failed" ? "text-amber-400" : undefined}>
+                <span className={rung.stage === "rejected" || rung.stage === "failed" || rung.stage === INGEST_REVIEW_REJECTED_STATUS ? "text-amber-400" : undefined}>
                   {RUNG_GLYPH[rung.state]}
                 </span>
                 <span>{rung.stage}</span>
@@ -530,7 +532,18 @@ export function IngestStatusCard({
             ))}
           </ul>
 
-          {(row.stage === "rejected" || row.stage === "failed") && (row.stage === "failed" ? (row.failure?.reason ?? row.detail) : row.detail) && (
+          {row.stage === INGEST_AWAITING_ORIGIN_STATUS && (
+            <p className="mt-2 text-[10px] font-mono text-slate-300" data-ingest-awaiting="awaiting_origin">
+              Waiting for a steward to accept where it came from
+            </p>
+          )}
+          {row.stage === INGEST_AWAITING_KIND_STATUS && (
+            <p className="mt-2 text-[10px] font-mono text-slate-300" data-ingest-awaiting="awaiting_kind">
+              Waiting for its kind — pick PCN or PDN
+            </p>
+          )}
+
+          {(row.stage === "rejected" || row.stage === "failed" || row.stage === INGEST_REVIEW_REJECTED_STATUS) && (row.stage === "failed" ? (row.failure?.reason ?? row.detail) : row.detail) && (
             <p className="mt-2 text-[11px] font-mono text-amber-400" data-ingest-detail>
               {row.stage === "failed" ? (row.failure?.reason ?? row.detail) : row.detail}
             </p>

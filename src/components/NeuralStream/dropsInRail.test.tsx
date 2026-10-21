@@ -40,7 +40,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestMine: (...a: unknown[]) => fetchIngestMine(...a),
   retryIngest: (...a: unknown[]) => retryIngest(...a),
   disputeIngestOrigin: vi.fn(),
-  confirmIngestContentKind: vi.fn(),
+  correctIngestLeaf: vi.fn(),
 }));
 vi.mock("./LiveAnswerStrip", () => ({ LiveAnswerStrip: () => null }));
 vi.mock("./useLiveStages", () => ({ useLiveStages: () => ({ active: false }) }));

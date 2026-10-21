@@ -13,8 +13,8 @@ const file = (name: string) => new File(["%PDF-1.7"], name, { type: "application
 beforeEach(() => __resetIngestMock());
 
 describe("ingestMock responses are accepted by the ingestWire readers", () => {
-  it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to review, where it parks for a human", async () => {
-    const id = readIngestUploadId(await uploadIngest(file("spec.pdf"), "pdf", "alice@example.com", "pdf"));
+  it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to review, where it parks for a human (a pcn-named file: an unnamed one parks at awaiting_kind, see ingestMockLeaf.test.ts)", async () => {
+    const id = readIngestUploadId(await uploadIngest(file("pcn-spec.pdf"), "pdf", "alice@example.com", "pdf"));
     expect(id, "readIngestUploadId refused the mock's upload response").not.toBeNull();
     // The mock advances a stage per fetch. Poll it the way the card does, and refuse any row the
     // reader rejects — one stage the mock spells wrong would leave the card blank at that step.

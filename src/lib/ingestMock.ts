@@ -38,7 +38,15 @@
  * mutating nothing.
  */
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
-import { promotionIngestId, type IngestFailure, type IngestStage } from "./ingestWire";
+import {
+  INGEST_AWAITING_KIND_STATUS,
+  promotionIngestId,
+  type IngestFailure,
+  type IngestLeaf,
+  type IngestLeafSource,
+  type IngestOobDocumentStatus,
+  type IngestStage,
+} from "./ingestWire";
 import type { IngestOrigin } from "./ingestOrigin";
 import type { IngestSource } from "@/api/client";
 import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
@@ -52,7 +60,7 @@ interface MockRow {
   ingest_id: string;
   sha256: string;
   kind: string;
-  stage: IngestStage | null;
+  stage: IngestStage | IngestOobDocumentStatus | null;
   detail: string | null;
   duplicate: { of_ingest_id: string; message: string } | null;
   created_at: number;
@@ -65,9 +73,11 @@ interface MockRow {
    * carry, so it would be dishonest to sniff it the same way.
    */
   origin?: IngestOrigin | null;
-  /** PROPOSED wire field (see `IngestStatusRow.suggested_content_kind`): set only when a drop reaches
-   *  `review`, from the filename — /pcn/i → "pcn", /pdn/i → "pdn". Absent otherwise. */
-  suggested_content_kind?: string;
+  /** PROPOSED wire pair (see `IngestStatusRow.leaf`): both null until extraction ends, then read from
+   *  the filename — /pcn/i → "pcn", /pdn/i → "pdn" (source "extraction-title"); neither parks the
+   *  row at `awaiting_kind`. A correction sets source "ingest". Absent on a duplicate's row. */
+  leaf?: IngestLeaf | null;
+  leaf_source?: IngestLeafSource | null;
   /** Mirrors the wire's `failure`/`attempt` (33b80988). Set only by `__seedMockFailedFixture` — the mock never fails a drop on its own. */
   failure?: IngestFailure | null;
   attempt?: number;
@@ -145,6 +155,8 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string, conte
     duplicate: null,
     created_at: now,
     updated_at: now,
+    leaf: null,
+    leaf_source: null,
   };
   STORE.set(ingestId, row);
   FILE_NAMES.set(ingestId, file.name);
@@ -168,15 +180,21 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
   // A duplicate row never advances — it is out-of-band on the real wire too (DUPLICATE is never
   // in the STAGES ladder), and returning it as-is on every fetch mirrors that.
   if (row.duplicate === null && row.stage !== null) {
-    const next = ADVANCE[row.stage];
+    const next = (ADVANCE as Record<string, IngestStage | undefined>)[row.stage];
     if (next) {
       row.stage = next;
       row.updated_at = Date.now();
       if (next === "review") {
         const name = FILE_NAMES.get(row.ingest_id) ?? "";
-        if (/pcn/i.test(name)) row.suggested_content_kind = "pcn";
-        else if (/pdn/i.test(name)) row.suggested_content_kind = "pdn";
-        seedReviewTask(row);
+        const leaf: IngestLeaf | null = /pcn/i.test(name) ? "pcn" : /pdn/i.test(name) ? "pdn" : null;
+        if (leaf) {
+          row.leaf = leaf;
+          row.leaf_source = "extraction-title";
+          seedReviewTask(row);
+        } else {
+          // Nothing in the title names a leaf: park until the dropper picks one (it does not advance).
+          row.stage = INGEST_AWAITING_KIND_STATUS;
+        }
       }
     }
   }
@@ -269,16 +287,42 @@ export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promi
   return Promise.resolve({ steward_task_id: `mock-steward-task-${ingestId}` });
 }
 
-/** PROPOSED — `POST /ingest/{id}/content_kind`'s mock: accepts the confirm for a known row, 404 otherwise. */
-export function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
-  if (!STORE.has(ingestId)) {
+const LEAF_LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected", "failed", "review_rejected"]);
+
+/**
+ * PROPOSED — `POST /ingest/{id}/leaf`'s mock (10-21 packet §3b). Unknown id → 404; a terminal row →
+ * the wrapped 409 `leaf_locked` (`readActRefusal`'s shape); else sets the leaf with source "ingest",
+ * moving an `awaiting_kind` row on to `review`. Resolves with the status body.
+ */
+export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
+  const row = STORE.get(ingestId);
+  if (!row) {
     const err = new Error(`mock: unknown ingest id ${ingestId}`) as Error & {
       response?: { status: number; data: { detail: string } };
     };
     err.response = { status: 404, data: { detail: "ingest not found" } };
     return Promise.reject(err);
   }
-  return Promise.resolve({ ingest_id: ingestId, content_kind: contentKind });
+  if (row.stage !== null && LEAF_LOCKED_STAGES.has(row.stage)) {
+    const err = new Error(`mock: leaf locked at ${row.stage}`) as Error & {
+      response?: { status: number; data: { detail: { error: string; stage: string; message: string } } };
+    };
+    err.response = {
+      status: 409,
+      data: {
+        detail: { error: "leaf_locked", stage: row.stage, message: `The kind can no longer be changed at ${row.stage}.` },
+      },
+    };
+    return Promise.reject(err);
+  }
+  row.leaf = leaf;
+  row.leaf_source = "ingest";
+  row.updated_at = Date.now();
+  if (row.stage === INGEST_AWAITING_KIND_STATUS) {
+    row.stage = "review";
+    seedReviewTask(row);
+  }
+  return Promise.resolve({ ...row });
 }
 
 /**

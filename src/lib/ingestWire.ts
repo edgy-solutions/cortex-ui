@@ -195,10 +195,46 @@ export const INGEST_DUPLICATE_STATUS = "duplicate" as const;
  *  or promotes). Only an `event` row can be at it. */
 export const INGEST_CASE_OPENED_STATUS = "case_opened" as const;
 
-/** What a row's `stage` field can carry: the ladder's stages, plus the one out-of-band status
- *  that arrives in that same field. (`duplicate` does not — a duplicate row carries `stage` of
+/** `ingest_status.py.AWAITING_ORIGIN` — OUT-OF-BAND like `case_opened`: in the producer's
+ *  `ALL_STATUSES`, NOT in `STAGES`. A deliberately domainless drop (every cortex `.pdf` drop)
+ *  parks here after extraction until a steward accepts its origin; it then moves to `review`.
+ *  Document rows only. */
+export const INGEST_AWAITING_ORIGIN_STATUS = "awaiting_origin" as const;
+
+/** `ingest_status.py.REVIEW_REJECTED` — OUT-OF-BAND, terminal: a steward's narrow reject of a
+ *  review. In `ALL_STATUSES`, NOT in `STAGES`. `detail` is REQUIRED, like `rejected`/`failed`.
+ *  Document rows only. */
+export const INGEST_REVIEW_REJECTED_STATUS = "review_rejected" as const;
+
+/** PROPOSED in the 10-21 packet (`sessions/2026-10-21-packet-to-architect-and-lane-01-no-leaf-is-settable-today-a-pdf-drop-parks-at-awaiting-origin-the-chip-needs-three-wire-items.md`),
+ *  NOT emitted by the producer yet: a drop whose leaf (pcn/pdn) could not be read parks here
+ *  until the dropper picks one. Out-of-band like the two above. Document rows only. */
+export const INGEST_AWAITING_KIND_STATUS = "awaiting_kind" as const;
+
+/** What a row's `stage` field can carry: the ladder's stages, plus the out-of-band statuses
+ *  that arrive in that same field. (`duplicate` does not — a duplicate row carries `stage` of
  *  its ORIGINAL, or null, and the fact itself is in `duplicate`.) */
-export type IngestRowStage = IngestStage | typeof INGEST_CASE_OPENED_STATUS;
+export type IngestRowStage =
+  | IngestStage
+  | typeof INGEST_CASE_OPENED_STATUS
+  | typeof INGEST_AWAITING_ORIGIN_STATUS
+  | typeof INGEST_REVIEW_REJECTED_STATUS
+  | typeof INGEST_AWAITING_KIND_STATUS;
+
+/** The out-of-band DOCUMENT statuses (everything in `IngestRowStage` that is neither a ladder
+ *  stage nor the event-only `case_opened`). */
+export const INGEST_OOB_DOCUMENT_STATUSES = [
+  INGEST_AWAITING_ORIGIN_STATUS,
+  INGEST_REVIEW_REJECTED_STATUS,
+  INGEST_AWAITING_KIND_STATUS,
+] as const;
+export type IngestOobDocumentStatus = (typeof INGEST_OOB_DOCUMENT_STATUSES)[number];
+
+/** The leaf content kinds the chip can name (PROPOSED, 10-21 packet §3). */
+export const INGEST_LEAVES = ["pcn", "pdn"] as const;
+export type IngestLeaf = (typeof INGEST_LEAVES)[number];
+/** Where a leaf came from: the dropper's own pick, or the title the extraction read. */
+export type IngestLeafSource = "ingest" | "extraction-title";
 
 /** The EVENT branch's whole ladder, exactly as `gateway.py`'s `POST /ingest/events` walks it at
  *  `3e6d9e9f`: `record_received` (status `received`), then `update_status(CASE_OPENED, case_id=…)`
@@ -234,14 +270,13 @@ export interface IngestStatusRow {
    */
   case_id: string | null;
   /**
-   * PROPOSED to Lane 1 (packet `sessions/2026-10-09-packet-to-lane-1-leaf-kind-suggestion-and-adr-0041-notes.md`);
- * the platform does NOT emit it at invincible-agent origin/master, so today it is always null.
-   * The classifier's suggested registered LEAF content kind (e.g. `pcn`), for the dropper to
-   * confirm (ADR-0041 §4: the classifier suggests, the human confirms, the manifest declares).
-   * A non-blank string, else null. Optional on the type so fixtures that predate it still compile;
-   * `readIngestStatusRow` always sets it.
+   * PROPOSED (10-21 packet §3a; not emitted yet): the same pair as the producer's `_review_leaf`
+   * (gateway.py:11921) gives the review body. THREE states: key ABSENT = no claim (the chip is not
+   * drawn; today's wire), `null` = not identified, string = the leaf. `leaf_source` says who named
+   * it. `readIngestStatusRow` OMITS both keys unless the wire carried a valid pair.
    */
-  suggested_content_kind?: string | null;
+  leaf?: IngestLeaf | null;
+  leaf_source?: IngestLeafSource | null;
   /**
    * `GET /ingest/{id}/status`'s `extraction_defect` (Lane 1 packet
    * `sessions/2026-10-11-packet-to-cortex-my-drops-extraction-incomplete-has-no-producer-yet.md`):
@@ -345,7 +380,26 @@ export function readNoticeId(raw: unknown): string | null | undefined {
   return undefined;
 }
 
-const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestStage> = new Set(["rejected", "failed"]);
+const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestRowStage> = new Set(["rejected", "failed", INGEST_REVIEW_REJECTED_STATUS]);
+
+/**
+ * The PROPOSED leaf pair (see `IngestStatusRow.leaf`). `undefined` = NO CLAIM: the `leaf_source` key
+ * is absent, or the pair is not one of the valid shapes — (a leaf in `INGEST_LEAVES`, a source in
+ * {ingest, extraction-title}) or (null, null). Never refuses the row.
+ */
+function readLeafPair(raw: Record<string, unknown>): { leaf: IngestLeaf | null; leaf_source: IngestLeafSource | null } | undefined {
+  if (!("leaf_source" in raw)) return undefined;
+  const { leaf, leaf_source } = raw;
+  if (leaf === null && leaf_source === null) return { leaf: null, leaf_source: null };
+  if (
+    typeof leaf === "string" &&
+    (INGEST_LEAVES as readonly string[]).includes(leaf) &&
+    (leaf_source === "ingest" || leaf_source === "extraction-title")
+  ) {
+    return { leaf: leaf as IngestLeaf, leaf_source };
+  }
+  return undefined;
+}
 
 /**
  * `GET /ingest/{id}/status` → the row, or `null` on anything malformed — including an
@@ -371,6 +425,12 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     stage = null;
   } else if (typeof raw.stage === "string" && (INGEST_STAGES as readonly string[]).includes(raw.stage)) {
     stage = raw.stage as IngestStage;
+  } else if (
+    raw.kind !== "event" &&
+    (INGEST_OOB_DOCUMENT_STATUSES as readonly unknown[]).includes(raw.stage)
+  ) {
+    // Out-of-band, document-only: an event row at any of these is not a state the producer writes.
+    stage = raw.stage as IngestOobDocumentStatus;
   } else if (raw.stage === INGEST_CASE_OPENED_STATUS && raw.kind === "event") {
     // Out-of-band, event-only: a document row at `case_opened` is not a state the producer writes.
     stage = INGEST_CASE_OPENED_STATUS;
@@ -383,7 +443,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   // must be non-null, or a null stage is unaccounted for.
   if (stage === null && !isRecord(raw.duplicate)) return null;
 
-  if (stage !== null && stage !== INGEST_CASE_OPENED_STATUS && DETAIL_REQUIRED_STAGES.has(stage) && !isNonEmptyString(raw.detail)) {
+  if (stage !== null && DETAIL_REQUIRED_STAGES.has(stage) && !isNonEmptyString(raw.detail)) {
     return null;
   }
 
@@ -413,9 +473,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     return null;
   }
 
-  // PROPOSED field (see `IngestStatusRow.suggested_content_kind`): non-blank string, else null —
-  // a wrong-typed value is not a refusal of the row, just no suggestion.
-  const suggested_content_kind = isNonEmptyString(raw.suggested_content_kind) ? raw.suggested_content_kind : null;
+  const leafPair = readLeafPair(raw);
   const extraction_defect = readExtractionDefect(raw.extraction_defect);
   const notice_id = readNoticeId(raw.notice_id);
   const content_kind = readNoticeId(raw.content_kind); // same three states as notice_id
@@ -435,7 +493,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     // fabricated unresolved/resolved state. See `IngestStatusRow.origin`'s own doc comment.
     origin: readIngestOrigin(raw.origin),
     case_id,
-    suggested_content_kind,
+    ...(leafPair ?? {}),
     ...(extraction_defect !== undefined ? { extraction_defect } : {}),
     ...(notice_id !== undefined ? { notice_id } : {}),
     ...(content_kind !== undefined ? { content_kind } : {}),
@@ -515,6 +573,11 @@ export function readIngestMinePage(raw: unknown): IngestMinePage | null {
 /** `POST /ingest/{id}/retry` — encoded exactly like `ingestStatusPath`. */
 export function ingestRetryPath(id: string): string {
   return `/ingest/${encodeURIComponent(id)}/retry`;
+}
+
+/** PROPOSED `POST /ingest/{id}/leaf` (10-21 packet §3b) — encoded exactly like `ingestRetryPath`. */
+export function ingestLeafPath(id: string): string {
+  return `/ingest/${encodeURIComponent(id)}/leaf`;
 }
 
 /**
@@ -689,7 +752,7 @@ export function payloadMatchesIngestId(payload: unknown, wanted: string): boolea
 const MAIN_STAGES: readonly IngestStage[] = ["received", "extracting", "review", "promoted"];
 
 export interface StageRung {
-  stage: IngestStage;
+  stage: IngestStage | IngestOobDocumentStatus;
   state: "done" | "current" | "pending";
 }
 
@@ -708,7 +771,17 @@ export interface StageRung {
  * happened. Marking `extracting`/`review` done would be a claim this row does not
  * support, so they stay `pending` and `failed` is the current rung on its own.
  */
-export function ingestStageLadder(stage: IngestStage): StageRung[] {
+export function ingestStageLadder(stage: IngestStage | IngestOobDocumentStatus): StageRung[] {
+  // Parked after extraction, waiting on a person: received/extracting happened, review has not.
+  if (stage === INGEST_AWAITING_ORIGIN_STATUS || stage === INGEST_AWAITING_KIND_STATUS) {
+    const rungs: StageRung[] = MAIN_STAGES.map((s) => ({
+      stage: s,
+      state: s === "received" || s === "extracting" ? "done" : "pending",
+    }));
+    rungs.push({ stage, state: "current" });
+    return rungs;
+  }
+
   if (stage === "failed") {
     const rungs: StageRung[] = MAIN_STAGES.map((s) => ({
       stage: s,
@@ -718,9 +791,9 @@ export function ingestStageLadder(stage: IngestStage): StageRung[] {
     return rungs;
   }
 
-  const isTerminalBranch = stage === "rejected";
+  const isTerminalBranch = stage === "rejected" || stage === INGEST_REVIEW_REJECTED_STATUS;
   const branchPoint = MAIN_STAGES.indexOf("review");
-  const currentIndex = isTerminalBranch ? branchPoint : MAIN_STAGES.indexOf(stage);
+  const currentIndex = isTerminalBranch ? branchPoint : MAIN_STAGES.indexOf(stage as IngestStage);
 
   const rungs: StageRung[] = MAIN_STAGES.map((s, i) => {
     let state: StageRung["state"];
@@ -778,6 +851,7 @@ export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicat
     row.stage === "promoted" ||
     row.stage === "rejected" ||
     row.stage === "failed" ||
+    row.stage === INGEST_REVIEW_REJECTED_STATUS ||
     row.stage === INGEST_CASE_OPENED_STATUS
   );
 }

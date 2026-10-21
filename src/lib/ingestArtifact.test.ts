@@ -74,10 +74,10 @@ describe("the drop as an Artifact", () => {
     expect(badge(entry({ acceptedThisSession: false, notFound: true }))).toBe("not found");
   });
 
-  it("in flight = uploading + received/extracting/review; nothing terminal, nothing unread", () => {
+  it("in flight = uploading + received/extracting/review + the two parked stages; nothing terminal, nothing unread", () => {
     const flight = (b: string) => ingestInFlight({ badge: b });
-    for (const b of ["uploading", "received", "extracting", "review"]) expect(flight(b), b).toBe(true);
-    for (const b of ["promoted", "rejected", "failed", "duplicate", "error", "not found", "checking", "case_opened"]) {
+    for (const b of ["uploading", "received", "extracting", "review", "awaiting_origin", "awaiting_kind"]) expect(flight(b), b).toBe(true);
+    for (const b of ["promoted", "rejected", "failed", "review_rejected", "duplicate", "error", "not found", "checking", "case_opened"]) {
       expect(flight(b), b).toBe(false);
     }
   });

@@ -13,7 +13,7 @@
  * the status row it polled, including the `failed` reason and the notice id when the row carries one.
  */
 import type { Artifact } from "@/api/types";
-import { INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestRefusal, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
+import { INGEST_AWAITING_KIND_STATUS, INGEST_AWAITING_ORIGIN_STATUS, INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestRefusal, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
 
 export const INGEST_ARTIFACT_PREFIX = "ingest:";
 
@@ -118,6 +118,9 @@ export function ingestComponentOf(e: IngestEntry): IngestComponent {
  */
 export function ingestInFlight(c: Pick<IngestComponent, "badge">): boolean {
   if (c.badge === "uploading") return true;
+  // `awaiting_origin` / `awaiting_kind` are out-of-band but MOVE ON (to review) once a person acts;
+  // `review_rejected` is terminal, so it is not in flight.
+  if (c.badge === INGEST_AWAITING_ORIGIN_STATUS || c.badge === INGEST_AWAITING_KIND_STATUS) return true;
   return (INGEST_STAGES as readonly string[]).includes(c.badge) && !ingestPollingDone({ stage: c.badge as IngestStage, duplicate: null });
 }
 

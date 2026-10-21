@@ -3,7 +3,7 @@
  *
  * Ruling: infer from the extension PLUS sniffed magic bytes, and never ask — except when it is
  * ambiguous: no extension, an unknown extension, or an extension and bytes that disagree. The
- * leaf-kind confirmation after classification (`IngestKindSuggestion`) is a different step and stays.
+ * leaf-kind chip after the drop (`IngestLeafChip`) is a different step and stays.
  *
  * OPEN QUESTION for Lane 1 and doc-tools: the platform declares NO cad extension list (IA's
  * gateway has none — it takes `kind` as a bare multipart field). The cad set below

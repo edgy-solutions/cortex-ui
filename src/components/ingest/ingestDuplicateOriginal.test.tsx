@@ -14,7 +14,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestMine: () => Promise.resolve({ items: [], next: null }),
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
   disputeIngestOrigin: vi.fn(),
-  confirmIngestContentKind: vi.fn(),
+  correctIngestLeaf: vi.fn(),
 }));
 vi.mock("react-oidc-context", () => ({
   useAuth: () => ({ user: { profile: { sub: "user-a", email: "a@example.com" } } }),

@@ -49,3 +49,8 @@ Use a fixture where the token's email and `/me/entitlements`' `authz_id` differ.
 The review and act routes take no `on_behalf_of` from the UI.
 
 Tell me when your build carries it, and I will tell Chris which pair of tags to put on the work deployment.
+
+## Addendum, 2026-10-21: the BFF build is done
+
+- Build 202 at `7a98f7bd6bff6c07c81f5bdb7b01d4295fb311d0` exited 0. The cortex-bff image answers 200 at that tag, as do the other 16.
+- It is not rolled to the sandbox. At work, Chris deploys the BFF tag.

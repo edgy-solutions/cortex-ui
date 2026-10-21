@@ -14,18 +14,19 @@ import {
   fetchIngestStatus as realFetchIngestStatus,
   fetchIngestMine as realFetchIngestMine,
   disputeIngestOrigin as realDisputeIngestOrigin,
-  confirmIngestContentKind as realConfirmIngestContentKind,
+  correctIngestLeaf as realCorrectIngestLeaf,
   retryIngest as realRetryIngest,
   fetchIngestSource as realFetchIngestSource,
   fetchIngestExtraction as realFetchIngestExtraction,
 } from "@/api/client";
 import type { IngestSource } from "@/api/client";
+import type { IngestLeaf } from "./ingestWire";
 import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
   fetchIngestMine as mockFetchIngestMine,
   disputeIngestOrigin as mockDisputeIngestOrigin,
-  confirmIngestContentKind as mockConfirmIngestContentKind,
+  correctIngestLeaf as mockCorrectIngestLeaf,
   mockRetryIngest,
   fetchIngestSource as mockFetchIngestSource,
   fetchIngestExtraction as mockFetchIngestExtraction,
@@ -54,11 +55,9 @@ export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promi
     : realDisputeIngestOrigin(ingestId, onBehalfOf);
 }
 
-/** PROPOSED — see `src/api/client.ts`'s `confirmIngestContentKind`. */
-export function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
-  return isIngestMockEnabled()
-    ? mockConfirmIngestContentKind(ingestId, contentKind)
-    : realConfirmIngestContentKind(ingestId, contentKind);
+/** PROPOSED — see `src/api/client.ts`'s `correctIngestLeaf`. */
+export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
+  return isIngestMockEnabled() ? mockCorrectIngestLeaf(ingestId, leaf) : realCorrectIngestLeaf(ingestId, leaf);
 }
 
 /** `POST /ingest/{id}/retry`, no body — see `src/api/client.ts`'s `retryIngest`. */

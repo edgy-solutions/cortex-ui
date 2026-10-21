@@ -7,7 +7,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { INGEST_MINE_PATH, ingestRetryPath, ingestExtractionPath, ingestSourcePath, ingestStatusPath, readProvenanceFloor } from "@/lib/ingestWire";
+import { INGEST_MINE_PATH, ingestLeafPath, ingestRetryPath, ingestExtractionPath, ingestSourcePath, ingestStatusPath, readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -1010,8 +1010,9 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  * that omits it HALTs downstream: doc-tools refuses "no registered content_kind" and the drop goes
  * `failed`. It is the REGISTERED kind, a separate channel from `kind` (the file format and path
  * segment): the format (`pdf` is registered, `policy/overlays/openddil-lab/content_kinds/pdf.yaml`)
- * unless a human confirmed a leaf kind (`pcn`, `pdn`). Today no leaf is confirmable before the
- * upload (the confirm is `POST /ingest/{id}/content_kind`, after), so the composer sends the format.
+ * unless a human confirmed a leaf kind (`pcn`, `pdn`). The composer still sends the format as
+ * `content_kind`: a leaf is corrected AFTER the drop, via the PROPOSED `POST /ingest/{id}/leaf`
+ * (`correctIngestLeaf`) — no picker before the drop, the drop stays one gesture (architect 2026-10-21).
  */
 export async function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
   const formData = new FormData();
@@ -1139,15 +1140,14 @@ export async function disputeIngestOrigin(
 }
 
 /**
- * PROPOSED to Lane 1 (packet `sessions/2026-10-09-packet-to-lane-1-leaf-kind-suggestion-and-adr-0041-notes.md`)
- * — `POST /ingest/{ingest_id}/content_kind` with `{"content_kind": "<kind>"}`: the dropper CONFIRMS the
- * classifier's suggested leaf kind (ADR-0041 §4). The platform has no such route at invincible-agent
- * origin/master. Same `api` instance as every call above, so it needs no `check:transport` declaration.
+ * PROPOSED (packet `sessions/2026-10-21-packet-to-architect-and-lane-01-no-leaf-is-settable-today-a-pdf-drop-parks-at-awaiting-origin-the-chip-needs-three-wire-items.md`
+ * §3b) — `POST /ingest/{ingest_id}/leaf` with `{"leaf": "pcn" | "pdn"}`: the dropper corrects (or, at
+ * `awaiting_kind`, supplies) the row's leaf. Answers the status body; a locked row answers 409
+ * `leaf_locked`. Supersedes the 10-09 `POST /ingest/{id}/content_kind` proposal. The platform has no
+ * such route yet. Same `api` instance as every call above, so it needs no `check:transport` declaration.
  */
-export async function confirmIngestContentKind(ingestId: string, contentKind: string): Promise<unknown> {
-  const { data } = await api.post<unknown>(`/ingest/${encodeURIComponent(ingestId)}/content_kind`, {
-    content_kind: contentKind,
-  });
+export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
+  const { data } = await api.post<unknown>(ingestLeafPath(ingestId), { leaf });
   return data;
 }
 

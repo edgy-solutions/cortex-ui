@@ -13,10 +13,12 @@ import type { IngestOrigin } from "@/lib/ingestOrigin";
 const fetchIngestStatus = vi.fn();
 const disputeIngestOrigin = vi.fn();
 const retryIngest = vi.fn();
+const correctIngestLeaf = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   retryIngest: (...args: unknown[]) => retryIngest(...args),
   fetchIngestStatus: (...args: unknown[]) => fetchIngestStatus(...args),
   disputeIngestOrigin: (...args: unknown[]) => disputeIngestOrigin(...args),
+  correctIngestLeaf: (...args: unknown[]) => correctIngestLeaf(...args),
 }));
 
 const actOnHumanTask = vi.fn().mockResolvedValue({ task_id: "t", decision: "promoted" });
@@ -29,6 +31,7 @@ afterEach(() => {
   fetchIngestStatus.mockReset();
   disputeIngestOrigin.mockReset();
   retryIngest.mockReset();
+  correctIngestLeaf.mockReset();
   useIngestStatusStore.getState().reset();
   actOnHumanTask.mockReset();
   actOnHumanTask.mockResolvedValue({ task_id: "t", decision: "promoted" });
@@ -487,5 +490,41 @@ describe("IngestStatusCard — failure reason, code, attempt, Retry", () => {
     fireEvent.click(q("[data-ingest-retry]")!);
     await waitFor(() => expect(retryIngest).toHaveBeenCalled());
     expect(outer).not.toHaveBeenCalled();
+  });
+});
+
+describe("out-of-band document statuses (defect: the card froze at extracting)", () => {
+  it("a poll that moves extracting -> awaiting_origin ends showing awaiting_origin and its waiting line", async () => {
+    fetchIngestStatus.mockResolvedValue(row({ stage: "awaiting_origin" }));
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "extracting" })} pollIntervalMs={20} />);
+    await waitFor(() => expect(document.querySelector('[data-ingest-status="awaiting_origin"]')).toBeTruthy());
+    expect(document.querySelector('[data-ingest-awaiting="awaiting_origin"]')?.textContent).toBe(
+      "Waiting for a steward to accept where it came from",
+    );
+  });
+
+  it("review_rejected draws its detail and the current branch rung", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "review_rejected", detail: "wrong supplier" })} pollIntervalMs={100000} />);
+    expect(document.querySelector("[data-ingest-detail]")?.textContent).toBe("wrong supplier");
+    expect(document.querySelector('[data-ingest-ladder-stage="review_rejected"][data-ingest-ladder-state="current"]')).toBeTruthy();
+  });
+
+  // The card MOUNTS the chip and takes the corrected row it hands back (onRow -> the card's row):
+  // a "?" at awaiting_kind, picked PDN, shows the server's next row without waiting for a poll.
+  it("the card mounts the leaf chip, and a pick's returned row becomes the card's row", async () => {
+    fetchIngestStatus.mockReturnValue(new Promise(() => undefined));
+    correctIngestLeaf.mockResolvedValue({ ...row({ stage: "review" }), leaf: "pdn", leaf_source: "ingest" });
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} pollIntervalMs={100000} />);
+    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("? · not identified");
+    fireEvent.click(document.querySelector('[data-leaf-pick="pdn"]')!);
+    await waitFor(() => expect(document.querySelector('[data-ingest-status="review"]')).toBeTruthy());
+    expect(correctIngestLeaf).toHaveBeenCalledWith(INGEST_ID, "pdn");
+    expect(document.querySelector("[data-leaf-chip]")?.getAttribute("data-leaf")).toBe("pdn");
+    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("PDN · picked");
+  });
+
+  it("awaiting_kind draws its waiting line", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "awaiting_kind" })} pollIntervalMs={100000} />);
+    expect(document.querySelector('[data-ingest-awaiting="awaiting_kind"]')?.textContent).toBe("Waiting for its kind — pick PCN or PDN");
   });
 });
