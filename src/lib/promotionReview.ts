@@ -47,7 +47,7 @@
  *   ABSENT: the ruled form (architect 10-21), `{page, bbox}` with the bbox in page fractions, read on a 1x1 page
  *   (`FRACTION_PAGE`); a bbox outside 0..1 or with no area is malformed.
  * - In EITHER form, `bbox: null` with a valid page is "stated on this page, no box we can draw" (architect 10-21):
- *   read as page-only, `page_dims` not validated. A missing `bbox` key, or a bad page, is malformed.
+ *   read as page-only, `page_dims` not validated. An absent `bbox` key is the same as null (Lane 1, 205); a bad page is malformed.
  * - `bbox` (with `page_dims`) is in `page_dims` units: `pt` for `text_layer_cell`, layout `px` otherwise. The card
  *   scales by `page_dims` (the evidence pane's sealed rule, `bboxScale.ts`), so `units` is carried
  *   but never needed to place the box.
@@ -202,8 +202,8 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
   const e = raw.evidence_ref;
   if (!isObj(e)) return { state: "malformed" };
   const page = posInt(e.page);
-  // A null bbox: stated on this page, no box we can draw. Either form; page_dims is not validated.
-  if (Object.hasOwn(e, "bbox") && e.bbox === null) {
+  // A null (or absent) bbox: stated on this page, no box we can draw. Either form; page_dims is not validated.
+  if (!Object.hasOwn(e, "bbox") || e.bbox === null) {
     if (page === null) return { state: "malformed" };
     return { state: "ok", ref: { page, bbox: null, page_dims: FRACTION_PAGE, units: str(e.units) } };
   }

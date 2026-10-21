@@ -205,9 +205,10 @@ describe("evidence has three states, with different owners", () => {
     expect(one({ evidence_ref: { bbox: null, page_dims: { width: 612, height: 792 } } })).toEqual({ state: "malformed" });
   });
 
-  it("a row evidence_ref with no bbox key is malformed", () => {
-    expect(one({ evidence_ref: { page: 1 } })).toEqual({ state: "malformed" });
-    expect(one({ evidence_ref: { page: 1, page_dims: { width: 612, height: 792 } } })).toEqual({ state: "malformed" });
+  it("a row evidence_ref with no bbox key is read as page-only, the same as null", () => {
+    expect(one({ evidence_ref: { page: 1 } })).toMatchObject({ state: "ok", ref: { page: 1, bbox: null } });
+    expect(one({ evidence_ref: { page: 1, page_dims: { width: 612, height: 792 } } })).toMatchObject({ state: "ok", ref: { page: 1, bbox: null } });
+    expect(one({ evidence_ref: { bbox: null } })).toEqual({ state: "malformed" });
   });
 
   it("a row evidence_ref with no page_dims and a pixel bbox is malformed", () => {

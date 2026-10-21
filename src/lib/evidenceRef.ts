@@ -29,17 +29,19 @@ export interface FractionEvidenceRef {
   note?: string;
 }
 
-/** Strict reader: keys only page / bbox / note; page an integer >= 1; bbox page fractions or null (page-only); a present note non-blank. */
+/** Strict reader: keys only page / bbox / note; page an integer >= 1; bbox page fractions, or null or absent (page-only); a present note non-blank. */
 export function readFractionEvidenceRef(v: unknown): FractionEvidenceRef | undefined {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (k !== "page" && k !== "bbox" && k !== "note") return undefined;
   if (typeof o.page !== "number" || !Number.isInteger(o.page) || o.page < 1) return undefined;
-  // A missing bbox key is refused too: undefined is neither null nor a box.
-  if (o.bbox !== null && !isFractionBox(o.bbox)) return undefined;
+  // An absent bbox key is the same as null (Lane 1, 205 `ad564907`: "Omitting it is the same as null"; ca's
+  // EvidenceRef defaults it to None).
+  const bbox = "bbox" in o ? o.bbox : null;
+  if (bbox !== null && !isFractionBox(bbox)) return undefined;
   if ("note" in o) {
     if (typeof o.note !== "string" || o.note.trim() === "") return undefined;
-    return { page: o.page, bbox: o.bbox, note: o.note };
+    return { page: o.page, bbox, note: o.note };
   }
-  return { page: o.page, bbox: o.bbox };
+  return { page: o.page, bbox };
 }
