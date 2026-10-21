@@ -50,6 +50,7 @@
  *   - `rows_without_evidence` against the absent rows drawn.
  */
 import type { Bbox, PageDims } from "./bboxScale";
+import { readCorrectedBy, readLeafSource, type IngestLeafSource } from "./ingestWire";
 
 export interface EvidenceRef {
   /** 1-based page number in the source PDF. */
@@ -99,8 +100,10 @@ export interface Extraction {
   droppedRows: number;
   /** PCN or PDN, when the extraction names it; anything else reads as null (a defaulted doc_type is not shown). */
   leaf: "pcn" | "pdn" | null;
-  /** Where the leaf came from: the ingest, or the extraction's title. */
-  leaf_source: "ingest" | "extraction-title" | null;
+  /** Where the leaf came from: the drop, the title, or a person (same enum as the status row). */
+  leaf_source: IngestLeafSource | null;
+  /** The person who changed it; only with source "corrected", else null. */
+  corrected_by: string | null;
 }
 
 /**
@@ -258,7 +261,8 @@ export function readExtraction(body: unknown): Extraction | null {
     rows,
     droppedRows,
     leaf: body.leaf === "pcn" || body.leaf === "pdn" ? body.leaf : null,
-    leaf_source: body.leaf_source === "ingest" || body.leaf_source === "extraction-title" ? body.leaf_source : null,
+    leaf_source: readLeafSource(body.leaf_source),
+    corrected_by: readCorrectedBy(readLeafSource(body.leaf_source), body.corrected_by),
   };
 }
 

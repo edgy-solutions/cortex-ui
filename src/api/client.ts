@@ -1011,7 +1011,7 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  * `failed`. It is the REGISTERED kind, a separate channel from `kind` (the file format and path
  * segment): the format (`pdf` is registered, `policy/overlays/openddil-lab/content_kinds/pdf.yaml`)
  * unless a human confirmed a leaf kind (`pcn`, `pdn`). The composer still sends the format as
- * `content_kind`: a leaf is corrected AFTER the drop, via the PROPOSED `POST /ingest/{id}/leaf`
+ * `content_kind`: a leaf is corrected AFTER the drop, via `POST /ingest/{id}/leaf`
  * (`correctIngestLeaf`) — no picker before the drop, the drop stays one gesture (architect 2026-10-21).
  */
 export async function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
@@ -1140,11 +1140,14 @@ export async function disputeIngestOrigin(
 }
 
 /**
- * PROPOSED (packet `sessions/2026-10-21-packet-to-architect-and-lane-01-no-leaf-is-settable-today-a-pdf-drop-parks-at-awaiting-origin-the-chip-needs-three-wire-items.md`
- * §3b) — `POST /ingest/{ingest_id}/leaf` with `{"leaf": "pcn" | "pdn"}`: the dropper corrects (or, at
- * `awaiting_kind`, supplies) the row's leaf. Answers the status body; a locked row answers 409
- * `leaf_locked`. Supersedes the 10-09 `POST /ingest/{id}/content_kind` proposal. The platform has no
- * such route yet. Same `api` instance as every call above, so it needs no `check:transport` declaration.
+ * RULED (architect 2026-10-21, "Leaf, final shape" §3; Lane 1 builds it in 202/203) —
+ * `POST /ingest/{ingest_id}/leaf` with `{"leaf": "pcn" | "pdn"}`: the dropper OR the steward (one route)
+ * corrects, or at `awaiting_kind` supplies, the row's leaf, until promotion. The row's `leaf_source` becomes
+ * `corrected` with `corrected_by`. A change after parts extraction sends the row back to `extracting`;
+ * one at `awaiting_kind` releases the hold. Answers the status body; a locked row answers 409
+ * `leaf_locked` (shape first proposed in packet
+ * `sessions/2026-10-21-packet-to-architect-and-lane-01-no-leaf-is-settable-today-a-pdf-drop-parks-at-awaiting-origin-the-chip-needs-three-wire-items.md`
+ * §3b). Same `api` instance as every call above, so it needs no `check:transport` declaration.
  */
 export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
   const { data } = await api.post<unknown>(ingestLeafPath(ingestId), { leaf });

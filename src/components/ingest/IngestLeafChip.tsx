@@ -9,6 +9,10 @@
  * §3a/§3b): `leaf` / `leaf_source` on the status row and `POST /ingest/{id}/leaf`. It renders
  * NOTHING until the status row carries the `leaf_source` key — absent is no claim, today's wire.
  * It replaces the dormant 10-09 `IngestKindSuggestion` proposal.
+ *
+ * Final shape (architect ruling 10-21): one source enum (declared / title / corrected, with
+ * `corrected_by`), candidates when the read was not confident, and the same route for the steward at
+ * review. `LeafChip` is the presentational part, shared with the review card.
  */
 import { useState } from "react";
 import { correctIngestLeaf } from "@/lib/ingestTransport";
@@ -19,41 +23,73 @@ import {
   readIngestErrorMessage,
   readIngestStatusRow,
   type IngestLeaf,
+  type IngestLeafCandidate,
+  type IngestLeafSource,
   type IngestStatusRow,
 } from "@/lib/ingestWire";
 
 /** Past these the server will not take a correction; it decides the finer line and says so. */
 const LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected", "failed", "review_rejected"]);
 
+export interface LeafChipProps {
+  ingestId: string;
+  stage: string | null;
+  leaf: IngestLeaf | null;
+  leafSource: IngestLeafSource | null;
+  correctedBy: string | null;
+  candidates?: IngestLeafCandidate[];
+  /** The host's own lock, beside the stage's: a review card whose task is already decided. */
+  locked?: boolean;
+  onRow?: (row: IngestStatusRow) => void;
+}
+
+/** The label for a leaf; exported so the wording lives in one place. */
+export function leafLabel(leaf: IngestLeaf | null, source: IngestLeafSource | null, correctedBy: string | null, stage: string | null): string {
+  if (!leaf) return stage === "received" || stage === "extracting" ? "? · not read yet" : "? · not identified";
+  const name = leaf.toUpperCase();
+  if (source === "declared") return `${name} · declared`;
+  if (source === "corrected") return correctedBy ? `${name} · corrected by ${correctedBy}` : `${name} · corrected`;
+  if (source === "title") return `${name} · from title`;
+  // A leaf with no source (the review body's reader maps an unknown name to null) claims nothing about where it came from.
+  return `${name} · source not given`;
+}
+
 export function IngestLeafChip({ row, onRow }: { row: IngestStatusRow; onRow?: (row: IngestStatusRow) => void }) {
-  const awaitingKind = row.stage === INGEST_AWAITING_KIND_STATUS;
+  if (!("leaf_source" in row)) return null;
+  if (row.duplicate !== null) return null;
+  if (row.kind === "event") return null;
+  return (
+    <LeafChip
+      ingestId={row.ingest_id}
+      stage={row.stage}
+      leaf={row.leaf ?? null}
+      leafSource={row.leaf_source ?? null}
+      correctedBy={row.corrected_by ?? null}
+      candidates={row.leaf_candidates}
+      onRow={onRow}
+    />
+  );
+}
+
+export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedBy, candidates, locked = false, onRow }: LeafChipProps) {
+  const awaitingKind = stage === INGEST_AWAITING_KIND_STATUS;
   // The picker's default follows the CURRENT stage: the chip mounts at `received` and the row reaches
   // `awaiting_kind` later, so a mount-time default would leave a "?" row waiting with the picker shut.
   // A person's open/close holds only for the stage it was made at.
   const [toggle, setToggle] = useState<{ stage: string | null; open: boolean } | null>(null);
-  const open = toggle !== null && toggle.stage === row.stage ? toggle.open : awaitingKind;
-  const setOpen = (next: boolean) => setToggle({ stage: row.stage, open: next });
+  const open = toggle !== null && toggle.stage === stage ? toggle.open : awaitingKind;
+  const setOpen = (next: boolean) => setToggle({ stage, open: next });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!("leaf_source" in row)) return null;
-  if (row.duplicate !== null) return null;
-  if (row.kind === "event") return null;
-
-  const leaf = row.leaf ?? null;
-  const source = row.leaf_source ?? null;
-  const changeable = row.stage !== null && !LOCKED_STAGES.has(row.stage);
-  const label = leaf
-    ? `${leaf.toUpperCase()} · ${source === "ingest" ? "picked" : "from title"}`
-    : row.stage === "received" || row.stage === "extracting"
-      ? "? · not read yet"
-      : "? · not identified";
+  const changeable = !locked && stage !== null && !LOCKED_STAGES.has(stage);
+  const label = leafLabel(leaf, source, correctedBy, stage);
 
   const pick = async (next: IngestLeaf) => {
     setPosting(true);
     setError(null);
     try {
-      const response = await correctIngestLeaf(row.ingest_id, next);
+      const response = await correctIngestLeaf(ingestId, next);
       const parsed = readIngestStatusRow(response);
       if (parsed) onRow?.(parsed);
       setOpen(false);
@@ -71,6 +107,7 @@ export function IngestLeafChip({ row, onRow }: { row: IngestStatusRow; onRow?: (
       data-leaf-chip
       data-leaf={leaf ?? "?"}
       data-leaf-source={source ?? "none"}
+      data-leaf-corrected-by={correctedBy ?? undefined}
     >
       {changeable ? (
         <button
@@ -86,7 +123,20 @@ export function IngestLeafChip({ row, onRow }: { row: IngestStatusRow; onRow?: (
       )}
       {changeable && open && (
         <div className="flex gap-2">
-          {INGEST_LEAVES.map((l) => (
+          {/* A candidate's crop is NOT drawn yet: its bbox has no page_dims, which bboxScale.ts needs (asked of Lane 1). */}
+          {(candidates ?? []).map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              data-leaf-candidate={c.leaf}
+              disabled={posting || leaf === c.leaf}
+              className="px-2 py-1 text-[10px] font-mono rounded bg-cyan-600/30 text-cyan-200 disabled:opacity-40"
+              onClick={() => void pick(c.leaf)}
+            >
+              {c.leaf.toUpperCase()} {Math.round(c.score * 100) / 100} · title on p.{c.evidence_ref.page}
+            </button>
+          ))}
+          {INGEST_LEAVES.filter((l) => !(candidates ?? []).some((c) => c.leaf === l)).map((l) => (
             <button
               key={l}
               type="button"

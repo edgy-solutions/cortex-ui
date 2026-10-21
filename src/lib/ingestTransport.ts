@@ -55,7 +55,7 @@ export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promi
     : realDisputeIngestOrigin(ingestId, onBehalfOf);
 }
 
-/** PROPOSED — see `src/api/client.ts`'s `correctIngestLeaf`. */
+/** RULED (architect 2026-10-21, "Leaf, final shape") — see `src/api/client.ts`'s `correctIngestLeaf`. */
 export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
   return isIngestMockEnabled() ? mockCorrectIngestLeaf(ingestId, leaf) : realCorrectIngestLeaf(ingestId, leaf);
 }

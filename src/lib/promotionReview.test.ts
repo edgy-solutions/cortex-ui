@@ -97,10 +97,18 @@ describe("the extraction body", () => {
   });
 
   it("reads the leaf (pcn|pdn) and its source; anything else is null", () => {
-    expect(read({ leaf: "pcn", leaf_source: "ingest" })).toMatchObject({ leaf: "pcn", leaf_source: "ingest" });
-    expect(read({ leaf: "pdn", leaf_source: "extraction-title" })).toMatchObject({ leaf: "pdn", leaf_source: "extraction-title" });
+    expect(read({ leaf: "pcn", leaf_source: "declared" })).toMatchObject({ leaf: "pcn", leaf_source: "declared", corrected_by: null });
+    expect(read({ leaf: "pdn", leaf_source: "title" })).toMatchObject({ leaf: "pdn", leaf_source: "title" });
+    expect(read({ leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" })).toMatchObject({ leaf_source: "corrected", corrected_by: "ana" });
+    expect(read({ leaf: "pdn", leaf_source: "corrected", corrected_by: " " }).corrected_by).toBeNull();
+    expect(read({ leaf: "pdn", leaf_source: "title", corrected_by: "ana" }).corrected_by).toBeNull();
     expect(read({ leaf: "PCN", leaf_source: "guess" })).toMatchObject({ leaf: null, leaf_source: null });
     expect(read()).toMatchObject({ leaf: null, leaf_source: null });
+  });
+
+  it("the retired names are unknown", () => {
+    expect(read({ leaf: "pcn", leaf_source: "ingest" }).leaf_source).toBeNull();
+    expect(read({ leaf: "pdn", leaf_source: "extraction-title" }).leaf_source).toBeNull();
   });
 
   it("part_count 0 is a count, not an absence", () => {

@@ -22,7 +22,9 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 const fetchIngestSource = vi.fn();
 const fetchIngestExtraction = vi.fn();
+const correctIngestLeaf = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
+  correctIngestLeaf: (...a: unknown[]) => correctIngestLeaf(...a),
   fetchIngestSource: (...a: unknown[]) => fetchIngestSource(...a),
   fetchIngestExtraction: (...a: unknown[]) => fetchIngestExtraction(...a),
 }));
@@ -84,6 +86,7 @@ const pdfSource = (head = "%PDF-1.4\n%\xe2\xe3", contentType: string | null = "a
 const failedText = () => document.querySelector("[data-pdf-failed]")!.textContent!;
 
 beforeEach(() => {
+  correctIngestLeaf.mockReset();
   actOnHumanTask.mockReset();
   fetchIngestSource.mockReset().mockResolvedValue(pdfSource());
   fetchIngestExtraction.mockReset().mockImplementation(async () => exBody());
@@ -176,7 +179,7 @@ describe("the top line", () => {
 
   it("names kind, manufacturer, notice date, N parts, attempt, dropped_by and the sha prefix", async () => {
     await mount();
-    expect(topline("kind")).toBe("kind ?"); // PCN/PDN is served by neither source
+    expect(topline("kind")).toBe("? · not identified"); // PCN/PDN is served by neither source
     expect(topline("manufacturer")).toBe("Example Discretes Ltd");
     expect(topline("notice-date")).toBe("2026-09-30");
     expect(topline("parts")).toBe("2 parts");
@@ -1224,13 +1227,83 @@ describe("header edits and the leaf on the promotion card", () => {
 
   it("the topline kind is the leaf upper-cased with its source, or the unnamed text", async () => {
     await mountPromotable();
-    expect(topline("kind")).toBe("kind ?");
+    expect(topline("kind")).toBe("? · not identified");
     expect(q("data-topline", "kind")!.getAttribute("title")).toMatch(/did not name it/);
     cleanup();
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pdn", leaf_source: "title" }));
+    await mountPromotable();
+    expect(topline("kind")).toBe("PDN · from title");
+    expect(q("data-topline", "kind")!.getAttribute("title")).toBe("read from the document's title");
+  });
+
+  it("the leaf chip is in the topline kind element", async () => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "declared" }));
+    await mountPromotable();
+    const kind = q("data-topline", "kind")!;
+    expect(kind.querySelector("[data-leaf-chip]")?.getAttribute("data-leaf")).toBe("pcn");
+    expect(kind.textContent).toContain("PCN · declared");
+    expect(kind.getAttribute("title")).toBe("declared at the drop");
+  });
+
+  const statusWire = (over: Record<string, unknown>) => ({
+    ingest_id: SHA, sha256: SHA.replace(/^sha256:/, ""), kind: "pdf", stage: "review", detail: null, duplicate: null,
+    created_at: 1, updated_at: 1, origin: null, case_id: null, ...over,
+  });
+  const pickPdn = async () => {
+    fireEvent.click(q("data-leaf-verb", "change")!);
+    fireEvent.click(q("data-leaf-pick", "pdn")!);
+  };
+
+  it("a pick whose response is at review updates the label", async () => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
+    correctIngestLeaf.mockResolvedValue(statusWire({ stage: "review", leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" }));
+    await mountPromotable();
+    await pickPdn();
+    await waitFor(() => expect(topline("kind")).toBe("PDN · corrected by ana"));
+    expect(correctIngestLeaf).toHaveBeenCalledWith(SHA, "pdn");
+    expect(document.querySelector("[data-leaf-sent-back]")).toBeNull();
+    expect(promoteBtn().disabled).toBe(false);
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("a change after parts extraction sends the review back", async () => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
+    correctIngestLeaf.mockResolvedValue(statusWire({ stage: "extracting", leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" }));
+    await mountPromotable();
+    await pickPdn();
+    await waitFor(() => expect(document.querySelector("[data-leaf-sent-back]")).not.toBeNull());
+    expect(hold()).toBe("sent-back");
+    expect(document.querySelector("[data-promote-held]")?.textContent).toBe(
+      "The kind changed to PDN: the document went back to extraction for the new kind. A new review replaces this one; Promote and Reject are off here.",
+    );
+    expect(promoteBtn().disabled).toBe(true);
+    expect(rejectBtn().disabled).toBe(true);
+    expect(q("data-leaf-verb", "change"), "a sent-back task offers no further leaf change").toBeNull();
+  });
+
+  it.each(["approved", "rejected", "expired"] as const)("a decided task (%s) shows the leaf but offers no change", async (task_state) => {
+    fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pcn", leaf_source: "title" }));
+    await mount(task({ task_state }));
+    expect(topline("kind")).toBe("PCN · from title");
+    expect(q("data-leaf-verb", "change"), `a ${task_state} task offers no leaf change`).toBeNull();
+  });
+
+  it("a recorded decision on this card locks the leaf chip", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountPromotable();
+    expect(q("data-leaf-verb", "change")).not.toBeNull();
+    fireEvent.click(rejectBtn());
+    fireEvent.click(document.querySelector('[data-reject-code="not_a_notice"] input')!);
+    fireEvent.click(document.querySelector("[data-reject-confirm]")!);
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(q("data-leaf-verb", "change"), "the chip still offers a change after the decision").toBeNull());
+  });
+
+  it("a leaf with no source says so, on the chip and in the tooltip", async () => {
     fetchIngestExtraction.mockImplementation(async () => ({ ...exBody(), leaf: "pdn", leaf_source: "extraction-title" }));
     await mountPromotable();
-    expect(topline("kind")).toBe("PDN");
-    expect(q("data-topline", "kind")!.getAttribute("title")).toBe("pdn from extraction-title");
+    expect(topline("kind")).toBe("PDN · source not given");
+    expect(q("data-topline", "kind")!.getAttribute("title")).toBe("source not given");
   });
 });
 

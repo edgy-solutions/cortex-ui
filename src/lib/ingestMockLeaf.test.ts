@@ -20,12 +20,12 @@ describe("mock: leaf / leaf_source", () => {
     expect([r.leaf, r.leaf_source]).toEqual([null, null]);
   });
 
-  it("a pcn-named drop advances to review with (pcn, extraction-title)", async () => {
+  it("a pcn-named drop advances to review with (pcn, title)", async () => {
     const id = await drop("PCN26-117.pdf");
     await poll(id);
     const r = await poll(id);
     expect(r.stage).toBe("review");
-    expect([r.leaf, r.leaf_source]).toEqual(["pcn", "extraction-title"]);
+    expect([r.leaf, r.leaf_source]).toEqual(["pcn", "title"]);
   });
 
   it("an unnamed drop parks at awaiting_kind and does not advance", async () => {
@@ -48,19 +48,19 @@ describe("mock: leaf / leaf_source", () => {
     const id = await drop("PDN-7.pdf");
     const r = await poll(id);
     expect(r.stage).toBe("extracting");
-    expect([r.leaf, r.leaf_source]).toEqual(["pdn", "extraction-title"]);
+    expect([r.leaf, r.leaf_source]).toEqual(["pdn", "title"]);
   });
 
-  it("correctIngestLeaf from awaiting_kind resumes extraction with (pdn, ingest); the next poll reaches review", async () => {
+  it("correctIngestLeaf from awaiting_kind resumes extraction with (pdn, corrected); the next poll reaches review", async () => {
     const id = await drop("scan.pdf");
     await poll(id);
     await poll(id);
     const r = readIngestStatusRow(await correctIngestLeaf(id, "pdn"))!;
     expect(r.stage).toBe("extracting");
-    expect([r.leaf, r.leaf_source]).toEqual(["pdn", "ingest"]);
+    expect([r.leaf, r.leaf_source, r.corrected_by]).toEqual(["pdn", "corrected", "mock-caller"]);
     const next = await poll(id);
     expect(next.stage).toBe("review");
-    expect([next.leaf, next.leaf_source]).toEqual(["pdn", "ingest"]);
+    expect([next.leaf, next.leaf_source]).toEqual(["pdn", "corrected"]);
   });
 
   it("a correction at a terminal stage rejects with leaf_locked; an unknown id rejects 404", async () => {
@@ -70,5 +70,69 @@ describe("mock: leaf / leaf_source", () => {
     const err = await correctIngestLeaf(id, "pdn").then(() => null, (e: unknown) => e);
     expect(readActRefusal(err)).toMatchObject({ status: 409, error: "leaf_locked" });
     await expect(correctIngestLeaf("nope", "pcn")).rejects.toMatchObject({ response: { status: 404 } });
+  });
+});
+
+describe("mock: declared leaf, candidates, and a correction at review", () => {
+  const dropAs = async (name: string, contentKind: string): Promise<string> =>
+    ((await uploadIngest(new File(["x"], name), "pdf", "me", contentKind)) as { ingest_id: string }).ingest_id;
+
+  it("a declared drop carries (leaf, declared) from received and never parks", async () => {
+    const id = await dropAs("scan.pdf", "pdn");
+    const mine = readIngestStatusRow(((await fetchIngestMine(10)) as { items: unknown[] }).items[0])!;
+    expect([mine.stage, mine.leaf, mine.leaf_source]).toEqual(["received", "pdn", "declared"]);
+    expect((await poll(id)).stage).toBe("extracting");
+    const r = await poll(id);
+    expect([r.stage, r.leaf, r.leaf_source]).toEqual(["review", "pdn", "declared"]);
+  });
+
+  it("a declared leaf wins over a title that names the other kind", async () => {
+    const id = await dropAs("PCN-9.pdf", "pdn");
+    const r = await poll(id);
+    expect([r.leaf, r.leaf_source]).toEqual(["pdn", "declared"]);
+  });
+
+  it("a title match sets source title", async () => {
+    const id = await dropAs("PDN-3.pdf", "pdf");
+    const r = await poll(id);
+    expect([r.leaf, r.leaf_source]).toEqual(["pdn", "title"]);
+  });
+
+  it("a notice-named drop that parks carries candidates, best first", async () => {
+    const id = await drop("notice.pdf");
+    const r = await poll(id);
+    expect(r.stage).toBe("awaiting_kind");
+    expect(r.leaf_candidates?.map((c) => [c.leaf, c.score, c.evidence_ref.page])).toEqual([["pcn", 0.55, 1], ["pdn", 0.4, 1]]);
+  });
+
+  it("an unhinted parked drop carries no leaf_candidates key", async () => {
+    const id = await drop("scan.pdf");
+    const raw = (await fetchIngestStatus(id)) as Record<string, unknown>;
+    expect("leaf_candidates" in raw).toBe(false);
+  });
+
+  it("the candidates are gone after a correction", async () => {
+    const id = await drop("notice.pdf");
+    await poll(id);
+    const raw = (await correctIngestLeaf(id, "pcn")) as Record<string, unknown>;
+    expect("leaf_candidates" in raw).toBe(false);
+    expect(readIngestStatusRow(raw)!.leaf_candidates).toBeUndefined();
+  });
+
+  it("a correction at review goes back to extracting, then to review with (leaf, corrected, mock-caller)", async () => {
+    const id = await drop("PCN-5.pdf");
+    await poll(id);
+    expect((await poll(id)).stage).toBe("review");
+    const r = readIngestStatusRow(await correctIngestLeaf(id, "pdn"))!;
+    expect([r.stage, r.leaf, r.leaf_source, r.corrected_by]).toEqual(["extracting", "pdn", "corrected", "mock-caller"]);
+    const next = await poll(id);
+    expect([next.stage, next.leaf, next.leaf_source, next.corrected_by]).toEqual(["review", "pdn", "corrected", "mock-caller"]);
+  });
+
+  it("a correction at received or extracting leaves the stage unchanged", async () => {
+    const id = await dropAs("scan.pdf", "pdf");
+    expect(readIngestStatusRow(await correctIngestLeaf(id, "pcn"))!.stage).toBe("received");
+    await poll(id);
+    expect(readIngestStatusRow(await correctIngestLeaf(id, "pdn"))!.stage).toBe("extracting");
   });
 });

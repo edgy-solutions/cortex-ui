@@ -6,6 +6,8 @@ import { buildHeaderEdits, buildRowEdits, isPromotionRowEditsEnabled, type RowEd
 import type { HeaderEdit } from "@/api/client";
 import { DISPOSITIONS, presentDisposition } from "@/lib/dispositions";
 import { fetchIngestExtraction } from "@/lib/ingestTransport";
+import { LeafChip } from "@/components/ingest/IngestLeafChip";
+import type { IngestLeaf, IngestLeafSource, IngestStatusRow } from "@/lib/ingestWire";
 import {
   mergeReview,
   readExtraction,
@@ -82,14 +84,18 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  * does not know holds Promote rather than passing it. Reject waits on neither, because "this is not
  * a notice" is exactly the decision a steward makes about a drop with no rows or no readable source.
  */
-type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source";
+type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back";
 
 const HOLD_TEXT: Record<PromoteHold, string> = {
   "rows-loading": "Promote waits for the extracted rows.",
   "no-rows": "Promote is off: there are no extracted rows to vet. Reject is still open.",
   "source-loading": "Promote waits for the source to draw.",
   "no-source": "Promote is off: the source cannot be shown, and a steward cannot vet what they cannot see. Reject is still open.",
+  // Unlike the holds above this one also turns Reject off: see `sentBack` in the card.
+  "sent-back": "",
 };
+const sentBackText = (leaf: IngestLeaf | null): string =>
+  `The kind changed to ${leaf ? leaf.toUpperCase() : "?"}: the document went back to extraction for the new kind. A new review replaces this one; Promote and Reject are off here.`;
 type ExtractionPhase = { phase: "loading" } | { phase: "ready"; ex: Extraction } | { phase: "failed"; why: string };
 
 const HEADER_LABEL: Record<HeaderField, string> = {
@@ -220,6 +226,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const [extraction, setExtraction] = useState<ExtractionPhase>({ phase: "loading" });
   const [sourcePhase, setSourcePhase] = useState<SourcePhase>("loading");
+  // A pick through the chip answers with the new status row. Still at `review`: only the chip's
+  // leaf/source/corrected_by change. Anywhere else (the server sent the row back to `extracting`
+  // because the kind changed after parts extraction): this review is stale, see `sentBack`.
+  const [leafPick, setLeafPick] = useState<{ leaf: IngestLeaf | null; source: IngestLeafSource | null; by: string | null } | null>(null);
+  const [sentBackTo, setSentBackTo] = useState<{ leaf: IngestLeaf | null } | null>(null);
+  const onLeafRow = (row: IngestStatusRow) => {
+    setLeafPick({ leaf: row.leaf ?? null, source: row.leaf_source ?? null, by: row.corrected_by ?? null });
+    if (row.stage !== "review") setSentBackTo({ leaf: row.leaf ?? null });
+  };
 
   useEffect(() => {
     let live = true;
@@ -252,12 +267,17 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const targetShared = target ? rowsSharingEvidence(rows, target) : 0;
 
   const blocked = isActBlocked(a);
-  const canAct = !blocked && !acting;
+  // WHY sent-back disables Reject too (the other holds leave it open): once the row has left review
+  // the task is stale; any decision recorded on it would be a decision on a review that no longer exists.
+  const sentBack = sentBackTo !== null;
+  const canAct = !blocked && !acting && !sentBack;
   const promoteVerb = verbs.includes("promoted") ? "promoted" : null;
   const rejectVerb = verbs.includes("rejected") ? "rejected" : null;
   const otherVerbs = verbs.filter((v) => v !== promoteVerb && v !== rejectVerb);
   const promoteHold: PromoteHold | null =
-    extraction.phase === "loading"
+    sentBack
+      ? "sent-back"
+      : extraction.phase === "loading"
       ? "rows-loading"
       : rows.length === 0
         ? "no-rows"
@@ -449,7 +469,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   };
 
   const topline: Array<[string, string]> = [
-    ["kind", ex?.leaf ? ex.leaf.toUpperCase() : "kind ?"],
+    ["kind", ""],
     // The identity fallback is labelled as one, but only when it is what the top line shows (the payload's value wins).
     ["manufacturer", review.manufacturer === null ? "—" : review.manufacturer === mfrFallback ? `${review.manufacturer} (from identity, header blank)` : review.manufacturer],
     ["notice-date", review.notice_date ?? "—"],
@@ -458,6 +478,24 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     ["dropped-by", `dropped by ${droppedBy ?? "—"}`],
   ];
 
+  // The card also renders a task already decided (the status line below says so); a leaf change there would
+  // re-route a document whose review is over, and after a send-back this task no longer reviews anything.
+  const chipLocked = a.done !== null || (task.task_state != null && task.task_state !== "pending") || sentBack;
+  const chipLeaf = leafPick ? leafPick.leaf : (ex?.leaf ?? null);
+  const chipSource = leafPick ? leafPick.source : (ex?.leaf_source ?? null);
+  const chipBy = leafPick ? leafPick.by : (ex?.corrected_by ?? null);
+  const kindTitle = !chipLeaf
+    ? "PCN or PDN: the extraction did not name it (a defaulted doc_type is not shown)"
+    : chipSource === "declared"
+      ? "declared at the drop"
+      : chipSource === "title"
+        ? "read from the document's title"
+        : chipSource === "corrected"
+          ? chipBy
+            ? `corrected by ${chipBy}`
+            : "corrected"
+          : "source not given";
+
   return (
     <div
       ref={rootRef}
@@ -465,6 +503,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       onKeyDown={onKeyDown}
       className="glass-panel p-5 my-4 border-cyan-500/20 outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40"
       data-promotion-review
+      data-leaf-sent-back={sentBack ? "" : undefined}
       aria-label={`Review ${review.notice_id ?? "document"}: j and k move between rows, p promotes, r rejects`}
     >
       {/* TOP LINE. The notice id is the title; the sha never is (it sits in the provenance line). */}
@@ -480,9 +519,19 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
         </div>
         <p className="text-[11px] font-mono text-slate-300" data-review-topline>
           {topline.map(([k, v], i) => (
-            <span key={k} data-topline={k} title={k === "kind" ? (ex?.leaf ? `${ex.leaf} from ${ex.leaf_source ?? "the extraction"}` : "PCN or PDN: the extraction did not name it (a defaulted doc_type is not shown)") : undefined}>
+            <span key={k} data-topline={k} title={k === "kind" ? kindTitle : undefined}>
               {i > 0 && <span className="text-slate-600"> · </span>}
-              {k === "manufacturer" || k === "notice-date" ? (
+              {k === "kind" ? (
+                <LeafChip
+                  ingestId={ingestId}
+                  stage="review"
+                  leaf={chipLeaf}
+                  leafSource={chipSource}
+                  correctedBy={chipBy}
+                  locked={chipLocked}
+                  onRow={onLeafRow}
+                />
+              ) : k === "manufacturer" || k === "notice-date" ? (
                 headerValue(k === "manufacturer" ? "mfr" : "notice_date", v)
               ) : (
                 v
@@ -826,7 +875,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   data-verb={promoteVerb}
                   data-promote-hold={promoteHold ?? undefined}
                   data-row-edit-count={editCount > 0 ? editCount : undefined}
-                  title={promoteHold ? HOLD_TEXT[promoteHold] : undefined}
+                  title={promoteHold === "sent-back" ? sentBackText(sentBackTo?.leaf ?? null) : promoteHold ? HOLD_TEXT[promoteHold] : undefined}
                   className="flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />{" "}
@@ -862,9 +911,9 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </button>
               ))}
             </div>
-            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source") && (
+            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
-                {HOLD_TEXT[promoteHold]}
+                {promoteHold === "sent-back" ? sentBackText(sentBackTo?.leaf ?? null) : HOLD_TEXT[promoteHold]}
               </p>
             )}
             {rejectOpen && rejectVerb && editCount > 0 && (

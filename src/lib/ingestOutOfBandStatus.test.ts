@@ -87,8 +87,9 @@ describe("reader: leaf / leaf_source (PROPOSED)", () => {
 
   it.each([
     [null, null],
-    ["pcn", "ingest"],
-    ["pdn", "extraction-title"],
+    ["pcn", "declared"],
+    ["pdn", "title"],
+    ["pcn", "corrected"],
   ])("valid pair (%j, %j) is kept", (leaf, leaf_source) => {
     const r = readIngestStatusRow(wire({ leaf, leaf_source }))!;
     expect(r.leaf).toBe(leaf);
@@ -96,11 +97,13 @@ describe("reader: leaf / leaf_source (PROPOSED)", () => {
   });
 
   it.each([
-    ["PCN", "ingest"],
+    ["PCN", "declared"],
     ["pcn", "dropper"],
     ["pcn", null],
-    [null, "ingest"],
-    [7, "ingest"],
+    [null, "declared"],
+    [7, "declared"],
+    ["pcn", "ingest"],
+    ["pdn", "extraction-title"],
   ])("no-claim pair (%j, %j): both keys omitted, row still read", (leaf, leaf_source) => {
     const r = readIngestStatusRow(wire({ leaf, leaf_source }))!;
     expect(r).not.toBeNull();
@@ -112,6 +115,58 @@ describe("reader: leaf / leaf_source (PROPOSED)", () => {
     const r = readIngestStatusRow(wire({ leaf: "pcn" }))!;
     expect("leaf" in r).toBe(false);
     expect("leaf_source" in r).toBe(false);
+  });
+});
+
+describe("reader: the retired names and corrected_by", () => {
+  it("the retired names are unknown", () => {
+    for (const old of ["ingest", "extraction-title"]) {
+      const r = readIngestStatusRow(wire({ leaf: "pcn", leaf_source: old }))!;
+      expect("leaf" in r).toBe(false);
+      expect("leaf_source" in r).toBe(false);
+    }
+  });
+
+  it.each([
+    ["corrected", "ana", "ana"],
+    ["corrected", "  ", null],
+    ["corrected", 7, null],
+    ["corrected", undefined, null],
+    ["title", "ana", null],
+    ["declared", "ana", null],
+  ])("corrected_by with source %s and value %j reads as %j, and never invalidates the pair", (leaf_source, by, expected) => {
+    const r = readIngestStatusRow(wire({ leaf: "pcn", leaf_source, corrected_by: by }))!;
+    expect(r.leaf_source).toBe(leaf_source);
+    expect(r.corrected_by).toBe(expected);
+  });
+});
+
+describe("reader: leaf_candidates (PROPOSED name)", () => {
+  const ref = { page: 1, bbox: [40, 60, 560, 110] };
+  const good = (leaf: string, score = 0.5) => ({ leaf, score, evidence_ref: { ...ref } });
+  const cand = (v: unknown) => readIngestStatusRow(wire({ leaf: null, leaf_source: null, leaf_candidates: v }))!.leaf_candidates;
+
+  it("a valid list of 2 is kept in the server's order", () => {
+    expect(cand([good("pdn", 0.3), good("pcn", 0.9)])?.map((c) => c.leaf)).toEqual(["pdn", "pcn"]);
+  });
+
+  it("an absent key is undefined", () => {
+    expect(readIngestStatusRow(wire({ leaf: null, leaf_source: null }))!.leaf_candidates).toBeUndefined();
+  });
+
+  it("0 items is undefined", () => expect(cand([])).toBeUndefined());
+  it("4 items is undefined", () => expect(cand([good("pcn"), good("pdn"), good("pcn"), good("pdn")])).toBeUndefined());
+  it("a non-array is undefined", () => expect(cand({ leaf: "pcn" })).toBeUndefined());
+
+  it.each([
+    ["score NaN", { ...good("pcn"), score: NaN }],
+    ["leaf PCN", { ...good("PCN") }],
+    ["page 0", { ...good("pcn"), evidence_ref: { ...ref, page: 0 } }],
+    ["bbox of 3", { ...good("pcn"), evidence_ref: { ...ref, bbox: [1, 2, 3] } }],
+    ["an extra key", { ...good("pcn"), evidence_ref: { ...ref, extra: 1 } }],
+    ["a blank note", { ...good("pcn"), evidence_ref: { ...ref, note: "  " } }],
+  ])("one bad item (%s) makes the whole field undefined", (_, bad) => {
+    expect(cand([good("pdn"), bad])).toBeUndefined();
   });
 });
 

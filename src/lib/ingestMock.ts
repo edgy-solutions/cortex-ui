@@ -43,6 +43,7 @@ import {
   promotionIngestId,
   type IngestFailure,
   type IngestLeaf,
+  type IngestLeafCandidate,
   type IngestLeafSource,
   type IngestOobDocumentStatus,
   type IngestStage,
@@ -73,12 +74,18 @@ interface MockRow {
    * carry, so it would be dishonest to sniff it the same way.
    */
   origin?: IngestOrigin | null;
-  /** PROPOSED wire pair (see `IngestStatusRow.leaf`): both null while `received`. The title read is
-   *  extraction's first step (architect, 10-21), so entering `extracting` reads the filename —
-   *  /pcn/i → "pcn", /pdn/i → "pdn" (source "extraction-title"); neither parks the row at
-   *  `awaiting_kind` before parts extraction. A correction sets source "ingest". Absent on a duplicate's row. */
+  /** PROPOSED wire pair (see `IngestStatusRow.leaf`): both null while `received`, unless the drop
+   *  DECLARED a leaf (`contentKind` "pcn"/"pdn" → that leaf, source "declared", from `received` on; such a row
+   *  never reads its title and never parks). Otherwise the title read is extraction's first step (architect,
+   *  10-21), so entering `extracting` reads the filename — /pcn/i → "pcn", /pdn/i → "pdn" (source "title");
+   *  neither parks the row at `awaiting_kind` before parts extraction. A correction sets source "corrected"
+   *  with `corrected_by` "mock-caller". Absent on a duplicate's row. */
   leaf?: IngestLeaf | null;
   leaf_source?: IngestLeafSource | null;
+  corrected_by?: string | null;
+  /** PROPOSED `leaf_candidates`: set only when a parked row's filename contains "notice" (PCN 0.55, then PDN 0.4,
+   *  both on the same title crop); no such key otherwise. A correction removes the key. */
+  leaf_candidates?: IngestLeafCandidate[];
   /** Mirrors the wire's `failure`/`attempt` (33b80988). Set only by `__seedMockFailedFixture` — the mock never fails a drop on its own. */
   failure?: IngestFailure | null;
   attempt?: number;
@@ -109,7 +116,6 @@ function uuidFor(n: number): string {
 
 export function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
   void onBehalfOf;
-  void contentKind;
   counter += 1;
   const sha256 = sha256For(counter);
   const isDuplicate = /dup/i.test(file.name);
@@ -147,6 +153,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string, conte
   }
 
   const ingestId = `sha256:${sha256}`;
+  const declared: IngestLeaf | null = contentKind === "pcn" || contentKind === "pdn" ? contentKind : null;
   const row: MockRow = {
     ingest_id: ingestId,
     sha256,
@@ -156,8 +163,9 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string, conte
     duplicate: null,
     created_at: now,
     updated_at: now,
-    leaf: null,
-    leaf_source: null,
+    leaf: declared ?? null,
+    leaf_source: declared ? "declared" : null,
+    corrected_by: null,
   };
   STORE.set(ingestId, row);
   FILE_NAMES.set(ingestId, file.name);
@@ -188,13 +196,23 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
       if (next === "extracting") {
         // The title read is extraction's first step: a leaf from it carries on into parts extraction;
         // none parks the row before parts extraction until someone picks (it does not advance).
+        // A declared leaf (or one already corrected) is never re-read.
         const name = FILE_NAMES.get(row.ingest_id) ?? "";
-        const leaf: IngestLeaf | null = /pcn/i.test(name) ? "pcn" : /pdn/i.test(name) ? "pdn" : null;
+        const leaf: IngestLeaf | null = row.leaf ?? (/pcn/i.test(name) ? "pcn" : /pdn/i.test(name) ? "pdn" : null);
         if (leaf) {
-          row.leaf = leaf;
-          row.leaf_source = "extraction-title";
+          if (!row.leaf) {
+            row.leaf = leaf;
+            row.leaf_source = "title";
+          }
         } else {
           row.stage = INGEST_AWAITING_KIND_STATUS;
+          if (/notice/i.test(name)) {
+            const evidence_ref = { page: 1, bbox: [40, 60, 560, 110] as [number, number, number, number] };
+            row.leaf_candidates = [
+              { leaf: "pcn", score: 0.55, evidence_ref },
+              { leaf: "pdn", score: 0.4, evidence_ref: { ...evidence_ref, bbox: [...evidence_ref.bbox] } },
+            ];
+          }
         }
       }
       if (row.stage === "review") seedReviewTask(row);
@@ -293,8 +311,9 @@ const LEAF_LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected",
 
 /**
  * PROPOSED — `POST /ingest/{id}/leaf`'s mock (10-21 packet §3b). Unknown id → 404; a terminal row →
- * the wrapped 409 `leaf_locked` (`readActRefusal`'s shape); else sets the leaf with source "ingest",
- * resuming an `awaiting_kind` row's extraction (back to `extracting`; the next poll reaches `review`).
+ * the wrapped 409 `leaf_locked` (`readActRefusal`'s shape); else sets the leaf with source "corrected" and `corrected_by` "mock-caller", clears
+ * `leaf_candidates`, and at `awaiting_kind` / `review` / `awaiting_origin` sends the row to `extracting` (the next
+ * poll reaches `review` and re-seeds the review task); at `received` / `extracting` the stage is unchanged.
  * Resolves with the status body.
  */
 export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
@@ -319,9 +338,11 @@ export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<u
     return Promise.reject(err);
   }
   row.leaf = leaf;
-  row.leaf_source = "ingest";
+  row.leaf_source = "corrected";
+  row.corrected_by = "mock-caller";
+  delete row.leaf_candidates;
   row.updated_at = Date.now();
-  if (row.stage === INGEST_AWAITING_KIND_STATUS) row.stage = "extracting";
+  if (row.stage === INGEST_AWAITING_KIND_STATUS || row.stage === "review" || row.stage === "awaiting_origin") row.stage = "extracting";
   return Promise.resolve({ ...row });
 }
 

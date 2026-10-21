@@ -513,14 +513,14 @@ describe("out-of-band document statuses (defect: the card froze at extracting)",
   // a "?" at awaiting_kind, picked PDN, shows the server's next row without waiting for a poll.
   it("the card mounts the leaf chip, and a pick's returned row becomes the card's row", async () => {
     fetchIngestStatus.mockReturnValue(new Promise(() => undefined));
-    correctIngestLeaf.mockResolvedValue({ ...row({ stage: "review" }), leaf: "pdn", leaf_source: "ingest" });
+    correctIngestLeaf.mockResolvedValue({ ...row({ stage: "review" }), leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" });
     render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} pollIntervalMs={100000} />);
     expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("? · not identified");
     fireEvent.click(document.querySelector('[data-leaf-pick="pdn"]')!);
     await waitFor(() => expect(document.querySelector('[data-ingest-status="review"]')).toBeTruthy());
     expect(correctIngestLeaf).toHaveBeenCalledWith(INGEST_ID, "pdn");
     expect(document.querySelector("[data-leaf-chip]")?.getAttribute("data-leaf")).toBe("pdn");
-    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("PDN · picked");
+    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("PDN · corrected by ana");
   });
 
   it("awaiting_kind draws its waiting line", () => {

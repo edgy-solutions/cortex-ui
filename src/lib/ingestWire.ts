@@ -233,8 +233,72 @@ export type IngestOobDocumentStatus = (typeof INGEST_OOB_DOCUMENT_STATUSES)[numb
 /** The leaf content kinds the chip can name (PROPOSED, 10-21 packet §3). */
 export const INGEST_LEAVES = ["pcn", "pdn"] as const;
 export type IngestLeaf = (typeof INGEST_LEAVES)[number];
-/** Where a leaf came from: the dropper's own pick, or the title the extraction read. */
-export type IngestLeafSource = "ingest" | "extraction-title";
+/** Where a leaf came from (architect ruling 10-21, one enum on the status row, the review route and
+ *  the decision record): the drop carried it, the document's title was read, or a person changed it.
+ *  WRITTEN with the leaf and stored on the row, never computed from the stored kind. */
+export const INGEST_LEAF_SOURCES = ["declared", "title", "corrected"] as const;
+export type IngestLeafSource = (typeof INGEST_LEAF_SOURCES)[number];
+
+/** A leaf's source is known iff it is in `INGEST_LEAF_SOURCES`; the retired names (`ingest`,
+ *  `extraction-title`) are unknown. Shared by the status-row and review readers so they cannot drift. */
+export function readLeafSource(v: unknown): IngestLeafSource | null {
+  return typeof v === "string" && (INGEST_LEAF_SOURCES as readonly string[]).includes(v) ? (v as IngestLeafSource) : null;
+}
+
+/** `corrected_by` is kept only for source "corrected" and only as a non-blank string; else null. */
+export function readCorrectedBy(source: IngestLeafSource | null, v: unknown): string | null {
+  return source === "corrected" && typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+/** The title crop a candidate's read used (the evidence_ref ruling, 10-21: `{page, bbox, note?}`). */
+export interface IngestLeafEvidenceRef {
+  page: number;
+  bbox: [number, number, number, number];
+  note?: string;
+}
+/** One candidate when the read was not confident. */
+export interface IngestLeafCandidate {
+  leaf: IngestLeaf;
+  score: number;
+  evidence_ref: IngestLeafEvidenceRef;
+}
+
+function readCandidateEvidenceRef(v: unknown): IngestLeafEvidenceRef | undefined {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) if (k !== "page" && k !== "bbox" && k !== "note") return undefined;
+  if (typeof o.page !== "number" || !Number.isInteger(o.page) || o.page < 1) return undefined;
+  if (!Array.isArray(o.bbox) || o.bbox.length !== 4 || !o.bbox.every((n) => typeof n === "number" && Number.isFinite(n))) return undefined;
+  const bbox = o.bbox as [number, number, number, number];
+  if ("note" in o) {
+    if (typeof o.note !== "string" || o.note.trim() === "") return undefined;
+    return { page: o.page, bbox, note: o.note };
+  }
+  return { page: o.page, bbox };
+}
+
+/**
+ * PROPOSED field name `leaf_candidates` (the ruling gave the shape, not the name): 1..3 items,
+ * best first. Absent key → undefined (no claim). ANY invalid item, or a length of 0 or over 3, makes
+ * the WHOLE field undefined — deliberately no partial lists, because order is the claim. The server's
+ * order is kept; nothing is sorted.
+ */
+export function readLeafCandidates(raw: Record<string, unknown>): IngestLeafCandidate[] | undefined {
+  if (!("leaf_candidates" in raw)) return undefined;
+  const v = raw.leaf_candidates;
+  if (!Array.isArray(v) || v.length < 1 || v.length > 3) return undefined;
+  const out: IngestLeafCandidate[] = [];
+  for (const item of v) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return undefined;
+    const c = item as Record<string, unknown>;
+    if (typeof c.leaf !== "string" || !(INGEST_LEAVES as readonly string[]).includes(c.leaf)) return undefined;
+    if (typeof c.score !== "number" || !Number.isFinite(c.score)) return undefined;
+    const evidence_ref = readCandidateEvidenceRef(c.evidence_ref);
+    if (!evidence_ref) return undefined;
+    out.push({ leaf: c.leaf as IngestLeaf, score: c.score, evidence_ref });
+  }
+  return out;
+}
 
 /** The EVENT branch's whole ladder, exactly as `gateway.py`'s `POST /ingest/events` walks it at
  *  `3e6d9e9f`: `record_received` (status `received`), then `update_status(CASE_OPENED, case_id=…)`
@@ -277,6 +341,11 @@ export interface IngestStatusRow {
    */
   leaf?: IngestLeaf | null;
   leaf_source?: IngestLeafSource | null;
+  /** Present with the pair; the person who changed it, only when `leaf_source` is "corrected". */
+  corrected_by?: string | null;
+  /** PROPOSED name (the ruling gave the shape only): best first, max 3. Absent = no claim. The crop is
+   *  NOT drawn yet: a candidate's bbox has no page_dims, which `bboxScale.ts` needs (asked of Lane 1). */
+  leaf_candidates?: IngestLeafCandidate[];
   /**
    * `GET /ingest/{id}/status`'s `extraction_defect` (Lane 1 packet
    * `sessions/2026-10-11-packet-to-cortex-my-drops-extraction-incomplete-has-no-producer-yet.md`):
@@ -385,18 +454,18 @@ const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestRowStage> = new Set(["rejected",
 /**
  * The PROPOSED leaf pair (see `IngestStatusRow.leaf`). `undefined` = NO CLAIM: the `leaf_source` key
  * is absent, or the pair is not one of the valid shapes — (a leaf in `INGEST_LEAVES`, a source in
- * {ingest, extraction-title}) or (null, null). Never refuses the row.
+ * {declared, title, corrected}) or (null, null). Never refuses the row.
  */
-function readLeafPair(raw: Record<string, unknown>): { leaf: IngestLeaf | null; leaf_source: IngestLeafSource | null } | undefined {
+function readLeafPair(
+  raw: Record<string, unknown>,
+): { leaf: IngestLeaf | null; leaf_source: IngestLeafSource | null; corrected_by: string | null } | undefined {
   if (!("leaf_source" in raw)) return undefined;
   const { leaf, leaf_source } = raw;
-  if (leaf === null && leaf_source === null) return { leaf: null, leaf_source: null };
-  if (
-    typeof leaf === "string" &&
-    (INGEST_LEAVES as readonly string[]).includes(leaf) &&
-    (leaf_source === "ingest" || leaf_source === "extraction-title")
-  ) {
-    return { leaf: leaf as IngestLeaf, leaf_source };
+  if (leaf === null && leaf_source === null) return { leaf: null, leaf_source: null, corrected_by: null };
+  const source = readLeafSource(leaf_source);
+  if (typeof leaf === "string" && (INGEST_LEAVES as readonly string[]).includes(leaf) && source !== null) {
+    // A missing or invalid corrected_by never invalidates the pair.
+    return { leaf: leaf as IngestLeaf, leaf_source: source, corrected_by: readCorrectedBy(source, raw.corrected_by) };
   }
   return undefined;
 }
@@ -474,6 +543,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   }
 
   const leafPair = readLeafPair(raw);
+  const leafCandidates = readLeafCandidates(raw);
   const extraction_defect = readExtractionDefect(raw.extraction_defect);
   const notice_id = readNoticeId(raw.notice_id);
   const content_kind = readNoticeId(raw.content_kind); // same three states as notice_id
@@ -494,6 +564,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     origin: readIngestOrigin(raw.origin),
     case_id,
     ...(leafPair ?? {}),
+    ...(leafCandidates !== undefined ? { leaf_candidates: leafCandidates } : {}),
     ...(extraction_defect !== undefined ? { extraction_defect } : {}),
     ...(notice_id !== undefined ? { notice_id } : {}),
     ...(content_kind !== undefined ? { content_kind } : {}),
