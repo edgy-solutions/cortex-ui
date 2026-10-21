@@ -84,7 +84,7 @@ interface MockRow {
   leaf_source?: IngestLeafSource | null;
   corrected_by?: string | null;
   /** PROPOSED `leaf_candidates`: set only when a parked row's filename contains "notice" (PCN 0.55, then PDN 0.4,
-   *  both on the same title crop); no such key otherwise. A correction removes the key. */
+   *  both on the same title crop, in page fractions); no such key otherwise. A correction removes the key. */
   leaf_candidates?: IngestLeafCandidate[];
   /** Mirrors the wire's `failure`/`attempt` (33b80988). Set only by `__seedMockFailedFixture` — the mock never fails a drop on its own. */
   failure?: IngestFailure | null;
@@ -207,7 +207,7 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
         } else {
           row.stage = INGEST_AWAITING_KIND_STATUS;
           if (/notice/i.test(name)) {
-            const evidence_ref = { page: 1, bbox: [40, 60, 560, 110] as [number, number, number, number] };
+            const evidence_ref = { page: 1, bbox: [0.07, 0.03, 0.92, 0.07] as [number, number, number, number] };
             row.leaf_candidates = [
               { leaf: "pcn", score: 0.55, evidence_ref },
               { leaf: "pdn", score: 0.4, evidence_ref: { ...evidence_ref, bbox: [...evidence_ref.bbox] } },
@@ -311,9 +311,11 @@ const LEAF_LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected",
 
 /**
  * PROPOSED — `POST /ingest/{id}/leaf`'s mock (10-21 packet §3b). Unknown id → 404; a terminal row →
- * the wrapped 409 `leaf_locked` (`readActRefusal`'s shape); else sets the leaf with source "corrected" and `corrected_by` "mock-caller", clears
- * `leaf_candidates`, and at `awaiting_kind` / `review` / `awaiting_origin` sends the row to `extracting` (the next
- * poll reaches `review` and re-seeds the review task); at `received` / `extracting` the stage is unchanged.
+ * the wrapped 409 `leaf_not_changeable` (`readActRefusal`'s shape); else sets the leaf with source "corrected" and `corrected_by` "mock-caller", clears
+ * `leaf_candidates`, and at `awaiting_kind` / `review` / `awaiting_origin` sends the row back to `received` (Lane 1's 203; the
+ * `attempt` counter is bumped when the row has one, and the next polls walk it to `review` and re-seed the review task);
+ * at `received` / `extracting` the stage is unchanged. The same leaf as the row's own is a no-op: the row is returned
+ * unchanged, no write (no source change).
  * Resolves with the status body.
  */
 export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
@@ -332,17 +334,21 @@ export function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<u
     err.response = {
       status: 409,
       data: {
-        detail: { error: "leaf_locked", stage: row.stage, message: `The kind can no longer be changed at ${row.stage}.` },
+        detail: { error: "leaf_not_changeable", stage: row.stage, message: `The kind can no longer be changed at ${row.stage}.` },
       },
     };
     return Promise.reject(err);
   }
+  if (row.leaf === leaf) return Promise.resolve({ ...row });
   row.leaf = leaf;
   row.leaf_source = "corrected";
   row.corrected_by = "mock-caller";
   delete row.leaf_candidates;
   row.updated_at = Date.now();
-  if (row.stage === INGEST_AWAITING_KIND_STATUS || row.stage === "review" || row.stage === "awaiting_origin") row.stage = "extracting";
+  if (row.stage === INGEST_AWAITING_KIND_STATUS || row.stage === "review" || row.stage === "awaiting_origin") {
+    row.stage = "received";
+    if (row.attempt !== undefined) row.attempt += 1;
+  }
   return Promise.resolve({ ...row });
 }
 

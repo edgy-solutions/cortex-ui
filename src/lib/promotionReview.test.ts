@@ -178,6 +178,17 @@ describe("evidence has three states, with different owners", () => {
     expect(one({ evidence_ref: { ...ev, units: undefined } })).toMatchObject({ state: "ok", ref: { units: null } });
   });
 
+  it("a row evidence_ref in page fractions with no page_dims is read on a 1x1 page", () => {
+    expect(one({ evidence_ref: { page: 2, bbox: [0.1, 0.2, 0.5, 0.3], bboxes: [], extra: 1 } })).toEqual({
+      state: "ok",
+      ref: { page: 2, bbox: [0.1, 0.2, 0.5, 0.3], page_dims: { width: 1, height: 1 }, units: null },
+    });
+  });
+
+  it("a row evidence_ref with no page_dims and a pixel bbox is malformed", () => {
+    expect(one({ evidence_ref: { page: 1, bbox: [40, 60, 560, 110] } })).toEqual({ state: "malformed" });
+  });
+
   it.each([
     ["not an object", "p1"],
     ["page 0 (pages are 1-based)", { ...ev, page: 0 }],

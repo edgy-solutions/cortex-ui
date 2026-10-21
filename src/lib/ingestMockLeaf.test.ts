@@ -51,24 +51,25 @@ describe("mock: leaf / leaf_source", () => {
     expect([r.leaf, r.leaf_source]).toEqual(["pdn", "title"]);
   });
 
-  it("correctIngestLeaf from awaiting_kind resumes extraction with (pdn, corrected); the next poll reaches review", async () => {
+  it("correctIngestLeaf from awaiting_kind sends the row to received with (pdn, corrected); the polls then reach review", async () => {
     const id = await drop("scan.pdf");
     await poll(id);
     await poll(id);
     const r = readIngestStatusRow(await correctIngestLeaf(id, "pdn"))!;
-    expect(r.stage).toBe("extracting");
+    expect(r.stage).toBe("received");
     expect([r.leaf, r.leaf_source, r.corrected_by]).toEqual(["pdn", "corrected", "mock-caller"]);
+    expect((await poll(id)).stage).toBe("extracting");
     const next = await poll(id);
     expect(next.stage).toBe("review");
     expect([next.leaf, next.leaf_source]).toEqual(["pdn", "corrected"]);
   });
 
-  it("a correction at a terminal stage rejects with leaf_locked; an unknown id rejects 404", async () => {
+  it("a correction at a terminal stage rejects with leaf_not_changeable; an unknown id rejects 404", async () => {
     const id = await drop("PCN-1.pdf");
     // The mock has no promote verb; its failed fixture is a terminal stage too.
     __seedMockFailedFixture(id, { reason_code: "x", reason: "r" } as never);
     const err = await correctIngestLeaf(id, "pdn").then(() => null, (e: unknown) => e);
-    expect(readActRefusal(err)).toMatchObject({ status: 409, error: "leaf_locked" });
+    expect(readActRefusal(err)).toMatchObject({ status: 409, error: "leaf_not_changeable" });
     await expect(correctIngestLeaf("nope", "pcn")).rejects.toMatchObject({ response: { status: 404 } });
   });
 });
@@ -119,14 +120,29 @@ describe("mock: declared leaf, candidates, and a correction at review", () => {
     expect(readIngestStatusRow(raw)!.leaf_candidates).toBeUndefined();
   });
 
-  it("a correction at review goes back to extracting, then to review with (leaf, corrected, mock-caller)", async () => {
+  it("a correction at review goes back to received, then to review with (leaf, corrected, mock-caller)", async () => {
     const id = await drop("PCN-5.pdf");
     await poll(id);
     expect((await poll(id)).stage).toBe("review");
     const r = readIngestStatusRow(await correctIngestLeaf(id, "pdn"))!;
-    expect([r.stage, r.leaf, r.leaf_source, r.corrected_by]).toEqual(["extracting", "pdn", "corrected", "mock-caller"]);
+    expect([r.stage, r.leaf, r.leaf_source, r.corrected_by]).toEqual(["received", "pdn", "corrected", "mock-caller"]);
+    await poll(id);
     const next = await poll(id);
     expect([next.stage, next.leaf, next.leaf_source, next.corrected_by]).toEqual(["review", "pdn", "corrected", "mock-caller"]);
+  });
+
+  it("the same leaf is a no-op", async () => {
+    const id = await drop("PCN-5.pdf");
+    await poll(id);
+    expect((await poll(id)).stage).toBe("review");
+    const r = readIngestStatusRow(await correctIngestLeaf(id, "pcn"))!;
+    expect([r.stage, r.leaf, r.leaf_source, r.corrected_by ?? null]).toEqual(["review", "pcn", "title", null]);
+  });
+
+  it("the notice candidates draw one title crop in page fractions", async () => {
+    const id = await drop("notice.pdf");
+    const r = await poll(id);
+    expect(r.leaf_candidates?.map((c) => c.evidence_ref.bbox)).toEqual([[0.07, 0.03, 0.92, 0.07], [0.07, 0.03, 0.92, 0.07]]);
   });
 
   it("a correction at received or extracting leaves the stage unchanged", async () => {

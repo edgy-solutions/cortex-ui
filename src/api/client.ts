@@ -1142,12 +1142,12 @@ export async function disputeIngestOrigin(
 /**
  * RULED (architect 2026-10-21, "Leaf, final shape" §3; Lane 1 builds it in 202/203) —
  * `POST /ingest/{ingest_id}/leaf` with `{"leaf": "pcn" | "pdn"}`: the dropper OR the steward (one route)
- * corrects, or at `awaiting_kind` supplies, the row's leaf, until promotion. The row's `leaf_source` becomes
- * `corrected` with `corrected_by`. A change after parts extraction sends the row back to `extracting`;
- * one at `awaiting_kind` releases the hold. Answers the status body; a locked row answers 409
- * `leaf_locked` (shape first proposed in packet
- * `sessions/2026-10-21-packet-to-architect-and-lane-01-no-leaf-is-settable-today-a-pdf-drop-parks-at-awaiting-origin-the-chip-needs-three-wire-items.md`
- * §3b). Same `api` instance as every call above, so it needs no `check:transport` declaration.
+ * corrects, or at `awaiting_kind` supplies, the row's leaf. The row's `leaf_source` becomes `corrected` with
+ * `corrected_by`. As built by Lane 1 (`invincible-agent lane/01-202 c095be48 / 5e1fc230`): at `review`,
+ * `awaiting_origin` or `awaiting_kind` the row goes back to stage `received` with `attempt` + 1; the same leaf as
+ * the row's own answers 200 and writes nothing; at `promoted` / `rejected` / `review_rejected` it answers 409
+ * `leaf_not_changeable`. Every refusal carries a `message`: 422 `unknown_leaf`, 409 `no_leaf_for_kind`, 409
+ * `leaf_not_changeable` (`leaf_fixed_at_review` no longer exists). Answers the status body. Same `api` instance as every call above, so it needs no `check:transport` declaration.
  */
 export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
   const { data } = await api.post<unknown>(ingestLeafPath(ingestId), { leaf });

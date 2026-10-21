@@ -68,6 +68,7 @@ export function PdfEvidencePane({
   target,
   quality = "unknown",
   sharedBy = 0,
+  caption,
   onPhase,
   jumpKey = 0,
   ref,
@@ -76,6 +77,8 @@ export function PdfEvidencePane({
   target: EvidenceRef | null;
   quality?: EvidenceQuality;
   sharedBy?: number;
+  /** Replaces the outline caption's text when given. */
+  caption?: string;
   /**
    * The source as the steward sees it: "ready" only once the page in front of them has DRAWN (the
    * target's page, else page 1; an opened document with nothing on screen is still "loading"),
@@ -398,7 +401,7 @@ export function PdfEvidencePane({
       </div>
       {box && targetPage !== null && (
         <p className="mt-1.5 text-[10px] text-slate-400" data-evidence-caption={quality}>
-          {outlineCaption(quality, targetPage, sharedBy)}
+          {caption ?? outlineCaption(quality, targetPage, sharedBy)}
         </p>
       )}
     </div>

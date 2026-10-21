@@ -141,8 +141,8 @@ describe("reader: the retired names and corrected_by", () => {
   });
 });
 
-describe("reader: leaf_candidates (PROPOSED name)", () => {
-  const ref = { page: 1, bbox: [40, 60, 560, 110] };
+describe("reader: leaf_candidates", () => {
+  const ref = { page: 1, bbox: [0.07, 0.03, 0.92, 0.07] };
   const good = (leaf: string, score = 0.5) => ({ leaf, score, evidence_ref: { ...ref } });
   const cand = (v: unknown) => readIngestStatusRow(wire({ leaf: null, leaf_source: null, leaf_candidates: v }))!.leaf_candidates;
 
@@ -155,6 +155,14 @@ describe("reader: leaf_candidates (PROPOSED name)", () => {
   });
 
   it("0 items is undefined", () => expect(cand([])).toBeUndefined());
+  it("an empty candidate list is no claim", () => expect(cand([])).toBeUndefined());
+  it("a null candidate list is no claim", () => expect(cand(null)).toBeUndefined());
+  it("a candidate with a pixel bbox drops the whole list", () => {
+    expect(cand([good("pdn"), { ...good("pcn"), evidence_ref: { ...ref, bbox: [40, 60, 560, 110] } }])).toBeUndefined();
+  });
+  it.each([1.2, -0.1])("a score outside 0..1 drops the whole list (%s)", (score) => {
+    expect(cand([good("pdn"), good("pcn", score)])).toBeUndefined();
+  });
   it("4 items is undefined", () => expect(cand([good("pcn"), good("pdn"), good("pcn"), good("pdn")])).toBeUndefined());
   it("a non-array is undefined", () => expect(cand({ leaf: "pcn" })).toBeUndefined());
 

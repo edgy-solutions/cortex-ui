@@ -52,6 +52,7 @@
  * see `IngestStatusCard`'s header for the full reasoning.) `ingestStageLadder` stays a bespoke
  * list, now drawn from the REAL `STAGES` tuple rather than the old `STATUSES`.
  */
+import { readFractionEvidenceRef, type FractionEvidenceRef } from "./evidenceRef";
 import { readIngestOrigin, type IngestOrigin } from "./ingestOrigin";
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
@@ -250,12 +251,8 @@ export function readCorrectedBy(source: IngestLeafSource | null, v: unknown): st
   return source === "corrected" && typeof v === "string" && v.trim() !== "" ? v : null;
 }
 
-/** The title crop a candidate's read used (the evidence_ref ruling, 10-21: `{page, bbox, note?}`). */
-export interface IngestLeafEvidenceRef {
-  page: number;
-  bbox: [number, number, number, number];
-  note?: string;
-}
+/** The title crop a candidate's read used (the evidence_ref ruling, 10-21: `{page, bbox, note?}`, bbox in page fractions). */
+export type IngestLeafEvidenceRef = FractionEvidenceRef;
 /** One candidate when the read was not confident. */
 export interface IngestLeafCandidate {
   leaf: IngestLeaf;
@@ -263,24 +260,12 @@ export interface IngestLeafCandidate {
   evidence_ref: IngestLeafEvidenceRef;
 }
 
-function readCandidateEvidenceRef(v: unknown): IngestLeafEvidenceRef | undefined {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
-  const o = v as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (k !== "page" && k !== "bbox" && k !== "note") return undefined;
-  if (typeof o.page !== "number" || !Number.isInteger(o.page) || o.page < 1) return undefined;
-  if (!Array.isArray(o.bbox) || o.bbox.length !== 4 || !o.bbox.every((n) => typeof n === "number" && Number.isFinite(n))) return undefined;
-  const bbox = o.bbox as [number, number, number, number];
-  if ("note" in o) {
-    if (typeof o.note !== "string" || o.note.trim() === "") return undefined;
-    return { page: o.page, bbox, note: o.note };
-  }
-  return { page: o.page, bbox };
-}
-
 /**
- * PROPOSED field name `leaf_candidates` (the ruling gave the shape, not the name): 1..3 items,
- * best first. Absent key → undefined (no claim). ANY invalid item, or a length of 0 or over 3, makes
- * the WHOLE field undefined — deliberately no partial lists, because order is the claim. The server's
+ * `leaf_candidates`: the name is CONFIRMED by Lane 1 (203, `c095be48`). 1..3 items `[{leaf, score, evidence_ref}]`,
+ * score in [0, 1], best first. Absent key, `null` (a leaf-capable row not at awaiting_kind) and `[]` (Lane 1's
+ * "the read offered no candidate", e.g. a title element with no box) are all undefined: no claim, so the plain
+ * PCN/PDN picker shows. ANY invalid item (including a bbox that is not page fractions, architect 10-21), or a length
+ * over 3, makes the WHOLE field undefined: deliberately no partial lists, because order is the claim. The server's
  * order is kept; nothing is sorted.
  */
 export function readLeafCandidates(raw: Record<string, unknown>): IngestLeafCandidate[] | undefined {
@@ -292,8 +277,8 @@ export function readLeafCandidates(raw: Record<string, unknown>): IngestLeafCand
     if (typeof item !== "object" || item === null || Array.isArray(item)) return undefined;
     const c = item as Record<string, unknown>;
     if (typeof c.leaf !== "string" || !(INGEST_LEAVES as readonly string[]).includes(c.leaf)) return undefined;
-    if (typeof c.score !== "number" || !Number.isFinite(c.score)) return undefined;
-    const evidence_ref = readCandidateEvidenceRef(c.evidence_ref);
+    if (typeof c.score !== "number" || !Number.isFinite(c.score) || c.score < 0 || c.score > 1) return undefined;
+    const evidence_ref = readFractionEvidenceRef(c.evidence_ref);
     if (!evidence_ref) return undefined;
     out.push({ leaf: c.leaf as IngestLeaf, score: c.score, evidence_ref });
   }
@@ -343,8 +328,8 @@ export interface IngestStatusRow {
   leaf_source?: IngestLeafSource | null;
   /** Present with the pair; the person who changed it, only when `leaf_source` is "corrected". */
   corrected_by?: string | null;
-  /** PROPOSED name (the ruling gave the shape only): best first, max 3. Absent = no claim. The crop is
-   *  NOT drawn yet: a candidate's bbox has no page_dims, which `bboxScale.ts` needs (asked of Lane 1). */
+  /** Lane 1's confirmed name (203, `c095be48`): best first, 0..3, bbox in page fractions. Absent, `null` and `[]`
+   *  all read as no claim (the plain picker shows). */
   leaf_candidates?: IngestLeafCandidate[];
   /**
    * `GET /ingest/{id}/status`'s `extraction_defect` (Lane 1 packet

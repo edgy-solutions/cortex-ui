@@ -17,6 +17,7 @@
  *         rows: [{ row_index, part_index, mpn, field, extracted_value, obtained_via,
  *                  match_confidence, needs_review, review_reason, source_snippet,
  *                  evidence_ref: {page, bbox, bboxes, page_dims, units} | null }] }
+ *       (or, in the ruled form of 10-21, evidence_ref: {page, bbox} with the bbox in page fractions, no page_dims)
  *
  * The top line takes each field from the PAYLOAD when it carries a value, and from the extraction
  * otherwise. Both come from the same manifest, so on ordinary data they agree. A field where both
@@ -42,7 +43,10 @@
  * - A row's evidence has THREE states, not two. ABSENT (`evidence_ref` missing or `null`) is the
  *   corpus-gate miss the standard names (7f). MALFORMED (present but unreadable) is a producer bug
  *   (Lane 1). They have different owners, so they are flagged differently.
- * - `bbox` is in `page_dims` units: `pt` for `text_layer_cell`, layout `px` otherwise. The card
+ * - An evidence_ref arrives in one of two forms. With `page_dims` present: today's form below. With `page_dims`
+ *   ABSENT: the ruled form (architect 10-21), `{page, bbox}` with the bbox in page fractions, read on a 1x1 page
+ *   (`FRACTION_PAGE`); a bbox outside 0..1 or with no area is malformed.
+ * - `bbox` (with `page_dims`) is in `page_dims` units: `pt` for `text_layer_cell`, layout `px` otherwise. The card
  *   scales by `page_dims` (the evidence pane's sealed rule, `bboxScale.ts`), so `units` is carried
  *   but never needed to place the box.
  * - Two completeness counts travel, and each is CHECKED, never corrected:
@@ -50,6 +54,7 @@
  *   - `rows_without_evidence` against the absent rows drawn.
  */
 import type { Bbox, PageDims } from "./bboxScale";
+import { FRACTION_PAGE, isFractionBox } from "./evidenceRef";
 import { readCorrectedBy, readLeafSource, type IngestLeafSource } from "./ingestWire";
 
 export interface EvidenceRef {
@@ -196,6 +201,12 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
   const page = posInt(e.page);
   const b = e.bbox;
   const d = e.page_dims;
+  // The ruled form (architect 10-21): page fractions, no page_dims. The page's own size is 1x1.
+  // Extra keys are not checked here: the served row body carries others.
+  if (!Object.hasOwn(e, "page_dims") || d === undefined) {
+    if (page === null || !isFractionBox(b)) return { state: "malformed" };
+    return { state: "ok", ref: { page, bbox: b, page_dims: FRACTION_PAGE, units: null } };
+  }
   if (page === null || !Array.isArray(b) || b.length !== 4 || !b.every(finite) || !isObj(d)) return { state: "malformed" };
   const { width, height } = d;
   if (!finite(width) || !finite(height) || width <= 0 || height <= 0) return { state: "malformed" };

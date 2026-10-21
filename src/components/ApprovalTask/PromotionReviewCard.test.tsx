@@ -36,6 +36,7 @@ vi.mock("@/lib/pdfSource", () => ({
   RenderCancelled: class extends Error {},
 }));
 
+import { PdfEvidencePane } from "./PdfEvidencePane";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { fixtureExtractionBody, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "@/lib/promotionReviewFixture";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
@@ -771,6 +772,17 @@ describe("the decision is the generic card's", () => {
     expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("promotion_payload_invalid");
     expect(document.querySelector('[data-verb="promoted"]')).not.toBeNull();
   });
+
+  it("a decision on a task whose leaf changed is refused with the server's message", async () => {
+    const message = "The kind changed to PDN after this task was filed.";
+    actOnHumanTask.mockRejectedValue({ response: { status: 409, data: { detail: { error: "leaf_changed", message } } } });
+    await mountPromotable();
+    fireEvent.click(document.querySelector('[data-verb="promoted"]')!);
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
+    expect(document.querySelector("[data-act-refusal]")!.textContent).toContain(message);
+    expect(document.querySelector('[data-act-outcome]')).toBeNull();
+    expect(document.querySelector('[data-verb="promoted"]')).not.toBeNull();
+  });
 });
 
 describe("the steward can read every page (the architect, 197: PAGE 1 / 2 with no way to page)", () => {
@@ -1332,5 +1344,20 @@ describe("the promotion editor flag", () => {
     await mountPromotable();
     expect(q("data-header-fix")).not.toBeNull();
     expect(q("data-row-fix")).not.toBeNull();
+  });
+});
+
+describe("PdfEvidencePane caption", () => {
+  const target = { page: 1, bbox: [0.1, 0.2, 0.5, 0.3] as [number, number, number, number], page_dims: { width: 1, height: 1 }, units: null };
+  const caption = () => document.querySelector("[data-evidence-caption]")?.textContent;
+
+  it("a caption prop replaces the outline caption's text", async () => {
+    render(<PdfEvidencePane ingestId={SHA} target={target} quality="cell" caption="Outlined: the title the read used on p1." />);
+    await waitFor(() => expect(caption()).toBe("Outlined: the title the read used on p1."));
+  });
+
+  it("without a caption prop the outline caption is the quality's own", async () => {
+    render(<PdfEvidencePane ingestId={SHA} target={target} quality="cell" />);
+    await waitFor(() => expect(caption()).toBe("Outlined: the cell this row was read from."));
   });
 });

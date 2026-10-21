@@ -2,16 +2,28 @@
  * IngestLeafChip — the PROPOSED leaf chip (10-21 packet §3). Renders nothing until the status row
  * carries the `leaf_source` key.
  */
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { IngestLeafChip, LeafChip, leafLabel } from "./IngestLeafChip";
 import { readIngestStatusRow, type IngestStatusRow } from "@/lib/ingestWire";
 
 const correctIngestLeaf = vi.fn();
+const fetchIngestSource = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   correctIngestLeaf: (...a: unknown[]) => correctIngestLeaf(...a),
+  fetchIngestSource: (...a: unknown[]) => fetchIngestSource(...a),
+}));
+const renderPage = vi.fn();
+vi.mock("@/lib/pdfSource", () => ({
+  openPdf: async () => ({ numPages: 2, renderPage, destroy: vi.fn() }),
+  RenderCancelled: class extends Error {},
 }));
 
+beforeEach(() => {
+  fetchIngestSource.mockReset().mockResolvedValue({ bytes: new Uint8Array([37, 80, 68, 70]).buffer, status: 200, contentType: "application/pdf" });
+  // A drawn page 400 wide and 520 tall: deliberately NOT 1x1 and not the 560 default width.
+  renderPage.mockReset().mockImplementation(async () => ({ width: 400, height: 520 }));
+});
 afterEach(() => {
   cleanup();
   correctIngestLeaf.mockReset();
@@ -128,7 +140,7 @@ describe("IngestLeafChip", () => {
   it("a 409 refusal's message is shown verbatim and the picker stays open", async () => {
     const message = "The kind can no longer be changed at promoted.";
     correctIngestLeaf.mockRejectedValue({
-      response: { status: 409, data: { detail: { error: "leaf_locked", stage: "promoted", message } } },
+      response: { status: 409, data: { detail: { error: "leaf_not_changeable", stage: "promoted", message } } },
     });
     render(<IngestLeafChip row={row()} />);
     fireEvent.click(q('[data-leaf-verb="change"]')!);
@@ -145,7 +157,7 @@ describe("IngestLeafChip", () => {
     expect(q("[data-leaf-chip]")?.hasAttribute("data-leaf-corrected-by")).toBe(false);
   });
 
-  const ref = { page: 1, bbox: [40, 60, 560, 110] };
+  const ref = { page: 1, bbox: [0.07, 0.03, 0.92, 0.07] };
   const cands = [
     { leaf: "pdn", score: 0.4, evidence_ref: ref },
     { leaf: "pcn", score: 0.555, evidence_ref: { ...ref, page: 2 } },
@@ -162,7 +174,7 @@ describe("IngestLeafChip", () => {
   it("a leaf that is not a candidate is still offered as a plain pick", () => {
     render(
       <LeafChip ingestId={ID} stage="awaiting_kind" leaf={null} leafSource={null} correctedBy={null}
-        candidates={[{ leaf: "pcn", score: 0.5, evidence_ref: { page: 1, bbox: [1, 2, 3, 4] } }]} />,
+        candidates={[{ leaf: "pcn", score: 0.5, evidence_ref: { page: 1, bbox: [0.1, 0.2, 0.3, 0.4] } }]} />,
     );
     expect(q('[data-leaf-candidate="pcn"]')).toBeTruthy();
     expect(q('[data-leaf-candidate="pdn"]')).toBeNull();
@@ -182,5 +194,63 @@ describe("IngestLeafChip", () => {
     render(<IngestLeafChip row={row({ stage: "awaiting_kind", leaf: null, leaf_source: null, leaf_candidates: cands })} />);
     fireEvent.click(q('[data-leaf-candidate="pdn"]')!);
     await waitFor(() => expect(correctIngestLeaf).toHaveBeenCalledWith(ID, "pdn"));
+  });
+
+  describe("the candidate's crop", () => {
+    const fr = { page: 1, bbox: [0.1, 0.2, 0.5, 0.3] };
+    const two = [
+      { leaf: "pcn", score: 0.55, evidence_ref: fr },
+      { leaf: "pdn", score: 0.4, evidence_ref: { page: 2, bbox: [0.2, 0.1, 0.6, 0.2] } },
+    ];
+    const mountAwaiting = () => render(<IngestLeafChip row={row({ stage: "awaiting_kind", leaf: null, leaf_source: null, leaf_candidates: two })} />);
+    const outline = () => q("[data-evidence-outline]") as HTMLElement | null;
+
+    it("show draws the candidate's title crop at its page fraction", async () => {
+      mountAwaiting();
+      expect(q("[data-leaf-crop]")).toBeNull();
+      fireEvent.click(q('[data-leaf-candidate-show="pcn"]')!);
+      await waitFor(() => expect(outline()).not.toBeNull());
+      const el = outline()!;
+      const W = 400;
+      const H = 520;
+      expect(parseFloat(el.style.left)).toBeCloseTo(0.1 * W);
+      expect(parseFloat(el.style.top)).toBeCloseTo(0.2 * H);
+      expect(parseFloat(el.style.width)).toBeCloseTo(0.4 * W);
+      expect(parseFloat(el.style.height)).toBeCloseTo(0.1 * H);
+      expect(el.getAttribute("data-evidence-quality")).toBe("cell");
+    });
+
+    it("show on a second candidate switches the crop; show again hides it", async () => {
+      mountAwaiting();
+      fireEvent.click(q('[data-leaf-candidate-show="pcn"]')!);
+      await waitFor(() => expect(q('[data-leaf-crop="pcn"]')).not.toBeNull());
+      expect(q('[data-leaf-candidate-show="pcn"]')?.textContent).toBe("hide");
+      fireEvent.click(q('[data-leaf-candidate-show="pdn"]')!);
+      await waitFor(() => expect(q('[data-leaf-crop="pdn"]')).not.toBeNull());
+      expect(q('[data-leaf-crop="pcn"]')).toBeNull();
+      expect(document.querySelectorAll("[data-leaf-crop]")).toHaveLength(1);
+      fireEvent.click(q('[data-leaf-candidate-show="pdn"]')!);
+      expect(q("[data-leaf-crop]")).toBeNull();
+      expect(q('[data-leaf-candidate-show="pdn"]')?.textContent).toBe("show");
+    });
+
+    it("the caption names the title the read used", async () => {
+      mountAwaiting();
+      fireEvent.click(q('[data-leaf-candidate-show="pdn"]')!);
+      await waitFor(() => expect(q("[data-evidence-caption]")).not.toBeNull());
+      expect(q("[data-evidence-caption]")?.textContent).toBe("Outlined: the title the read used on p2.");
+    });
+
+    it("closing the picker closes the crop", async () => {
+      mountAwaiting();
+      fireEvent.click(q('[data-leaf-candidate-show="pcn"]')!);
+      await waitFor(() => expect(q("[data-leaf-crop]")).not.toBeNull());
+      fireEvent.click(q('[data-leaf-verb="cancel"]')!);
+      expect(q("[data-leaf-crop]")).toBeNull();
+      // Reopening starts with no crop: the close cleared the choice, it did not just hide it.
+      fireEvent.click(q('[data-leaf-verb="change"]')!);
+      expect(q('[data-leaf-candidate-show="pcn"]'), "the picker is open again").not.toBeNull();
+      expect(q("[data-leaf-crop]"), "a reopened picker shows no crop until one is asked for").toBeNull();
+    });
   });
 });
