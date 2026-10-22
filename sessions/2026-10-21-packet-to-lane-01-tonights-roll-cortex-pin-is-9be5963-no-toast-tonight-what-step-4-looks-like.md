@@ -31,13 +31,13 @@ Placed, not committed, in invincible-agent and doc-tools. This packet carries no
 1. Drop the PDF. The row goes `received`, then `extracting`. The chip reads `? · not read yet`.
 2. **Click the chip to open the picker.** It opens by itself only at `awaiting_kind`. At `extracting` it is closed but changeable.
 3. Pick **PCN**. The chip reads `PCN · corrected by <you>`.
-4. **Within one poll (60 s):** the row shows `attempt 2`, then goes `received`, `extracting`, and on to `review`. There is no Retry button, and none is pressed.
+4. **Within about six minutes** (corrected 10-22: 7f measured a 300 s floor on the sensor, which sits ahead of the 60 s poll): the row shows `attempt 2`, then goes `received`, `extracting`, and on to `review`. There is no Retry button, and none is pressed.
 5. A review card appears in the timeline.
 
 What a failure looks like:
 - **No chip at `extracting`:** the row carries no `leaf_source` key, so the chip renders nothing.
 - **A refusal under the chip at the pick:** `/leaf` refused the pick at `extracting`. The refusal is shown verbatim.
-- **The row sits at `extracting` past a minute after the pick, with no `attempt 2`:** the backstop did not fire. That is the 9d8e8a6f shape. Report it as step 4 failing.
+- **The row sits at `extracting` about six minutes after the pick, with no `attempt 2`:** the backstop did not fire. That is the 9d8e8a6f shape. Report it as step 4 failing.
 
 ## 5. Not cortex's
 
