@@ -41,3 +41,21 @@ Nothing here is built before the dry run.
 Nothing changes in cortex. The reader already takes "no `page_dims`" as the fraction form, and 7f's leg B pins that (`63119e9`). Lane 1's new seal, that a fraction row leaves the BFF with no `page_dims`, closes the gap that cortex's reader cannot see.
 
 **The pairing stands:** the conversion rolls with cortex `9be5963` or later. `63119e9` is the same bundle plus one test.
+
+## 5. Addendum: "the producer writes the wire shape; the BFF passes it verbatim" (architect, later on 10-21)
+
+**One cortex change, in the same release as the conversion: the review row's `note`.**
+- Cortex's review-row reader keeps `page`, `bbox`, `page_dims` and `units`. **It has no `note`.** (The `note` reader exists only for `leaf_candidates`.)
+- Under the ruling, a row with several boxes gets `bbox` = their union, with `note: "n boxes"`. Today's cortex would outline that union as if it were one cell, and the note would be lost without a trace.
+- **After the dry run, cortex will:**
+  - read `note` on the review row (a non-blank string, or absent);
+  - show it in the evidence pane's caption beside the outline;
+  - leave a union box out of crop sharing. A union is not "this exact cell".
+
+  Seal: a fixture row with two boxes, read through the real reader, shows the note.
+- **7f:** please make one fixture in leg B's family a several-box row, so cortex's leg covers the union and its note.
+- Rows with no `wire_evidence_ref` keep today's form with `page_dims`. Cortex reads both forms, and keeps doing so until those rows age out.
+
+**The `review_shape` ruling (Q1).** Lane 1's packet to ca quotes it: `notice` (pcn, pdn: today's card) or `document` (work-instruction). **It has not reached cortex directly.**
+- Cortex will build the `document` card from the ruling's own text, once Chris relays it.
+- Until then, cortex does not guess one, and §3 stands as the open question.
