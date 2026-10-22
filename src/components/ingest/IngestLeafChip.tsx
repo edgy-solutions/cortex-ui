@@ -47,7 +47,12 @@ export interface LeafChipProps {
 
 /** The label for a leaf; exported so the wording lives in one place. */
 export function leafLabel(leaf: IngestLeaf | null, source: IngestLeafSource | null, correctedBy: string | null, stage: string | null): string {
-  if (!leaf) return stage === "received" || stage === "extracting" ? "? · not read yet" : "? · not identified";
+  if (!leaf) {
+    // "Not read yet" is for a run that is actually running; a read that gave up says so and asks.
+    if (stage === "received" || stage === "extracting") return "? · not read yet";
+    if (stage === INGEST_AWAITING_KIND_STATUS) return "? · couldn't tell — pick one";
+    return "? · not identified";
+  }
   const name = leaf.toUpperCase();
   if (source === "declared") return `${name} · declared`;
   if (source === "corrected") return correctedBy ? `${name} · corrected by ${correctedBy}` : `${name} · corrected`;
@@ -75,11 +80,10 @@ export function IngestLeafChip({ row, onRow }: { row: IngestStatusRow; onRow?: (
 
 export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedBy, candidates, locked = false, onRow }: LeafChipProps) {
   const awaitingKind = stage === INGEST_AWAITING_KIND_STATUS;
-  // The picker's default follows the CURRENT stage: the chip mounts at `received` and the row reaches
-  // `awaiting_kind` later, so a mount-time default would leave a "?" row waiting with the picker shut.
-  // A person's open/close holds only for the stage it was made at.
+  // A person's open/close holds only for the stage it was made at. At `awaiting_kind` the picker is not
+  // a toggle at all (below): the row is waiting on the pick, so it is always on the card.
   const [toggle, setToggle] = useState<{ stage: string | null; open: boolean } | null>(null);
-  const open = toggle !== null && toggle.stage === stage ? toggle.open : awaitingKind;
+  const toggled = toggle !== null && toggle.stage === stage && toggle.open;
   const setOpen = (next: boolean) => {
     setToggle({ stage, open: next });
     if (!next) setShowAt(null);
@@ -93,7 +97,8 @@ export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedB
   const setShownLeaf = (next: IngestLeaf | null) => setShowAt(next === null ? null : { stage, leaf: next });
 
   const changeable = !locked && stage !== null && !LOCKED_STAGES.has(stage);
-  const shown = changeable && open ? (candidates ?? []).find((c) => c.leaf === shownLeaf) : undefined;
+  const open = changeable && (awaitingKind || toggled);
+  const shown = open ? (candidates ?? []).find((c) => c.leaf === shownLeaf) : undefined;
   const label = leafLabel(leaf, source, correctedBy, stage);
 
   const pick = async (next: IngestLeaf) => {
@@ -120,19 +125,19 @@ export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedB
       data-leaf-source={source ?? "none"}
       data-leaf-corrected-by={correctedBy ?? undefined}
     >
-      {changeable ? (
+      {changeable && !awaitingKind ? (
         <button
           type="button"
           data-leaf-verb="change"
           className={`self-start text-[11px] font-mono ${tone} underline decoration-dotted`}
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen(!toggled)}
         >
           {label}
         </button>
       ) : (
-        <span className="text-[11px] font-mono text-slate-300">{label}</span>
+        <span className={`text-[11px] font-mono ${awaitingKind && changeable ? tone : "text-slate-300"}`}>{label}</span>
       )}
-      {changeable && open && (
+      {open && (
         <div className="flex gap-2">
           {(candidates ?? []).map((c, i) => (
             <span key={i} className="flex items-center gap-1">
@@ -168,15 +173,17 @@ export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedB
               {l.toUpperCase()}
             </button>
           ))}
-          <button
-            type="button"
-            data-leaf-verb="cancel"
-            disabled={posting}
-            className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-white/5 text-slate-300 disabled:opacity-40"
-            onClick={() => setOpen(false)}
-          >
-            Cancel
-          </button>
+          {!awaitingKind && (
+            <button
+              type="button"
+              data-leaf-verb="cancel"
+              disabled={posting}
+              className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-white/5 text-slate-300 disabled:opacity-40"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       )}
       {shown && (

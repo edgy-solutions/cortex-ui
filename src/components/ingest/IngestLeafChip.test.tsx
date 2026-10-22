@@ -95,7 +95,7 @@ describe("IngestLeafChip", () => {
     expect(q('[data-leaf-verb="change"]')).toBeNull();
   });
 
-  it("awaiting_kind opens the picker by default; other stages start closed", () => {
+  it("awaiting_kind has the picker on the card; other stages start closed", () => {
     render(<IngestLeafChip row={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} />);
     expect(q('[data-leaf-pick="pcn"]')).toBeTruthy();
     expect(q('[data-leaf-pick="pdn"]')).toBeTruthy();
@@ -110,19 +110,46 @@ describe("IngestLeafChip", () => {
   });
 
   // The directive: the leaf can be changed BEFORE extraction starts as well as after.
-  it.each(["received", "extracting", "awaiting_origin", "awaiting_kind", "review"])("at %s the leaf can be changed", (stage) => {
+  it.each(["received", "extracting", "awaiting_origin", "review"])("at %s the leaf can be changed", (stage) => {
     render(<IngestLeafChip row={row({ stage, leaf: null, leaf_source: null })} />);
     expect(q('[data-leaf-verb="change"]')).toBeTruthy();
   });
 
-  it("a row that REACHES awaiting_kind while mounted opens the picker; a close made earlier does not carry over", () => {
+  it("a row that REACHES awaiting_kind while mounted shows the picker; a close made earlier does not carry over", () => {
     const r = render(<IngestLeafChip row={row({ stage: "extracting", leaf: null, leaf_source: null })} />);
     fireEvent.click(q('[data-leaf-verb="change"]')!);
     fireEvent.click(q('[data-leaf-verb="cancel"]')!);
     expect(q('[data-leaf-pick="pcn"]')).toBeNull();
     r.rerender(<IngestLeafChip row={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} />);
     expect(q('[data-leaf-pick="pcn"]')).toBeTruthy();
-    expect(q('[data-leaf-chip]')?.textContent).toContain("? · not identified");
+    expect(q('[data-leaf-chip]')?.textContent).toContain("? · couldn't tell — pick one");
+  });
+
+  it("leafLabel: no leaf at awaiting_kind reads couldn't tell — pick one", () => {
+    expect(leafLabel(null, null, null, "awaiting_kind")).toBe("? · couldn't tell — pick one");
+  });
+
+  it("leafLabel: not read yet only while running (received, extracting)", () => {
+    for (const stage of ["received", "extracting"]) expect(leafLabel(null, null, null, stage)).toBe("? · not read yet");
+    for (const stage of ["awaiting_origin", "review", null]) {
+      expect(leafLabel(null, null, null, stage)).not.toContain("not read yet");
+      expect(leafLabel(null, null, null, stage)).toBe("? · not identified");
+    }
+  });
+
+  it("at awaiting_kind the PCN and PDN buttons are on the card without a click", () => {
+    render(<IngestLeafChip row={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} />);
+    expect(q('[data-leaf-pick="pcn"]')).toBeTruthy();
+    expect(q('[data-leaf-pick="pdn"]')).toBeTruthy();
+    expect(q('[data-leaf-verb="change"]')).toBeNull();
+    expect(q('[data-leaf-verb="cancel"]')).toBeNull();
+  });
+
+  it("at extracting the picker stays behind the chip", () => {
+    render(<IngestLeafChip row={row({ stage: "extracting", leaf: null, leaf_source: null })} />);
+    expect(q("[data-leaf-pick]")).toBeNull();
+    fireEvent.click(q('[data-leaf-verb="change"]')!);
+    expect(q('[data-leaf-pick="pcn"]')).toBeTruthy();
   });
 
   it("a pick posts the leaf and hands the parsed row to onRow", async () => {
@@ -242,7 +269,9 @@ describe("IngestLeafChip", () => {
     });
 
     it("closing the picker closes the crop", async () => {
-      mountAwaiting();
+      // At awaiting_kind the picker cannot be closed, so this runs at a stage where it can.
+      render(<IngestLeafChip row={row({ stage: "review", leaf: null, leaf_source: null, leaf_candidates: cands })} />);
+      fireEvent.click(q('[data-leaf-verb="change"]')!);
       fireEvent.click(q('[data-leaf-candidate-show="pcn"]')!);
       await waitFor(() => expect(q("[data-leaf-crop]")).not.toBeNull());
       fireEvent.click(q('[data-leaf-verb="cancel"]')!);

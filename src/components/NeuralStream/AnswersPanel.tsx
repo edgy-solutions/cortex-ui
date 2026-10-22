@@ -8,6 +8,7 @@ import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/sta
 import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import { INGEST_AWAITING_KIND_STATUS } from "@/lib/ingestWire";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { IngestFailureExtras } from "@/components/ingest/IngestFailureExtras";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
@@ -603,7 +604,9 @@ function IngestBadge({ a }: { a: Artifact }) {
       {/* Text, not a chip: bordered = clickable on the rail, and a stage is not an action. */}
       <span
         className={`text-[8px] font-mono font-bold uppercase tracking-widest ${
-          ing.badge === "failed" || ing.badge === "refused" ? "text-amber-300" : "text-neon-cyan"
+          ing.badge === "failed" || ing.badge === "refused" || ing.badge === INGEST_AWAITING_KIND_STATUS
+            ? "text-amber-300"
+            : "text-neon-cyan"
         }`}
         data-ingest-stage={ing.badge}
       >
@@ -636,6 +639,12 @@ function IngestReason({ a }: { a: Artifact }) {
   const reason = ing.reason;
   return (
     <>
+      {/* Keyed on the stage alone: the server's reason for it is not ours to interpret. */}
+      {ing.badge === INGEST_AWAITING_KIND_STATUS && (
+        <p className="text-[10px] font-mono text-amber-300 leading-snug mt-0.5" data-ingest-needs-you>
+          Needs you: what kind is this?
+        </p>
+      )}
       {reason !== null && (
         <p
           className="text-[10px] font-mono text-amber-400 leading-snug line-clamp-2 mt-0.5"
@@ -674,11 +683,12 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   // (it wants action), resolved settles to muted (it's history).
   const task = a.task_ref;
   const taskPending = task?.task_state === "pending";
+  const needsYou = ingestComponentFrom(a)?.badge === INGEST_AWAITING_KIND_STATUS;
   const node = task
     ? taskPending
       ? TASK_PINK
       : TASK_MUTED
-    : fallback
+    : fallback || needsYou
     ? AMBER
     : TEAL;
 

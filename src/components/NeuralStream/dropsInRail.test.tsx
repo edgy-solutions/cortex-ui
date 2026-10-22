@@ -654,3 +654,36 @@ describe("GET /ingest/mine: the server's list is the record, browser storage the
     expect(useIngestStatusStore.getState().listed).toEqual([LISTED]);
   });
 });
+
+describe("awaiting_kind on the rail: Needs you", () => {
+  const nodeColour = () => (ingestRow()!.querySelector("div.rounded-full[style]") as HTMLElement | null)?.style.background;
+  const asColour = (hex: string) => {
+    const probe = document.createElement("div");
+    probe.style.background = hex;
+    return probe.style.background;
+  };
+  const setup = async (stage: string) => {
+    uploadIngest.mockResolvedValue({ ingest_id: ID, stage: "received", duplicate: null });
+    fetchIngestStatus.mockResolvedValue(wire(ID, stage));
+    render(<Harness />);
+    await sendOne();
+    await tick(0);
+  };
+
+  it("an awaiting_kind drop's rail row says Needs you: what kind is this?, in amber", async () => {
+    await setup("awaiting_kind");
+    const needs = ingestRow()?.querySelector("[data-ingest-needs-you]");
+    expect(needs?.textContent).toBe("Needs you: what kind is this?");
+    expect(ingestRow()!.querySelector("[data-ingest-stage]")!.className).toContain("text-amber-300");
+    // The row's spine node turns amber too (the AMBER of AnswersPanel), compared as the browser normalises it.
+    expect(nodeColour()).toBe(asColour("#d9a13c"));
+  });
+
+  it("an extracting drop's rail row has no Needs you line", async () => {
+    await setup("extracting");
+    expect(ingestRow()).not.toBeNull();
+    expect(document.querySelector("[data-ingest-needs-you]")).toBeNull();
+    expect(ingestRow()!.querySelector("[data-ingest-stage]")!.className).not.toContain("text-amber-300");
+    expect(nodeColour()).toBe(asColour("#2dd4bf"));
+  });
+});

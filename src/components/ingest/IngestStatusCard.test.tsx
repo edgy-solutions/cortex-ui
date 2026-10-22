@@ -515,7 +515,7 @@ describe("out-of-band document statuses (defect: the card froze at extracting)",
     fetchIngestStatus.mockReturnValue(new Promise(() => undefined));
     correctIngestLeaf.mockResolvedValue({ ...row({ stage: "review" }), leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" });
     render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "awaiting_kind", leaf: null, leaf_source: null })} pollIntervalMs={100000} />);
-    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("? · not identified");
+    expect(document.querySelector("[data-leaf-chip]")?.textContent).toContain("? · couldn't tell — pick one");
     fireEvent.click(document.querySelector('[data-leaf-pick="pdn"]')!);
     await waitFor(() => expect(document.querySelector('[data-ingest-status="review"]')).toBeTruthy());
     expect(correctIngestLeaf).toHaveBeenCalledWith(INGEST_ID, "pdn");

@@ -10,6 +10,7 @@ import { NodeInspector } from "@/components/AgenticCanvas/NodeInspector";
 import { UserMenu } from "@/components/UserMenu";
 import { StaleBundleBanner } from "@/components/StaleBundleBanner";
 import { HumanTaskInboxBadge } from "@/components/HumanTaskInbox/HumanTaskInboxBadge";
+import { NeedsYouBadge } from "@/components/HumanTaskInbox/NeedsYouBadge";
 
 interface LayoutProps {
   stream: ReactNode;
@@ -77,6 +78,7 @@ export function Layout({ stream, canvas, hud }: LayoutProps) {
           
           <StaleBundleBanner />
           <HumanTaskInboxBadge />
+          <NeedsYouBadge />
 
           <div className="h-8 w-[1px] bg-glass-border" />
 
