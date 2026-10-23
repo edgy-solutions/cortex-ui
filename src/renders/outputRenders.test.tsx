@@ -9,6 +9,11 @@ import {
   DRAFT_ORPHAN,
   DRAFT_WITH_CASE,
   DRAFT_URI,
+  DRC_NO_COUNT,
+  DRC_URI,
+  DRC_WO_3001,
+  DRC_WO_3002,
+  DRC_WO_3003,
   FRS_COMPLETE,
   FRS_SHORT,
   FRS_UNDATED,
@@ -23,7 +28,8 @@ const text = (c: ParentNode, sel: string) => c.querySelector(sel)?.textContent;
 
 describe("output_uri lookup", () => {
   it("exact IRI match only, no CURIE folding", () => {
-    expect(OUTPUT_RENDERS.size).toBe(2);
+    expect(OUTPUT_RENDERS.size).toBe(3);
+    expect(outputRenderFor(DRC_URI)).toBeDefined();
     expect(outputRenderFor(DRAFT_URI)).toBeDefined();
     expect(outputRenderFor(FRS_URI)).toBeDefined();
     expect(outputRenderFor("safety:FailureRecordSet")).toBeUndefined();
@@ -176,6 +182,66 @@ describe("FAILURE_RECORD_SET through SemanticInterpreter", () => {
     const ids = [...c.querySelectorAll("[data-frs-record]")].map((e) => e.getAttribute("data-frs-record"));
     expect(ids[ids.length - 1]).toBe("FR-6000");
     expect(c.querySelector('[data-frs-record="FR-6000"]')!.textContent).toContain("date not recorded");
+  });
+});
+
+describe("DEFERRAL_RISK_CARD through SemanticInterpreter", () => {
+  it("WO-3001: critical and deferred, re-opens the hazard, drafted", () => {
+    const c = draw(asDocument(DRC_WO_3001));
+    expect(c.querySelector('[data-render="DEFERRAL_RISK_CARD"]')).not.toBeNull();
+    expect(text(c, "[data-drc-header]")).toContain("work order WO-3001 · part PN-8801");
+    expect(text(c, "[data-drc-subline]")).toBe("TN-7701 · deferred: Awaiting parts; deferred to next phase.");
+    expect(text(c, "[data-drc-verdict]")).toBe("safety-critical · CSI-5001 · checked against 2 critical items");
+    expect(c.querySelector("[data-drc-verdict]")!.getAttribute("data-drc-critical")).toBe("true");
+    expect(text(c, "[data-drc-hazard]")).toContain("re-opens HAZ-1001 (open)");
+    expect(text(c, "[data-drc-hazard]")).toContain("Chafed wiring loom in the aft equipment bay");
+    expect(text(c, "[data-drc-pair]")).toBe("severity I · probability D · carried from the hazard");
+    expect(c.querySelector("[data-drc-assessment]")!.getAttribute("data-drc-assessment-value")).toBe("drafted");
+    expect(text(c, "[data-drc-assessment]")).toBe("DRAFTED: no risk level or acceptance is set here");
+    expect(text(c, "[data-drc-note]")).toContain("Deferring WO-3001 leaves HAZ-1001 live.");
+    expect(c.querySelector("pre")).toBeNull();
+  });
+
+  it("WO-3002: not critical, and says how many items it was checked against", () => {
+    const c = draw(asDocument(DRC_WO_3002));
+    expect(text(c, "[data-drc-verdict]")).toBe("not safety-critical · checked against 2 critical items");
+    expect(c.querySelector("[data-drc-verdict]")!.getAttribute("data-drc-critical")).toBe("false");
+    expect(c.querySelector("[data-drc-hazard]")).toBeNull();
+    expect(c.querySelector("[data-drc-assessment]")!.getAttribute("data-drc-assessment-value")).toBe("not_applicable");
+  });
+
+  it("WO-3003: critical but not deferred: the hazard is named and NOT re-opened", () => {
+    const c = draw(asDocument(DRC_WO_3003));
+    const hazard = text(c, "[data-drc-hazard]")!;
+    expect(hazard).toContain("is not re-opened");
+    expect(hazard).toContain("HAZ-1003 (mitigated)");
+    expect(hazard).not.toContain("re-opens");
+    expect(text(c, "[data-drc-pair]")).toBe("severity II · probability D · carried from the hazard");
+    expect(text(c, "[data-drc-subline]")).toContain("not deferred");
+  });
+
+  it("an unstated deferral with a hazard says so: neither re-opened nor not", () => {
+    const { deferred: _d, ...rest } = DRC_WO_3001;
+    const c = draw(asDocument(rest));
+    const hazard = text(c, "[data-drc-hazard]")!;
+    expect(hazard).toContain("its hazard HAZ-1001 (open): whether this deferral re-opens it is not stated");
+    expect(hazard).not.toContain("is not re-opened");
+    expect(text(c, "[data-drc-subline]")).toBe("TN-7701 · deferral not stated");
+  });
+
+  it("a missing count is said, never dropped", () => {
+    const c = draw(asDocument(DRC_NO_COUNT));
+    expect(text(c, "[data-drc-count-missing]")).toBe("the number of items checked did not arrive");
+    expect(text(c, "[data-drc-verdict]")).not.toBe("not safety-critical");
+    expect(text(c, "[data-drc-verdict]")).toContain("the number of items checked did not arrive");
+  });
+
+  it("a refused deferral draws the refusal block, not the card", () => {
+    const c = draw(
+      asDocument({ refused: true, outcome: "unknown_hazard", hazard_id: "HAZ-9999", reason: "unknown hazard 'HAZ-9999'", output_uri: DRC_URI }),
+    );
+    expect(c.querySelector("[data-refusal]")).not.toBeNull();
+    expect(c.querySelector('[data-render="DEFERRAL_RISK_CARD"]')).toBeNull();
   });
 });
 

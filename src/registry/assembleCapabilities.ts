@@ -651,6 +651,8 @@ const DERIVED_BINDINGS = [
   // treatment and it beats a mis-binding: a mis-bound card renders something plausible and
   // wrong, which is harder to notice than something plain and right.
   {
+    // The document carries the reply and cortex draws `DeferralRiskCardRender` by `output_uri`
+    // (`src/renders/`, overnight 10-23).
     subject_uri: "http://internal/sustainment/safety#DeferralRiskCard",
     object_uri: "mesh:KnowledgeDocument",
     persona_fit: ["SAFETY_ENGINEER"],
