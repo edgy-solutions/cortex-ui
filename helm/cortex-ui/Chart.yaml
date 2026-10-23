@@ -2,5 +2,5 @@ apiVersion: v2
 name: cortex-ui
 description: The Cortex — the cortex-ui frontend (nginx serving the Vite build). No backend; the platform chart runs those.
 type: application
-version: 0.2.1
-appVersion: "1.0.0"
+version: 0.3.0
+appVersion: "0.3.0"
