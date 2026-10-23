@@ -1,7 +1,10 @@
 # ──────────────────────────────────────────────────────────
 # The Cortex — Build & Push Container Images (Buildpacks)
 # ──────────────────────────────────────────────────────────
-# Triggers on push to main or any tag starting with 'v'.
+# Triggers on push to master (and builds, without pushing, for PRs to master).
+# A release tag is NOT built here: release tags are cut from digests, never rebuilt (ruled
+# 2026-10-23) — see retag-image.yml. A `v*` git tag used to rebuild and push `frontend:<tag>`,
+# which would have put different bytes under a release name than the ones the gates passed.
 # Builds the cortex-frontend image using Cloud Native Buildpacks (pack CLI):
 # Pushes to GitHub Container Registry (ghcr.io).
 
@@ -10,7 +13,6 @@ name: Build Containers
 on:
   push:
     branches: [master]
-    tags: ["v*"]
   pull_request:
     branches: [master]
 
@@ -749,3 +751,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tag.outputs.tags }}
+          # Ruled 2026-10-23: every image carries its revision and version. A build here is by sha, so
+          # its version IS the sha; a release version (x.y.z) is a tag cut later from this digest by
+          # retag-image.yml, and cannot be written into a label without changing the digest.
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

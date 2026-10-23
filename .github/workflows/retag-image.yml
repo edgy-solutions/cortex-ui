@@ -1,0 +1,96 @@
+# ──────────────────────────────────────────────────────────
+# Retag the frontend image BY DIGEST — a release tag is cut, never rebuilt
+# ──────────────────────────────────────────────────────────
+# Ruled (architect, release v0.5.0, 2026-10-23): release tags are cut from digests, never
+# rebuilt, so the tag points at the bytes that passed the gates. This copies the image INDEX
+# stored at `digest` under `tag`, byte for byte — the same bytes hash to the same digest, so
+# amd64 and arm64 both resolve under the new tag and nothing is re-serialised. (`docker buildx
+# imagetools create` may rewrite the index and change its digest; this does not.)
+#
+# It refuses to MOVE a tag: a release tag already pointing elsewhere fails the run. Re-running
+# for the same digest is a no-op that still verifies.
+#
+# Run: gh workflow run retag-image.yml -f digest=sha256:<64 hex> -f tag=<x.y.z>
+
+name: Retag Image By Digest
+
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "Index digest to tag (sha256:<64 hex>) — the one the gates passed"
+        required: true
+      tag:
+        description: "Release tag (x.y.z)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy the index under the release tag, byte for byte, and verify
+        env:
+          DIGEST: ${{ inputs.digest }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}/frontend
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::digest must be sha256:<64 hex>, got '$DIGEST'"; exit 1; }
+          # A release tag only: never a sha, never latest.
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag must be x.y.z, got '$TAG'"; exit 1; }
+
+          REG="https://ghcr.io/v2/${REPO}"
+          TOKEN=$(curl -fsS -u "${ACTOR}:${GH_TOKEN}" "https://ghcr.io/token?scope=repository:${REPO}:pull,push" | jq -r .token)
+          [ -n "$TOKEN" ] && [ "$TOKEN" != null ] || { echo "::error::no registry token"; exit 1; }
+          AUTH="Authorization: Bearer ${TOKEN}"
+          ACCEPT="Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json"
+          # Prints the digest a ref resolves to, or the HTTP status when it does not resolve.
+          resolve() {
+            local h; h=$(curl -sS -o /dev/null -D - -w '%{http_code}' -I -H "$AUTH" -H "$ACCEPT" "$REG/manifests/$1")
+            if [ "$(tail -n1 <<<"$h")" = 200 ]; then grep -i '^docker-content-digest:' <<<"$h" | awk '{print $2}' | tr -d '\r'; else echo "HTTP $(tail -n1 <<<"$h")"; fi
+          }
+
+          # 1. The source: exactly the bytes stored at DIGEST, and they must be a two-platform index.
+          curl -fsS -H "$AUTH" -H "$ACCEPT" -o index.json "$REG/manifests/$DIGEST"
+          CALC="sha256:$(sha256sum index.json | cut -d' ' -f1)"
+          [ "$CALC" = "$DIGEST" ] || { echo "::error::bytes read hash to $CALC, not $DIGEST"; exit 1; }
+          MT=$(jq -r .mediaType index.json)
+          case "$MT" in
+            application/vnd.oci.image.index.v1+json|application/vnd.docker.distribution.manifest.list.v2+json) ;;
+            *) echo "::error::$DIGEST is $MT, not an index — retag the INDEX"; exit 1 ;;
+          esac
+          for p in linux/amd64 linux/arm64; do
+            d=$(jq -r --arg p "$p" '.manifests[] | select((.platform.os+"/"+.platform.architecture)==$p) | .digest' index.json | head -n1)
+            [ -n "$d" ] || { echo "::error::index has no $p"; exit 1; }
+          done
+          echo "source: $DIGEST ($MT) platforms: $(jq -r '[.manifests[].platform | .os+"/"+.architecture] | join(",")' index.json)"
+
+          # 2. Never move a release tag.
+          NOW=$(resolve "$TAG")
+          if [ "$NOW" = "$DIGEST" ]; then
+            echo "$TAG already resolves to $DIGEST — nothing to write"
+          elif [ "${NOW#HTTP }" = 404 ]; then
+            curl -fsS -X PUT -H "$AUTH" -H "Content-Type: $MT" --data-binary @index.json "$REG/manifests/$TAG" -o /dev/null
+          else
+            echo "::error::$TAG already resolves to $NOW, not $DIGEST — a release tag is never moved"; exit 1
+          fi
+
+          # 3. Verify: the tag resolves to DIGEST, each platform resolves, and a control that must not resolve does not.
+          GOT=$(resolve "$TAG")
+          [ "$GOT" = "$DIGEST" ] || { echo "::error::$TAG resolves to $GOT, not $DIGEST"; exit 1; }
+          for p in linux/amd64 linux/arm64; do
+            d=$(jq -r --arg p "$p" '.manifests[] | select((.platform.os+"/"+.platform.architecture)==$p) | .digest' index.json | head -n1)
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -I -H "$AUTH" -H "Accept: $(jq -r --arg d "$d" '.manifests[] | select(.digest==$d) | .mediaType' index.json)" "$REG/manifests/$d")
+            [ "$code" = 200 ] || { echo "::error::$p ($d) returned $code"; exit 1; }
+            echo "$p: $d -> 200"
+          done
+          CONTROL=$(resolve "0.0.0-control-never-tagged")
+          [ "$CONTROL" = "HTTP 404" ] || { echo "::error::control resolved ($CONTROL): this check cannot tell a tag from no tag"; exit 1; }
+          echo "control 0.0.0-control-never-tagged: $CONTROL"
+          echo "ghcr.io/${REPO}:${TAG} -> $GOT"
