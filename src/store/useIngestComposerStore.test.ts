@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const uploadIngest = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({ uploadIngest: (...a: unknown[]) => uploadIngest(...a) }));
 
-import { useIngestComposerStore } from "./useIngestComposerStore";
+import { useIngestComposerStore, dropReady } from "./useIngestComposerStore";
 
 const http = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
 const pdf = () => new File(["%PDF-1.4\n"], "a.pdf");
@@ -16,7 +16,7 @@ const step = () => new File(["ISO-10303-21;\nHEADER;"], "a.step");
 
 beforeEach(() => {
   uploadIngest.mockReset();
-  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, leaf: null, turns: [] });
 });
 
 describe("cad is never selectable or sendable", () => {
@@ -41,9 +41,9 @@ describe("cad is never selectable or sendable", () => {
   it("pdf still submits with the same upload args", async () => {
     uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"a".repeat(64)}` });
     const file = pdf();
-    useIngestComposerStore.setState({ file, kind: "pdf" });
+    useIngestComposerStore.setState({ file, kind: "pdf", leaf: "unsure" });
     await useIngestComposerStore.getState().submit("a@example.com", "");
-    expect(uploadIngest).toHaveBeenCalledWith(file, "pdf", "a@example.com", "pdf");
+    expect(uploadIngest).toHaveBeenCalledWith(file, "pdf", "a@example.com", "pdf", null);
   });
 });
 
@@ -63,7 +63,7 @@ describe("xml is selectable and sendable (lifted 2026-10-17)", () => {
     const file = xml();
     useIngestComposerStore.setState({ file, kind: "xml" });
     await useIngestComposerStore.getState().submit("a@example.com", "");
-    expect(uploadIngest).toHaveBeenCalledWith(file, "xml", "a@example.com", "xml");
+    expect(uploadIngest).toHaveBeenCalledWith(file, "xml", "a@example.com", "xml", null);
     expect(useIngestComposerStore.getState().turns).toHaveLength(1);
   });
 });
@@ -71,7 +71,7 @@ describe("xml is selectable and sendable (lifted 2026-10-17)", () => {
 describe("a failed upload", () => {
   const send = async (err: unknown) => {
     uploadIngest.mockRejectedValue(err);
-    useIngestComposerStore.setState({ file: pdf(), kind: "pdf" });
+    useIngestComposerStore.setState({ file: pdf(), kind: "pdf", leaf: "unsure" });
     await useIngestComposerStore.getState().submit("a@example.com", "");
     return useIngestComposerStore.getState().turns[0];
   };
@@ -91,5 +91,71 @@ describe("a failed upload", () => {
     const t = await send(http(500, "boom"));
     expect(t.phase).toBe("error");
     expect(t.error).toBe("boom");
+  });
+});
+
+describe("the drop-time kind question (architect 2026-10-23)", () => {
+  const S = () => useIngestComposerStore.getState();
+
+  it("leaf is null after attach, and a PDF drop is not ready until one is chosen", async () => {
+    useIngestComposerStore.setState({ leaf: "pcn" });
+    await S().attach(pdf());
+    expect(S().kind).toBe("pdf");
+    expect(S().leaf).toBeNull();
+    expect(dropReady(S())).toBe(false);
+  });
+  it("pdf + no leaf: submit makes NO upload call and keeps the draft", async () => {
+    useIngestComposerStore.setState({ file: pdf(), kind: "pdf" });
+    await S().submit("a@example.com", "");
+    expect(uploadIngest).not.toHaveBeenCalled();
+    expect(S().turns).toHaveLength(0);
+    expect(S().file).not.toBeNull();
+  });
+  it("pdf + unsure: uploads with leaf null (nothing on the wire), turn records the choice", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"a".repeat(64)}` });
+    const file = pdf();
+    useIngestComposerStore.setState({ file, kind: "pdf" });
+    S().setLeaf("unsure");
+    await S().submit("a@example.com", "");
+    expect(uploadIngest).toHaveBeenCalledWith(file, "pdf", "a@example.com", "pdf", null);
+    expect(S().turns[0].leaf).toBe("unsure");
+  });
+  it("pdf + pcn: leaf pcn on the wire, content_kind stays pdf; the draft leaf resets", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"a".repeat(64)}` });
+    const file = pdf();
+    useIngestComposerStore.setState({ file, kind: "pdf" });
+    S().setLeaf("pcn");
+    await S().submit("a@example.com", "");
+    expect(uploadIngest).toHaveBeenCalledWith(file, "pdf", "a@example.com", "pdf", "pcn");
+    expect(S().leaf).toBeNull();
+  });
+  it("xml: submit sends with leaf null, and setLeaf is ignored", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"b".repeat(64)}` });
+    const file = xml();
+    useIngestComposerStore.setState({ file, kind: "xml" });
+    S().setLeaf("pcn");
+    expect(S().leaf).toBeNull();
+    await S().submit("a@example.com", "");
+    expect(uploadIngest).toHaveBeenCalledWith(file, "xml", "a@example.com", "xml", null);
+  });
+  it("a stale leaf on a non-PDF kind never reaches the wire", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: `sha256:${"b".repeat(64)}` });
+    useIngestComposerStore.setState({ file: xml(), kind: "xml", leaf: "pdn" });
+    await S().submit("a@example.com", "");
+    expect(uploadIngest.mock.calls[0][4]).toBeNull();
+  });
+  it("setKind to a DIFFERENT kind resets the leaf; the same kind keeps it", () => {
+    useIngestComposerStore.setState({ file: pdf(), kind: "pdf" });
+    S().setLeaf("pdn");
+    S().setKind("pdf");
+    expect(S().leaf).toBe("pdn");
+    S().setKind("xml");
+    expect(S().leaf).toBeNull();
+  });
+  it("clearDraft resets the leaf", () => {
+    useIngestComposerStore.setState({ file: pdf(), kind: "pdf" });
+    S().setLeaf("pcn");
+    S().clearDraft();
+    expect(S().leaf).toBeNull();
   });
 });

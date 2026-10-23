@@ -18,8 +18,22 @@ import {
   readIngestRefusal,
   ingestKindNotYetAccepted,
   type IngestKind,
+  type IngestLeaf,
   type IngestRefusal,
 } from "@/lib/ingestWire";
+
+/** The drop-time kind answer for a PDF: a leaf, or "unsure" (architect 2026-10-23). */
+export type DropLeafChoice = IngestLeaf | "unsure";
+
+/** Only a PDF is asked its leaf; XML/S1000D kind is structural, cad is not yet accepted. */
+export function leafAsked(kind: IngestKind | null): boolean {
+  return kind === "pdf";
+}
+
+/** THE ready rule for a pending drop — the store's submit and InputBar's button / Enter path share it. */
+export function dropReady(d: { file: File | null; kind: IngestKind | null; leaf: DropLeafChoice | null }): boolean {
+  return !!d.file && !!d.kind && !ingestKindNotYetAccepted(d.kind) && (!leafAsked(d.kind) || d.leaf !== null);
+}
 
 export interface IngestTurn {
   id: string;
@@ -32,6 +46,8 @@ export interface IngestTurn {
   phase: "uploading" | "status" | "error" | "refused";
   ingestId: string | null;
   error: string | null;
+  /** What the dropper answered at the drop (PDF only); kept, not rendered. */
+  leaf?: DropLeafChoice | null;
   /** The 4xx body, when phase is `refused`. */
   refusal?: IngestRefusal | null;
   /** The upload response itself said "already processed" (level-1 dedupe). A RESULT, not an error. */
@@ -43,9 +59,12 @@ interface State {
   kind: IngestKind | null;
   /** The kind inference for the attached file; null while it is still reading the bytes (or no file). */
   inferred: Inferred | null;
+  /** The drop-time kind answer (PDF only); null = not chosen. Pre-selecting the title read's proposal comes later. */
+  leaf: DropLeafChoice | null;
   turns: IngestTurn[];
   attach: (file: File) => Promise<void>;
   setKind: (kind: IngestKind | null) => void;
+  setLeaf: (choice: DropLeafChoice | null) => void;
   clearDraft: () => void;
   /** `owner` is the OIDC sub that keys "My drops"; null records nothing. */
   submit: (onBehalfOf: string, text: string, owner?: string | null) => Promise<void>;
@@ -67,9 +86,10 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
   file: null,
   kind: null,
   inferred: null,
+  leaf: null,
   turns: [],
   attach: async (file) => {
-    set({ file, kind: null, inferred: null });
+    set({ file, kind: null, inferred: null, leaf: null });
     const inferred = await inferUploadKind(file);
     // A newer attach or a removed chip wins over a slow read.
     if (get().file !== file) return;
@@ -82,19 +102,24 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
   },
   setKind: (kind) => {
     if (kind !== null && ingestKindNotYetAccepted(kind)) return;
-    set({ kind });
+    set((s) => (s.kind === kind ? { kind } : { kind, leaf: null }));
   },
-  clearDraft: () => set({ file: null, kind: null, inferred: null }),
+  setLeaf: (choice) => {
+    if (!leafAsked(get().kind)) return;
+    set({ leaf: choice });
+  },
+  clearDraft: () => set({ file: null, kind: null, inferred: null, leaf: null }),
   submit: async (onBehalfOf, text, owner = null) => {
-    const { file, kind } = get();
-    if (!file || !kind) return;
-    // Not yet accepted (cad: kind_unregistered at the door). Do not send.
-    if (ingestKindNotYetAccepted(kind)) return;
+    const { file, kind, leaf } = get();
+    // One rule (`dropReady`): a file, an accepted kind (cad: kind_unregistered at the door), and for
+    // a PDF an answered leaf question. Do not send otherwise.
+    if (!file || !kind || !dropReady({ file, kind, leaf })) return;
     const id = `ingest-turn-${++seq}`;
     const turn: IngestTurn = {
       id,
       fileName: file.name,
       kind,
+      leaf,
       text,
       createdAt: Date.now(),
       phase: "uploading",
@@ -102,12 +127,14 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       error: null,
       duplicate: null,
     };
-    set((s) => ({ turns: [turn, ...s.turns], file: null, kind: null, inferred: null }));
+    set((s) => ({ turns: [turn, ...s.turns], file: null, kind: null, inferred: null, leaf: null }));
     const patch = (p: Partial<IngestTurn>) =>
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {
-      // content_kind = the format: no leaf kind can be confirmed before the upload (see `uploadIngest`).
-      const raw = await uploadIngest(file, kind, onBehalfOf, kind);
+      // content_kind stays the format. A PDF is asked its leaf at the drop (architect 2026-10-23,
+      // overriding 10-21): PCN/PDN travel as `leaf`; "Not sure" sends none and takes the title read.
+      const wireLeaf: IngestLeaf | null = kind === "pdf" && (leaf === "pcn" || leaf === "pdn") ? leaf : null;
+      const raw = await uploadIngest(file, kind, onBehalfOf, kind, wireLeaf);
       const duplicate = readDuplicate(raw);
       if (duplicate) {
         // A duplicate is a RESULT about the ORIGINAL. Today's server answers with a fresh row id

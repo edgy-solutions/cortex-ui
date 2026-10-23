@@ -63,4 +63,18 @@ describe("uploadIngest — the body that reaches the adapter", () => {
     const ct = String(seen[0].headers.get("Content-Type") ?? "");
     expect(ct).not.toMatch(/application\/json/);
   });
+
+  it("leaf pcn is sent as the leaf field, and content_kind stays the format", async () => {
+    await uploadIngest(new File(["%PDF-1.4\n"], "a.pdf"), "pdf", "alice@example.com", "pdf", "pcn");
+    const body = seen[0].data as FormData;
+    expect(body.get("leaf")).toBe("pcn");
+    expect(body.get("content_kind")).toBe("pdf");
+  });
+
+  it("no leaf sends NO leaf field at all (never an empty or 'null' string)", async () => {
+    await uploadIngest(new File(["%PDF-1.4\n"], "a.pdf"), "pdf", "alice@example.com", "pdf", null);
+    expect((seen[0].data as FormData).has("leaf")).toBe(false);
+    await uploadIngest(new File(["%PDF-1.4\n"], "a.pdf"), "pdf", "alice@example.com", "pdf");
+    expect((seen[1].data as FormData).has("leaf")).toBe(false);
+  });
 });

@@ -33,10 +33,16 @@ import {
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
-export function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
+export function uploadIngest(
+  file: File,
+  kind: string,
+  onBehalfOf: string,
+  contentKind: string,
+  leaf: IngestLeaf | null = null,
+): Promise<unknown> {
   return isIngestMockEnabled()
-    ? mockUploadIngest(file, kind, onBehalfOf, contentKind)
-    : realUploadIngest(file, kind, onBehalfOf, contentKind);
+    ? mockUploadIngest(file, kind, onBehalfOf, contentKind, leaf)
+    : realUploadIngest(file, kind, onBehalfOf, contentKind, leaf);
 }
 
 export function fetchIngestStatus(ingestId: string): Promise<unknown> {

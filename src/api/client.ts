@@ -1011,15 +1011,30 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  * `failed`. It is the REGISTERED kind, a separate channel from `kind` (the file format and path
  * segment): the format (`pdf` is registered, `policy/overlays/openddil-lab/content_kinds/pdf.yaml`)
  * unless a human confirmed a leaf kind (`pcn`, `pdn`). The composer still sends the format as
- * `content_kind`: a leaf is corrected AFTER the drop, via `POST /ingest/{id}/leaf`
- * (`correctIngestLeaf`) — no picker before the drop, the drop stays one gesture (architect 2026-10-21).
+ * `content_kind`.
+ *
+ * `leaf` (architect 2026-10-23, overriding the 10-21 "no picker before the drop"): the composer now
+ * asks a PDF its leaf at the drop. It is sent ONLY for PCN/PDN; "Not sure" sends none and takes the
+ * title-read path (awaiting_kind -> pick -> relaunch). `POST /ingest/{id}/leaf` (`correctIngestLeaf`)
+ * remains the correction path (the chip on the card). The door (`gateway.py` `ingest_document`)
+ * declares `leaf` from invincible-agent `0843efed` (lane/01-207, Monday's roll); a door without
+ * it drops the field silently — the door-fields seal (`uploadIngest.doorFields.test.ts`) says
+ * which. A blank `leaf` is refused (422 `leaf_unknown`), so "Not sure" sends NO field, never "".
+ * `leaf_requires_pdf` / `leaf_conflicts_with_content_kind` are 422s too, read by `readIngestRefusal`.
  */
-export async function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
+export async function uploadIngest(
+  file: File,
+  kind: string,
+  onBehalfOf: string,
+  contentKind: string,
+  leaf: IngestLeaf | null = null,
+): Promise<unknown> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kind", kind);
   formData.append("on_behalf_of", onBehalfOf);
   formData.append("content_kind", contentKind);
+  if (leaf !== null) formData.append("leaf", leaf);
   const { data } = await api.post<unknown>("/ingest", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
