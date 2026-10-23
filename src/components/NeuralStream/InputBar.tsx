@@ -8,11 +8,12 @@ import { useComposerDraft } from "@/hooks/useComposerDraft";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { KindPicker } from "@/components/ingest/KindPicker";
+import { DropLeafRow } from "@/components/ingest/DropLeafRow";
 import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
 import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
-import { useIngestComposerStore } from "@/store/useIngestComposerStore";
+import { useIngestComposerStore, dropReady, leafAsked } from "@/store/useIngestComposerStore";
 import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -51,6 +52,7 @@ export function InputBar() {
   const chipFile = useIngestComposerStore((s) => s.file);
   const chipKind = useIngestComposerStore((s) => s.kind);
   const chipInferred = useIngestComposerStore((s) => s.inferred);
+  const chipLeaf = useIngestComposerStore((s) => s.leaf);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasChip = ingestEnabled && chipFile !== null;
@@ -118,7 +120,7 @@ export function InputBar() {
     e.preventDefault();
     if (hasChip) {
       // An ingest turn: needs the human-confirmed kind and a drop identity; never an interview.
-      if (!chipKind || !onBehalfOf) return;
+      if (!dropReady({ file: chipFile, kind: chipKind, leaf: chipLeaf }) || !onBehalfOf) return;
       void useIngestComposerStore.getState().submit(onBehalfOf, value.trim(), auth.user?.profile?.sub ?? null);
       clearDraft();
       return;
@@ -135,7 +137,7 @@ export function InputBar() {
   // surfacing the disabled state here makes the rate-limit visible to the
   // user instead of a button that looks active but does nothing.
   const isDisabled = phase !== "active" || isProcessing;
-  const sendDisabled = hasChip ? !chipKind || !onBehalfOf : !value.trim() || isDisabled;
+  const sendDisabled = hasChip ? !(dropReady({ file: chipFile, kind: chipKind, leaf: chipLeaf }) && onBehalfOf) : !value.trim() || isDisabled;
 
   return (
     <div className="px-6 pb-5 pt-2">
@@ -220,6 +222,9 @@ export function InputBar() {
                     </p>
                   )}
                 </>
+              )}
+              {hasChip && leafAsked(chipKind) && (
+                <DropLeafRow value={chipLeaf} onChange={(c) => useIngestComposerStore.getState().setLeaf(c)} />
               )}
             </div>
           )}

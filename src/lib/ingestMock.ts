@@ -114,7 +114,13 @@ function uuidFor(n: number): string {
   return `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 }
 
-export function uploadIngest(file: File, kind: string, onBehalfOf: string, contentKind: string): Promise<unknown> {
+export function uploadIngest(
+  file: File,
+  kind: string,
+  onBehalfOf: string,
+  contentKind: string,
+  leaf: IngestLeaf | null = null,
+): Promise<unknown> {
   void onBehalfOf;
   counter += 1;
   const sha256 = sha256For(counter);
@@ -153,7 +159,7 @@ export function uploadIngest(file: File, kind: string, onBehalfOf: string, conte
   }
 
   const ingestId = `sha256:${sha256}`;
-  const declared: IngestLeaf | null = contentKind === "pcn" || contentKind === "pdn" ? contentKind : null;
+  const declared: IngestLeaf | null = leaf ?? (contentKind === "pcn" || contentKind === "pdn" ? contentKind : null);
   const row: MockRow = {
     ingest_id: ingestId,
     sha256,

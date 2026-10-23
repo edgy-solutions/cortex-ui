@@ -93,7 +93,7 @@ const overlay = () => document.querySelector("[data-ingest-drag-overlay]");
 beforeEach(() => {
   sendMessage.mockReset();
   uploadIngest.mockReset();
-  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, leaf: null, turns: [] });
   usePersonaStore.setState({ entitlements: null });
 });
 afterEach(cleanup);
@@ -251,13 +251,57 @@ describe("send", () => {
     return r.getByRole("button", { name: "Send" }) as HTMLButtonElement;
   }
 
-  it("a real-looking PDF shows no kind picker and Send is enabled at once", async () => {
+  const leafRow = () => document.querySelector("[data-ingest-leaf-row]");
+  const chooseLeaf = (c: "pcn" | "pdn" | "unsure") =>
+    fireEvent.click(document.querySelector(`[data-ingest-leaf-option="${c}"]`)!);
+
+  it("a real-looking PDF shows no FORMAT picker; the leaf row asks, nothing selected, Send disabled", async () => {
     const r = render(<InputBar />);
     const send = await attach(r);
     expect(document.querySelector("[data-ingest-kind]")).toBeNull();
     expect(document.querySelector("[data-ingest-kind-reason]")).toBeNull();
     expect(document.querySelector('[data-ingest-kind-inferred="pdf"]')).not.toBeNull();
+    expect(leafRow()).not.toBeNull();
+    expect(leafRow()!.getAttribute("data-ingest-leaf-selected")).toBe("none");
+    expect(r.getAllByRole("radio", { name: /PCN|PDN|Not sure/ })).toHaveLength(3);
+    expect(send.disabled).toBe(true);
+  });
+
+  it("choosing PCN enables Send; choosing Not sure enables Send", async () => {
+    const r = render(<InputBar />);
+    const send = await attach(r);
+    chooseLeaf("pcn");
+    expect(leafRow()!.getAttribute("data-ingest-leaf-selected")).toBe("pcn");
+    expect(r.getByRole("radio", { name: "PCN" }).getAttribute("aria-checked")).toBe("true");
     expect(send.disabled).toBe(false);
+    chooseLeaf("unsure");
+    expect(leafRow()!.getAttribute("data-ingest-leaf-selected")).toBe("unsure");
+    expect(send.disabled).toBe(false);
+  });
+
+  it("an xml drop does not ask: no leaf row, Send enabled", async () => {
+    const r = render(<InputBar />);
+    const send = await attach(r, new File(['<?xml version="1.0"?><dmodule/>'], "dm.xml"));
+    expect(leafRow()).toBeNull();
+    expect(send.disabled).toBe(false);
+  });
+
+  it("Enter (form submit) with no leaf choice sends nothing", async () => {
+    const r = render(<InputBar />);
+    await attach(r);
+    fireEvent.submit(document.querySelector("form")!);
+    expect(uploadIngest).not.toHaveBeenCalled();
+    expect(useIngestComposerStore.getState().file).not.toBeNull();
+  });
+
+  it("PCN travels as the fifth argument", async () => {
+    uploadIngest.mockResolvedValue({ ingest_id: "ing-2", stage: "received", duplicate: null });
+    const r = render(<InputBar />);
+    const send = await attach(r);
+    chooseLeaf("pcn");
+    fireEvent.click(send);
+    expect(uploadIngest.mock.calls[0][3]).toBe("pdf");
+    expect(uploadIngest.mock.calls[0][4]).toBe("pcn");
   });
 
   it("a .pdf whose bytes are <?xml ASKS: reason shown, xml hinted but NOT selected, no kind in the store, Send disabled", async () => {
@@ -277,6 +321,10 @@ describe("send", () => {
     expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(document.querySelector('[data-ingest-kind="pdf"] input')!);
     expect(useIngestComposerStore.getState().kind).toBe("pdf");
+    // pdf resolved: the leaf question appears (xml never showed it) and Send waits on it.
+    expect(leafRow()).not.toBeNull();
+    expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    chooseLeaf("pdn");
     expect((r.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -286,7 +334,7 @@ describe("send", () => {
     expect(document.querySelector("[data-ingest-kind-reason]")).not.toBeNull();
     expect(document.querySelectorAll("[data-ingest-kind] input:checked").length).toBe(0);
     expect(send.disabled).toBe(true);
-    fireEvent.click(document.querySelector('[data-ingest-kind="pdf"] input')!);
+    fireEvent.click(document.querySelector('[data-ingest-kind="xml"] input')!);
     expect(send.disabled).toBe(false);
   });
 
@@ -294,6 +342,7 @@ describe("send", () => {
     uploadIngest.mockResolvedValue({ ingest_id: "ing-1", stage: "received", duplicate: null });
     const r = render(<InputBar />);
     const send = await attach(r);
+    chooseLeaf("unsure");
     fireEvent.change(r.getByPlaceholderText(/Add a note/), { target: { value: "for the PCN review" } });
     fireEvent.click(send);
     expect(uploadIngest).toHaveBeenCalledTimes(1);
@@ -342,6 +391,7 @@ describe("ingest turns as rail entries", () => {
     else uploadIngest.mockResolvedValue(resp);
     useIngestComposerStore.getState().attach(pdf());
     useIngestComposerStore.getState().setKind("pdf");
+    useIngestComposerStore.getState().setLeaf("unsure");
     await useIngestComposerStore.getState().submit("steward@example.com", "note text");
   }
 
@@ -526,7 +576,8 @@ describe("the drop identity is authz_id, not the email (not_a_delegate at work)"
     uploadIngest.mockResolvedValue({ ingest_id: "ing-w", stage: "received", duplicate: null });
     const r = render(<InputBar />);
     const send = await attachPdf(r);
-    expect(send.disabled).toBe(false);
+    useIngestComposerStore.getState().setLeaf("unsure");
+    await waitFor(() => expect(send.disabled).toBe(false));
     fireEvent.click(send);
     expect(uploadIngest).toHaveBeenCalledTimes(1);
     expect(uploadIngest.mock.calls[0][2], "on_behalf_of must be authz_id, never the email").toBe("E12345");
@@ -547,7 +598,9 @@ describe("the drop identity is authz_id, not the email (not_a_delegate at work)"
     usePersonaStore.setState({ entitlements: ENT({}) });
     uploadIngest.mockResolvedValue({ ingest_id: "ing-s", stage: "received", duplicate: null });
     const r = render(<InputBar />);
-    fireEvent.click(await attachPdf(r));
+    const send = await attachPdf(r);
+    act(() => useIngestComposerStore.getState().setLeaf("unsure"));
+    fireEvent.click(send);
     expect(uploadIngest.mock.calls[0][2]).toBe("steward@example.com");
     await waitFor(() => expect(useIngestComposerStore.getState().turns[0].phase).toBe("status"));
   });

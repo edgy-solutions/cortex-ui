@@ -79,7 +79,7 @@ function RailEntries() {
 async function dropDuplicate(response: unknown) {
   uploadIngest.mockResolvedValue(response);
   const r = render(<RailEntries />);
-  useIngestComposerStore.setState({ file: new File(["%PDF-"], "work-instruction.pdf"), kind: "pdf" });
+  useIngestComposerStore.setState({ file: new File(["%PDF-"], "work-instruction.pdf"), kind: "pdf", leaf: "unsure" });
   await useIngestComposerStore.getState().submit("a@example.com", "", "user-a");
   return r;
 }

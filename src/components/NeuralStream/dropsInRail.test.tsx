@@ -106,6 +106,7 @@ const badgeEl = () => document.querySelector("[data-ingest-inflight-badge]") as 
 async function sendOne() {
   useIngestComposerStore.getState().attach(pdf());
   useIngestComposerStore.getState().setKind("pdf");
+    useIngestComposerStore.getState().setLeaf("unsure");
   await act(async () => {
     await useIngestComposerStore.getState().submit("a@example.com", "", "user-a");
   });
@@ -120,7 +121,7 @@ beforeEach(() => {
   retryIngest.mockReset();
   fetchIngestMine.mockReset();
   fetchIngestMine.mockResolvedValue({ items: [], next: null }); // a person with no drops on record
-  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, turns: [] });
+  useIngestComposerStore.setState({ file: null, kind: null, inferred: null, leaf: null, turns: [] });
   useIngestStatusStore.getState().reset();
   useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
   useAnswerPanelStore.setState({ sortMode: "TIME", search: "", typeFilter: null });
@@ -138,6 +139,7 @@ describe("a drop is a turn on the rail", () => {
     render(<Harness />);
     useIngestComposerStore.getState().attach(pdf());
     useIngestComposerStore.getState().setKind("pdf");
+    useIngestComposerStore.getState().setLeaf("unsure");
     let done!: Promise<void>;
     await act(async () => {
       done = useIngestComposerStore.getState().submit("a@example.com", "", "user-a");
@@ -234,6 +236,7 @@ describe("a drop is a turn on the rail", () => {
     render(<Harness />);
     useIngestComposerStore.getState().attach(pdf());
     useIngestComposerStore.getState().setKind("pdf");
+    useIngestComposerStore.getState().setLeaf("unsure");
     let done!: Promise<void>;
     await act(async () => {
       done = useIngestComposerStore.getState().submit("a@example.com", "", "user-a");
