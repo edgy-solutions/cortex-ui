@@ -1,6 +1,6 @@
 /**
  * DERIVED fixtures: shapes written from `agent_fleet/safety_agent/measures.py` at 938d7639
- * (`draft_risk_assessment`, `what_failed_on_this_part`) with `output_uri` stamped as
+ * (`draft_risk_assessment`, `what_failed_on_this_part`, `assess_deferral_risk`; seed `entities.py`) with `output_uri` stamped as
  * `safety_agent/main.py:856` does. NOT a live capture.
  *
  * The draft vocabulary is the producer's, not a gloss: severity is a MIL-STD-882E code ("II"),
@@ -189,3 +189,69 @@ export const asDocument = (reply: Record<string, unknown>, prose?: string): Reco
   archetype: "KNOWLEDGE_DOCUMENT",
   markdown_content: (prose ? prose + "\n\n" : "") + "```json\n" + JSON.stringify(reply, null, 2) + "\n```",
 });
+
+// ── assess_deferral_risk (measures.py; seed entities.py at 938d7639) ─────────────────────
+export const DRC_URI = `${SAFETY}DeferralRiskCard`;
+
+/** WO-3001: deferred, and the item IS safety-critical. Re-opens HAZ-1001. */
+export const DRC_WO_3001: Record<string, unknown> = {
+  refused: false,
+  work_order_id: "WO-3001",
+  part_number: "PN-8801",
+  deferred: true,
+  deferred_reason: "Awaiting parts; deferred to next phase.",
+  tail: "TN-7701",
+  safety_critical: true,
+  critical_items_checked: 2,
+  csi_id: "CSI-5001",
+  reopens_hazard_id: "HAZ-1001",
+  reopens_hazard: "Chafed wiring loom in the aft equipment bay can short the primary bus.",
+  hazard_status: "open",
+  severity: "I",
+  probability: "D",
+  assessment: "drafted",
+  note: "Deferring WO-3001 leaves HAZ-1001 live. Severity and probability are carried from the hazard; the risk level and its acceptance authority are resolved from the ratified matrix, and neither is set here.",
+  output_uri: DRC_URI,
+};
+
+/** WO-3002: deferred, item NOT critical. The discriminating control. */
+export const DRC_WO_3002: Record<string, unknown> = {
+  refused: false,
+  work_order_id: "WO-3002",
+  part_number: "PN-8803",
+  deferred: true,
+  deferred_reason: "Cosmetic; deferred indefinitely.",
+  tail: "TN-7704",
+  safety_critical: false,
+  critical_items_checked: 2,
+  assessment: "not_applicable",
+  note: "Item is not on the critical items list; no hazard is re-opened by this deferral.",
+  output_uri: DRC_URI,
+};
+
+/** WO-3003: NOT deferred, item IS critical. The other half of the control pair. */
+export const DRC_WO_3003: Record<string, unknown> = {
+  refused: false,
+  work_order_id: "WO-3003",
+  part_number: "PN-8802",
+  deferred: false,
+  deferred_reason: null,
+  tail: "TN-7703",
+  safety_critical: true,
+  critical_items_checked: 2,
+  csi_id: "CSI-5002",
+  reopens_hazard_id: "HAZ-1003",
+  reopens_hazard: "Fuel quantity probe seal degrades, allowing vapour ingress to the sense line.",
+  hazard_status: "mitigated",
+  severity: "II",
+  probability: "D",
+  assessment: "not_applicable",
+  note: "Work order is not deferred; the hazard is not re-opened by a deferral.",
+  output_uri: DRC_URI,
+};
+
+/** WO-3002 with the count removed: the load-bearing field absent. */
+export const DRC_NO_COUNT: Record<string, unknown> = (() => {
+  const { critical_items_checked: _drop, ...rest } = DRC_WO_3002;
+  return rest;
+})();

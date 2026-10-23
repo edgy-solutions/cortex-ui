@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { DeferralRiskCardRender } from "./DeferralRiskCard";
 import { FailureRecordSetCard } from "./FailureRecordSetCard";
 import { RiskAssessmentDraftCard } from "./RiskAssessmentDraftCard";
 
@@ -15,6 +16,7 @@ import { RiskAssessmentDraftCard } from "./RiskAssessmentDraftCard";
 export const OUTPUT_RENDERS: ReadonlyMap<string, FC<{ payload: Record<string, unknown> }>> = new Map([
   ["http://internal/sustainment/safety#RiskAssessmentDraft", RiskAssessmentDraftCard],
   ["http://internal/sustainment/safety#FailureRecordSet", FailureRecordSetCard],
+  ["http://internal/sustainment/safety#DeferralRiskCard", DeferralRiskCardRender],
 ]);
 
 /** Exact string match on the full IRI the engine stamps; no CURIE folding. */

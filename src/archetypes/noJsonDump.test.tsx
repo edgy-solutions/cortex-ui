@@ -10,7 +10,7 @@ import path from "node:path";
 import { cleanup, render } from "@testing-library/react";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { RawFields } from "./RawFields";
-import { DRAFT_URI, FRS_URI, asDocument } from "@/renders/fixtures/safetyReplies.derived";
+import { DRAFT_URI, DRC_URI, DRC_WO_3001, FRS_URI, asDocument } from "@/renders/fixtures/safetyReplies.derived";
 
 afterEach(cleanup);
 
@@ -28,9 +28,10 @@ describe("(a) source: no JSON.stringify in the answer-card files", () => {
       .map((f) => `renders/${f}`),
   ];
   it("the file population is explicit", () => {
-    expect(files.length).toBe(6);
+    expect(files.length).toBe(7);
     expect(files).toContain("renders/RiskAssessmentDraftCard.tsx");
     expect(files).toContain("renders/FailureRecordSetCard.tsx");
+    expect(files).toContain("renders/DeferralRiskCard.tsx");
   });
   it.each(files)("%s", (f) => {
     expect(readFileSync(path.join(root, f), "utf8")).not.toContain("JSON.stringify(");
@@ -68,6 +69,8 @@ const CENSUS: [string, () => React.ReactElement][] = [
   ],
   ["a degraded draft", () => <SemanticInterpreter payload={{ components: [asDocument({ refused: false, output_uri: DRAFT_URI })] }} />],
   ["a degraded FailureRecordSet", () => <SemanticInterpreter payload={{ components: [asDocument({ refused: false, output_uri: FRS_URI })] }} />],
+  ["a degraded DeferralRiskCard", () => <SemanticInterpreter payload={{ components: [asDocument({ refused: false, output_uri: DRC_URI })] }} />],
+  ["a DeferralRiskCard (WO-3001)", () => <SemanticInterpreter payload={{ components: [asDocument(DRC_WO_3001)] }} />],
   [
     "a fence with an unknown output_uri",
     () => <SemanticInterpreter payload={{ components: [asDocument({ output_uri: "http://x/y#Z", nested })] }} />,
@@ -77,7 +80,7 @@ const CENSUS: [string, () => React.ReactElement][] = [
 
 describe("(b) render census: no pre, no JSON text node", () => {
   it("the census population is explicit", () => {
-    expect(CENSUS.length).toBe(7);
+    expect(CENSUS.length).toBe(9);
   });
 
   it.each(CENSUS)("%s", (_name, make) => {
