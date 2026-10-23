@@ -40,6 +40,7 @@ import { PdfEvidencePane } from "./PdfEvidencePane";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { fixtureExtractionBody, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "@/lib/promotionReviewFixture";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 
 const SHA = `sha256:${"5b15f205".padEnd(64, "a")}`;
 const DECL = {
@@ -95,6 +96,7 @@ beforeEach(() => {
   destroy.mockReset();
   openPdf.mockReset().mockResolvedValue({ numPages: 2, renderPage, destroy });
   useTaskKindStore.setState({ status: "idle", byKind: {} });
+  usePersonaStore.setState({ entitlements: null });
 });
 afterEach(cleanup);
 
@@ -1489,5 +1491,48 @@ describe("PdfEvidencePane caption", () => {
   it("without a caption prop the outline caption is the quality's own", async () => {
     render(<PdfEvidencePane ingestId={SHA} target={target} quality="cell" />);
     await waitFor(() => expect(caption()).toBe("Outlined: the cell this row was read from."));
+  });
+});
+
+describe("the dropper cannot attest its own origin", () => {
+  const viewer = (authz_id?: string) =>
+    usePersonaStore.setState({ entitlements: { authz_id, email: "x@example.com" } as never });
+
+  it("the dropper sees Promote held with the reason, and Reject open", async () => {
+    viewer("alice@example.com");
+    await mount();
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("dropper");
+    expect(document.querySelector("[data-promote-held=\"dropper\"]")!.textContent).toContain("someone else must attest its origin");
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("someone who did not drop it can promote", async () => {
+    viewer("bob@example.com");
+    await mountPromotable();
+    expect(hold()).toBeNull();
+  });
+
+  it("the dropper's hold does not wait for the rows: it shows while they are still loading", async () => {
+    viewer("alice@example.com");
+    fetchIngestExtraction.mockReturnValue(new Promise(() => {}));
+    render(<ApprovalTaskCard task={task()} />);
+    await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
+    expect(hold()).toBe("dropper");
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("the person it was dropped for sees Promote held", async () => {
+    viewer("carol@example.com");
+    await mount(task({ payload: payload193({ dropped_by: { authz_id: "svc:bot", on_behalf_of: "carol@example.com" } }) }));
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("dropper");
+  });
+
+  it("with no authz_id on the entitlements the card does not hold Promote", async () => {
+    // The email IS the dropper's id here, so a fallback to the email would hold Promote and fail this arm.
+    usePersonaStore.setState({ entitlements: { email: "alice@example.com" } as never });
+    await mountPromotable();
+    expect(hold()).toBeNull();
   });
 });

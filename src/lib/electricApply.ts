@@ -17,16 +17,73 @@ export type ElectricOp =
   /** `must-refetch`: drop every non-pending row, keep pending client-created ones. */
   | { kind: "reset" };
 
+/** Whether an answer's body (`rendered_output`, `routing`, `resolved_intent`) has been read. A missing key is `absent`. */
+export type BodyState = "absent" | "loading" | "loaded" | "failed";
+
+/** One paged view of `/answers` (the unfiltered list, or a search). `frontier` is the `ts` of the oldest item loaded. */
+export interface AnswerPaging {
+  status: "idle" | "loading" | "loaded" | "failed";
+  loaded: number;
+  total: number | null;
+  nextPage: number;
+  frontier: number | null;
+}
+export const INITIAL_ANSWER_PAGING: AnswerPaging = { status: "idle", loaded: 0, total: null, nextPage: 1, frontier: null };
+
+/** A server search: its own pages, and the ids they listed (the rail lists exactly these while it is set). */
+export interface AnswerSearch extends AnswerPaging {
+  q: string;
+  ids: string[];
+}
+
+/** The six columns a summary-only change feed does not carry; a loaded body keeps them across an upsert. */
+export const BODY_FIELDS = [
+  "rendered_output",
+  "routing",
+  "resolved_intent",
+  "sources",
+  "graph_trace",
+  "graph_trace_alternates",
+] as const satisfies readonly (keyof Artifact)[];
+
 export interface ElectricSlice {
   artifacts: Artifact[];
   currentArtifactId: string | null;
   currentArtifactSetByUser: boolean;
   _lastUpdateSource: Record<string, Partial<Record<keyof Artifact, UpdateSource>>>;
+  /** Summaries mode only (the `answerSummaries` flag); absent keys read as `absent`. */
+  bodies?: Record<string, BodyState>;
+  subjects?: Record<string, { uri: string; label: string }>;
+  answerPaging?: AnswerPaging;
+  answerSearch?: AnswerSearch | null;
+}
+
+export interface ApplyOptions {
+  /** The feed carries summary columns only: a loaded body survives an upsert, and a reset clears paging. */
+  summaries?: boolean;
+}
+
+/**
+ * Summaries mode: drop a live upsert for a row OLDER than the frontier whose id is not already
+ * held. It arrives when its page is loaded; an update to a held id, and anything at or newer than
+ * the frontier, passes. No frontier (page 1 not read, or it failed) filters nothing.
+ */
+export function filterLiveOps(
+  ops: readonly ElectricOp[],
+  frontier: number | null,
+  held: ReadonlySet<string>,
+): ElectricOp[] {
+  if (frontier === null) return ops.slice();
+  return ops.filter((op) => op.kind !== "upsert" || op.artifact.created_at >= frontier || held.has(op.artifact.id));
 }
 
 const ELECTRIC_TAG: UpdateSource = "electric:answer_artifact_projection";
 
-export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[]): Partial<ElectricSlice> {
+export function applyElectricOps(
+  state: ElectricSlice,
+  ops: readonly ElectricOp[],
+  opts: ApplyOptions = {},
+): Partial<ElectricSlice> {
   if (ops.length === 0) return {};
   // Working copies, made once. `arr` holds tombstones (null) so a remove does not shift indices.
   const arr: (Artifact | null)[] = state.artifacts.slice();
@@ -38,6 +95,7 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
   /** An upsert wants "highest watermark" recomputed; deferred until something needs the value. */
   let dirty = false;
   let changed = false;
+  let cleared = false;
 
   const highest = (): string | null => {
     let best: Artifact | null = null;
@@ -73,6 +131,10 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
       // Drops are client-made (no Electric shape carries them) and nothing re-sends them after a
       // refetch, so a reset keeps them.
       for (const a of arr.slice()) if (a && a.status !== "pending" && !isIngestArtifact(a)) remove(a.id);
+      if (opts.summaries) {
+        cleared = true;
+        changed = true;
+      }
     } else {
       const artifact = op.artifact;
       const prevSource = sources[artifact.id] ?? {};
@@ -81,9 +143,15 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
       const i = index.get(artifact.id);
       if (i !== undefined) {
         const existing = arr[i]!;
+        // A summary-only row has no body columns: a body already read must survive it.
+        const keep: Partial<Artifact> = {};
+        if (opts.summaries && state.bodies?.[artifact.id] === "loaded") {
+          for (const f of BODY_FIELDS) (keep as Record<string, unknown>)[f] = existing[f];
+        }
         arr[i] = {
           ...existing,
           ...artifact,
+          ...keep,
           // Preserve locally-captured invariants - question_text + message_id are set at
           // create-pending and the user is already seeing them; the projection echoes them but a
           // future schema drift must not wipe them.
@@ -112,5 +180,6 @@ export function applyElectricOps(state: ElectricSlice, ops: readonly ElectricOp[
     currentArtifactId: current,
     currentArtifactSetByUser: setByUser,
     _lastUpdateSource: sources,
+    ...(cleared ? { bodies: {}, subjects: {}, answerPaging: INITIAL_ANSWER_PAGING, answerSearch: null } : {}),
   };
 }

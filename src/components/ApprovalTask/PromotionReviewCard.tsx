@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
+import { useViewerAuthzId, viewerIsDropper } from "@/lib/dropperHold";
 import { verbLabel } from "@/lib/taskDeclaration";
 import { buildHeaderEdits, buildRowEdits, isPromotionRowEditsEnabled, type RowEditDraft } from "@/lib/reviewRowEdits";
 import type { HeaderEdit } from "@/api/client";
@@ -84,7 +85,7 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  * does not know holds Promote rather than passing it. Reject waits on neither, because "this is not
  * a notice" is exactly the decision a steward makes about a drop with no rows or no readable source.
  */
-type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back";
+type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back" | "dropper";
 
 const HOLD_TEXT: Record<PromoteHold, string> = {
   "rows-loading": "Promote waits for the extracted rows.",
@@ -93,6 +94,8 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   "no-source": "Promote is off: the source cannot be shown, and a steward cannot vet what they cannot see. Reject is still open.",
   // Unlike the holds above this one also turns Reject off: see `sentBack` in the card.
   "sent-back": "",
+  // Known from the payload alone; the server refuses promoted from the dropper (dropper_cannot_attest_origin).
+  dropper: "Promote is off: you dropped this document, and someone else must attest its origin. Reject is still open.",
 };
 /** One hold, three causes: the kind sent the document back, a re-class superseded this task, or the server said stale. */
 type ReviewHold = { leaf: IngestLeaf | null; cause: "sent-back" | "superseded" | "stale"; newTaskId: string | null };
@@ -294,9 +297,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const promoteVerb = verbs.includes("promoted") ? "promoted" : null;
   const rejectVerb = verbs.includes("rejected") ? "rejected" : null;
   const otherVerbs = verbs.filter((v) => v !== promoteVerb && v !== rejectVerb);
+  const viewerAuthzId = useViewerAuthzId();
+  const dropperHeld = viewerIsDropper(task.payload, viewerAuthzId);
   const promoteHold: PromoteHold | null =
     sentBack
       ? "sent-back"
+      : dropperHeld
+      ? "dropper"
       : extraction.phase === "loading"
       ? "rows-loading"
       : rows.length === 0
@@ -934,7 +941,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </button>
               ))}
             </div>
-            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back") && (
+            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
                 {promoteHold === "sent-back" ? sentBackText(hold!) : HOLD_TEXT[promoteHold]}
               </p>

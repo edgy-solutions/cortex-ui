@@ -15,9 +15,9 @@
  * `loadMine` reads `GET /ingest/mine` once per session (191): the server's list of this person's drops,
  * which seeds `rows` and names the drops browser storage never held (`listed`). A row this tab already
  * holds wins while its `updated_at` is newer than the listed item's — the live poll is fresher than the
- * page. It follows `next` page by page (keyset: each page's `next` goes back as `before`): the first page
- * draws at once, older pages are appended as they come, up to `INGEST_MINE_MAX_PAGES`. A failure on a
- * LATER page stops the walk and keeps what was read; only the first page's failure is `failed`.
+ * page. It reads the FIRST page only and keeps `next`; `loadOlderDrops` reads the next page on demand
+ * (keyset: each page's `next` goes back as `before`), with no cap. A failure on a LATER page keeps
+ * what was read and marks `olderDrops: "failed"`; only the first page's failure is `mine: "failed"`.
  *
  * The fetch is `fetchIngestStatus` from `ingestTransport` (the guarded transport) — no new site.
  * In-memory only; the sync hook drives it and `purgeUserScopedState` resets it, so A's rows never
@@ -40,8 +40,6 @@ import {
 export const INGEST_POLL_MS = 2000;
 /** One page of `GET /ingest/mine`: the same count browser storage kept (`MY_DROPS_CAP`). */
 export const INGEST_MINE_LIMIT = 50;
-/** Pages `loadMine` follows at most (500 drops): past that the rail shows the newest 500. */
-export const INGEST_MINE_MAX_PAGES = 10;
 
 /** The listed item, unless this tab already holds a NEWER read of the same row. */
 export function mergeListedRow(held: IngestStatusRow | undefined, listed: IngestStatusRow): IngestStatusRow {
@@ -56,11 +54,17 @@ interface State {
   /** `idle` until `loadMine` runs; `loaded` once the FIRST page is read (older pages may still be
    *  coming); `failed` if the first page errs (a fleet before 191 has no route). */
   mine: "idle" | "loading" | "loaded" | "failed";
+  /** The cursor for the next (older) page of `GET /ingest/mine`; null on the last, or before the first read. */
+  next: string | null;
+  /** State of the older-page read the rail's "Load older" control drives. */
+  olderDrops: "idle" | "loading" | "failed";
   /** +1 on every `reset`. Only ever grows, so a reader keyed on it re-runs even when `mine` went
    *  idle → loading → idle inside one effect flush (which no subscriber sees as a change). */
   epoch: number;
-  /** Read `GET /ingest/mine` once per session (again after `reset`), following `next`. */
+  /** Read the first page of `GET /ingest/mine` once per session (again after `reset`). */
   loadMine: () => void;
+  /** Read the next page while `next` is non-null and append it in order. */
+  loadOlderDrops: () => void;
   /** Fetch every id in `ids` that is due: never read, or read and still not terminal. */
   pollDue: (ids: readonly string[]) => void;
   /** Re-open the person's own failed drop. The UI shows `message` on refusal. */
@@ -71,6 +75,8 @@ interface State {
 const inFlight = new Set<string>();
 /** When each id was last requested (ms), for the slow cadence of a failed+timeout row. */
 const lastFetchedAt = new Map<string, number>();
+/** Cursors already handed back, so a server that repeats one cannot page forever. Cleared by `reset`. */
+const seenCursors = new Set<string>();
 /** Bumped by `reset`: a response that left before a purge must not repopulate after it. */
 let generation = 0;
 
@@ -79,40 +85,65 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
   notFound: {},
   listed: [],
   mine: "idle",
+  next: null,
+  olderDrops: "idle",
   epoch: 0,
   loadMine: () => {
     if (get().mine !== "idle") return;
     set({ mine: "loading" });
     const gen = generation;
-    const seen = new Set<string>(); // a cursor handed back twice would page forever
-    const walk = async () => {
-      let before: string | null = null;
-      for (let n = 0; n < INGEST_MINE_MAX_PAGES; n++) {
-        let page: ReturnType<typeof readIngestMinePage>;
-        try {
-          page = readIngestMinePage(await fetchIngestMine(INGEST_MINE_LIMIT, before));
-        } catch {
-          page = null;
-        }
-        if (gen !== generation) return;
-        if (!page) {
-          if (n === 0) set({ mine: "failed" });
-          return; // a later page's failure keeps what was read
-        }
-        const items = page.items;
-        set((s) => {
-          const rows = { ...s.rows };
-          for (const item of items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
-          const listed = n === 0 ? [] : [...s.listed];
-          for (const item of items) if (!listed.includes(item.ingest_id)) listed.push(item.ingest_id);
-          return { rows, listed, mine: "loaded" };
-        });
-        if (page.next === null || seen.has(page.next)) return;
-        seen.add(page.next);
-        before = page.next;
+    const read = async () => {
+      let page: ReturnType<typeof readIngestMinePage>;
+      try {
+        page = readIngestMinePage(await fetchIngestMine(INGEST_MINE_LIMIT, null));
+      } catch {
+        page = null;
       }
+      if (gen !== generation) return;
+      if (!page) {
+        set({ mine: "failed" });
+        return;
+      }
+      const items = page.items;
+      set((s) => {
+        const rows = { ...s.rows };
+        for (const item of items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
+        return { rows, listed: items.map((i) => i.ingest_id), mine: "loaded", next: page.next };
+      });
+      if (page.next !== null) seenCursors.add(page.next);
     };
-    void walk();
+    void read();
+  },
+  loadOlderDrops: () => {
+    const { next, olderDrops, mine } = get();
+    if (mine !== "loaded" || next === null || olderDrops === "loading") return;
+    set({ olderDrops: "loading" });
+    const gen = generation;
+    const read = async () => {
+      let page: ReturnType<typeof readIngestMinePage>;
+      try {
+        page = readIngestMinePage(await fetchIngestMine(INGEST_MINE_LIMIT, next));
+      } catch {
+        page = null;
+      }
+      if (gen !== generation) return;
+      if (!page) {
+        set({ olderDrops: "failed" }); // keeps what was read; the control offers the page again
+        return;
+      }
+      const items = page.items;
+      // A cursor handed back twice would page forever: take the rows, then stop.
+      const again = page.next !== null && seenCursors.has(page.next);
+      if (page.next !== null) seenCursors.add(page.next);
+      set((s) => {
+        const rows = { ...s.rows };
+        for (const item of items) rows[item.ingest_id] = mergeListedRow(rows[item.ingest_id], item);
+        const listed = [...s.listed];
+        for (const item of items) if (!listed.includes(item.ingest_id)) listed.push(item.ingest_id);
+        return { rows, listed, next: again ? null : page.next, olderDrops: "idle" };
+      });
+    };
+    void read();
   },
   pollDue: (ids) => {
     for (const id of ids) {
@@ -182,6 +213,7 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
     generation++;
     inFlight.clear();
     lastFetchedAt.clear();
-    set((s) => ({ rows: {}, notFound: {}, listed: [], mine: "idle", epoch: s.epoch + 1 }));
+    seenCursors.clear();
+    set((s) => ({ rows: {}, notFound: {}, listed: [], mine: "idle", next: null, olderDrops: "idle", epoch: s.epoch + 1 }));
   },
 }));

@@ -2,7 +2,17 @@ import { create } from "zustand";
 import type { Artifact, RouteDecision, Source, GraphTraceNode } from "@/api/types";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
 import { INGEST_ARTIFACT_PREFIX } from "@/lib/ingestArtifact";
-import { applyElectricOps, type ElectricOp } from "@/lib/electricApply";
+import {
+  applyElectricOps,
+  filterLiveOps,
+  INITIAL_ANSWER_PAGING,
+  type AnswerPaging,
+  type AnswerSearch,
+  type BodyState,
+  type ElectricOp,
+} from "@/lib/electricApply";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { summaryToArtifact, type AnswerBody, type AnswersPage } from "@/lib/answersWire";
 import type { SourcesProvenance } from "@/lib/sourceProvenance";
 
 /** Do two task-artifacts carry the same displayed content? Compares the fields
@@ -64,6 +74,10 @@ function ingestArtifactContentEqual(a: Artifact, b: Artifact): boolean {
 export type UpdateSource =
   // Electric subscription delivered the Postgres projection row.
   | "electric:answer_artifact_projection"
+  // `GET /answers` summaries / `GET /answers/{id}/body` (the `answerSummaries` flag). REST may
+  // write the Electric-covered fields ONLY under these tags, never an `sse:*` one.
+  | "rest:answers"
+  | "rest:answers_body"
   // SSE event handler in useInterviewAgent. Should NOT appear as the
   // last source for any field in ELECTRIC_COVERED_FIELDS after Hop 3.
   | "sse:route_decision"
@@ -102,6 +116,9 @@ export type UpdateSource =
  * Fields the Electric subscription is the sole source of truth for
  * post-Hop-3. After this hop, no SSE handler may drive these fields
  * onto the store — only `electric:answer_artifact_projection` may.
+ * (With the `answerSummaries` flag ON, Electric carries summary columns only and REST also
+ * writes these fields: `rest:answers` for summaries, `rest:answers_body` for the body read on
+ * open. The absence probe is unchanged: the last source is still never `sse:*`.)
  *
  * Part 2's absence probe asserts: for every artifact, every field in
  * this list whose `_lastUpdateSource` is set is `electric:*`, never
@@ -257,6 +274,26 @@ interface CanvasState {
   _lastUpdateSource: Record<string, Partial<Record<keyof Artifact, UpdateSource>>>;
 
   /**
+   * `answerSummaries` flag ON only. Whether each answer's body has been read; a missing key is
+   * `absent`. A stub from `/answers` has no body, so the rail never fetches one: the canvas does,
+   * for the OPENED answer (`ensureBody` in `src/lib/answersPaging.ts`).
+   */
+  bodies: Record<string, BodyState>;
+  /** `subject` from the `/answers` item (the S·P subject), kept for a cluster label while `routing` is null. */
+  subjects: Record<string, { uri: string; label: string }>;
+  /** The unfiltered `/answers` pages; `frontier` bounds which live Electric rows are kept. */
+  answerPaging: AnswerPaging;
+  /** A server-side search (its own pages), or null. While set, the rail lists exactly `ids` for answers. */
+  answerSearch: AnswerSearch | null;
+  /** Upsert a page of summaries as body-less stubs (a held id is left alone) and advance the paging. */
+  applyAnswersPage: (page: AnswersPage, q: string | null) => void;
+  setBodyState: (id: string, state: BodyState) => void;
+  /** Merge a body read on open and mark it `loaded`. */
+  applyAnswerBody: (id: string, body: AnswerBody) => void;
+  setAnswerPaging: (patch: Partial<AnswerPaging>) => void;
+  setAnswerSearch: (search: AnswerSearch | null) => void;
+
+  /**
    * Create a new PENDING artifact for this turn.
    *
    * Phase 1 acceptance #2: this is the create-pending half of the
@@ -395,7 +432,7 @@ interface CanvasState {
   clearCanvas: () => void;
 }
 
-export const useCanvasStore = create<CanvasState>((set) => ({
+export const useCanvasStore = create<CanvasState>((set, get) => ({
   artifacts: [],
   currentArtifactId: null,
   currentArtifactSetByUser: false,
@@ -404,6 +441,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   inspectedNodeId: null,
   isInspectorOpen: false,
   _lastUpdateSource: {},
+  bodies: {},
+  subjects: {},
+  answerPaging: INITIAL_ANSWER_PAGING,
+  answerSearch: null,
 
   createPendingArtifact: (seed) =>
     set((state) => {
@@ -510,10 +551,61 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     }),
 
   // One row = a batch of one: the merge lives in applyElectricOps and is NOT forked.
-  electricUpsertArtifact: (artifact) =>
-    set((state) => applyElectricOps(state, [{ kind: "upsert", artifact }])),
+  electricUpsertArtifact: (artifact) => get().electricApplyBatch([{ kind: "upsert", artifact }]),
 
-  electricApplyBatch: (ops) => set((state) => applyElectricOps(state, ops)),
+  electricApplyBatch: (ops) =>
+    set((state) => {
+      // Flag off: byte-identical to before. On: the feed is summary columns, and a live row below
+      // the `/answers` frontier waits for its page.
+      if (!isFeatureEnabled("answerSummaries")) return applyElectricOps(state, ops);
+      const held = new Set(state.artifacts.map((a) => a.id));
+      return applyElectricOps(state, filterLiveOps(ops, state.answerPaging.frontier, held), { summaries: true });
+    }),
+
+  applyAnswersPage: (page, q) =>
+    set((state) => {
+      const held = new Set(state.artifacts.map((a) => a.id));
+      const fresh = page.items.filter((it) => !held.has(it.id));
+      const sources = { ...state._lastUpdateSource };
+      for (const it of fresh) {
+        sources[it.id] = Object.fromEntries(
+          Object.keys(summaryToArtifact(it)).map((k) => [k, "rest:answers" as UpdateSource]),
+        );
+      }
+      const subjects = { ...state.subjects };
+      for (const it of page.items) if (it.subject) subjects[it.id] = it.subject;
+      const prev = q === null ? state.answerPaging : (state.answerSearch?.q === q ? state.answerSearch : INITIAL_ANSWER_PAGING);
+      const oldest = page.items.reduce((m, it) => Math.min(m, it.ts), prev.frontier ?? Infinity);
+      const loaded = prev.loaded + page.items.length + page.dropped;
+      const next: AnswerPaging = {
+        status: "loaded",
+        loaded,
+        // An empty page ends the list however large `total` claims to be (rows archived since).
+        total: page.items.length + page.dropped === 0 ? loaded : page.total,
+        nextPage: page.page + 1,
+        frontier: Number.isFinite(oldest) ? oldest : prev.frontier,
+      };
+      const artifacts = fresh.length ? [...state.artifacts, ...fresh.map(summaryToArtifact)] : state.artifacts;
+      if (q === null) return { artifacts, subjects, _lastUpdateSource: sources, answerPaging: next };
+      const ids = [...(state.answerSearch?.q === q ? state.answerSearch.ids : [])];
+      for (const it of page.items) if (!ids.includes(it.id)) ids.push(it.id);
+      return { artifacts, subjects, _lastUpdateSource: sources, answerSearch: { ...next, q, ids } };
+    }),
+
+  setBodyState: (id, bodyState) => set((state) => ({ bodies: { ...state.bodies, [id]: bodyState } })),
+
+  applyAnswerBody: (id, body) => {
+    get().updateArtifact(
+      id,
+      { rendered_output: body.rendered_output, routing: body.routing, resolved_intent: body.resolved_intent },
+      "rest:answers_body",
+    );
+    get().setBodyState(id, "loaded");
+  },
+
+  setAnswerPaging: (patch) => set((state) => ({ answerPaging: { ...state.answerPaging, ...patch } })),
+
+  setAnswerSearch: (answerSearch) => set({ answerSearch }),
 
   removeArtifact: (id) =>
     set((state) => {
@@ -643,6 +735,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       isInspectorOpen: false,
       inspectedNodeId: null,
       _lastUpdateSource: {},
+      bodies: {},
+      subjects: {},
+      answerPaging: INITIAL_ANSWER_PAGING,
+      answerSearch: null,
     }),
 }));
 

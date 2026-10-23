@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AttemptFailed } from "./AttemptFailed";
 import { AskedSection } from "@/components/elicitation/AskedSection";
+import { useOpenedAnswerBody } from '../../lib/useOpenedAnswerBody';
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { useStageStore } from '@/store/useStageStore';
 import { AnswerBody } from './AnswerBody';
@@ -42,6 +43,8 @@ export const CanvasPane = () => {
   const { personaConfig } = useMeshConfig();
   const artifact = useCurrentArtifact();
   const routing = useCurrentRouting();
+  // `answerSummaries` flag: an opened stub reads its body here, once (never in the rail).
+  const body = useOpenedAnswerBody(artifact);
   // Two PEER views of one artifact: the composed Answer, and the Decision
   // Map (how the engine got there). Tabs express "two equal lenses", not a
   // slide-in annotation — and the map gets the full canvas it needs.
@@ -223,7 +226,11 @@ export const CanvasPane = () => {
 
   if (components.length === 0) {
     const empty =
-      artifact.status === "pending"
+      body.view === "loading"
+        ? { label: "Loading the answer…", tone: "text-slate-500" }
+        : body.view === "failed"
+        ? { label: "The answer's body could not be read.", tone: "text-rose-400/80" }
+        : artifact.status === "pending"
         ? { label: "Working on it…", tone: "text-slate-500" }
         : artifact.status === "failed"
         ? { label: "This attempt failed.", tone: "text-rose-400/80" }
@@ -243,6 +250,15 @@ export const CanvasPane = () => {
           <p className={`font-mono text-xs tracking-widest uppercase ${empty.tone}`}>
             {empty.label}
           </p>
+          {body.view === "failed" && (
+            <button
+              type="button"
+              onClick={body.retry}
+              className="px-3 py-1 rounded border border-white/10 font-mono text-[10px] tracking-wider uppercase text-slate-300 hover:text-neon-cyan hover:border-neon-cyan/40"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );
