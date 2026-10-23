@@ -8,6 +8,7 @@ import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
 import { INGEST_MINE_PATH, ingestLeafPath, ingestRetryPath, ingestExtractionPath, ingestSourcePath, ingestStatusPath, readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
+import { ANSWERS_PATH, answerBodyPath } from "@/lib/answersWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import {
@@ -1062,6 +1063,23 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
  */
 export async function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
   const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: before === null ? { limit } : { limit, before } });
+  return data;
+}
+
+/**
+ * `GET /answers?page&size&q` — paged answer SUMMARIES (no body columns), read by `readAnswersPage`
+ * in `src/lib/answersWire.ts`. Only with the `answerSummaries` flag on.
+ */
+export async function fetchAnswersPage(args: { page: number; size: number; q?: string }): Promise<unknown> {
+  const params: Record<string, unknown> = { page: args.page, size: args.size };
+  if (args.q) params.q = args.q;
+  const { data } = await api.get<unknown>(ANSWERS_PATH, { params });
+  return data;
+}
+
+/** `GET /answers/{id}/body` — the body of ONE opened answer, read by `readAnswerBody`. The id is URL-encoded. */
+export async function fetchAnswerBody(id: string): Promise<unknown> {
+  const { data } = await api.get<unknown>(answerBodyPath(id));
   return data;
 }
 

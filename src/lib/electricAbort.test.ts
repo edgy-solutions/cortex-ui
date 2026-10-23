@@ -38,7 +38,7 @@ vi.mock("@electric-sql/client", () => ({
   },
 }));
 
-vi.mock("@/config", () => ({ config: { VITE_API_URL: "https://bff.example" } }));
+vi.mock("@/config", () => ({ config: { VITE_API_URL: "https://bff.example" }, readRuntimeConfig: () => undefined }));
 
 beforeEach(() => {
   constructed.length = 0;
