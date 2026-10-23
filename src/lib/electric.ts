@@ -14,7 +14,10 @@
  * user; scoping is a clean follow-up that doesn't gate Hop 3 closure.
  *
  * Source-of-truth claim: post-Hop-3, this module is the SOLE source
- * of truth for Electric-covered fields on Artifact rows. The SSE
+ * of truth for Electric-covered fields on Artifact rows. (With the `answerSummaries`
+ * flag ON this is no longer the whole truth: Electric streams summary columns only,
+ * the list is `/answers` pages, and an opened answer's body is read from
+ * `/answers/{id}/body` — see `ANSWER_SUMMARY_COLUMNS` and `src/lib/answersPaging.ts`.) The SSE
  * handlers in useInterviewAgent are refactored to NOT call
  * updateArtifact for any field in ELECTRIC_COVERED_FIELDS; Part 2's
  * absence probe asserts the refactor held.
@@ -40,6 +43,38 @@ import type { Artifact } from "@/api/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import type { ElectricOp } from "@/lib/electricApply";
 import { config } from "@/config";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { loadFirstAnswersPage } from "@/lib/answersPaging";
+
+/**
+ * The columns the summaries-mode shape asks Electric for: every column `rowToArtifact` reads
+ * EXCEPT the six body columns (rendered_output, routing, resolved_intent, sources, graph_trace,
+ * graph_trace_alternates). Electric requires the primary key `id`. Exported because the seal reads it.
+ */
+export const ANSWER_SUMMARY_COLUMNS: readonly string[] = [
+  "id",
+  "created_at",
+  "updated_at",
+  "duration_ms",
+  "valid_as_of",
+  "valid_until",
+  "question_text",
+  "summary",
+  "message_id",
+  "status",
+  "produced_by",
+  "produced_for",
+  "derived_from_artifact_id",
+  "durability_status",
+  "watermark",
+];
+
+/** The shape's query params: `columns` only in summaries mode, so flag off sends exactly what it always did. */
+export function answerShapeParams(summaries: boolean): { table: string; columns?: string[] } {
+  return summaries
+    ? { table: "answer_artifact_projection", columns: [...ANSWER_SUMMARY_COLUMNS] }
+    : { table: "answer_artifact_projection" };
+}
 
 /**
  * Convert an Electric-delivered row (snake_case, JSONB-as-string,
@@ -250,101 +285,116 @@ export function startArtifactsSubscription(token: string | null): () => void {
   // line of code, so a statement wedged in here severs the `transport-exception:` marker from
   // the call it declares — which is exactly how this file broke the build once.
   const controller = new AbortController();
-  // THE STREAM MUST BE ABORTABLE, AND `unsubscribe()` DOES NOT ABORT IT.
-  //
-  // `ShapeStream.subscribe()` returns a closure that does exactly one thing —
-  // `subscribers.delete(subscriptionId)` — verified in
-  // node_modules/@electric-sql/client/dist/index.mjs. It detaches the CALLBACK. The internal
-  // long-poll loop keeps running. `unsubscribeAll()` is no better: it clears subscribers and
-  // detaches the visibility/wake listeners, and the fetch loop continues.
-  //
-  // WHICH TURNED THE TOKEN REFRESH INTO A LEAK. The bearer below is baked in at construction,
-  // so a stream carries one token for life. The effect in App.tsx re-fires on refresh and
-  // starts a NEW stream, but the old one was never stopped — it goes on polling
-  // `/electric/shape` with a token that expires an hour later, then 401s
-  // `{"detail":"Token has expired"}` forever, as an unhandled promise rejection, because a
-  // retry loop cannot fix a credential. One orphan per refresh, each one permanent.
-  //
-  // `signal` is the only thing that stops it, so the caller's cleanup aborts.
-  //
-  // transport-exception: ShapeStream is a different transport (long-poll replication), so it
-  // cannot ride the axios wrapper. It carries the caller's OIDC bearer, and the route it
-  // targets is cortex-bff's `/electric/shape` PROXY — never Electric directly — so the WHERE
-  // clause is server-injected from the verified JWT `sub` rather than client-controlled.
-  // See gateway.py `electric_shape_proxy`.
-  const stream = new ShapeStream({
-    url: `${base}/electric/shape`,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    params: {
-      table: "answer_artifact_projection",
-    },
-    signal: controller.signal,
-  });
-  const unsubscribe = stream.subscribe(
-    (messages: Message[]) => {
-      // ONE batch -> ONE store update. Applying per message copied the whole collection once per
-      // row (O(N^2)) and notified every subscriber N times per snapshot. The ops keep message
-      // ORDER, so insert / update / delete / must-refetch interleave exactly as before.
-      const ops: ElectricOp[] = [];
-      for (const msg of messages) {
-        if (!("headers" in msg)) continue;
-        const headers = msg.headers as Record<string, unknown>;
+  const summaries = isFeatureEnabled("answerSummaries");
+  let unsubscribe: () => void = () => {};
+  const connect = () => {
+    // THE STREAM MUST BE ABORTABLE, AND `unsubscribe()` DOES NOT ABORT IT.
+    //
+    // `ShapeStream.subscribe()` returns a closure that does exactly one thing —
+    // `subscribers.delete(subscriptionId)` — verified in
+    // node_modules/@electric-sql/client/dist/index.mjs. It detaches the CALLBACK. The internal
+    // long-poll loop keeps running. `unsubscribeAll()` is no better: it clears subscribers and
+    // detaches the visibility/wake listeners, and the fetch loop continues.
+    //
+    // WHICH TURNED THE TOKEN REFRESH INTO A LEAK. The bearer below is baked in at construction,
+    // so a stream carries one token for life. The effect in App.tsx re-fires on refresh and
+    // starts a NEW stream, but the old one was never stopped — it goes on polling
+    // `/electric/shape` with a token that expires an hour later, then 401s
+    // `{"detail":"Token has expired"}` forever, as an unhandled promise rejection, because a
+    // retry loop cannot fix a credential. One orphan per refresh, each one permanent.
+    //
+    // `signal` is the only thing that stops it, so the caller's cleanup aborts.
+    //
+    // transport-exception: ShapeStream is a different transport (long-poll replication), so it
+    // cannot ride the axios wrapper. It carries the caller's OIDC bearer, and the route it
+    // targets is cortex-bff's `/electric/shape` PROXY — never Electric directly — so the WHERE
+    // clause is server-injected from the verified JWT `sub` rather than client-controlled.
+    // See gateway.py `electric_shape_proxy`.
+    const stream = new ShapeStream({
+      url: `${base}/electric/shape`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      params: answerShapeParams(summaries),
+      signal: controller.signal,
+    });
+    unsubscribe = stream.subscribe(
+      (messages: Message[]) => {
+        // ONE batch -> ONE store update. Applying per message copied the whole collection once per
+        // row (O(N^2)) and notified every subscriber N times per snapshot. The ops keep message
+        // ORDER, so insert / update / delete / must-refetch interleave exactly as before.
+        const ops: ElectricOp[] = [];
+        let refetch = false;
+        for (const msg of messages) {
+          if (!("headers" in msg)) continue;
+          const headers = msg.headers as Record<string, unknown>;
 
-        // Control: `must-refetch` means the cached shape is invalid - Electric will re-send the
-        // current snapshot. Drop all Electric-sourced (non-pending) artifacts so the re-sync can't
-        // leave ghosts; pending client-created artifacts are kept (they aren't in the shape yet).
-        if (headers.control === "must-refetch") {
-          ops.push({ kind: "reset" });
-          continue;
-        }
+          // Control: `must-refetch` means the cached shape is invalid - Electric will re-send the
+          // current snapshot. Drop all Electric-sourced (non-pending) artifacts so the re-sync can't
+          // leave ghosts; pending client-created artifacts are kept (they aren't in the shape yet).
+          if (headers.control === "must-refetch") {
+            ops.push({ kind: "reset" });
+            refetch = true;
+            continue;
+          }
 
-        const op = headers.operation;
-        if (op === "insert" || op === "update") {
-          const row = (msg as { value: Row }).value;
-          try {
-            ops.push({ kind: "upsert", artifact: rowToArtifact(row) });
-          } catch (err) {
-            console.error("[electric] row conversion failed", err, row);
-          }
-        } else if (op === "delete") {
-          // The projector grew a delete path (rows can be pruned from answer_artifact_projection).
-          const row = (msg as { value?: Row }).value;
-          const id = row?.id;
-          if (id != null) {
-            ops.push({ kind: "remove", id: String(id) });
-          } else {
-            console.warn("[electric] delete without id", msg);
+          const op = headers.operation;
+          if (op === "insert" || op === "update") {
+            const row = (msg as { value: Row }).value;
+            try {
+              ops.push({ kind: "upsert", artifact: rowToArtifact(row) });
+            } catch (err) {
+              console.error("[electric] row conversion failed", err, row);
+            }
+          } else if (op === "delete") {
+            // The projector grew a delete path (rows can be pruned from answer_artifact_projection).
+            const row = (msg as { value?: Row }).value;
+            const id = row?.id;
+            if (id != null) {
+              ops.push({ kind: "remove", id: String(id) });
+            } else {
+              console.warn("[electric] delete without id", msg);
+            }
           }
         }
+        if (ops.length > 0) useCanvasStore.getState().electricApplyBatch(ops);
+        // The reset cleared the paging with the rows; the list is page 1 again.
+        if (refetch && summaries) void loadFirstAnswersPage();
+      },
+      (err: Error) => {
+        // Subscription's internal retry loop handles reconnect; we
+        // surface the error for diagnostics. Per
+        // [[feedback-trailing-steps-nonfatal]]: an Electric outage
+        // must not break the user's session — the canvas degrades
+        // honestly (artifacts stop updating in real-time) but the
+        // SSE path's HUD/pipeline-stage stream stays alive.
+        //
+        // A 401 IS NOT AN OUTAGE AND THE RETRY LOOP CANNOT FIX IT. The comment above is true of
+        // a network fault and false of an expired credential: retrying with the same baked-in
+        // bearer 401s identically, forever. It is named separately so a dead subscription reads
+        // as a dead subscription rather than as a flaky connection — the two want different
+        // remedies, and only one of them resolves by waiting.
+        if (isAuthFailure(err)) {
+          console.error(
+            "[electric] subscription REJECTED — the bearer is no longer accepted, so this stream " +
+              "will not recover on its own. A silent renew should abort it and start a new one.",
+            err,
+          );
+          return;
+        }
+        console.error("[electric] subscription error", err);
       }
-      if (ops.length > 0) useCanvasStore.getState().electricApplyBatch(ops);
-    },
-    (err: Error) => {
-      // Subscription's internal retry loop handles reconnect; we
-      // surface the error for diagnostics. Per
-      // [[feedback-trailing-steps-nonfatal]]: an Electric outage
-      // must not break the user's session — the canvas degrades
-      // honestly (artifacts stop updating in real-time) but the
-      // SSE path's HUD/pipeline-stage stream stays alive.
-      //
-      // A 401 IS NOT AN OUTAGE AND THE RETRY LOOP CANNOT FIX IT. The comment above is true of
-      // a network fault and false of an expired credential: retrying with the same baked-in
-      // bearer 401s identically, forever. It is named separately so a dead subscription reads
-      // as a dead subscription rather than as a flaky connection — the two want different
-      // remedies, and only one of them resolves by waiting.
-      if (isAuthFailure(err)) {
-        console.error(
-          "[electric] subscription REJECTED — the bearer is no longer accepted, so this stream " +
-            "will not recover on its own. A silent renew should abort it and start a new one.",
-          err,
-        );
-        return;
-      }
-      console.error("[electric] subscription error", err);
-    }
-  );
+    );
+  };
+  if (summaries) {
+    // The frontier that bounds live rows comes from page 1, so the stream starts once it has settled
+    // (read or failed: a failed page leaves no frontier and the feed filters nothing).
+    void loadFirstAnswersPage().finally(() => {
+      if (!controller.signal.aborted) connect();
+    });
+  } else {
+    connect();
+  }
   return () => {
     unsubscribe();
     // See the note at construction: this, not `unsubscribe()`, is what stops the polling.

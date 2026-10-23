@@ -293,9 +293,10 @@ export function isUnresolved(a: Artifact): boolean {
 /** TOPIC-grouping key: the subject class the answer is about. Fallback
  *  answers have no grounded subject → "unresolved" (they land in the
  *  collapsed group regardless). */
-export function answerTopic(a: Artifact): string {
+export function answerTopic(a: Artifact, subject?: { label: string } | null): string {
   if (isUnresolved(a)) return "unresolved";
-  const label = a.routing?.about?.label?.trim();
+  // A body-less stub has no `routing`: the `/answers` item's `subject` stands in until its body is read.
+  const label = a.routing?.about?.label?.trim() || (a.routing === null ? subject?.label?.trim() : undefined);
   return label || "ungrouped";
 }
 
@@ -305,8 +306,8 @@ export function answerTopic(a: Artifact): string {
  *  long task on its own). The ONE exception is a drop's own client-made component (ingest id, stage
  *  badge, original's id): it is not a server body and is tiny, and those are what a drop is found by.
  *  Lowercased; compute once per answer set - see AnswersPanel.
- *  // LANE-1: the server replaces this with a query over the summary index (the summary route's
- *  // search param); until it lands this is the client-side stand-in over the same fields. */
+ *  With the `answerSummaries` flag on, a non-empty search box queries the server instead
+ *  (`GET /answers?q=`, see AnswersPanel); this stays the client-side filter for drops and flag off. */
 export function answerSearchText(a: Artifact): string {
   const ingest = ingestComponentFrom(a);
   return [

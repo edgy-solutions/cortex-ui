@@ -7,7 +7,10 @@ import { useStageStore } from "@/store/useStageStore";
 import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/stageEdges";
 import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
-import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import { ingestComponentFrom, isIngestArtifact } from "@/lib/ingestArtifact";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { answerPagesHaveMore, loadOlderAnswers, runAnswerSearch } from "@/lib/answersPaging";
+import { railCutoff, shownByCutoff, sourcesToLoad, type RailSource } from "@/lib/railPaging";
 import { INGEST_AWAITING_KIND_STATUS } from "@/lib/ingestWire";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { IngestFailureExtras } from "@/components/ingest/IngestFailureExtras";
@@ -62,6 +65,22 @@ export function AnswersPanel() {
   const artifacts = useCanvasStore((s) => s.artifacts);
   const currentArtifactId = useCanvasStore((s) => s.currentArtifactId);
   const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
+  // `answerSummaries`: the list is `/answers` pages of body-less stubs and the search box asks the
+  // server. Off, none of this runs and the rail is what it was.
+  const summaries = useMemo(() => isFeatureEnabled("answerSummaries"), []);
+  const subjects = useCanvasStore((s) => s.subjects);
+  const answerPaging = useCanvasStore((s) => s.answerPaging);
+  const answerSearch = useCanvasStore((s) => s.answerSearch);
+  const dropsNext = useIngestStatusStore((s) => s.next);
+  const olderDrops = useIngestStatusStore((s) => s.olderDrops);
+  const dropsFrontier = useIngestStatusStore((s) => {
+    let oldest: number | null = null;
+    for (const id of s.listed) {
+      const t = s.rows[id]?.created_at;
+      if (typeof t === "number" && (oldest === null || t < oldest)) oldest = t;
+    }
+    return oldest;
+  });
 
   const sortMode = useAnswerPanelStore((s) => s.sortMode);
   const setSortMode = useAnswerPanelStore((s) => s.setSortMode);
@@ -114,19 +133,51 @@ export function AnswersPanel() {
   }, [artifacts, folded]);
 
   const q = search.trim().toLowerCase();
+
+  // ONE "Load older" for both sources. Each source with more pages has a frontier (its oldest loaded
+  // item); anything older than the NEWEST frontier is hidden, because the other source may have items
+  // in between and the rail would draw a gap as if it were complete.
+  const answerView = answerSearch ?? answerPaging;
+  const railSources: RailSource[] = [
+    { name: "answers", more: summaries && answerPagesHaveMore(answerView), frontier: answerView.frontier },
+    { name: "drops", more: dropsNext !== null, frontier: dropsFrontier },
+  ];
+  const cutoff = railCutoff(railSources);
+  const sortedInRail = useMemo(
+    () =>
+      // A task belongs to neither paged source, so the cutoff leaves it be.
+      cutoff === null ? sorted : sorted.filter((a) => a.task_ref || shownByCutoff(a.created_at, cutoff)),
+    [sorted, cutoff],
+  );
+
+  // Flag on: a non-empty search box asks the server (debounced); clearing it returns to the pages.
+  useEffect(() => {
+    if (!summaries) return;
+    if (!q) {
+      void runAnswerSearch("");
+      return;
+    }
+    const t = setTimeout(() => void runAnswerSearch(search), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summaries, q]);
+  const serverHits = useMemo(() => new Set(answerSearch?.ids ?? []), [answerSearch]);
   // Full-content search index (summary + question + the whole rendered payload
   // + sources), computed once per answer set and cached so keystrokes are cheap.
   const searchIndex = useMemo(() => {
     const m = new Map<string, string>();
-    for (const a of sorted) m.set(a.id, answerSearchText(a));
+    for (const a of sortedInRail) m.set(a.id, answerSearchText(a));
     return m;
-  }, [sorted]);
+  }, [sortedInRail]);
   // The TYPE filter narrows in EVERY mode (search included); search narrows within it.
   const filtered = useMemo(() => {
-    const ofType = typeFilter ? sorted.filter((a) => answerArchetype(a) === typeFilter) : sorted;
+    const ofType = typeFilter ? sortedInRail.filter((a) => answerArchetype(a) === typeFilter) : sortedInRail;
     if (!q) return ofType;
-    return ofType.filter((a) => (searchIndex.get(a.id) ?? "").includes(q));
-  }, [sorted, q, searchIndex, typeFilter]);
+    // Drops and tasks stay client-filtered; an answer is what the server found.
+    return ofType.filter((a) =>
+      summaries && !a.task_ref && !isIngestArtifact(a) ? serverHits.has(a.id) : (searchIndex.get(a.id) ?? "").includes(q),
+    );
+  }, [sortedInRail, q, searchIndex, typeFilter, summaries, serverHits]);
 
   // ── Pointer drag → chit ghost → pin ────────────────────────────────
   const [drag, setDrag] = useState<{
@@ -206,7 +257,7 @@ export function AnswersPanel() {
     ? filtered.find((a) => a.id === draggingId)
     : null;
 
-  const total = sorted.length;
+  const total = sortedInRail.length;
 
   // Built over the WHOLE collection, not the filtered list: a hop's parent may be filtered
   // out of view, and the total time is a fact about the answer rather than about the filter.
@@ -240,7 +291,23 @@ export function AnswersPanel() {
     onPointerDown: onRowPointerDown,
     searchHit: q,
     byId: (id) => byIdMap.get(id),
+    subjects,
   };
+
+  const loadOlder = () => {
+    for (const name of sourcesToLoad(railSources)) {
+      if (name === "answers") void loadOlderAnswers();
+      else useIngestStatusStore.getState().loadOlderDrops();
+    }
+  };
+  const olderFailed = answerView.status === "failed" || olderDrops === "failed";
+  const olderBusy = answerView.status === "loading" || olderDrops === "loading";
+  const olderLabel = [
+    summaries && railSources[0]!.more ? `${answerView.loaded} of ${answerView.total} answers` : null,
+    railSources[1]!.more ? "drops: more" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -322,7 +389,7 @@ export function AnswersPanel() {
           <AccessDeniedCard />
         </div>
 
-        {total === 0 && !liveActive && !hasAccessDenial && <EmptyState />}
+        {total === 0 && cutoff === null && !liveActive && !hasAccessDenial && <EmptyState />}
         {total > 0 && filtered.length === 0 && typeFilter && !q && (
           <p className="text-slate-600 font-mono text-[11px] px-2 py-4 text-center" data-type-filter-empty>
             No {archetypeLabel(typeFilter).toLowerCase()} entries.
@@ -340,6 +407,18 @@ export function AnswersPanel() {
           <GraphClusters items={filtered} ctx={rowCtx} view={scrollView} />
         ) : (
           <Clusters items={filtered} mode={q ? "TIME" : sortMode} ctx={rowCtx} view={scrollView} />
+        )}
+        {cutoff !== null && (
+          <div className="px-2 py-3 flex justify-center" data-load-older>
+            <button
+              type="button"
+              disabled={olderBusy}
+              onClick={loadOlder}
+              className="px-3 py-1.5 rounded-md border border-slate-700/60 text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:text-neon-cyan hover:border-neon-cyan/40 disabled:opacity-50"
+            >
+              {olderBusy ? "Loading…" : `Load older · ${olderLabel}${olderFailed ? " · failed, retry" : ""}`}
+            </button>
+          </div>
         )}
       </div>
 
@@ -377,6 +456,8 @@ interface RowCtx {
    * every artifact change. The panel already holds the collection; it passes a reader.
    */
   byId: (id: string) => Artifact | undefined;
+  /** `subject` per answer id from `/answers` (flag on); the cluster label while a stub has no `routing`. */
+  subjects: Record<string, { uri: string; label: string }>;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -804,7 +885,7 @@ function Clusters({
 }) {
   const flat = useMemo(() => {
     const out: FlatItem[] = [];
-    for (const c of buildClusters(items, mode)) {
+    for (const c of buildClusters(items, mode, ctx.subjects)) {
       // Map the list cluster to the canvas group id (stageLayout keys).
       const groupId =
         mode === "TYPE" ? (c.archetype ? "type-" + c.archetype : null) : "topic-" + c.label;
@@ -812,7 +893,8 @@ function Clusters({
       for (const a of c.items) out.push({ kind: "cluster-row", key: a.id, a });
     }
     return out;
-  }, [items, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, mode, ctx.subjects]);
   return <VirtualRows flat={flat} ctx={ctx} view={view} />;
 }
 
@@ -863,7 +945,11 @@ interface Cluster {
   items: Artifact[];
 }
 
-function buildClusters(items: Artifact[], mode: AnswerSortMode): Cluster[] {
+function buildClusters(
+  items: Artifact[],
+  mode: AnswerSortMode,
+  subjects: Record<string, { uri: string; label: string }> = {},
+): Cluster[] {
   const by = new Map<string, Cluster>();
   const order: string[] = [];
   for (const a of items) {
@@ -877,7 +963,7 @@ function buildClusters(items: Artifact[], mode: AnswerSortMode): Cluster[] {
       }
     } else {
       // TOPIC
-      const t = answerTopic(a);
+      const t = answerTopic(a, subjects[a.id]);
       key = `topic:${t}`;
       label = t;
       color = t === "unresolved" ? AMBER : TEAL;
