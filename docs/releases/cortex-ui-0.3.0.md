@@ -27,9 +27,18 @@ built from `3a1bb80` on carries `revision`, `version` and `source`.
 
 ## Chart
 
-The chart is `cortex-ui` `0.3.0`, published by chart-releaser to this repo's Helm index (gh-pages).
-Its templates and values are byte-identical to those at `c390a03`; only `Chart.yaml`'s `version` and
-`appVersion` differ.
+| | |
+|---|---|
+| Chart | `cortex-ui` `0.3.0` (appVersion `0.3.0`) |
+| Repository | `https://edgy-solutions.github.io/cortex-ui` (gh-pages `index.yaml`) |
+| Package | [`cortex-ui-0.3.0.tgz`](https://github.com/edgy-solutions/cortex-ui/releases/download/cortex-ui-0.3.0/cortex-ui-0.3.0.tgz) |
+| Package sha256 (= index digest) | `cb5c92fca1ef8c17cc8baa67e95b0bc9193f034d726cf46a5caa373a082a042c` |
+| Git tag | `cortex-ui-0.3.0` at `e2d2d28` |
+| Release run | https://github.com/edgy-solutions/cortex-ui/actions/runs/39961714171 |
+
+The templates and values are byte-identical to those at `c390a03`; only `Chart.yaml`'s `version`
+and `appVersion` differ (`git diff c390a03 e2d2d28 -- helm/`). The chart sets no default image: the
+caller pins it.
 
 ## What a deployment must supply
 
