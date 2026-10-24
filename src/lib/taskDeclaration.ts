@@ -135,6 +135,20 @@ export function readTaskKindsResponse(data: unknown): unknown[] | null {
 }
 
 /**
+ * A kind that is FILED TO ANOTHER KIND'S STEWARD POOL, by design: kind -> the audience prefix it is
+ * filed under. The producer files `document_empty_confirm` to `document_promotion:<DOMAIN>`
+ * (`_file_or_find_empty_confirm_task` builds `f"{promotion.KIND}:..."`), because the people who
+ * can say a document has no parts are the stewards who promote its parts. Without this entry the
+ * audience check reads that prefix as a declared kind that disagrees with the task's own kind and
+ * hides the verbs. The exemption is exact: it matches only this pair, so any OTHER prefix on this
+ * kind, and this prefix on any other kind, still contradict. `emptyConfirmParity.test.ts` seals
+ * the value against promotion.py's KIND.
+ */
+export const AUDIENCE_POOL_OF: Readonly<Record<string, string>> = {
+  document_empty_confirm: "document_promotion",
+};
+
+/**
  * Does this task's AUDIENCE contradict its KIND?
  *
  * Audience forms seen on the producer: `<task_kind>:<compartment>` for risk acceptance,
@@ -162,6 +176,7 @@ export function audienceKindContradiction(
   if (i < 0) return null;
   const prefix = audience.slice(0, i);
   if (!prefix || prefix === kind) return null;
+  if (Object.hasOwn(AUDIENCE_POOL_OF, kind) && AUDIENCE_POOL_OF[kind] === prefix) return null;
   if (!isDeclaredKind(prefix)) return null;
   return { audienceKind: prefix, taskKind: kind };
 }

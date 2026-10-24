@@ -62,6 +62,7 @@ import {
   INGEST_AWAITING_KIND_STATUS,
   INGEST_AWAITING_ORIGIN_STATUS,
   INGEST_CASE_OPENED_STATUS,
+  INGEST_NO_PARTS_STATUS,
   INGEST_REVIEW_REJECTED_STATUS,
   ingestPollingDone,
   INGEST_FAILED_TIMEOUT_POLL_MS,
@@ -540,6 +541,15 @@ export function IngestStatusCard({
           {row.stage === INGEST_AWAITING_KIND_STATUS && (
             <p className="mt-2 text-[10px] font-mono text-slate-300" data-ingest-awaiting="awaiting_kind">
               Waiting for its kind — pick PCN or PDN
+            </p>
+          )}
+
+          {row.stage === INGEST_NO_PARTS_STATUS && (
+            // TERMINAL and NEUTRAL: a steward confirmed the document has no parts. That is an answer,
+            // not a failure, so it takes the slate of the other waiting/terminal notes, not the amber
+            // of rejected/failed, and it has no Retry (Retry is drawn only at `failed`).
+            <p className="mt-2 text-[10px] font-mono text-slate-300" data-ingest-no-parts>
+              No parts{row.detail ? ` — ${row.detail}` : ""}
             </p>
           )}
 

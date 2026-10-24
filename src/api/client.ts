@@ -141,6 +141,16 @@ export interface ActOnTaskResult {
   review_dispatched?: boolean;
   resolved_count?: number;
   reason?: string;
+  /**
+   * `document_empty_confirm` (spec 208) answers with the ingest's NEW STAGE, not a workflow resume:
+   * EmptyConfirmed = {ingest_id, task_id, decision, stage: "no_parts", rows_resolved}, and
+   * EmptyHasParts = {ingest_id, task_id, decision, stage: "received", attempt, extraction_defect,
+   * force_text_fallback: true, rows_resolved}. `extraction_defect` (above) is the filed task id there.
+   */
+  stage?: string;
+  attempt?: number;
+  ingest_id?: string;
+  force_text_fallback?: boolean;
 }
 /** The verbs a task may be acted on with. PER SPECIES, not universal: a triage task ("this
  *  notice could not be prepared for review") takes acknowledged/redriven, and the API REFUSES
@@ -207,7 +217,8 @@ export function buildActBody(
   overrides?: Record<string, { disposition: string; reason: string }>,
   rowEdits?: RowEdits,
   reasonCode?: GroupedRejectCode,
-  headerEdits?: HeaderEdit[]
+  headerEdits?: HeaderEdit[],
+  page?: number
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
@@ -216,6 +227,9 @@ export function buildActBody(
   }
   if (decision === "rejected" && reasonCode) body.reason_code = reasonCode;
   if (decision === "promoted" && headerEdits && headerEdits.length > 0) body.header_edits = headerEdits;
+  // `HumanTaskActRequest.page` is refused (422 page_not_for_decision) on anything but `has_parts`, and
+  // `_StrictInt` refuses a non-integer: send it ONLY there, and only a whole page number >= 1.
+  if (decision === "has_parts" && typeof page === "number" && Number.isInteger(page) && page >= 1) body.page = page;
   return body;
 }
 
@@ -230,9 +244,11 @@ export async function actOnHumanTask(
   // grouped_review reject only: REQUIRED by the platform (422 reason_code_required without it).
   reasonCode?: GroupedRejectCode,
   // document_promotion promote only: steward corrections of mfr / notice_id / notice_date.
-  headerEdits?: HeaderEdit[]
+  headerEdits?: HeaderEdit[],
+  // document_empty_confirm has_parts only: the 1-based page the steward saw a part on.
+  page?: number
 ): Promise<ActOnTaskResult> {
-  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits);
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, page);
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
     body

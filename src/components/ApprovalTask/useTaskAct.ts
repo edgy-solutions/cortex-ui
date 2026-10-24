@@ -17,11 +17,40 @@ import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
  */
 export type TaskAct = ReturnType<typeof useTaskAct>;
 
+/**
+ * THE SUCCESS CLAIM OF A ROUTE THAT NAMES A STAGE (`document_empty_confirm`, spec 208), or null.
+ * That route never resumes a workflow, so the generic "Recorded — workflow not resumed" would be
+ * false of it; what it DID is move the ingest to `stage`. Null (the generic wording) unless the
+ * result carries a non-blank string `stage`.
+ */
+export function stageOutcomeSentence(
+  decision: string,
+  res: { stage?: unknown; attempt?: unknown; extraction_defect?: unknown },
+): string | null {
+  if (typeof res.stage !== "string" || res.stage.trim() === "") return null;
+  if (res.stage === "no_parts") return "Confirmed: no parts in this document";
+  if (res.stage === "received") {
+    const filed =
+      typeof res.extraction_defect === "string" && res.extraction_defect.trim() !== ""
+        ? ` — filed as ${res.extraction_defect}`
+        : "";
+    return `Sent back for re-extraction with the text fallback (attempt ${String(res.attempt)})${filed}`;
+  }
+  return `${verbLabel(decision)} — now ${res.stage}`;
+}
+
 export function useTaskAct(task: ApprovalTaskPayload) {
   const [acting, setActing] = useState(false);
   /** The decision that landed, and whether the workflow actually resumed — see `act()` below for
    *  why the verb alone is not an honest thing to show. */
-  const [done, setDone] = useState<{ decision: string; resumed: boolean } | null>(null);
+  const [done, setDone] = useState<{
+    decision: string;
+    resumed: boolean;
+    /** Set only by a route that names the ingest's new stage (see `stageOutcomeSentence`). */
+    stage?: string;
+    attempt?: number;
+    sentence?: string;
+  } | null>(null);
   const [reason, setReason] = useState("");
   /**
    * A 422 that is NOT `invalid_decision_for_kind` — a refusal with no menu to adopt, drawn
@@ -89,7 +118,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
 
   // `reasonOverride`: a card that composes its reason at the press (the review card's reject code plus
   // note) passes it here, so it is not left waiting a render for `setReason` to land.
-  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[]) => {
+  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[], page?: number) => {
     const said = (reasonOverride ?? reason).trim();
     // A REASON-REQUIRED VERB IS NOT SUBMITTED WITHOUT ONE. Dismissing a reported hazard with no
     // stated rationale is the erasure this domain cares about most; the gate refuses it, and a
@@ -103,7 +132,9 @@ export function useTaskAct(task: ApprovalTaskPayload) {
     try {
       // No edits: the call is the three-argument one it always was.
       const res =
-        headerEdits
+        page !== undefined
+          ? await actOnHumanTask(task.task_id, decision, said, undefined, undefined, undefined, undefined, page)
+          : headerEdits
           ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits, undefined, headerEdits)
           : rowEdits
             ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits)
@@ -117,13 +148,24 @@ export function useTaskAct(task: ApprovalTaskPayload) {
        * `=== true` rather than truthy: `undefined` is not a resume either.
        */
       const resumed = res.workflow_resumed === true;
-      setDone({ decision, resumed });
+      const sentence = stageOutcomeSentence(decision, res);
+      setDone({
+        decision,
+        resumed,
+        ...(sentence !== null
+          ? { stage: res.stage as string, sentence, ...(typeof res.attempt === "number" ? { attempt: res.attempt } : {}) }
+          : {}),
+      });
       markTaskResolvedByTaskId(task.task_id);
       // A promote with row edits files them as an extraction_defect; the toast names it.
       const filed =
         typeof res.extraction_defect === "string" && res.extraction_defect.trim() !== ""
           ? ` — ${(res.row_edits?.corrected ?? 0) + (res.row_edits?.added ?? 0) + (res.row_edits?.deleted ?? 0) + (res.row_edits?.header ?? 0)} correction(s) filed as ${res.extraction_defect}`
           : "";
+      if (sentence !== null) {
+        toast.success(sentence);
+        return;
+      }
       toast.success(
         (resumed ? verbLabel(decision) : `Recorded: ${verbLabel(decision)} — workflow not resumed`) + filed,
       );

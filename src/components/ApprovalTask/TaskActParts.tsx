@@ -97,9 +97,9 @@ export function TaskActBlocked({ task, a }: { task: ApprovalTaskPayload; a: Task
         <div
           className="text-[11px] font-mono uppercase tracking-widest text-neon-green"
           role="status"
-          data-act-outcome={done.resumed ? "resumed" : "recorded"}
+          data-act-outcome={done.sentence !== undefined ? "stage" : done.resumed ? "resumed" : "recorded"}
         >
-          {done.resumed ? verbLabel(done.decision) : `Recorded: ${verbLabel(done.decision)} — workflow not resumed`}
+          {done.sentence ?? (done.resumed ? verbLabel(done.decision) : `Recorded: ${verbLabel(done.decision)} — workflow not resumed`)}
         </div>
       ) : null}
     </>

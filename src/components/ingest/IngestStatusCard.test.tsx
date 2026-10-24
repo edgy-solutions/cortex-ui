@@ -509,6 +509,15 @@ describe("out-of-band document statuses (defect: the card froze at extracting)",
     expect(document.querySelector('[data-ingest-ladder-stage="review_rejected"][data-ingest-ladder-state="current"]')).toBeTruthy();
   });
 
+  it("no_parts draws a neutral terminal note with the row detail, the current rung, and no Retry", () => {
+    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "no_parts", detail: "no parts (confirmed by ana)" })} pollIntervalMs={100000} />);
+    expect(document.querySelector("[data-ingest-no-parts]")?.textContent).toBe("No parts — no parts (confirmed by ana)");
+    expect(document.querySelector("[data-ingest-no-parts]")?.className).not.toMatch(/amber|red/);
+    expect(document.querySelector("[data-ingest-detail]")).toBeNull();
+    expect(document.querySelector('[data-ingest-ladder-stage="no_parts"][data-ingest-ladder-state="current"]')).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  });
+
   // The card MOUNTS the chip and takes the corrected row it hands back (onRow -> the card's row):
   // a "?" at awaiting_kind, picked PDN, shows the server's next row without waiting for a poll.
   it("the card mounts the leaf chip, and a pick's returned row becomes the card's row", async () => {
