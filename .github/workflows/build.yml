@@ -177,7 +177,17 @@ env:
   #   extraction_defect.yaml, comment only (control: 123 files changed). Check 3: uv.lock
   #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
   #   a31b61cb placed as the sibling.
-  PRODUCER_REF: a31b61cbb5933ace20121dfdd5e94d12d122c91d
+  # 2026-10-24 BUMP AHEAD to e8b4f346 (origin/lane/01-208 head) — ⚠ NOT on platform master, NOT a
+  #   descendant of a31b61cb (it lacks a31b61cb's 5 commits: 0.4.65 notes, the doors-export overlay
+  #   fix, training:Course, the 0.4.66 chart pin and its merge), and NOT read off the pods (the
+  #   freeze: no cluster reads). 208 rolls only with this card, so this PR merges when 208 does;
+  #   RE-PIN to the platform master sha that carries 208 at that merge. Why: taskKindParity reds on
+  #   document_empty_confirm (declared at d5061ffb, unknown to cortex), and the OOB-status arm reads
+  #   ingest_status.NO_PARTS. Check 2: task_kinds diff a31b61cb..e8b4f346 is ONE file,
+  #   document_empty_confirm.yaml (new) (control: 34 files changed). Check 3: uv.lock iagent-mesh
+  #   v0.9.10 at both. Gate: the full suite against a git-archive export of e8b4f346 placed as the
+  #   sibling; and CI run 40065753003 on this PR, before the rebase onto f5dbf53.
+  PRODUCER_REF: e8b4f346c09367597d8f6adf74e8cab5556458fc
 
 permissions:
   contents: read

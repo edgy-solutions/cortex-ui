@@ -56,6 +56,7 @@ const EXPECTED_ARCHETYPE: Record<string, TaskKindDisplay["archetype"]> = {
   access_request: "APPROVAL_TASK",
   workflow_ack: "APPROVAL_TASK",
   extraction_refusal: "TRIAGE_TASK",
+  document_empty_confirm: "APPROVAL_TASK",
 };
 
 const DEFAULT_BADGE = "TASK";

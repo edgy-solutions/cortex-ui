@@ -23,6 +23,7 @@ describe("reader: out-of-band stages", () => {
     ["awaiting_origin", null],
     ["review_rejected", "not this supplier"],
     ["awaiting_kind", null],
+    ["no_parts", "no parts (confirmed by ana)"],
   ];
 
   it.each(cases)("a document row at %s parses with that stage", (stage, detail) => {
@@ -41,6 +42,12 @@ describe("reader: out-of-band stages", () => {
     expect(readIngestStatusRow(wire({ stage: "awaiting_something" }))).toBeNull();
   });
 
+  it("readIngestMinePage counts a no_parts item as read, not unreadable", () => {
+    const page = readIngestMinePage({ items: [wire({ stage: "no_parts", detail: "no parts (confirmed by ana)" })], next: null });
+    expect(page!.items).toHaveLength(1);
+    expect(page!.unreadable).toBe(0);
+  });
+
   it("readIngestMinePage counts an awaiting_origin item as read, not unreadable", () => {
     const page = readIngestMinePage({ items: [wire({ stage: "awaiting_origin" })], next: null });
     expect(page!.items).toHaveLength(1);
@@ -51,15 +58,18 @@ describe("reader: out-of-band stages", () => {
 describe("ladder and polling", () => {
   // awaiting_origin parks after extraction; awaiting_kind after the title read, BEFORE parts
   // extraction (architect, 10-21), so its extracting rung has not finished.
-  const parked = (s: "awaiting_origin" | "awaiting_kind") => [
+  const parked = (s: "awaiting_origin" | "awaiting_kind" | "no_parts") => [
     { stage: "received", state: "done" },
-    { stage: "extracting", state: s === "awaiting_origin" ? "done" : "pending" },
+    { stage: "extracting", state: s === "awaiting_kind" ? "pending" : "done" },
     { stage: "review", state: "pending" },
     { stage: "promoted", state: "pending" },
     { stage: s, state: "current" },
   ];
   it("awaiting_origin", () => expect(ingestStageLadder("awaiting_origin")).toEqual(parked("awaiting_origin")));
   it("awaiting_kind", () => expect(ingestStageLadder("awaiting_kind")).toEqual(parked("awaiting_kind")));
+  it("no_parts: extraction finished and found nothing, review never happened, no_parts is the current rung", () => {
+    expect(ingestStageLadder("no_parts")).toEqual(parked("no_parts"));
+  });
   it("review_rejected branches off review", () => {
     expect(ingestStageLadder("review_rejected")).toEqual([
       { stage: "received", state: "done" },
@@ -73,6 +83,7 @@ describe("ladder and polling", () => {
     ["awaiting_origin", false],
     ["awaiting_kind", false],
     ["review_rejected", true],
+    ["no_parts", true],
   ] as const)("ingestPollingDone at %s is %s", (stage, done) => {
     expect(ingestPollingDone({ stage, duplicate: null })).toBe(done);
   });

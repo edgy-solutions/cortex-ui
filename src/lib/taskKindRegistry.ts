@@ -47,6 +47,9 @@ const REGISTRY: Record<string, TaskKindDisplay> = {
   // evidence. Registered here BEFORE the card exists on purpose: an unregistered kind falls
   // back to APPROVAL_TASK, which is exactly how the bug shipped.
   extraction_refusal: { badge: "TRIAGE", title: "Unprocessable notice", archetype: "TRIAGE_TASK" },
+  // Spec 208: the producer declares it (policy/task_kinds/document_empty_confirm.yaml) as an
+  // APPROVAL_TASK; EmptyConfirmCard draws it. taskKindParity reds on a declared kind we omit.
+  document_empty_confirm: { badge: "EMPTY", title: "Confirm a document has no parts", archetype: "APPROVAL_TASK" },
 };
 
 // THE DEFAULT WAS HONEST ABOUT LABELS AND DISHONEST ABOUT AFFORDANCES. "TASK" as a badge says
