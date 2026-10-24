@@ -212,6 +212,12 @@ export const INGEST_REVIEW_REJECTED_STATUS = "review_rejected" as const;
  *  until the dropper picks one. Out-of-band like the two above. Document rows only. */
 export const INGEST_AWAITING_KIND_STATUS = "awaiting_kind" as const;
 
+/** `ingest_status.py.NO_PARTS` — OUT-OF-BAND, TERMINAL and NOT A FAILURE (spec 208): a steward
+ *  confirmed through the `document_empty_confirm` card that the document really has no parts.
+ *  The row's `detail` reads `no parts (confirmed by <actor>)`. In `ALL_STATUSES`, NOT in
+ *  `STAGES`; nothing moves it on, so polling stops. Document rows only. */
+export const INGEST_NO_PARTS_STATUS = "no_parts" as const;
+
 /** What a row's `stage` field can carry: the ladder's stages, plus the out-of-band statuses
  *  that arrive in that same field. (`duplicate` does not — a duplicate row carries `stage` of
  *  its ORIGINAL, or null, and the fact itself is in `duplicate`.) */
@@ -220,7 +226,8 @@ export type IngestRowStage =
   | typeof INGEST_CASE_OPENED_STATUS
   | typeof INGEST_AWAITING_ORIGIN_STATUS
   | typeof INGEST_REVIEW_REJECTED_STATUS
-  | typeof INGEST_AWAITING_KIND_STATUS;
+  | typeof INGEST_AWAITING_KIND_STATUS
+  | typeof INGEST_NO_PARTS_STATUS;
 
 /** The out-of-band DOCUMENT statuses (everything in `IngestRowStage` that is neither a ladder
  *  stage nor the event-only `case_opened`). */
@@ -228,6 +235,7 @@ export const INGEST_OOB_DOCUMENT_STATUSES = [
   INGEST_AWAITING_ORIGIN_STATUS,
   INGEST_REVIEW_REJECTED_STATUS,
   INGEST_AWAITING_KIND_STATUS,
+  INGEST_NO_PARTS_STATUS,
 ] as const;
 export type IngestOobDocumentStatus = (typeof INGEST_OOB_DOCUMENT_STATUSES)[number];
 
@@ -849,10 +857,12 @@ export function ingestStageLadder(stage: IngestStage | IngestOobDocumentStatus):
   // Parked waiting on a person. awaiting_origin sits after extraction (received/extracting happened,
   // review has not). awaiting_kind sits after the title read, BEFORE parts extraction (architect,
   // 10-21): extraction has started but not finished, so it stays pending until a pick resumes it.
-  if (stage === INGEST_AWAITING_ORIGIN_STATUS || stage === INGEST_AWAITING_KIND_STATUS) {
+  // no_parts is the same shape as awaiting_origin: extraction finished (and found nothing), review did
+  // not happen — it is a TERMINAL rung, but a neutral one, so it is not drawn as a branch off review.
+  if (stage === INGEST_AWAITING_ORIGIN_STATUS || stage === INGEST_AWAITING_KIND_STATUS || stage === INGEST_NO_PARTS_STATUS) {
     const rungs: StageRung[] = MAIN_STAGES.map((s) => ({
       stage: s,
-      state: s === "received" || (s === "extracting" && stage === INGEST_AWAITING_ORIGIN_STATUS) ? "done" : "pending",
+      state: s === "received" || (s === "extracting" && stage !== INGEST_AWAITING_KIND_STATUS) ? "done" : "pending",
     }));
     rungs.push({ stage, state: "current" });
     return rungs;
@@ -928,6 +938,7 @@ export function ingestPollingDone(row: Pick<IngestStatusRow, "stage" | "duplicat
     row.stage === "rejected" ||
     row.stage === "failed" ||
     row.stage === INGEST_REVIEW_REJECTED_STATUS ||
+    row.stage === INGEST_NO_PARTS_STATUS ||
     row.stage === INGEST_CASE_OPENED_STATUS
   );
 }

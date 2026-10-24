@@ -32,6 +32,7 @@ import {
   INGEST_DUPLICATE_STATUS,
   INGEST_CASE_OPENED_STATUS,
   INGEST_EVENT_LADDER,
+  INGEST_OOB_DOCUMENT_STATUSES,
 } from "./ingestWire";
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
@@ -140,6 +141,57 @@ describe("parseOutOfBandNames — unit-tested on fixtures", () => {
   });
 });
 
+/** `ALL_STATUSES = STAGES + (NAME, ...)` -> the VALUES of the names after STAGES, each resolved
+ *  through the file's own `NAME = "value"` assignments. The tuple is multi-line in the producer
+ *  (the 208 `NO_PARTS` wrapped it), so comments are stripped line by line FIRST (a `#` comment can
+ *  mention ALL_STATUSES) and the parens flattened after. THROWS, never returns empty, when the
+ *  statement is absent or a name has no assignment: an empty result would make the set-equality
+ *  arm below compare against nothing. */
+function resolveAllStatusesBeyondStages(src: string): string[] {
+  const code = src
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+#.*$/, "").replace(/^\s*#.*$/, ""))
+    .join("\n");
+  const pattern = /^ALL_STATUSES\s*=\s*STAGES\s*\+\s*\(\s*([A-Z][A-Z0-9_]*(?:\s*,\s*[A-Z][A-Z0-9_]*)*)\s*,?\s*\)\s*$/;
+  let names: string[] | null = null;
+  for (const raw of flattenParens(code).split(/\r?\n/)) {
+    const m = pattern.exec(raw.trim());
+    if (m) {
+      names = m[1].split(",").map((x) => x.trim());
+      break;
+    }
+  }
+  if (!names) throw new Error("ALL_STATUSES not found");
+  const assignments = parseNameAssignments(code);
+  return names.map((n) => {
+    const v = assignments.get(n);
+    if (v === undefined) throw new Error(`unresolved name ${n}`);
+    return v;
+  });
+}
+
+describe("resolveAllStatusesBeyondStages — unit-tested on fixtures", () => {
+  const OK = [
+    'A, B, C = "a", "b", "c"',
+    "STAGES = (A,)",
+    "ALL_STATUSES = STAGES + (B,",
+    "                         C)",
+  ].join("\n");
+  it("reads a multi-line tuple and resolves names to values", () => {
+    expect(resolveAllStatusesBeyondStages(OK)).toEqual(["b", "c"]);
+  });
+  it("ignores a comment that mentions ALL_STATUSES", () => {
+    expect(resolveAllStatusesBeyondStages("# ALL_STATUSES = STAGES + (Z)\n" + OK)).toEqual(["b", "c"]);
+  });
+  it("throws ALL_STATUSES not found when the statement is absent or reshaped", () => {
+    expect(() => resolveAllStatusesBeyondStages("X = 1\n")).toThrow(/ALL_STATUSES not found/);
+    expect(() => resolveAllStatusesBeyondStages("ALL_STATUSES = tuple(STAGES)\n")).toThrow(/ALL_STATUSES not found/);
+  });
+  it("throws unresolved name X when a name has no assignment", () => {
+    expect(() => resolveAllStatusesBeyondStages('ALL_STATUSES = STAGES + (B, Q)\nB = "b"\n')).toThrow(/unresolved name Q/);
+  });
+});
+
 // ── the live comparand ──────────────────────────────────────────────────────────────────────
 
 const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
@@ -204,6 +256,23 @@ describe.skipIf(!HAVE_PRODUCER)(
       const stages = resolveTuple(src(), "STAGES");
       expect(stages, PRODUCER_AT).not.toContain(INGEST_DUPLICATE_STATUS);
       expect(stages, PRODUCER_AT).not.toContain(INGEST_CASE_OPENED_STATUS);
+    });
+
+    // The OOB-DOCUMENT arm (208): ALL_STATUSES minus STAGES minus the two statuses cortex holds
+    // elsewhere (duplicate is a flag, case_opened is event-only) IS the set of document statuses a
+    // row may carry beyond the ladder. Set equality, both directions: a value the producer added
+    // (no_parts, 208) and a value cortex invented are each named.
+    it("INGEST_OOB_DOCUMENT_STATUSES equals ALL_STATUSES minus STAGES, DUPLICATE and CASE_OPENED", () => {
+      const assignments = parseNameAssignments(src());
+      const held = new Set([assignments.get("DUPLICATE"), assignments.get("CASE_OPENED")]);
+      const producer = new Set(resolveAllStatusesBeyondStages(src()).filter((v) => !held.has(v)));
+      const cortex = new Set<string>(INGEST_OOB_DOCUMENT_STATUSES);
+      const missing = [...producer].filter((v) => !cortex.has(v));
+      const extra = [...cortex].filter((v) => !producer.has(v));
+      expect(
+        { missing, extra },
+        `${PRODUCER_AT}: missing = in the producer, not in cortex; extra = in cortex, not in the producer`,
+      ).toEqual({ missing: [], extra: [] });
     });
 
     it("the event ladder is stages the producer names: received (in STAGES) then case_opened (out of band)", () => {

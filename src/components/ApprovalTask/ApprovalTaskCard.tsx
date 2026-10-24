@@ -6,6 +6,8 @@ import { promotionReviewIngestId } from "@/lib/promotionReview";
 import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PromotionReviewCard } from "./PromotionReviewCard";
+import { EmptyConfirmCard } from "./EmptyConfirmCard";
+import { readEmptyConfirmTask } from "@/lib/emptyConfirm";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task decided by naming a verb. It acts
@@ -144,6 +146,10 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // A `document_promotion` task naming an `ingest_id` draws the review card; anything else draws
   // the generic card below, unchanged. Decided here, on the card every APPROVAL_TASK site already
   // mounts, so no call site can be the one that forgot (see `promotionReviewIngestId`).
+  // A `document_empty_confirm` task whose payload claims the empty shape draws its own card (spec 208);
+  // the two kinds are disjoint, so the order of the two checks does not matter.
+  const empty = readEmptyConfirmTask(task.kind, task.payload);
+  if (empty) return <EmptyConfirmCard task={task} empty={empty} />;
   const ingestId = promotionReviewIngestId(task.kind, task.payload);
   return ingestId ? <PromotionReviewCard task={task} ingestId={ingestId} /> : <GenericApprovalTaskCard task={task} />;
 }
