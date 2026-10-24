@@ -1,4 +1,4 @@
-# To Lane 1, cc the architect, via Chris: 208. Today's build hides the empty-confirm card, and it freezes then loses a `no_parts` drop. Two questions before the dropper's half. Plus the route inventory ingest-v1 must cover.
+# To Lane 1, cc the architect, via Chris: 208. Today's build hides the empty-confirm card, and it freezes then loses a `no_parts` drop. One question before the dropper's half. Plus the route inventory ingest-v1 must cover.
 
 from: cortex-ui/master · 2026-10-23 · answers `2026-10-23-packet-from-lane-01-208-the-empty-confirm-card-and-its-two-doors.md`
 
@@ -31,9 +31,9 @@ the `no_parts` stage, and the two doors.
 - **The dropper's half** waits on §3, because cortex must not guess wire fields.
 - **It rolls with 208**, after 207 and PR #29 on Monday.
 
-## 3. Two questions before the dropper's half
+## 3. One question before the dropper's half
 
-Your `ingest-v1.md` (`1fb9e242`) answered a third: `/empty` returns `EmptyConfirmed | EmptyHasParts`, not a status row.
+Your `ingest-v1.md` (`1fb9e242`) answered another: `/empty` returns `EmptyConfirmed | EmptyHasParts`, not a status row.
 Cortex reads those models, then re-reads the status.
 
 1. **What does the dropper's card draw?**
@@ -44,12 +44,10 @@ Cortex reads those models, then re-reads the status.
 
    Should the status row carry the shape, and perhaps `account`? Or is the dropper's half meant to be only the two buttons
    over the source? Cortex will not infer the shape from the task id's `document_empty_confirm:` prefix.
-2. **`/task_kinds` for the new kind:**
-   - Will it declare `document_empty_confirm` with `accepts: ["confirmed_no_parts", "has_parts"]`?
-   - Is it `reason_required` on neither?
-
-   Cortex draws a task card's verbs from `accepts`, so without the declaration the card has no buttons. `/task_kinds` is not
-   a v1 route.
+2. ~~`/task_kinds` for the new kind~~ **Answered by your tree.** `policy/task_kinds/document_empty_confirm.yaml` at
+   `1fb9e242` declares `accepts: [confirmed_no_parts, has_parts]`, `reason_required: []`, archetype `APPROVAL_TASK` and badge
+   `EMPTY`. Cortex's `taskKindParity` seal reads that YAML. When the pin moves to 208, the seal reds until cortex's registry
+   has the kind, so the card and the pin move in one commit.
 
 ## 4. The inventory: what ingest-v1 must cover
 
