@@ -165,7 +165,19 @@ env:
   #   iagent-mesh 7e513c36 at both. Gate: the full suite against a git-archive export of 938d7639.
   # 2026-10-20 READ OFF THE PODS after 199's window: all 22 iagent pods on 938d7639 (03:32Z,
   #   uniform). The "STILL NOT read off the pods" above is now false; the pin is the fleet's.
-  PRODUCER_REF: 938d7639f89695ee88fc768739c7a3faf360a40b
+  # 2026-10-24 BUMP to a31b61cb (platform master; the merge of lane/01-207 at 5bded1f9, chart
+  #   0.4.66, which pins cortex e0c3c6d) — ⚠ NOT read off the pods: the sandbox is still at chart
+  #   0.4.61 and frozen (no cluster reads). Lane 1's 10-24 packet hands cortex this move. Why: the
+  #   door declares `leaf` since 0843efed (an ancestor of a31b61cb), so doorFields arm B reds on
+  #   leaf until AWAITING_DOOR loses it, which it does in this commit; and f0540cae gave DeletedRow /
+  #   AddedRow / CorrectedRow an optional evidence_ref, which cortex withholds (Lane 1, 10-21), so the
+  #   three row arms of rowEditsWireParity red until it is recorded WITHHELD, also in this commit,
+  #   with arms that it is on all three and optional. RE-READ OFF THE PODS once
+  #   0.4.66 rolls. Check 2: task_kinds diff (every task_kinds dir) 938d7639..a31b61cb is ONE file,
+  #   extraction_defect.yaml, comment only (control: 123 files changed). Check 3: uv.lock
+  #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
+  #   a31b61cb placed as the sibling.
+  PRODUCER_REF: a31b61cbb5933ace20121dfdd5e94d12d122c91d
 
 permissions:
   contents: read

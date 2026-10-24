@@ -127,7 +127,45 @@ function codesTuple(src: string, name: string): string[] {
   return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
 }
 
+/**
+ * Fields the producer's row models carry that cortex DELIBERATELY does not send yet: field -> why.
+ * `evidence_ref` (optional on DeletedRow/AddedRow/CorrectedRow since f0540cae, on platform master): Lane 1's packet
+ * `sessions/2026-10-21-packet-to-cortex-ui-master-every-row-edit-op-takes-an-optional-evidence-ref-add-it-to-the-branch-type.md`
+ * asks cortex NOT to build the UI field until the architect rules string vs `{page,bbox}`. The three
+ * row arms compare cortex's sent keys UNION this record to the producer's fields; the WITHHELD arms
+ * below red when an entry goes stale or the producer makes the field required (which would 422 every
+ * row edit cortex sends).
+ */
+const WITHHELD: Readonly<Record<string, string>> = {
+  evidence_ref:
+    "Lane 1 packet 2026-10-21 (every row-edit op takes an optional evidence_ref): do not build the UI field until the architect rules string vs {page,bbox}",
+};
+const ROW_MODELS = ["DeletedRow", "AddedRow", "CorrectedRow"] as const;
+
+/** Is `field` on `className` OPTIONAL: a `= None` default AND a nullable annotation (`Optional[...]`,
+ *  `... | None`, or a module-level alias whose definition is one). THROWS when the field is absent. */
+function fieldIsOptional(src: string, className: string, field: string): boolean {
+  const line = classBody(src, className).find((l) => new RegExp("^ {4}" + field + "\\s*:").test(l));
+  if (!line) throw new Error(className + "." + field + " not found");
+  const code = line.replace(/\s+#.*$/, "");
+  const m = /^ {4}[a-z_][a-z0-9_]*\s*:\s*(.+?)\s*=\s*None\s*$/.exec(code);
+  if (!m) return false;
+  const nullable = (t: string) => /\bOptional\[/.test(t) || /\|\s*None\b/.test(t);
+  if (nullable(m[1])) return true;
+  const alias = new RegExp("^" + m[1] + "\\s*=\\s*(.+)$", "m").exec(src);
+  return alias !== null && nullable(alias[1]);
+}
+
 describe("the parser, unit-tested on fixtures", () => {
+  it("fieldIsOptional: a default-None nullable field is optional; a required or non-nullable one is not; absent throws", () => {
+    const base = "Alias = A[Optional[Any], V]\n\nclass R(_M):\n";
+    expect(fieldIsOptional(base + "    x: Alias = None   # c\n", "R", "x")).toBe(true);
+    expect(fieldIsOptional(base + "    x: Optional[str] = None\n", "R", "x")).toBe(true);
+    expect(fieldIsOptional(base + "    x: str | None = None\n", "R", "x")).toBe(true);
+    expect(fieldIsOptional(base + "    x: Alias\n", "R", "x")).toBe(false);
+    expect(fieldIsOptional(base + "    x: str = None\n", "R", "x")).toBe(false);
+    expect(() => fieldIsOptional(base + "    y: str\n", "R", "x")).toThrow(/R\.x not found/);
+  });
   it("reads a field Literal and the header_edits verb guard, and throws when either is absent", () => {
     const lit = 'class HeaderEdit(_M):\n    field: Literal["mfr", "notice_id"]\n    value: str\n';
     expect(classFieldLiteral(lit, "HeaderEdit")).toEqual(["mfr", "notice_id"]);
@@ -206,13 +244,23 @@ describe.skipIf(GATEWAY === null)("cortex's grouped-review send equals the produ
   const sorted = (a: string[]) => [...a].sort();
 
   it("deleted entries carry exactly DeletedRow's fields", () => {
-    expect(sorted(Object.keys(edits().deleted[0]!)), AT).toEqual(sorted(fieldNames(src(), "DeletedRow")));
+    expect(sorted([...new Set([...Object.keys(edits().deleted[0]!), ...Object.keys(WITHHELD)])]), AT).toEqual(sorted(fieldNames(src(), "DeletedRow")));
   });
   it("added entries carry exactly AddedRow's fields", () => {
-    expect(sorted(Object.keys(edits().added[0]!)), AT).toEqual(sorted(fieldNames(src(), "AddedRow")));
+    expect(sorted([...new Set([...Object.keys(edits().added[0]!), ...Object.keys(WITHHELD)])]), AT).toEqual(sorted(fieldNames(src(), "AddedRow")));
   });
   it("corrected entries carry exactly CorrectedRow's fields", () => {
-    expect(sorted(Object.keys(edits().corrected[0]!)), AT).toEqual(sorted(fieldNames(src(), "CorrectedRow")));
+    expect(sorted([...new Set([...Object.keys(edits().corrected[0]!), ...Object.keys(WITHHELD)])]), AT).toEqual(sorted(fieldNames(src(), "CorrectedRow")));
+  });
+  it.each(ROW_MODELS)("every WITHHELD field is on %s (a stale entry reds)", (model) => {
+    for (const k of Object.keys(WITHHELD)) {
+      expect(fieldNames(src(), model), `${AT}: WITHHELD ${k} is not a field of ${model}: delete it`).toContain(k);
+    }
+  });
+  it.each(ROW_MODELS)("every WITHHELD field is OPTIONAL on %s (required would 422 every row edit cortex sends)", (model) => {
+    for (const k of Object.keys(WITHHELD)) {
+      expect(fieldIsOptional(src(), model, k), `${AT}: ${model}.${k} is no longer optional`).toBe(true);
+    }
   });
   it("row_edits carries exactly RowEdits' lists", () => {
     expect(sorted(Object.keys(edits())), AT).toEqual(sorted(fieldNames(src(), "RowEdits")));

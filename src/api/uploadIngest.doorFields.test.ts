@@ -42,12 +42,11 @@ vi.mock("axios", async (importOriginal) => {
 import { uploadIngest } from "./client";
 
 /** field -> why the door does not declare it yet. */
-const AWAITING_DOOR: Record<string, string> = {
-  leaf:
-    "architect 2026-10-23 kind-at-drop item 2 (Lane 1): the door takes `leaf`. Built at 0843efed on " +
-    "invincible-agent lane/01-207 (not on master), rolls Monday. Until the pinned door declares it, " +
-    "FastAPI drops it and a PCN/PDN choice falls back to the title read",
-};
+// EMPTY IS THE HEALTHY STATE: `leaf` was the last entry and left when the door declared it (0843efed,
+// 207), so arm B now loops over nothing. That is not a vacuous seal — arm A still checks every field
+// sent against the door's declared set — it is a record with no live exceptions. Add an entry only for
+// a field cortex sends that the pinned door really lacks, and arm B will name the day to delete it.
+const AWAITING_DOOR: Record<string, string> = {};
 
 // ── the parser ──────────────────────────────────────────────────────────────────────────────
 
