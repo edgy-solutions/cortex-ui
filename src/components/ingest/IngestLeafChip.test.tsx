@@ -89,7 +89,7 @@ describe("IngestLeafChip", () => {
     expect(q('[data-leaf-verb="change"]')).toBeNull();
   });
 
-  it.each(["promoted", "rejected", "failed", "review_rejected"])("at %s there is no change button", (stage) => {
+  it.each(["promoted", "rejected", "failed", "review_rejected", "no_parts"])("at %s there is no change button", (stage) => {
     render(<IngestLeafChip row={row({ stage, detail: "d" })} />);
     expect(q("[data-leaf-chip]")).toBeTruthy();
     expect(q('[data-leaf-verb="change"]')).toBeNull();
