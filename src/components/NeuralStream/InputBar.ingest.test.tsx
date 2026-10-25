@@ -35,8 +35,8 @@ vi.mock("@/lib/ingestTransport", () => ({
 }));
 // The status card polls the network on its own; the turn tests only need to know it mounted.
 vi.mock("@/components/ingest/IngestStatusCard", () => ({
-  IngestStatusCard: ({ ingestId, onBehalfOf }: { ingestId: string; onBehalfOf?: string | null }) => (
-    <div data-testid="status-card" data-on-behalf-of={onBehalfOf ?? ""}>{ingestId}</div>
+  IngestStatusCard: ({ ingestId }: { ingestId: string }) => (
+    <div data-testid="status-card">{ingestId}</div>
   ),
 }));
 // The HUD arm needs the HUD to mount without its stores' network side.
@@ -47,7 +47,6 @@ vi.mock("@/components/HUD/DecisionPathDiagram", () => ({ DecisionPathDiagram: ()
 vi.mock("@/components/HUD/GraphTrace", () => ({ GraphTrace: () => null }));
 vi.mock("@/components/HUD/UnreadFields", () => ({ UnreadFields: () => null }));
 vi.mock("@/components/HUD/TaskContextCard", () => ({ TaskContextCard: () => null }));
-vi.mock("@/components/Compilation/CompileButton", () => ({ CompileButton: () => null }));
 
 import { InputBar } from "./InputBar";
 import { IngestEntryBody } from "@/components/ingest/IngestEntryBody";
@@ -62,7 +61,6 @@ import { DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { NO_DROP_IDENTITY } from "@/lib/dropIdentity";
 import type { Entitlements } from "@/api/types";
-import type { IngestComponent } from "@/lib/ingestArtifact";
 
 const pdf = () => new File(["%PDF-1.4\n"], "PCN26-117.pdf", { type: "application/pdf" });
 
@@ -582,16 +580,6 @@ describe("the drop identity is authz_id, not the email (not_a_delegate at work)"
     expect(uploadIngest).toHaveBeenCalledTimes(1);
     expect(uploadIngest.mock.calls[0][2], "on_behalf_of must be authz_id, never the email").toBe("E12345");
     await waitFor(() => expect(useIngestComposerStore.getState().turns[0].phase).toBe("status"));
-  });
-
-  it("the dispute route gets the same authz_id, threaded from the entry body", () => {
-    usePersonaStore.setState({ entitlements: ENT({ authz_id: "E12345" }) });
-    const ingest = {
-      ingest_id: "ing-w", filename: "PCN26-117.pdf", kind: "pdf", note: null, badge: "received", duplicate_of: null,
-      error: null, reason: null, duplicate_message: null,
-    } as unknown as IngestComponent;
-    const r = render(<IngestEntryBody ingest={ingest} />);
-    expect(r.getByTestId("status-card").getAttribute("data-on-behalf-of")).toBe("E12345");
   });
 
   it("a BFF older than 7a98f7bd (no authz_id key) falls back to the email: today's behaviour", async () => {

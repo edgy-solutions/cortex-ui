@@ -55,10 +55,9 @@ function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
     audience: task.audience,
     requested_by: task.requestedBy,
     subject_ref: task.subjectRef,
-    // CORTEX-PROPOSED (`src/lib/ingestOrigin.ts` §5) — threaded through unopened so a steward
-    // task's own served `payload` (today's real `payload.ingest_id` for document_promotion,
-    // tomorrow's proposed `suggestion`/`evidence` for an origin-dispute steward task) reaches
-    // ApprovalTaskCard generically, kind-agnostic, with no second fetch and no per-kind mapping.
+    // Threaded through unopened so a task's own served `payload` (`payload.ingest_id` for
+    // document_promotion) reaches ApprovalTaskCard generically, kind-agnostic, with no second
+    // fetch and no per-kind mapping.
     payload: task.payload,
     // The row's own served declaration, when `humanTaskFromRow` carried one through — the fix
     // for the gap `useTaskKindStore.ts`'s header names ("NOTHING EVER SUPPLIED ONE"). Only

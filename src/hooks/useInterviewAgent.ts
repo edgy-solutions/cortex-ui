@@ -127,7 +127,6 @@ function getProducedFor(): import("@/api/types").Artifact["produced_for"] {
  * - Streams text character-by-character (backend controls pacing)
  * - Parses special tokens to trigger thinking card animations
  * - Updates Zustand store with ontology terms and data bindings
- * - Transitions to "blueprint" phase on INTERVIEW_COMPLETE signal
  */
 /**
  * One turn's outgoing content: the phrase, and whatever the reader's answer was — a PICK from
@@ -150,13 +149,10 @@ interface SendPayload {
 
 export function useInterviewAgent() {
   const {
-    liveBpmnGraph,
     addMessage,
     updateMessage,
-    setLiveBpmnGraph,
     setIsProcessing,
     setAccessDenial,
-    setPhase,
     addOntologyTerm,
     addDataBinding,
     upsertThinkingStep,
@@ -550,8 +546,6 @@ export function useInterviewAgent() {
 
       // Reset state for the new turn
       setIsProcessing(true);
-      setPhase("active");
-      setLiveBpmnGraph(null);
       // Per-turn UI grounding (ontology terms, data bindings) on the
       // interview store stays per-turn-resettable — that's transient
       // UI state, not artifact state. The per-turn routing/sources/
@@ -666,7 +660,6 @@ export function useInterviewAgent() {
         // real, durable answer. `answeringArtifactBody` still decides absent-vs-empty.
         ...answeringArtifactBody(lineageClaim),
         session_id: sessionId,
-        current_graph_json: liveBpmnGraph ? JSON.stringify(liveBpmnGraph) : undefined,
         artifact_id: artifactId,
         ...(personaSelection.hasEntitlements() && personaSelection.selectedPersona
           ? {

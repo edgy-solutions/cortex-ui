@@ -40,12 +40,8 @@ import { IntervalTimeline } from "@/components/planning/IntervalTimeline";
 import { commitDrag } from "@/lib/planDrag";
 import { DecisionRecord } from "@/components/planning/DecisionRecord";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
-import { publishToSuperset } from "@/api/client";
-import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
-import { toast } from "sonner";
 import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
 import { IngestEntryBody } from "@/components/ingest/IngestEntryBody";
-import { OriginUnresolvedBanner } from "@/components/ingest/OriginUnresolvedBanner";
 
 /**
  * SupplyTable — ASSET_STATE_METRIC render.
@@ -201,7 +197,6 @@ interface SemanticInterpreterProps {
 // Render a single semantic component by archetype
 const renderComponent = (
   comp: any,
-  onPublish: (sql: string, title: string) => void,
   previewRows?: number,
   // Threaded rather than read from the store — see `artifactId` on the props. Only the ask
   // card uses it, and only to claim lineage to the artifact it is ON.
@@ -293,7 +288,6 @@ const renderComponent = (
           // Declared by the producer, never inferred here — the axis says "$" only when the
           // answer says it is money. See ChartWidget.contract.ts `value_unit`.
           valueUnit={comp.value_unit}
-          onPublish={onPublish}
         />
       );
 
@@ -815,41 +809,6 @@ const isFullWidth = (archetype: string) =>
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();
 
-  const handlePublish = async (sql: string, title: string) => {
-    // Mock-grounding mode: the publish-to-superset action genuinely
-    // requires a live backend (gateway → Analyst Service →
-    // Superset). Faking success here would be misleading (nothing
-    // actually got published); letting the request fall through
-    // produces a confusing CORS error toast. Honest middle path:
-    // intercept and tell the user explicitly the action is
-    // backend-gated.
-    if (isMockGroundingEnabled()) {
-      toast.info("Publish requires a live backend", {
-        description:
-          `Mock-grounding mode is on. ` +
-          `"${title}" would publish to Superset via Analyst Service in production.`,
-        duration: 6000,
-      });
-      return;
-    }
-
-    const toastId = toast.loading("Publishing to Superset...");
-    try {
-      const result = await publishToSuperset(sql, title);
-      toast.success("Chart Published!", {
-        id: toastId,
-        description: `View at: ${result.summary}`,
-        duration: 5000,
-      });
-    } catch (err) {
-      console.error("Failed to publish chart:", err);
-      toast.error("Publication failed", {
-        id: toastId,
-        description: "The Analyst Service is currently unreachable.",
-      });
-    }
-  };
-
   if (!payload || !payload.components || !Array.isArray(payload.components)) {
     return null;
   }
@@ -883,12 +842,7 @@ export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payloa
                 when `comp.provenance_floor` is absent or unreadable (field renamed by the
                 2026-09-30 dispatch — see ingestWire.ts for the prior name). */}
             <ProvenanceFloorLabel component={comp} />
-            {/* CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — same mount site as
-                `ProvenanceFloorLabel` immediately above: archetype-agnostic by construction.
-                `OriginUnresolvedBanner` self-guards and draws nothing when
-                `comp.origin` is absent, malformed, or resolved. */}
-            <OriginUnresolvedBanner component={comp} />
-            {renderComponent(comp, handlePublish, previewRows, artifactId)}
+            {renderComponent(comp, previewRows, artifactId)}
             {/* THE RAW SECTION — mounted HERE, at the one place every dispatched component passes
                 through (package cases, switch cases, the acted-on and not-found defaults, and the
                 `break` fall-throughs alike), never per branch. The human's 2026-10-07 ruling

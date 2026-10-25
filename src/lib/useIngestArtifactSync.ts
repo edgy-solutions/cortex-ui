@@ -5,12 +5,10 @@
  *
  * Sources, in order of authority:
  *  - the composer's in-memory turns (`useIngestComposerStore`): uploading, errored, duplicate;
- *  - `myDrops` (localStorage, per `sub`): the ids remembered across a reload, for drops no turn
- *    in this session covers — a CACHE: it carries the filename the server does not send;
  *  - `GET /ingest/mine` (`useIngestStatusStore.listed`, 191): the record — every drop of this
- *    person's the server lists, including those made before browser storage remembered any.
- * A drop appears once: a turn that holds an ingest id hides the stored and listed drop with that id,
- * and a stored drop hides the listed one (it knows the filename).
+ *    person's the server lists. `myDrops` (localStorage, per `sub`) is a cache of the FILENAME
+ *    only, which the status body does not carry; it is never a source of ids.
+ * A drop appears once: a turn that holds an ingest id hides the listed drop with that id.
  *
  * The entry's key is the INGEST id once the server has given one, so a drop keeps its
  * `ingest:` id across a reload (where only the stored list remains). Before that — uploading,
@@ -50,7 +48,6 @@ export function useIngestArtifactSync(): void {
   const ids = useMemo(() => {
     const out = new Set<string>();
     for (const t of turns) if (t.ingestId) out.add(t.ingestId);
-    for (const d of drops) out.add(d.ingestId);
     for (const id of listed) out.add(id);
     return [...out];
   }, [turns, drops, listed]);
@@ -67,7 +64,7 @@ export function useIngestArtifactSync(): void {
 
   useEffect(() => {
     const covered = new Set(turns.map((t) => t.ingestId).filter((x): x is string => x !== null));
-    const stored = new Set(drops.map((d) => d.ingestId));
+    const filenames = new Map(drops.map((d) => [d.ingestId, d.filename] as const));
     const keys = turnKeys(turns);
     const renamed: Record<string, string> = {};
     for (const t of turns) {
@@ -90,27 +87,11 @@ export function useIngestArtifactSync(): void {
         row: t.ingestId ? rows[t.ingestId] ?? null : null,
         notFound: t.ingestId ? !!notFound[t.ingestId] : false,
       })),
-      ...drops
-        .filter((d) => !covered.has(d.ingestId))
-        .map((d) => ({
-          key: d.ingestId,
-          filename: d.filename,
-          kind: null,
-          droppedAt: d.droppedAt,
-          phase: "status" as const,
-          ingestId: d.ingestId,
-          error: null,
-          acceptedThisSession: false,
-          duplicate: null,
-          note: null,
-          row: rows[d.ingestId] ?? null,
-          notFound: !!notFound[d.ingestId],
-        })),
       ...listed
-        .filter((id) => !covered.has(id) && !stored.has(id) && rows[id] !== undefined)
+        .filter((id) => !covered.has(id) && rows[id] !== undefined)
         .map((id) => ({
           key: id,
-          filename: "", // the status body carries none; `ingestToArtifact` leads with the notice id or a short id
+          filename: filenames.get(id) ?? "", // the status body carries none; the myDrops cache may; else `ingestToArtifact` leads with the notice id or a short id
           kind: null,
           droppedAt: rows[id]!.created_at,
           phase: "status" as const,

@@ -33,18 +33,11 @@
  * deliberate retry only.
  *
  * Where the poll lives: on the answers rail a drop is an entry and this card is its opened body, so
- * the ONE poller is `useIngestStatusStore` and the card, mounted with `fromStore`, only READS it. A
- * card mounted outside the rail (no `fromStore`) keeps its own poll, as below. Never both for one id.
- *
- * Polling stops per `ingestPollingDone`: a duplicate, or `promoted`/`rejected`/`failed` — except a
- * `failed` row with reason_code `timeout`, which a late run can still advance: it is re-read every
- * `INGEST_FAILED_TIMEOUT_POLL_MS` (this card's own poll included). `review` keeps polling. A 404 (existence-oracle-safe "not found, or not yours")
- * also stops polling, distinctly from a transient transport error, which is tolerated and
- * retried.
+ * the ONE poller is `useIngestStatusStore` and the card only READS it (rows, notFound, retry).
+ * Polling stops per `ingestPollingDone` (see the store).
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { actOnHumanTask } from "@/api/client";
-import { fetchIngestStatus, disputeIngestOrigin, retryIngest } from "@/lib/ingestTransport";
 import { fetchCase, type FetchCaseResult } from "@/lib/cases";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
@@ -53,10 +46,7 @@ import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { taskArtifactId } from "@/lib/taskArtifact";
 import {
-  readIngestStatusRow,
   readActRefusal,
-  readIngestErrorMessage,
-  isIngestNotFoundError,
   ingestStageLadder,
   ingestEventLadder,
   INGEST_AWAITING_KIND_STATUS,
@@ -64,10 +54,6 @@ import {
   INGEST_CASE_OPENED_STATUS,
   INGEST_NO_PARTS_STATUS,
   INGEST_REVIEW_REJECTED_STATUS,
-  ingestPollingDone,
-  INGEST_FAILED_TIMEOUT_POLL_MS,
-  INGEST_FAILURE_TIMEOUT,
-  readIngestRetryRefusal,
   promotionIngestId,
   payloadMatchesIngestId,
   type IngestStatusRow,
@@ -75,7 +61,6 @@ import {
 import { IngestFailureExtras } from "./IngestFailureExtras";
 import { IngestLeafChip } from "./IngestLeafChip";
 import { duplicatePhrase } from "@/lib/ingestWire";
-import { originSummary } from "@/lib/ingestOrigin";
 
 const RUNG_GLYPH: Record<string, string> = {
   done: "●",
@@ -193,164 +178,29 @@ function EventSection({ row }: { row: IngestStatusRow }) {
 
 export interface IngestStatusCardProps {
   ingestId: string;
-  /** Injectable so tests need not wait on a real 2s cadence. */
-  pollIntervalMs?: number;
-  /** Seed row — avoids a redundant first fetch right after upload, and lets tests render a
-   *  specific status synchronously. */
-  initialRow?: IngestStatusRow;
-  /**
-   * CORTEX-PROPOSED — the dispute route's own `on_behalf_of`: the caller's `authz_id` (see
-   * `src/lib/dropIdentity.ts`), threaded down from `IngestEntryBody`'s `useDropIdentity()` rather than this card calling `useAuth()` a second time, so a standalone render of
-   * this card — every existing test here — needs no `<AuthProvider>` just to show a status row.
-   */
-  onBehalfOf?: string | null;
   /** The surrounding turn already drew the duplicate phrase (message or label); the card then draws
    *  only the original's id/stage, so the phrase appears once. */
   duplicatePhraseDrawn?: boolean;
-  /** Read the row from `useIngestStatusStore` (the rail's one poller) instead of polling here. */
-  fromStore?: boolean;
 }
 
-export function IngestStatusCard({
-  ingestId,
-  pollIntervalMs = 2000,
-  initialRow,
-  onBehalfOf = null,
-  duplicatePhraseDrawn = false,
-  fromStore = false,
-}: IngestStatusCardProps) {
-  const [ownRow, setRow] = useState<IngestStatusRow | null>(initialRow ?? null);
-  const [ownNotFound, setNotFound] = useState(false);
-  const storeRow = useIngestStatusStore((s) => s.rows[ingestId] ?? null);
-  const storeNotFound = useIngestStatusStore((s) => !!s.notFound[ingestId]);
-  const row = fromStore ? storeRow : ownRow;
-  const notFound = fromStore ? storeNotFound : ownNotFound;
+export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: IngestStatusCardProps) {
+  const row = useIngestStatusStore((s) => s.rows[ingestId] ?? null);
+  const notFound = useIngestStatusStore((s) => !!s.notFound[ingestId]);
   const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastPollRef = useRef(0);
-  const [pollEpoch, setPollEpoch] = useState(0);
-  const storeRetry = useIngestStatusStore((s) => s.retry);
-  // Store mode uses the store action; self-poll mode calls the transport, then restarts its poll.
-  const retry = async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    if (fromStore) return storeRetry(id);
-    try {
-      await retryIngest(id);
-      setRow((cur) => (cur ? { ...cur, stage: "received", failure: null } : cur));
-      setPollEpoch((n) => n + 1);
-      return { ok: true };
-    } catch (err) {
-      const refusal = readIngestRetryRefusal(err);
-      if (refusal?.status === 409 && refusal.error === "not_failed") {
-        // It moved since it was read: re-read now (the stale failed row would stop the interval).
-        void fetchIngestStatus(id)
-          .then((raw) => {
-            const next = readIngestStatusRow(raw);
-            if (next) setRow(next);
-            setPollEpoch((n) => n + 1);
-          })
-          .catch(() => undefined);
-        return { ok: false, message: "It moved since it was read — refreshed." };
-      }
-      if (refusal?.status === 403) return { ok: false, message: "This drop can’t be retried from here." };
-      return { ok: false, message: readIngestErrorMessage(err) ?? "Retry failed." };
-    }
-  };
+  const retry = useIngestStatusStore((s) => s.retry);
+  // The leaf chip hands back the row it re-read; the store is the one place a row lives.
+  const setRow = (next: IngestStatusRow) =>
+    useIngestStatusStore.setState((st) => ({ rows: { ...st.rows, [next.ingest_id]: next } }));
 
   const tasks = useHumanTaskStore((s) => s.tasks);
   const declarationFor = useTaskKindStore((s) => s.declarationFor);
   // The packet says "<human task id>" without saying which of the task's two ids; accept either.
   const defectTaskId = row?.extraction_defect?.task_id;
   const defectTask = defectTaskId ? tasks.find((t) => t.id === defectTaskId || t.taskId === defectTaskId) ?? null : null;
-
-  // CORTEX-PROPOSED — see `src/lib/ingestOrigin.ts`. `onBehalfOf` arrives as a prop; see its doc
-  // comment above.
-  const [disputing, setDisputing] = useState(false);
-  const [disputeResult, setDisputeResult] = useState<{ stewardTaskId: string | null } | null>(null);
-  const [disputeError, setDisputeError] = useState<string | null>(null);
-  const [disputeErrorCode, setDisputeErrorCode] = useState<string | null>(null);
-
-  const handleDispute = async (disputeIngestId: string) => {
-    if (!onBehalfOf) return;
-    setDisputing(true);
-    setDisputeError(null);
-    setDisputeErrorCode(null);
-    try {
-      const result = await disputeIngestOrigin(disputeIngestId, onBehalfOf);
-      setDisputeResult({ stewardTaskId: result?.steward_task_id ?? null });
-    } catch (err) {
-      // This route does not exist on the real wire yet (CORTEX-PROPOSED) — a 404/405 there is
-      // "not built", not a refusal of THIS dispute, so it gets its own message rather than
-      // whatever generic text a bare 404 would otherwise read as.
-      const status = (err as { response?: { status?: number } } | null | undefined)?.response?.status;
-      if (status === 404 || status === 405) {
-        setDisputeError("This server does not accept origin disputes yet.");
-        setDisputeErrorCode(null);
-      } else {
-        const refusal = readActRefusal(err);
-        setDisputeError(refusal?.message ?? readIngestErrorMessage(err) ?? "Dispute failed.");
-        setDisputeErrorCode(refusal?.error ?? null);
-      }
-      // Never rendered as disputed on a refusal — the button stays enabled for a deliberate retry.
-    } finally {
-      setDisputing(false);
-    }
-  };
-
-  useEffect(() => {
-    if (fromStore) return;
-    let cancelled = false;
-
-    const poll = async () => {
-      try {
-        const raw = await fetchIngestStatus(ingestId);
-        if (cancelled) return;
-        const next = readIngestStatusRow(raw);
-        if (next) setRow(next);
-      } catch (err) {
-        if (cancelled) return;
-        if (isIngestNotFoundError(err)) {
-          setNotFound(true);
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-        // Any other transport error is tolerated and retried on the next tick.
-      }
-    };
-
-    if (!initialRow) {
-      lastPollRef.current = Date.now();
-      void poll();
-    }
-
-    timerRef.current = setInterval(() => {
-      setRow((current) => {
-        if (current && ingestPollingDone(current)) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return current;
-        }
-        // A failed+timeout row is re-read at most every INGEST_FAILED_TIMEOUT_POLL_MS.
-        if (
-          current?.stage === "failed" &&
-          current.failure?.reason_code === INGEST_FAILURE_TIMEOUT &&
-          Date.now() - lastPollRef.current < INGEST_FAILED_TIMEOUT_POLL_MS
-        ) {
-          return current;
-        }
-        lastPollRef.current = Date.now();
-        void poll();
-        return current;
-      });
-    }, pollIntervalMs);
-
-    return () => {
-      cancelled = true;
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingestId, pollIntervalMs, fromStore, pollEpoch]);
 
   if (notFound) {
     return (
@@ -425,58 +275,6 @@ export function IngestStatusCard({
         <p className="text-[10px] font-mono text-slate-300" data-ingest-notice-id>
           notice {row.notice_id}
         </p>
-      )}
-
-      {/*
-       * CORTEX-PROPOSED ORIGIN (`src/lib/ingestOrigin.ts`) — `row.origin === null` is the real,
-       * unbuilt producer today: a THIRD state, kept on its OWN attribute name
-       * (`data-ingest-origin-unreported`) rather than a value of `data-ingest-origin`, so a
-       * selector keyed on the latter can never pick it up as "resolved" or "unresolved" by
-       * accident.
-       */}
-      {row.origin === null ? (
-        <p className="mt-2 text-[10px] font-mono text-slate-500" data-ingest-origin-unreported>
-          Origin: not reported by this server
-        </p>
-      ) : row.origin.status === "resolved" ? (
-        <div className="mt-2" data-ingest-origin="resolved">
-          <p className="text-[10px] font-mono text-slate-300">{originSummary(row.origin)}</p>
-          {disputeResult ? (
-            <p className="text-[10px] font-mono text-cyan-300" data-ingest-origin-disputed>
-              Sent to the steward
-              {disputeResult.stewardTaskId ? ` (task ${disputeResult.stewardTaskId})` : ""}
-            </p>
-          ) : (
-            <>
-              <button
-                type="button"
-                data-ingest-origin-dispute
-                disabled={disputing || !onBehalfOf}
-                title={!onBehalfOf ? "No drop identity (authz_id or verified email) available" : undefined}
-                className="mt-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-amber-600/30 text-amber-200 disabled:opacity-40"
-                onClick={() => void handleDispute(row.ingest_id)}
-              >
-                This looks wrong
-              </button>
-              {disputeError && (
-                <p
-                  className="mt-1 text-[10px] font-mono text-rose-400"
-                  role="alert"
-                  data-ingest-origin-dispute-refusal={disputeErrorCode ?? ""}
-                >
-                  {disputeError}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="mt-2" data-ingest-origin="unresolved">
-          <p className="text-[10px] font-mono text-slate-300">{originSummary(row.origin)}</p>
-          <p className="text-[10px] font-mono text-slate-500" data-ingest-origin-visibility>
-            Visible only to you until a steward resolves its origin.
-          </p>
-        </div>
       )}
 
       <IngestLeafChip row={row} onRow={setRow} />

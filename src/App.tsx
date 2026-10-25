@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "react-oidc-context";
-import { useInterviewStore } from "@/store/useInterviewStore";
 import { Layout } from "@/components/Layout";
 import { NeuralStream } from "@/components/NeuralStream/NeuralStream";
 import { HUD } from "@/components/HUD/HUD";
-import { WorkflowCanvas } from "@/components/Blueprint/WorkflowCanvas";
-import { CompilationOverlay } from "@/components/Compilation/CompilationOverlay";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { CanvasPersistence } from "@/hooks/useCanvasPersistence";
 import { GlobalCanvasStage } from "@/components/AgenticCanvas/GlobalCanvasStage";
@@ -35,21 +32,13 @@ import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 import { usePersonaStore } from "@/store/usePersonaStore";
-import { useLiveViewRefresh } from "@/lib/useLiveViewRefresh";
 import { useCanvasSeedFromAnswers } from "@/lib/canvasSeedFromAnswer";
 import { fetchEntitlements } from "@/api/client";
-// SIDE-EFFECT IMPORT, and the bare form is load-bearing. This module installs the
-// `window.__cortexSeedPortfolioCanvas` bring-up trigger and exports nothing App needs, so an
-// unused named import would be a binding a bundler may drop. A module no one imports at all is
-// dropped outright — which is what happened here: the module claimed in its own comment to
-// expose a global, six tests passed by importing the function directly, and the global was
-// absent from every built bundle for two days because nothing on the entry path referenced it.
-// Guarded by `seedPortfolioCanvas.reachability.test.ts`. Remove when the phrase routes.
-import "@/lib/seedPortfolioCanvas";
-// SIDE-EFFECT IMPORT, bare for the same reason as the line above: this module installs
+// SIDE-EFFECT IMPORT, and the bare form is load-bearing: this module installs
 // `window.__cortex` and exports nothing App needs, so an unused named binding would be a
 // binding a bundler may drop and a module nobody imports is dropped outright. Covered by the
-// same reachability law.
+// reachability law in `seedPortfolioCanvas.reachability.test.ts` (the file keeps its name; the
+// seed module it was written for is gone, the law is not).
 import "@/lib/debugGlobals";
 
 import { Toaster } from "sonner";
@@ -421,14 +410,9 @@ export default function App() {
   // MUST be first — purges a prior user's cached state before the sync hooks
   // below start their subscriptions or the timeline renders.
   const isolationReady = useSessionIsolation();
-  const phase = useInterviewStore((s) => s.phase);
-  const setPhase = useInterviewStore((s) => s.setPhase);
   useFrontendCapabilityRegistration();
   useTaskKindDeclarations();
   useEntitlementsSync();
-  // ADR-0042 OQ1: ONE subscription for the whole surface, not one per card — a per-card
-  // watcher on a global signal is the fan-out species swept for on 2026-08-25.
-  useLiveViewRefresh();
   // The client end of "make me a portfolio canvas": watch for the seed ANSWER and arrange the
   // artifacts it names. Mounted once — a per-card watcher on a global store is the fan-out
   // species swept for on 2026-08-25.
@@ -449,19 +433,13 @@ export default function App() {
       {!isolationReady ? (
         <div className="h-full w-full bg-slate-950" />
       ) : (
-        <SessionSurface phase={phase} setPhase={setPhase} />
+        <SessionSurface />
       )}
     </RequireAuth>
   );
 }
 
-function SessionSurface({
-  phase,
-  setPhase,
-}: {
-  phase: ReturnType<typeof useInterviewStore.getState>["phase"];
-  setPhase: (p: ReturnType<typeof useInterviewStore.getState>["phase"]) => void;
-}) {
+function SessionSurface() {
   return (
     <>
       {/* Sync custom canvases with the server (durable, cross-device). */}
@@ -480,28 +458,15 @@ function SessionSurface({
         stream={<NeuralStream />}
         canvas={
           <div className="h-full w-full relative overflow-hidden">
-            {/* Workflow Blueprint (Blueprint Phase) */}
-            {phase === "blueprint" && (
-              <div className="absolute inset-0 z-10 animate-in fade-in duration-700">
-                <WorkflowCanvas />
-              </div>
-            )}
-            
             {/* Semantic Canvas (Active Phase) — the camera-driven global
                 stage (ADR-0028 canvas-dock model). It reuses CanvasPane for
                 the double-click full-pane view. */}
-            {phase !== "blueprint" && (
-              <GlobalCanvasStage />
-            )}
+            <GlobalCanvasStage />
           </div>
         }
         hud={<HUD />}
       />
 
-      {/* Full-screen Compilation Overlay */}
-      {(phase === "compiling" || phase === "complete") && (
-        <CompilationOverlay onComplete={() => setPhase("blueprint")} />
-      )}
     </>
   );
 }

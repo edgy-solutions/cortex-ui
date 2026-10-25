@@ -23,7 +23,7 @@ import {
   readProvenanceFloor,
   provenanceFloorIsUnverified,
 } from "./ingestWire";
-import { IngestStatusCard } from "@/components/ingest/IngestStatusCard";
+import { SeededCard } from "@/components/ingest/ingestCardTestKit";
 import { buildPcn26117Fixture, type Pcn26117Seed } from "./ingestPcn26117Fixture";
 
 interface IngestExchange {
@@ -95,7 +95,7 @@ describe("ingest roll-11 capture — the deployed gateway's actual wire", () => 
     it("draws the duplicate message and of_ingest_id, with NO ladder", () => {
       const row = readIngestStatusRow(capture.exchanges[3].response.body)!;
       const { container } = render(
-        <IngestStatusCard ingestId={row.ingest_id} initialRow={row} pollIntervalMs={100000} />,
+        <SeededCard ingestId={row.ingest_id} seed={row} />,
       );
       expect(container.querySelector("[data-ingest-duplicate]")?.textContent).toContain(
         "already processed",

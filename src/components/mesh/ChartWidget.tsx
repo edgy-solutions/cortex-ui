@@ -18,7 +18,6 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { Share2 } from 'lucide-react';
 import { formatAmount } from "@/lib/formatAmount";
 
 interface ChartWidgetProps {
@@ -28,7 +27,6 @@ interface ChartWidgetProps {
   sql: string;
   /** ISO-4217 code or bare unit token from the payload. Absent → magnitude only. */
   valueUnit?: string;
-  onPublish: (sql: string, title: string) => void;
 }
 
 /**
@@ -302,7 +300,7 @@ const TOOLTIP_STYLE = {
   color: "#f1f5f9",
 };
 
-export const ChartWidget = ({ data, type, subject, sql, valueUnit, onPublish }: ChartWidgetProps) => {
+export const ChartWidget = ({ data, type, subject, sql, valueUnit }: ChartWidgetProps) => {
   // One closure so every axis formats identically; the wiring guard asserts no value axis
   // renders raw numbers, which is the half unit tests on the formatter cannot prove.
   const tickFmt = (v: number | string) => formatAmount(v, valueUnit);
@@ -359,13 +357,6 @@ export const ChartWidget = ({ data, type, subject, sql, valueUnit, onPublish }: 
           </p>
         </div>
 
-        <button
-          className="btn-publish flex items-center gap-2 group/btn"
-          onClick={() => onPublish(sql, subject)}
-        >
-          <Share2 className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
-          <span>Publish to Superset</span>
-        </button>
       </div>
 
       <div className="h-[350px] w-full relative z-10">

@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 /**
  * Three properties, each one a defect this repo has already paid for once.
  *
@@ -14,12 +12,10 @@ import path from "node:path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const fetchPlanStateVersion = vi.fn();
-const requestReevaluation = vi.fn();
 vi.mock("@/api/client", () => ({
   // FORWARDS THE REF. The first version of this mock dropped the argument, which meant no
   // test could observe WHICH plan was being polled — the exact property that was wrong.
   fetchPlanStateVersion: (ref?: string) => fetchPlanStateVersion(ref),
-  requestReevaluation: (id: string) => requestReevaluation(id),
 }));
 
 import {
@@ -38,7 +34,6 @@ const flush = () => vi.advanceTimersByTimeAsync(0);
 beforeEach(() => {
   vi.useFakeTimers();
   fetchPlanStateVersion.mockReset();
-  requestReevaluation.mockReset();
   __resetPlanVersion();
 });
 
@@ -147,40 +142,6 @@ describe("planVersion — a change notifies, a first read does not", () => {
     off();
   });
 });
-
-describe("the refresh triggers rather than writes", () => {
-  const SRC = readFileSync(path.join(__dirname, "useLiveViewRefresh.ts"), "utf8");
-
-  it("the source is read — positive control", () => {
-    expect(SRC).toContain("export function useLiveViewRefresh");
-  });
-
-  it("NEVER writes rendered_output or valid_as_of — those are Electric's", () => {
-    // The prohibition is what forces this to be a trigger instead of a second write path. A
-    // client that patched rows would be recomputing by another name, and the card's stamp
-    // would then assert a freshness no evaluation produced.
-    expect(SRC).not.toContain("updateArtifact");
-    expect(SRC).not.toMatch(/rendered_output\s*[:=]/);
-    expect(SRC).not.toMatch(/valid_as_of\s*[:=]/);
-  });
-
-  it("swallows a failed re-request rather than clearing the card", () => {
-    // A failed refresh leaves the previous evaluation AND its stamp. The old numbers really
-    // were true as of the old time; blanking would discard a valid answer to report a
-    // transport problem.
-    expect(SRC).toMatch(/requestReevaluation\(id\)\.catch\(\(\) => \{\}\)/);
-  });
-
-  it("is mounted ONCE in App, not per card", () => {
-    const app = readFileSync(path.join(__dirname, "../App.tsx"), "utf8");
-    expect(app).toContain("useLiveViewRefresh()");
-    // The card tree must not reach for it — that would be the fan-out species again.
-    for (const f of ["../components/AgenticCanvas/StageCard.tsx"]) {
-      expect(readFileSync(path.join(__dirname, f), "utf8")).not.toContain("useLiveViewRefresh");
-    }
-  });
-});
-
 
 /**
  * THE SCENARIO-BLINDNESS FIX.

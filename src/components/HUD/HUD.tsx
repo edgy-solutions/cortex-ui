@@ -10,7 +10,6 @@ import { TaskContextCard } from "./TaskContextCard";
 import { ModeToggle } from "./ModeToggle";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCurrentArtifact } from "@/store/useCanvasStore";
-import { CompileButton } from "@/components/Compilation/CompileButton";
 
 /**
  * HUD — the right-side grounding panel.
@@ -22,7 +21,6 @@ import { CompileButton } from "@/components/Compilation/CompileButton";
  *                        (replaces the stale DataBindings card)
  *   4. SourcesTrail    — citations the engines returned
  *   5. GraphTrace      — substrate walk (detailed mode only)
- *   6. CompileButton   — for interview phases (existing)
  *
  * Per architect's principle: the panel surfaces what the pipeline
  * actually did. Each section corresponds to a real pipeline emission;
@@ -30,7 +28,6 @@ import { CompileButton } from "@/components/Compilation/CompileButton";
  * over the same single event stream; the modes cannot diverge.
  */
 export function HUD() {
-  const phase = useInterviewStore((s) => s.phase);
   const mode = useInterviewStore((s) => s.groundingDisplayMode);
   // The HUD follows the selection's KIND: a task shows task-context, an answer
   // shows the routing/sources/graph trail. One contract, no overlay war.
@@ -83,17 +80,6 @@ export function HUD() {
         </>
       )}
 
-      {/* Compile button (shown when interview reaches blueprint/compiling/complete phase) */}
-      {(phase === "blueprint" || phase === "compiling" || phase === "complete") && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, type: "spring" }}
-          className="mt-auto"
-        >
-          <CompileButton />
-        </motion.div>
-      )}
     </div>
   );
 }

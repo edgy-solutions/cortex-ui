@@ -1,14 +1,9 @@
 import { create } from "zustand";
-import type {
-  BPMNGraphUpdate,
-  SemanticUIContainer,
-  PipelineStageKind,
-} from "@/api/types";
+import type { PipelineStageKind } from "@/api/types";
 import { PIPELINE_STAGES } from "@/api/types";
 
 // ── Types ──────────────────────────────────────────────────
 export type MessageRole = "user" | "agent";
-export type InterviewPhase = "active" | "blueprint" | "compiling" | "complete";
 
 /**
  * ThinkingStep — a single row in the left-stream ThinkingCard.
@@ -151,11 +146,8 @@ export interface AccessDenial {
 
 interface InterviewState {
   messages: Message[];
-  phase: InterviewPhase;
   ontologyTerms: OntologyTerm[];
   dataBindings: DataBinding[];
-  /** Live BPMN graph state from the backend stream */
-  liveBpmnGraph: BPMNGraphUpdate | SemanticUIContainer | null;
   /** Dead-end paths requiring user resolution */
   unresolvedPaths: string[];
   isProcessing: boolean;
@@ -208,10 +200,8 @@ interface InterviewState {
    * "I heard you" perceived responsiveness.
    */
   primePipelineStages: (agentMsgId: string) => void;
-  setPhase: (phase: InterviewPhase) => void;
   addOntologyTerm: (term: OntologyTerm) => void;
   addDataBinding: (binding: DataBinding) => void;
-  setLiveBpmnGraph: (graph: BPMNGraphUpdate | SemanticUIContainer | null) => void;
   setUnresolvedPaths: (paths: string[]) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   setAccessDenial: (denial: AccessDenial | null) => void;
@@ -234,10 +224,8 @@ interface InterviewState {
 
 const initialState = {
   messages: [] as Message[],
-  phase: "active" as InterviewPhase,
   ontologyTerms: [] as OntologyTerm[],
   dataBindings: [] as DataBinding[],
-  liveBpmnGraph: null as BPMNGraphUpdate | SemanticUIContainer | null,
   unresolvedPaths: [] as string[],
   isProcessing: false,
   accessDenial: null as AccessDenial | null,
@@ -342,8 +330,6 @@ export const useInterviewStore = create<InterviewState>((set) => ({
       }),
     })),
 
-  setPhase: (phase) => set({ phase }),
-
   addOntologyTerm: (term) =>
     set((state) => {
       // Prevent duplicates by label
@@ -357,8 +343,6 @@ export const useInterviewStore = create<InterviewState>((set) => ({
         return state;
       return { dataBindings: [...state.dataBindings, binding] };
     }),
-
-  setLiveBpmnGraph: (graph) => set({ liveBpmnGraph: graph }),
 
   setUnresolvedPaths: (paths) => set({ unresolvedPaths: paths }),
 

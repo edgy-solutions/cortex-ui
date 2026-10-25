@@ -3,7 +3,7 @@
  *
  * A header (filename, kind, the optional note) over the status card — what `IngestTurns` drew at the
  * head of the rail before a drop became a turn. With an ingest id the card reads the row from the
- * rail's one poller (`fromStore`). Without one the upload has not produced a status yet, or never
+ * rail's one poller. Without one the upload has not produced a status yet, or never
  * will: still uploading, refused (the server's `detail`, verbatim), or a duplicate whose original
  * was not named — the message alone is the result.
  *
@@ -13,11 +13,9 @@
 import { FileText } from "lucide-react";
 import { IngestStatusCard } from "./IngestStatusCard";
 import { duplicatePhrase } from "@/lib/ingestWire";
-import { useDropIdentity } from "@/hooks/useDropIdentity";
 import type { IngestComponent } from "@/lib/ingestArtifact";
 
 export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
-  const onBehalfOf = useDropIdentity();
   return (
     <div className="glass-panel p-3 border-cyan-500/20" data-ingest-entry={ingest.ingest_id ?? ""}>
       <div className="flex items-center gap-2 text-[11px] font-mono text-slate-200" data-ingest-turn-header>
@@ -57,8 +55,6 @@ export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
       {ingest.ingest_id && (
         <IngestStatusCard
           ingestId={ingest.ingest_id}
-          fromStore
-          onBehalfOf={onBehalfOf}
           duplicatePhraseDrawn={ingest.duplicate_message !== null}
         />
       )}

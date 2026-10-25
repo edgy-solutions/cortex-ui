@@ -15,8 +15,6 @@ import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusa
 import {
   type StreamEvent,
   type InterviewRequest,
-  type CompileRequest,
-  type CompileResponse,
   type Entitlements,
   type DecisionSubgraphRequest,
   type DecisionSubgraphResponse,
@@ -543,25 +541,6 @@ export async function streamInterviewResponse(
 
 // ── Canvas seeding ─────────────────────────────────────────────────────────────────────
 /**
- * THE SEAM for "make me a portfolio canvas".
- *
- * The server half asks the five measures through the GOVERNED path — BFF, gateway,
- * entitlements, select_presentation — and mints five real answer artifacts with real
- * provenance. It returns their ids IN SLOT ORDER; the client arranges them and nothing else.
- *
- * Ids, not content, on purpose. The artifacts arrive the way every artifact arrives, through
- * Electric, so a seeded card is a genuine answer with a decision path and a freshness stamp
- * rather than a payload this call inlined. Returning content here would make seeding a second
- * delivery path for answers, which is the thing the whole arrangement avoids.
- */
-export async function requestPortfolioCanvasSeed(): Promise<string[]> {
-  const { data } = await api.post<{ artifact_ids: string[] }>("/canvas/seed", {
-    canvas_type: "portfolio_planning",
-  });
-  return Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
-}
-
-/**
  * Seed a canvas for ONE TEMPLATE, by id -- the route is the one declaration of whether it can.
  *
  * Sends only fields `CanvasSeedRequest` declares: `template_id`, `bindings`, and the cell
@@ -670,31 +649,6 @@ export async function reschedulePlanProject(args: {
   const { data } = await api.post(
     `/plan/scenario/${encodeURIComponent(args.scenarioId)}/reschedule`,
     { project_id: args.projectId, start: args.start, end: args.end },
-  );
-  return data;
-}
-
-/**
- * Ask the server to re-evaluate one live view. Returns nothing on purpose: the answer does
- * not come back through this call. It lands as an updated projection row via Electric,
- * carrying its OWN valid_as_of stamped at evaluation — which is what makes a refreshed card
- * visibly fresh rather than silently newer.
- */
-export async function requestReevaluation(artifactId: string): Promise<void> {
-  await api.post("/artifacts/reevaluate", { artifact_id: artifactId });
-}
-
-// ── Compile Workflow ──────────────────────────────────────
-/**
- * Sends the final blueprint to the backend for compilation into
- * a Dagster job + Restate service.
- */
-export async function compileWorkflow(
-  request: CompileRequest
-): Promise<CompileResponse> {
-  const { data } = await api.post<CompileResponse>(
-    "/workflow/compile",
-    request
   );
   return data;
 }
@@ -808,28 +762,6 @@ export async function healthCheck(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// ── Analyst / Superset ───────────────────────────────────
-/**
- * Publishes a SQL-backed chart to Apache Superset.
- * Targets Engine A (Analyst Service) via the BFF.
- */
-export async function publishToSuperset(
-  sql: string,
-  title: string
-): Promise<{ summary: string }> {
-  const taskPayload = {
-    task_description: `Publish the chart '${title}' to Superset.`,
-    custom_payload: {
-      action: "publish",
-      sql_query: sql,
-      chart_title: title,
-    },
-  };
-
-  const { data } = await api.post<{ summary: string }>("/analyze", taskPayload);
-  return data;
 }
 
 // ── Fleet version (what is actually serving) ──────────────
@@ -1117,9 +1049,8 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
 /**
  * `GET /ingest/mine?limit=&before=` — the caller's own drops, newest first (191). Parsed by
  * `readIngestMinePage` in `src/lib/ingestWire.ts`. Keyset paging: `before` is the previous page's
- * `next`, passed back verbatim (opaque; never built here), and left off for the first page. A fleet
- * before 191 has no such route; the caller treats any failure as "no server list" and keeps what
- * browser storage holds.
+ * `next`, passed back verbatim (opaque; never built here), and left off for the first page. A failure
+ * is read by the caller as "no server list".
  */
 export async function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
   const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: before === null ? { limit } : { limit, before } });
@@ -1208,28 +1139,6 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
   const token = getOidcToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   return fetch(`${API_URL}/cases/${encodeURIComponent(caseId)}`, { method: "GET", headers });
-}
-
-/**
- * CORTEX-PROPOSED — `POST /ingest/{ingest_id}/origin/dispute`. Nothing on the real producer
- * (invincible-agent origin/master `41647787`) serves origin at all yet (see
- * `src/lib/ingestOrigin.ts`'s header), so this route, its body shape and its response are this
- * client's own proposal, not a measured wire — built the same way as `uploadIngest` above (same
- * `api` instance, so the caller's bearer + trace headers attach the same way) so it needs no
- * `check:transport` declaration of its own; it rides the wrapper like every other call here.
- *
- * No note UI exists (the dispute is a single action, "this looks wrong" — see
- * `IngestStatusCard`), so `note` is always sent absent rather than as an empty string.
- */
-export async function disputeIngestOrigin(
-  ingestId: string,
-  onBehalfOf: string,
-): Promise<{ steward_task_id: string }> {
-  const { data } = await api.post<{ steward_task_id: string }>(
-    `/ingest/${encodeURIComponent(ingestId)}/origin/dispute`,
-    { on_behalf_of: onBehalfOf },
-  );
-  return data;
 }
 
 /**

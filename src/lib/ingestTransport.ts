@@ -13,7 +13,6 @@ import {
   uploadIngest as realUploadIngest,
   fetchIngestStatus as realFetchIngestStatus,
   fetchIngestMine as realFetchIngestMine,
-  disputeIngestOrigin as realDisputeIngestOrigin,
   correctIngestLeaf as realCorrectIngestLeaf,
   retryIngest as realRetryIngest,
   fetchIngestSource as realFetchIngestSource,
@@ -25,7 +24,6 @@ import {
   uploadIngest as mockUploadIngest,
   fetchIngestStatus as mockFetchIngestStatus,
   fetchIngestMine as mockFetchIngestMine,
-  disputeIngestOrigin as mockDisputeIngestOrigin,
   correctIngestLeaf as mockCorrectIngestLeaf,
   mockRetryIngest,
   fetchIngestSource as mockFetchIngestSource,
@@ -52,13 +50,6 @@ export function fetchIngestStatus(ingestId: string): Promise<unknown> {
 /** `GET /ingest/mine` — see `src/api/client.ts`'s `fetchIngestMine`. */
 export function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
   return isIngestMockEnabled() ? mockFetchIngestMine(limit, before) : realFetchIngestMine(limit, before);
-}
-
-/** CORTEX-PROPOSED — see `src/api/client.ts`'s `disputeIngestOrigin` doc comment. */
-export function disputeIngestOrigin(ingestId: string, onBehalfOf: string): Promise<{ steward_task_id: string }> {
-  return isIngestMockEnabled()
-    ? mockDisputeIngestOrigin(ingestId, onBehalfOf)
-    : realDisputeIngestOrigin(ingestId, onBehalfOf);
 }
 
 /** RULED (architect 2026-10-21, "Leaf, final shape") — see `src/api/client.ts`'s `correctIngestLeaf`. */

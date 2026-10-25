@@ -3,6 +3,9 @@ import path from "node:path";
 /**
  * A MODULE NO ONE IMPORTS DOES NOT EXIST.
  *
+ * (`seedPortfolioCanvas.ts`, the module this was written for, was deleted in the dead-paths pass;
+ * the file keeps its name because other files cite it, and the law below is what it still holds.)
+ *
  * `seedPortfolioCanvas.ts` installs `window.__cortexSeedPortfolioCanvas` as a side effect and
  * says so in its own comment. That comment was false for two days. Nothing on the entry path
  * imported the module, so the bundler dropped it whole, so the side effect never ran and the
@@ -120,19 +123,6 @@ describe("the bring-up trigger is reachable from the entry point", () => {
     // which is the shape of false green that would make the real assertion meaningless.
     const orphans = allSources().filter((f) => !REACHABLE.has(f));
     expect(orphans.length).toBeGreaterThan(0);
-  });
-
-  it("seedPortfolioCanvas.ts is on the entry path", () => {
-    // The defect, stated directly. Red the moment App.tsx stops importing it and nothing else
-    // picks it up.
-    expect([...REACHABLE].map(rel)).toContain("lib/seedPortfolioCanvas.ts");
-  });
-
-  it("App.tsx imports it for its SIDE EFFECT, with no binding to drop", () => {
-    // Reachability is necessary and not sufficient. An unused named binding is a thing a
-    // bundler may eliminate; a bare import is a statement that the module must be evaluated.
-    const app = readFileSync(path.join(SRC, "App.tsx"), "utf8");
-    expect(app).toMatch(/^import "@\/lib\/seedPortfolioCanvas";$/m);
   });
 
   it("package.json does not declare sideEffects: false", () => {
