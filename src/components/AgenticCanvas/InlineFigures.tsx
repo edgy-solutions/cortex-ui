@@ -44,7 +44,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "react-oidc-context";
 import { Image as ImageIcon, AlertTriangle, Sparkles } from "lucide-react";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
-import { config } from "@/config";
+import { fetchDataModuleFigures } from "@/api/client";
 import type { Artifact, Source } from "@/api/types";
 
 interface Figure {
@@ -133,19 +133,11 @@ export function InlineFigures({ artifact }: InlineFiguresProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const url = `${config.VITE_API_URL}/data_module/figures?uri=${encodeURIComponent(
-      dataModuleUri,
-    )}`;
-    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
-    // Bypassing the axios wrapper costs only the X-Trace-Id/X-Session-Id correlation
-    // headers; the identity is intact and cortex-bff gates /data_module/figures on it.
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json() as Promise<FiguresResponse>;
-      })
+    // The client's request() carries the OIDC bearer and the correlation headers; a non-2xx
+    // rejects with "<status> <statusText>", as the raw fetch site did.
+    fetchDataModuleFigures(dataModuleUri)
       .then((json) => {
-        if (!cancelled) setFigures(json.figures ?? []);
+        if (!cancelled) setFigures((json as FiguresResponse).figures ?? []);
       })
       .catch((e: unknown) => {
         if (!cancelled) {

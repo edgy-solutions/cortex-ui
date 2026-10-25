@@ -28,7 +28,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { X, Image as ImageIcon, AlertTriangle, Sparkles } from "lucide-react";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
-import { config } from "@/config";
+import { fetchDataModuleFigures } from "@/api/client";
 
 interface Figure {
   uri: string;
@@ -70,19 +70,10 @@ export function FiguresSlideIn({ sourceUri, sourceLabel, onClose }: Props) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const url = `${config.VITE_API_URL}/data_module/figures?uri=${encodeURIComponent(sourceUri)}`;
-    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
-    // Same route and same reasoning as InlineFigures; identity intact, correlation
-    // headers are what the wrapper bypass costs.
-    fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json() as Promise<FiguresResponse>;
-      })
+    // Same shared reader as InlineFigures; a non-2xx rejects with "<status> <statusText>".
+    fetchDataModuleFigures(sourceUri)
       .then((json) => {
-        if (!cancelled) setData(json);
+        if (!cancelled) setData(json as FiguresResponse);
       })
       .catch((e: unknown) => {
         if (!cancelled) {

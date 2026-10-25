@@ -1,22 +1,12 @@
 import { useEffect, useState } from 'react';
 import { X, Database } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
-import { config } from '@/config';
+import { fetchGraphNode } from '@/api/client';
 import { useCanvasStore } from '../../store/useCanvasStore';
 
-// Backend URL from RUNTIME config, not `import.meta.env`.
-//
-// This line previously read `import.meta.env.VITE_API_URL ?? "http://localhost:8000"`,
-// which is baked at BUILD time. The CI image is built with no VITE_API_URL build arg
-// and no tracked .env, so the deployed bundle pinned this panel to loopback and the
-// request never left the browser — every load failed at the network layer.
-//
-// That outer fault MASKED an inner one: the request also carried no Authorization
-// header (see below). Repairing only the URL would have made this panel start reaching
-// cortex-bff and start rendering `{"detail": "Not authenticated"}` as graph data.
-// Both faults are fixed together on purpose; see scripts/check-transport-declarations.mjs
-// for the guard that stops a new unminted call site from landing.
-const API_URL = config.VITE_API_URL;
+// The fetch goes through the client module (request()): the backend URL comes from RUNTIME config and the
+// OIDC bearer rides the axios interceptor. Both faults the old raw fetch had (a build-time URL, no
+// Authorization header) are structurally impossible there; check:transport stops a new unminted call site.
 
 export const NodeInspector = () => {
   const { inspectedNodeId, isInspectorOpen, closeInspector } = useCanvasStore();
@@ -37,18 +27,9 @@ export const NodeInspector = () => {
       return () => { isMounted = false; };
     }
 
-    // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
-    fetch(`${API_URL}/graph/node/${encodeURIComponent(inspectedNodeId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        // `fetch` does NOT reject on 4xx/5xx. Without this check a 401's
-        // `{"detail": "Not authenticated"}` body parses cleanly and renders in the
-        // "Raw Graph Node" pane as though it were graph data — an auth failure
-        // dressed as a result. Same check the three sibling fetch sites already do.
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        return res.json();
-      })
+    fetchGraphNode(inspectedNodeId)
+      // A non-2xx rejects (axios, like the status check the raw fetch needed), so a 401's
+      // {"detail": "Not authenticated"} body is never rendered as graph data.
       .then((data) => {
         if (isMounted) {
           setNodeData(data);
