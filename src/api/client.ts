@@ -208,7 +208,9 @@ export function buildActBody(
   overrides?: Record<string, { disposition: string; reason: string }>,
   rowEdits?: RowEdits,
   reasonCode?: GroupedRejectCode,
-  headerEdits?: HeaderEdit[]
+  headerEdits?: HeaderEdit[],
+  // document review card only. // PROPOSED (unratified): see src/lib/documentReview.ts
+  sectionVerdicts?: unknown[]
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
@@ -217,6 +219,7 @@ export function buildActBody(
   }
   if (decision === "rejected" && reasonCode) body.reason_code = reasonCode;
   if (decision === "promoted" && headerEdits && headerEdits.length > 0) body.header_edits = headerEdits;
+  if (sectionVerdicts && sectionVerdicts.length > 0) body.section_verdicts = sectionVerdicts; // PROPOSED (unratified)
   return body;
 }
 
@@ -231,9 +234,11 @@ export async function actOnHumanTask(
   // grouped_review reject only: REQUIRED by the platform (422 reason_code_required without it).
   reasonCode?: GroupedRejectCode,
   // document_promotion promote only: steward corrections of mfr / notice_id / notice_date.
-  headerEdits?: HeaderEdit[]
+  headerEdits?: HeaderEdit[],
+  // document review card only: the per-section verdicts, sent only when provided.
+  sectionVerdicts?: unknown[]
 ): Promise<ActOnTaskResult> {
-  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits);
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts);
   const { data } = await api.post<ActOnTaskResult>(
     `/human_tasks/${encodeURIComponent(taskId)}/act`,
     body
