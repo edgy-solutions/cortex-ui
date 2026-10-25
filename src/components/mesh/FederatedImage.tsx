@@ -20,7 +20,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useAuth } from "react-oidc-context";
-import { config } from "@/config";
+import { fetchFederatedImage } from "@/api/client";
 
 interface FederatedImageProps {
   src: string;
@@ -51,19 +51,19 @@ export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, classN
           setError("not authenticated");
           return;
         }
-        // transport-exception: raw fetch — carries the caller's OIDC bearer explicitly.
-        // Must be raw rather than the axios wrapper because the response is a binary
-        // blob (URL.createObjectURL), not JSON. cortex-bff re-checks domain
-        // entitlement on /federated_image and 403s if the caller is not entitled.
-        const resp = await fetch(
-          `${config.VITE_API_URL}/federated_image?src=${encodeURIComponent(src)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!resp.ok) {
-          setError(resp.status === 403 ? "not entitled" : `bff ${resp.status}`);
+        // Through the client's request() with responseType "blob" (the body is binary, for
+        // URL.createObjectURL). cortex-bff re-checks domain entitlement on /federated_image and 403s
+        // if the caller is not entitled; axios rejects on non-2xx where fetch did not, so the status
+        // is read off the rejection.
+        let blob: Blob;
+        try {
+          blob = await fetchFederatedImage(src);
+        } catch (e) {
+          const status = (e as { response?: { status?: number } })?.response?.status;
+          if (typeof status !== "number") throw e;
+          setError(status === 403 ? "not entitled" : `bff ${status}`);
           return;
         }
-        const blob = await resp.blob();
         createdObjectUrl = URL.createObjectURL(blob);
         if (!cancelled) {
           setObjectUrl(createdObjectUrl);

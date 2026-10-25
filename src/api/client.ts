@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
@@ -7,8 +7,7 @@ import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
-import { INGEST_MINE_PATH, ingestLeafPath, ingestRetryPath, ingestExtractionPath, ingestSourcePath, ingestStatusPath, readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
-import { ANSWERS_PATH, answerBodyPath } from "@/lib/answersWire";
+import { readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
@@ -19,6 +18,8 @@ import {
   type DecisionSubgraphRequest,
   type DecisionSubgraphResponse,
 } from "./types";
+import type { Operations as BffOperations } from "./generated/bff";
+import type { Operations as V1Operations } from "./generated/ingestV1";
 
 // ── Auth Utilities ─────────────────────────────────────────
 /**
@@ -42,30 +43,6 @@ function getOidcToken(): string | null {
 
 // ── Config ────────────────────────────────────────────────
 const API_URL = config.VITE_API_URL;
-
-// ── ADR-0026 entitlements ─────────────────────────────────
-/**
- * Fetch the current user's (persona, domain) entitlement matrix from
- * cortex-bff (backed by topaz). Returns cells + default + provenance.
- *
- * The picker (PersonaPicker.tsx) calls this on login and populates
- * its dropdowns from the returned cells. Empty cells = no entitlements
- * seeded for this user → picker hides itself and the legacy JWT-claim
- * path handles routing.
- */
-export async function fetchEntitlements(): Promise<Entitlements> {
-  const token = getOidcToken();
-  const resp = await axios.get<Entitlements>(`${API_URL}/me/entitlements`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    // 15s, not 5s. DEFENCE, not the fix: under HTTP/1.1 the browser caps ~6 connections per
-    // origin, Electric holds two live shapes, and a bootstrap request can sit unsent past a 5s
-    // deadline without the server ever seeing it. The ordering change (fetch on auth-ready,
-    // ahead of shape subscriptions) is the actual repair; this only stops a queued request from
-    // being abandoned before it is dispatched.
-    timeout: 15000,
-  });
-  return resp.data;
-}
 
 const api = axios.create({
   baseURL: API_URL,
@@ -102,6 +79,159 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+// ── The typed core ────────────────────────────────────────
+// Every BFF call goes through request(): the op key names the route, and the argument types come
+// from the generated OpenAPI types (src/api/generated/*, snapshot pinned in src/api/openapi/SOURCES.json).
+// client.requestSeal.test.ts replays every exported function against the snapshot, so a path, a query
+// key or a body key the BFF does not declare goes red here instead of being silently dropped by the server.
+type BffOps = BffOperations;
+export type OpKey = keyof BffOps;
+
+/**
+ * Operations whose RESPONSE type comes from the ingest-v1 document, because the BFF snapshot declares no
+ * 200 schema for them yet (Lane 1: use v1 for response types until v1 merges to master).
+ * openapi.seal.test.ts goes red the day the BFF snapshot declares one of these.
+ */
+export const V1_SOURCED = [
+  "GET /me/entitlements",
+  "GET /me/human_tasks",
+  "POST /human_tasks/{task_id}/act",
+  "POST /ingest",
+  "GET /ingest/mine",
+  "GET /ingest/{ingest_id}/status",
+  "POST /ingest/{ingest_id}/retry",
+  "GET /ingest/{ingest_id}/extraction",
+  "POST /ingest/{ingest_id}/leaf",
+] as const satisfies readonly (keyof V1Operations & OpKey)[];
+type V1Key = (typeof V1_SOURCED)[number];
+
+export type Resp<K extends OpKey> = K extends V1Key ? V1Operations[K]["response"] : BffOps[K]["response"];
+
+type Slot<N extends string, T> = [T] extends [never]
+  ? { [P in N]?: undefined }
+  : undefined extends T
+    ? { [P in N]?: T }
+    : Record<never, never> extends T
+      ? { [P in N]?: T }
+      : { [P in N]: T };
+export type OpArgs<K extends OpKey> = Slot<"path", BffOps[K]["path"]> &
+  Slot<"query", BffOps[K]["query"]> &
+  Slot<"body", BffOps[K]["body"]>;
+
+type LooseArgs = { path?: Record<string, string>; query?: Record<string, unknown>; body?: unknown };
+
+function splitOp(op: string): [string, string] {
+  const i = op.indexOf(" ");
+  return [op.slice(0, i), op.slice(i + 1)];
+}
+
+function fillPath(template: string, path: Record<string, string> | undefined): string {
+  return template.replace(/\{([^}]+)\}/g, (_m, name: string) => encodeURIComponent(String(path?.[name])));
+}
+
+/** The path (no origin) an op resolves to. */
+export function opPath<K extends OpKey>(op: K, args: Slot<"path", BffOps[K]["path"]>): string {
+  return fillPath(splitOp(op)[1], (args as LooseArgs).path);
+}
+
+async function send(
+  method: string,
+  url: string,
+  a: LooseArgs,
+  cfg?: AxiosRequestConfig,
+): Promise<AxiosResponse<unknown>> {
+  const config: AxiosRequestConfig | undefined =
+    a.query !== undefined ? { ...cfg, params: a.query } : cfg;
+  switch (method) {
+    case "GET":
+      return config ? api.get(url, config) : api.get(url);
+    case "POST":
+      return config ? api.post(url, a.body, config) : a.body !== undefined ? api.post(url, a.body) : api.post(url);
+    case "PUT":
+      return config ? api.put(url, a.body, config) : api.put(url, a.body);
+    case "DELETE":
+      return config ? api.delete(url, config) : api.delete(url);
+    default:
+      throw new Error(`request: unsupported method ${method}`);
+  }
+}
+
+/** The whole axios response (status, headers) for a declared op. `request` returns only `.data`. */
+export async function requestFull<K extends OpKey>(
+  op: K,
+  args: OpArgs<K>,
+  cfg?: AxiosRequestConfig,
+): Promise<AxiosResponse<Resp<K>>> {
+  const [method, template] = splitOp(op);
+  const a = args as LooseArgs;
+  return (await send(method, fillPath(template, a.path), a, cfg)) as AxiosResponse<Resp<K>>;
+}
+
+export async function request<K extends OpKey>(
+  op: K,
+  args: OpArgs<K>,
+  cfg?: AxiosRequestConfig,
+): Promise<Resp<K>> {
+  return (await requestFull(op, args, cfg)).data;
+}
+
+/**
+ * Routes cortex calls that the BFF snapshot does NOT declare. Each is dead or unbuilt (the reason is the
+ * row text from docs/api/consumed-routes.md §6); item 4 deletes the callers. client.requestSeal.test.ts
+ * goes red the day the producer declares one of these ("move it onto request()").
+ */
+export const UNDECLARED_ROUTES = {
+  "POST /artifacts/reevaluate":
+    "the route is absent on both shas; it fires on every plan-version change, and a 404 is swallowed",
+  "POST /analyze":
+    'absent on both shas; every error toasts "Analyst Service unreachable"',
+  "POST /ingest/{ingest_id}/origin/dispute":
+    "cortex-proposed and never built (`/internal/origin/write` exists; the public dispute route does not)",
+} as const;
+
+/** The ONE escape for a route the snapshot does not declare. It must be listed in UNDECLARED_ROUTES. */
+export async function requestUndeclared<T = unknown>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  pathTemplate: string,
+  args: LooseArgs = {},
+  cfg?: AxiosRequestConfig,
+): Promise<T> {
+  if (!Object.prototype.hasOwnProperty.call(UNDECLARED_ROUTES, `${method} ${pathTemplate}`)) {
+    throw new Error(`requestUndeclared: ${method} ${pathTemplate} is not in UNDECLARED_ROUTES`);
+  }
+  return (await send(method, fillPath(pathTemplate, args.path), args, cfg)).data as T;
+}
+
+/** axios throws on non-2xx where fetch did not; callers that showed `${status} ${statusText}` keep that line. */
+function throwStatusLine(e: unknown): never {
+  const r = (e as { response?: { status?: number; statusText?: string } })?.response;
+  if (r && typeof r.status === "number") throw new Error(`${r.status} ${r.statusText ?? ""}`.trimEnd());
+  throw e;
+}
+
+// ── ADR-0026 entitlements ─────────────────────────────────
+/**
+ * Fetch the current user's (persona, domain) entitlement matrix from
+ * cortex-bff (backed by topaz). Returns cells + default + provenance.
+ *
+ * The picker (PersonaPicker.tsx) calls this on login and populates
+ * its dropdowns from the returned cells. Empty cells = no entitlements
+ * seeded for this user → picker hides itself and the legacy JWT-claim
+ * path handles routing.
+ */
+export async function fetchEntitlements(): Promise<Entitlements> {
+  // The api instance's interceptor attaches the same Bearer token this call used to set by hand.
+  const resp = await requestFull("GET /me/entitlements", {}, {
+    // 15s, not 5s. DEFENCE, not the fix: under HTTP/1.1 the browser caps ~6 connections per
+    // origin, Electric holds two live shapes, and a bootstrap request can sit unsent past a 5s
+    // deadline without the server ever seeing it. The ordering change (fetch on auth-ready,
+    // ahead of shape subscriptions) is the actual repair; this only stops a queued request from
+    // being abandoned before it is dispatched.
+    timeout: 15000,
+  });
+  return resp.data as unknown as Entitlements; // pass B: hand shape vs Entitlements (ingest-v1)
+}
+
 // ── HITL HumanTask queue (Slice 2 — workflow-ack) ───────────
 /**
  * REST initial-load of the caller's pending queue. cortex-bff filters by
@@ -114,8 +244,8 @@ export interface MyHumanTasksResponse {
   tasks: Array<Record<string, unknown>>;
 }
 export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
-  const { data } = await api.get<MyHumanTasksResponse>("/me/human_tasks");
-  return data;
+  const data = await request("GET /me/human_tasks", {});
+  return data as unknown as MyHumanTasksResponse; // pass B: hand shape vs HumanTasksListing (ingest-v1)
 }
 
 /**
@@ -255,11 +385,11 @@ export async function actOnHumanTask(
   page?: number
 ): Promise<ActOnTaskResult> {
   const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page);
-  const { data } = await api.post<ActOnTaskResult>(
-    `/human_tasks/${encodeURIComponent(taskId)}/act`,
-    body
-  );
-  return data;
+  const data = await request("POST /human_tasks/{task_id}/act", {
+    path: { task_id: taskId },
+    body: body as BffOps["POST /human_tasks/{task_id}/act"]["body"],
+  });
+  return data as unknown as ActOnTaskResult; // pass B: hand shape vs the ActGeneric | ActPromotion | Empty* | ActGrouped* union (ingest-v1)
 }
 
 /**
@@ -290,11 +420,8 @@ export async function createAccessRequest(req: {
     reason: req.reason ?? "",
   };
   if (req.domain) body.domain = req.domain;
-  const { data } = await api.post<CreateAccessRequestResult>(
-    "/access_requests",
-    body
-  );
-  return data;
+  const data = await request("POST /access_requests", { body });
+  return data as CreateAccessRequestResult;
 }
 
 /**
@@ -315,10 +442,8 @@ export interface ReviewOverrideInput {
  *  the detail view can render it. Existence-oracle-safe server-side: 404 unless the caller holds this
  *  grouped task in their own queue. */
 export async function fetchReviewBatch(workflowId: string): Promise<ReviewBatch> {
-  const { data } = await api.get<ReviewBatch>(
-    `/reviews/${encodeURIComponent(workflowId)}/batch`
-  );
-  return data;
+  const data = await request("GET /reviews/{workflow_id}/batch", { path: { workflow_id: workflowId } });
+  return data as ReviewBatch;
 }
 
 /**
@@ -333,10 +458,8 @@ export interface NoticeProvenanceResponse {
   items: ProvenanceItem[];
 }
 export async function fetchNoticeProvenance(noticeId: string): Promise<NoticeProvenanceResponse> {
-  const { data } = await api.get<NoticeProvenanceResponse>(
-    `/notices/${encodeURIComponent(noticeId)}/provenance`
-  );
-  return data;
+  const data = await request("GET /notices/{notice_id}/provenance", { path: { notice_id: noticeId } });
+  return data as NoticeProvenanceResponse;
 }
 
 /**
@@ -463,7 +586,7 @@ export async function streamInterviewResponse(
     signal.addEventListener("abort", () => ctrl.abort());
   }
 
-  await fetchEventSource(`${API_URL}/interview/stream`, {
+  await fetchEventSource(`${API_URL}${opPath("POST /interview/stream", {})}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -602,10 +725,10 @@ export async function requestTemplateCanvasSeed(
  * The server echoes `state_ref` back so a caller can see which plan it was answered about.
  */
 export async function fetchPlanStateVersion(stateRef?: string): Promise<number> {
-  const { data } = await api.get<{ state_ref: string; state_version: number }>(
-    "/plan/state_version",
-    stateRef ? { params: { state_ref: stateRef } } : undefined,
-  );
+  const data = (await request(
+    "GET /plan/state_version",
+    stateRef ? { query: { state_ref: stateRef } } : {},
+  )) as { state_ref: string; state_version: number };
   return data.state_version;
 }
 
@@ -622,7 +745,7 @@ export async function forkPlanScenario(
   name: string,
 ): Promise<void> {
   try {
-    await api.post("/plan/scenario", { scenario_id: scenarioId, name });
+    await request("POST /plan/scenario", { body: { scenario_id: scenarioId, name } });
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status;
     if (status !== 409) throw err;
@@ -646,22 +769,47 @@ export async function reschedulePlanProject(args: {
   start: string;
   end: string;
 }): Promise<{ scenario_id: string; version: number; ops: string[] }> {
-  const { data } = await api.post(
-    `/plan/scenario/${encodeURIComponent(args.scenarioId)}/reschedule`,
-    { project_id: args.projectId, start: args.start, end: args.end },
-  );
-  return data;
+  const data = await request("POST /plan/scenario/{scenario_id}/reschedule", {
+    path: { scenario_id: args.scenarioId },
+    body: { project_id: args.projectId, start: args.start, end: args.end },
+  });
+  return data as { scenario_id: string; version: number; ops: string[] };
+}
+
+// ── Reads that used to be raw fetches inside components ───
+/** GET /data_module/figures?uri= -- shared by InlineFigures and FiguresSlideIn. A non-2xx throws `<status> <statusText>`, as the fetch sites did. */
+export async function fetchDataModuleFigures(uri: string): Promise<unknown> {
+  try {
+    return await request("GET /data_module/figures", { query: { uri } });
+  } catch (e) {
+    return throwStatusLine(e);
+  }
+}
+
+/** GET /graph/node/{node_id} (NodeInspector's raw-JSON debug pane). A non-2xx throws `<status> <statusText>`. */
+export async function fetchGraphNode(nodeId: string): Promise<unknown> {
+  try {
+    return await request("GET /graph/node/{node_id}", { path: { node_id: nodeId } });
+  } catch (e) {
+    return throwStatusLine(e);
+  }
+}
+
+/** GET /federated_image?src= -- a binary body. A non-2xx rejects with the axios error (`response.status` is the caller's signal). */
+export async function fetchFederatedImage(src: string): Promise<Blob> {
+  const data = await request("GET /federated_image", { query: { src } }, { responseType: "blob" });
+  return data as Blob;
 }
 
 // ── Canvas persistence (ADR-0028) ────────────────────────
 /** The caller's durable custom canvases (server-side, cross-device). Shape is
  *  the client's CustomCanvas[] stored verbatim. */
 export async function fetchCanvases(): Promise<unknown[]> {
-  const { data } = await api.get<{ canvases: unknown[] }>("/me/canvases");
+  const data = (await request("GET /me/canvases", {})) as { canvases: unknown[] };
   return data.canvases ?? [];
 }
 export async function saveCanvases(canvases: unknown[]): Promise<void> {
-  await api.put("/me/canvases", { canvases });
+  await request("PUT /me/canvases", { body: { canvases } });
 }
 
 /** Directed 1-hop DataHub lineage edges among the given answered subjects, for
@@ -678,10 +826,9 @@ export async function fetchLineageEdges(
   subjects: { answer_id: string; urn: string }[],
 ): Promise<LineageEdgeDTO[]> {
   try {
-    const { data } = await api.post<{ edges: LineageEdgeDTO[] }>(
-      "/canvas/lineage_edges",
-      { subjects },
-    );
+    const data = (await request("POST /canvas/lineage_edges", { body: { subjects } })) as {
+      edges: LineageEdgeDTO[];
+    };
     return data.edges ?? [];
   } catch {
     return [];
@@ -690,8 +837,7 @@ export async function fetchLineageEdges(
 
 // ── Mesh Config ──────────────────────────────────────────
 export async function getMeshConfig(): Promise<any> {
-  const { data } = await api.get("/mesh/config");
-  return data;
+  return request("GET /mesh/config", {});
 }
 
 // ── Decision-path MAP base layer ─────────────────────────
@@ -702,14 +848,11 @@ export async function getMeshConfig(): Promise<any> {
  * "captured-only, cannot verify", never an empty map.
  */
 export async function fetchDecisionSubgraph(
-  request: DecisionSubgraphRequest,
+  req: DecisionSubgraphRequest,
 ): Promise<DecisionSubgraphResponse> {
   try {
-    const { data } = await api.post<DecisionSubgraphResponse>(
-      "/decision_subgraph",
-      request,
-    );
-    return data;
+    const data = await request("POST /decision_subgraph", { body: req });
+    return data as unknown as DecisionSubgraphResponse; // pass B: hand shape vs DecisionSubgraphResponse (bff)
   } catch (e) {
     // The transport itself failed — treat as couldn't-check, same shape
     // the backend returns on a live-read failure. Never fabricate a base
@@ -750,14 +893,14 @@ export async function registerFrontendCapabilities(payload: {
   frontend_version: string;
   capabilities: FrontendCapabilityPayload[];
 }): Promise<{ accepted: number; frontend_id: string; unchanged?: boolean }> {
-  const { data } = await api.post("/register_frontend_capabilities", payload);
+  const data = await request("POST /register_frontend_capabilities", { body: payload });
   return data;
 }
 
 // ── Health Check ─────────────────────────────────────────
 export async function healthCheck(): Promise<boolean> {
   try {
-    const { status } = await api.get("/health");
+    const { status } = await requestFull("GET /health", {});
     return status === 200;
   } catch {
     return false;
@@ -806,7 +949,7 @@ export type BffVersionResult =
 
 export async function fetchBffVersion(): Promise<BffVersionResult> {
   try {
-    const { data } = await api.get<{ self?: ServiceVersion }>("/fleet/version");
+    const data = await request("GET /fleet/version", {});
     return { kind: "ok", version: data?.self ?? {} };
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status;
@@ -832,7 +975,7 @@ export async function fetchBffVersion(): Promise<BffVersionResult> {
  * `saveCanvases`; nothing about the authorisation path changes.
  */
 export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
-  const url = `${API_URL}/me/canvases`;
+  const url = `${API_URL}${opPath("PUT /me/canvases", {})}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const auth = api.defaults.headers.common?.Authorization;
   if (typeof auth === "string" && auth) headers.Authorization = auth;
@@ -871,7 +1014,7 @@ export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
  */
 export async function fetchTemplates(): Promise<unknown | null> {
   try {
-    const { data } = await api.get<unknown>("/templates");
+    const data = await request("GET /templates", {});
     return data ?? null;
   } catch {
     return null;
@@ -903,7 +1046,7 @@ export async function fetchTemplates(): Promise<unknown | null> {
  */
 export async function fetchTaskKinds(): Promise<unknown[] | null> {
   try {
-    const { data } = await api.get<unknown>("/task_kinds");
+    const data = await request("GET /task_kinds", {});
     return readTaskKindsResponse(data);
   } catch {
     return null;
@@ -921,7 +1064,7 @@ export async function fetchTaskKinds(): Promise<unknown[] | null> {
  * until a live capture against this route seals it.
  */
 export async function fetchExportRecipients(): Promise<ExportRecipient[]> {
-  const { data } = await api.get<unknown>("/export/package/recipients");
+  const data = await request("GET /export/package/recipients", {});
   const recipients = readExportRecipients(
     isRecord(data) ? data.recipients : undefined,
   );
@@ -940,8 +1083,7 @@ export async function startCanvasExport(body: {
   recipient_scope: string;
   template_id?: string;
 }): Promise<unknown> {
-  const { data } = await api.post<unknown>("/export/package", body);
-  return data;
+  return request("POST /export/package", { body });
 }
 
 /**
@@ -954,8 +1096,9 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
   if (!uri.startsWith("/export/package/artifact/")) {
     throw new Error(`refusing to download outside /export/package/artifact/: ${uri}`);
   }
-  const { data } = await api.get<Blob>(uri, { responseType: "blob" });
-  return data;
+  const filename = uri.slice("/export/package/artifact/".length);
+  const data = await request("GET /export/package/artifact/{filename}", { path: { filename } }, { responseType: "blob" });
+  return data as Blob;
 }
 
 // ── Ingest (THE REAL WIRE — invincible-agent origin/master, 0f48fe2f, live on helm rev 162) ──
@@ -1028,10 +1171,7 @@ export async function uploadIngest(
   formData.append("on_behalf_of", onBehalfOf);
   formData.append("content_kind", contentKind);
   if (leaf !== null) formData.append("leaf", leaf);
-  const { data } = await api.post<unknown>("/ingest", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return data;
+  return request("POST /ingest", { body: formData }, { headers: { "Content-Type": "multipart/form-data" } });
 }
 
 /**
@@ -1042,8 +1182,7 @@ export async function uploadIngest(
  * at a reason the server deliberately did not give.
  */
 export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
-  const { data } = await api.get<unknown>(ingestStatusPath(ingestId));
-  return data;
+  return request("GET /ingest/{ingest_id}/status", { path: { ingest_id: ingestId } });
 }
 
 /**
@@ -1053,8 +1192,7 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
  * is read by the caller as "no server list".
  */
 export async function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
-  const { data } = await api.get<unknown>(INGEST_MINE_PATH, { params: before === null ? { limit } : { limit, before } });
-  return data;
+  return request("GET /ingest/mine", { query: before === null ? { limit } : { limit, before } });
 }
 
 /**
@@ -1062,16 +1200,14 @@ export async function fetchIngestMine(limit: number, before: string | null = nul
  * in `src/lib/answersWire.ts`. Only with the `answerSummaries` flag on.
  */
 export async function fetchAnswersPage(args: { page: number; size: number; q?: string }): Promise<unknown> {
-  const params: Record<string, unknown> = { page: args.page, size: args.size };
-  if (args.q) params.q = args.q;
-  const { data } = await api.get<unknown>(ANSWERS_PATH, { params });
-  return data;
+  const query: { page: number; size: number; q?: string } = { page: args.page, size: args.size };
+  if (args.q) query.q = args.q;
+  return request("GET /answers", { query });
 }
 
 /** `GET /answers/{id}/body` — the body of ONE opened answer, read by `readAnswerBody`. The id is URL-encoded. */
 export async function fetchAnswerBody(id: string): Promise<unknown> {
-  const { data } = await api.get<unknown>(answerBodyPath(id));
-  return data;
+  return request("GET /answers/{answer_id}/body", { path: { answer_id: id } });
 }
 
 /**
@@ -1081,8 +1217,7 @@ export async function fetchAnswerBody(id: string): Promise<unknown> {
  * (FastAPI wraps them under `detail`; read with `readIngestRetryRefusal`).
  */
 export async function retryIngest(ingestId: string): Promise<unknown> {
-  const { data } = await api.post<unknown>(ingestRetryPath(ingestId));
-  return data;
+  return request("POST /ingest/{ingest_id}/retry", { path: { ingest_id: ingestId } });
 }
 
 /**
@@ -1090,8 +1225,7 @@ export async function retryIngest(ingestId: string): Promise<unknown> {
  * and header. Returned RAW; `readExtraction` reads it.
  */
 export async function fetchIngestExtraction(ingestId: string): Promise<unknown> {
-  const { data } = await api.get<unknown>(ingestExtractionPath(ingestId));
-  return data;
+  return request("GET /ingest/{ingest_id}/extraction", { path: { ingest_id: ingestId } });
 }
 
 /**
@@ -1111,9 +1245,9 @@ export interface IngestSource {
 }
 
 export async function fetchIngestSource(ingestId: string): Promise<IngestSource> {
-  const res = await api.get<ArrayBuffer>(ingestSourcePath(ingestId), { responseType: "arraybuffer" });
+  const res = await requestFull("GET /ingest/{ingest_id}/source", { path: { ingest_id: ingestId } }, { responseType: "arraybuffer" });
   const ct = res.headers?.["content-type"];
-  return { bytes: res.data, status: res.status, contentType: typeof ct === "string" && ct ? ct : null };
+  return { bytes: res.data as ArrayBuffer, status: res.status, contentType: typeof ct === "string" && ct ? ct : null };
 }
 
 /**
@@ -1138,7 +1272,7 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
   };
   const token = getOidcToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(`${API_URL}/cases/${encodeURIComponent(caseId)}`, { method: "GET", headers });
+  return fetch(`${API_URL}${opPath("GET /cases/{case_id}", { path: { case_id: caseId } })}`, { method: "GET", headers });
 }
 
 /**
@@ -1152,8 +1286,7 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
  * `leaf_not_changeable` (`leaf_fixed_at_review` no longer exists). Answers the status body. Same `api` instance as every call above, so it needs no `check:transport` declaration.
  */
 export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
-  const { data } = await api.post<unknown>(ingestLeafPath(ingestId), { leaf });
-  return data;
+  return request("POST /ingest/{ingest_id}/leaf", { path: { ingest_id: ingestId }, body: { leaf } });
 }
 
 /**

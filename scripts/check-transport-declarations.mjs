@@ -54,7 +54,9 @@ const WRAPPER_FILES = ["src/api/client.ts"];
  * Without this, a broken walker, a renamed `src/`, or a regex that stops
  * matching all report the same cheerful green as a clean repo.
  */
-const MIN_EXPECTED_SITES = 8;
+// Lowered 8 -> 6 (census 10 -> 6) when the four raw component fetches (figures x2, graph/node, federated_image)
+// moved into client.ts request().
+const MIN_EXPECTED_SITES = 6;
 
 const MARKER = "transport-exception:";
 
