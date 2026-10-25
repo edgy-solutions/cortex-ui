@@ -474,15 +474,15 @@ This is measured on master `0288915`, and answers Lane 1's question in `2026-10-
 
 | path | evidence | plan |
 |---|---|---|
-| `POST /artifacts/reevaluate` (`requestReevaluation`, `useLiveViewRefresh.ts:103`) | the route is absent on both shas; it fires on every plan-version change, and a 404 is swallowed | ask the producer: it is unbuilt, so delete the call; or is it named differently? |
-| `POST /analyze` (`publishToSuperset`) | absent on both shas; every error toasts "Analyst Service unreachable" | ask; if unbuilt, remove the Publish button |
-| `POST /ingest/{id}/origin/dispute`, `origin` on the row, `ingestOrigin.ts` | cortex-proposed and never built (`/internal/origin/write` exists; the public dispute route does not) | ingest-v1 states whether `origin` is on the row; if not, delete |
-| `/workflow/compile`, `useCompileWorkflow`, `CompileButton`, `CompilationOverlay`, `useMockWorkflowBuilder`, `WorkflowCanvas`, `BPMN*` types | the interview phase starts `active`, and only these components enter blueprint/compiling | delete |
-| `/canvas/seed`, `seedPortfolioCanvas.ts` window global | only `window.__cortexSeedPortfolioCanvas`; its header says "Remove when the phrase routes end to end" | delete |
-| `IngestStatusCard` self-poll (:303-352), `initialRow`, `pollIntervalMs`, the non-store retry branch | the only live mount (`IngestEntryBody.tsx:58`) passes `fromStore` | delete, and move the tests to the store path |
-| `mine: "failed"` and the "fleet before 191" fallback, `myDrops.ts` as an id source | pre-191 | delete the fallback, and keep `myDrops` for the **filename** only (the status row does not carry it); ask ingest-v1 for `filename` |
-| suggestion-flow orphans: `KindPicker.suggestedKind`/`suggestionValid`, the `origin_suggestion` fixtures | `IngestKindSuggestion` was deleted in `8eed1c5` | delete |
-| stale text: "route not served here yet (lands with 193)" (`promotionReview.ts:448`), "NOT LIVE until 193" (`ingestWire.ts:659`) | 193 has rolled | reword |
+| `POST /artifacts/reevaluate` (`requestReevaluation`, `useLiveViewRefresh.ts:103`) | the route is absent on both shas; it fires on every plan-version change, and a 404 is swallowed | ask the producer: it is unbuilt, so delete the call; or is it named differently? — **deleted in this PR** |
+| `POST /analyze` (`publishToSuperset`) | absent on both shas; every error toasts "Analyst Service unreachable" | ask; if unbuilt, remove the Publish button — **deleted in this PR** |
+| `POST /ingest/{id}/origin/dispute`, `origin` on the row, `ingestOrigin.ts` | cortex-proposed and never built (`/internal/origin/write` exists; the public dispute route does not) | ingest-v1 states whether `origin` is on the row; if not, delete — **deleted in this PR** |
+| `/workflow/compile`, `useCompileWorkflow`, `CompileButton`, `CompilationOverlay`, `useMockWorkflowBuilder`, `WorkflowCanvas`, `BPMN*` types | the interview phase starts `active`, and only these components enter blueprint/compiling | delete — **deleted in this PR** |
+| `/canvas/seed`, `seedPortfolioCanvas.ts` window global | only `window.__cortexSeedPortfolioCanvas`; its header says "Remove when the phrase routes end to end" | delete — **deleted in this PR** |
+| `IngestStatusCard` self-poll (:303-352), `initialRow`, `pollIntervalMs`, the non-store retry branch | the only live mount (`IngestEntryBody.tsx:58`) passes `fromStore` | delete, and move the tests to the store path — **deleted in this PR** |
+| `mine: "failed"` and the "fleet before 191" fallback, `myDrops.ts` as an id source | pre-191 | delete the fallback, and keep `myDrops` for the **filename** only (the status row does not carry it); ask ingest-v1 for `filename` — **deleted in this PR** |
+| suggestion-flow orphans: `KindPicker.suggestedKind`/`suggestionValid`, the `origin_suggestion` fixtures | `IngestKindSuggestion` was deleted in `8eed1c5` | delete — **deleted in this PR** |
+| stale text: "route not served here yet (lands with 193)" (`promotionReview.ts:448`), "NOT LIVE until 193" (`ingestWire.ts:659`) | 193 has rolled | reword — **deleted in this PR** |
 | `/health` | gates nothing (`isConnected` is hard-coded true) | keep or delete; it is not load-bearing |
 | `/graph/node/{id}` | dereferences nothing; prints raw JSON | keep (a debug pane), and type it as `unknown` |
 | duplicated `Figure` interfaces (`InlineFigures`, `FiguresSlideIn`) | they disagree on `url`'s nullability | one reader, in the client module |

@@ -53,7 +53,6 @@
  * list, now drawn from the REAL `STAGES` tuple rather than the old `STATUSES`.
  */
 import { readFractionEvidenceRef, type FractionEvidenceRef } from "./evidenceRef";
-import { readIngestOrigin, type IngestOrigin } from "./ingestOrigin";
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
 
@@ -307,13 +306,6 @@ export interface IngestStatusRow {
   created_at: number;
   updated_at: number;
   /**
-   * CORTEX-PROPOSED (`src/lib/ingestOrigin.ts`) — the real route (invincible-agent origin/master
-   * `41647787`) serves no `origin` field today. `null` means "the server reports no origin",
-   * read via `readIngestOrigin`, which is a THIRD state, distinct from `{status:"unresolved"}` —
-   * never conflate a server that has not been asked with a resolver that tried and missed.
-   */
-  origin: IngestOrigin | null;
-  /**
    * `GET /ingest/{id}/status`'s `case_id` (roll #20): the id of the case an EVENT ingest opened,
    * for `GET /cases/{case_id}`. `null` on document rows (Lane 1: null on document rows) and on an
    * event row not yet at `case_opened`. Older producers omit the field entirely — absent reads
@@ -559,9 +551,6 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     duplicate,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
-    // Absent on today's real wire — `readIngestOrigin` returns null for exactly that, never a
-    // fabricated unresolved/resolved state. See `IngestStatusRow.origin`'s own doc comment.
-    origin: readIngestOrigin(raw.origin),
     case_id,
     ...(leafPair ?? {}),
     ...(leafCandidates !== undefined ? { leaf_candidates: leafCandidates } : {}),
@@ -655,8 +644,8 @@ export function ingestLeafPath(id: string): string {
 }
 
 /**
- * The review card's two routes. Built on 193 by Lane 1 (`lane/01-193` at 71cdc40b), and NOT LIVE
- * until 193 rolls; until then each answers a plain 404.
+ * The review card's two routes. Built on 193 by Lane 1 (`lane/01-193` at 71cdc40b); 193 has rolled, so
+ * both are served. A BARE 404 (no error code) now means a server that does not carry them.
  *
  * Both are built HERE from the task's `ingest_id`, never read off a payload: the fetch carries the
  * caller's bearer, and a payload path could point it anywhere (see `promotionReview.ts`).

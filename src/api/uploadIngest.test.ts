@@ -1,5 +1,5 @@
 /**
- * THE CONNECTION ITSELF, for `uploadIngest` and `disputeIngestOrigin` — mirrors
+ * THE CONNECTION ITSELF, for `uploadIngest` — mirrors
  * `fetchTaskKinds.test.ts`'s rationale: every other ingest test mocks `@/lib/ingestTransport` or
  * `@/api/client` wholesale, so the real multipart body `uploadIngest` actually sends is
  * unexercised. This mocks `axios` one level further out so the REAL functions in `src/api/client.ts`
@@ -22,7 +22,7 @@ vi.mock("axios", () => ({
   },
 }));
 
-import { uploadIngest, disputeIngestOrigin } from "./client";
+import { uploadIngest } from "./client";
 
 beforeEach(() => {
   mockPost.mockReset();
@@ -44,16 +44,5 @@ describe("uploadIngest — the multipart body's key set, exactly", () => {
     expect(keys).toEqual(new Set(["file", "kind", "on_behalf_of", "content_kind"]));
     // Without it doc-tools refuses "no registered content_kind" and the drop goes `failed`.
     expect((body as FormData).get("content_kind")).toBe("pdf");
-  });
-});
-
-describe("disputeIngestOrigin — the proposed dispute route", () => {
-  it("posts {on_behalf_of} with no note, to /ingest/{id}/origin/dispute", async () => {
-    mockPost.mockResolvedValue({ data: { steward_task_id: "task-1" } });
-    const out = await disputeIngestOrigin("sha256:abc", "steward@example.com");
-    expect(mockPost).toHaveBeenCalledWith("/ingest/sha256%3Aabc/origin/dispute", {
-      on_behalf_of: "steward@example.com",
-    });
-    expect(out).toEqual({ steward_task_id: "task-1" });
   });
 });

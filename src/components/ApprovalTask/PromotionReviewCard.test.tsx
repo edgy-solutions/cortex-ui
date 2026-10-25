@@ -384,11 +384,11 @@ describe("rows and the source", () => {
     expect(document.querySelector('[data-pdf-state="failed"]')).not.toBeNull();
   });
 
-  it("an extraction route not served yet (a plain 404, before 193) says so; the source and Reject remain", async () => {
+  it("an extraction route not served yet (a plain 404) says so; the source and Reject remain", async () => {
     fetchIngestExtraction.mockRejectedValue({ response: { status: 404, data: { detail: "Not Found" } } });
     render(<ApprovalTaskCard task={task()} />);
     await waitFor(() => expect(document.querySelector("[data-extraction-failed]")).not.toBeNull());
-    expect(document.querySelector("[data-extraction-failed]")!.textContent).toContain("not served here yet (404)");
+    expect(document.querySelector("[data-extraction-failed]")!.textContent).toContain("answered a bare 404");
     expect(rowEls()).toHaveLength(0);
     expect(document.querySelector("[data-review-title]")!.textContent).toBe(FIXTURE_NOTICE_ID); // the payload's
     await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());

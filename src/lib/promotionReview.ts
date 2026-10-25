@@ -448,7 +448,7 @@ export function reviewRouteFailure(err: unknown, route: "extraction" | "source")
   const code = isObj(detail) ? str(detail.error) : null;
   const message = isObj(detail) ? str(detail.message) : null;
   const what = route === "extraction" ? "The extraction" : "The source";
-  if (status === 404 && code === null) return `${what} route is not served here yet (404). It lands with 193.`;
+  if (status === 404 && code === null) return `${what} route answered a bare 404 (no error code), so this server does not serve it.`;
   if (status === 403) return `You are not entitled to this task's ${route} (403${code ? ` ${code}` : ""}). A steward's access closes when the task resolves.`;
   if (status !== null) {
     const head = `${what} could not be loaded (${status}${code ? ` ${code}` : ""})`;

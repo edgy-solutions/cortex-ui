@@ -7,8 +7,8 @@
  *
  * A CACHE, NOT THE RECORD. The list route landed in 191 (`GET /ingest/mine`, read by
  * `useIngestStatusStore.loadMine`); the architect's ruling: "browser storage is a cache, never the
- * record." What this list still adds is the FILENAME, which the status body does not carry, and a
- * rail on a fleet before 191. (Requested of Lane 1 in
+ * record." What this list still adds is the FILENAME, which the status body does not carry; it is
+ * read for that alone and is never a source of ids. (Requested of Lane 1 in
  * `sessions/2026-10-10-packet-to-lane-1-duplicate-mints-a-row-and-my-drops.md`.)
  *
  * Keyed by the authenticated user's stable id (the OIDC `sub` — the same identity

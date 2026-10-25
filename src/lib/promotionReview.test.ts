@@ -316,7 +316,7 @@ describe("route failures name the server's code", () => {
   const err = (status: number, detail?: unknown) => ({ response: { status, data: detail === undefined ? {} : { detail } } });
 
   it("a PLAIN 404 is the route not served yet; a coded 404 is the route's own answer", () => {
-    expect(reviewRouteFailure(err(404, "Not Found"), "extraction")).toBe("The extraction route is not served here yet (404). It lands with 193.");
+    expect(reviewRouteFailure(err(404, "Not Found"), "extraction")).toBe("The extraction route answered a bare 404 (no error code), so this server does not serve it.");
     expect(reviewRouteFailure(err(404, { error: "ingest_not_found" }), "extraction")).toBe("The extraction could not be loaded (404 ingest_not_found).");
     expect(reviewRouteFailure(err(404, { error: "source_absent" }), "source")).toBe("The source could not be loaded (404 source_absent).");
   });
@@ -334,7 +334,7 @@ describe("route failures name the server's code", () => {
     const raw = (status: number, data: unknown) => ({ response: { status, data } });
     expect(reviewRouteFailure(raw(404, bytes({ detail: { error: "source_absent" } }).buffer), "source")).toBe("The source could not be loaded (404 source_absent).");
     expect(reviewRouteFailure(raw(403, bytes({ detail: { error: "not_entitled" } })), "source")).toContain("(403 not_entitled)");
-    expect(reviewRouteFailure(raw(404, bytes({ detail: "Not Found" }).buffer), "source")).toBe("The source route is not served here yet (404). It lands with 193.");
+    expect(reviewRouteFailure(raw(404, bytes({ detail: "Not Found" }).buffer), "source")).toBe("The source route answered a bare 404 (no error code), so this server does not serve it.");
     expect(reviewRouteFailure(raw(502, new TextEncoder().encode("<html>bad gateway").buffer), "source")).toBe("The source could not be loaded (502).");
   });
 

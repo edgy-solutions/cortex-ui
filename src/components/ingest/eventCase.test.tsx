@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
-import { IngestStatusCard } from "./IngestStatusCard";
+import { SeededCard } from "./ingestCardTestKit";
 import { readIngestStatusRow } from "@/lib/ingestWire";
 import {
   CASE_ID,
@@ -40,7 +40,7 @@ function stubFetch(status: number, body: unknown) {
 function renderRow(raw: unknown) {
   const row = readIngestStatusRow(raw);
   expect(row, "the fixture row must parse").not.toBeNull();
-  return render(<IngestStatusCard ingestId={row!.ingest_id} initialRow={row!} pollIntervalMs={100000} />);
+  return render(<SeededCard ingestId={row!.ingest_id} seed={row!} />);
 }
 
 describe("seal 5 — the card, an event row at case_opened with a case_id", () => {

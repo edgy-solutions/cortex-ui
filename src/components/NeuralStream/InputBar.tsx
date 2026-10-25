@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { Paperclip, Send, Wifi, WifiOff, X } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
 import { useComposerDraft } from "@/hooks/useComposerDraft";
-import { useInterviewStore } from "@/store/useInterviewStore";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { KindPicker } from "@/components/ingest/KindPicker";
 import { DropLeafRow } from "@/components/ingest/DropLeafRow";
@@ -26,7 +25,6 @@ export function InputBar() {
   // surface and bounces to Keycloak, and the typed prompt used to die with it.
   const { value, setValue, clearDraft } = useComposerDraft();
   const { sendMessage, isConnected, isProcessing } = useAgent();
-  const phase = useInterviewStore((s) => s.phase);
   const textInputRef = useRef<HTMLInputElement>(null);
 
   // The `/ask?q=` deep link: the question is TYPED into the composer and nothing is sent. Replaces
@@ -127,7 +125,7 @@ export function InputBar() {
     }
     // Early return leaves the draft on disk — a submit that never dispatched has not
     // consumed the text, and clearing here would delete work the user still owes an attempt.
-    if (!value.trim() || phase !== "active" || isProcessing) return;
+    if (!value.trim() || isProcessing) return;
     sendMessage(value.trim());
     clearDraft();
   };
@@ -136,7 +134,7 @@ export function InputBar() {
   // mutation guard in useInterviewAgent will silently no-op duplicates, but
   // surfacing the disabled state here makes the rate-limit visible to the
   // user instead of a button that looks active but does nothing.
-  const isDisabled = phase !== "active" || isProcessing;
+  const isDisabled = isProcessing;
   const sendDisabled = hasChip ? !(dropReady({ file: chipFile, kind: chipKind, leaf: chipLeaf }) && onBehalfOf) : !value.trim() || isDisabled;
 
   return (
@@ -289,11 +287,9 @@ export function InputBar() {
                   ? "Add a note (optional), then send..."
                   : isProcessing
                     ? "Streaming response — please wait..."
-                    : phase !== "active"
-                      ? "Interview complete — compile the workflow"
-                      : isConnected
-                        ? "Connected to mesh — begin interrogation..."
-                        : "Offline mode — begin interrogation..."
+                    : isConnected
+                      ? "Connected to mesh — begin interrogation..."
+                      : "Offline mode — begin interrogation..."
               }
               className="flex-1 min-w-0 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 font-mono outline-none disabled:opacity-40"
             />

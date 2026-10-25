@@ -7,11 +7,7 @@
  * ("never LLM-classified") holds exactly as it did for the proposed wire, just with a smaller,
  * fixed menu instead of a registered/fetched one.
  *
- * `suggestedKind` pre-selects ONLY when it names a value actually in `INGEST_KINDS` — kept as a
- * prop, with its own tests below, because a future producer-side suggestion is the kind of
- * addition that should slot into this component rather than need a second one. NOTHING ON THE
- * REAL TRANSPORT SUPPLIES ONE TODAY: `IngestPanel` never passes `suggestedKind`, so in practice
- * nothing is ever pre-selected and confirm starts disabled until a human picks.
+ * Nothing is pre-selected: confirm starts disabled until a human picks.
  *
  * `blockedReason`, when non-null, disables confirm regardless of selection and shows the reason
  * — the no-`on_behalf_of`-email case (`IngestPanel`), where sending the upload at all would be
@@ -21,7 +17,6 @@ import { useState } from "react";
 import { INGEST_UPLOAD_KINDS, ingestKindNotYetAccepted, ingestKindNotYetAcceptedReason, type IngestKind } from "@/lib/ingestWire";
 
 export interface KindPickerProps {
-  suggestedKind?: string | null;
   onConfirm: (kind: IngestKind) => void;
   confirming?: boolean;
   blockedReason?: string | null;
@@ -33,13 +28,8 @@ export interface KindPickerProps {
   sniffedKind?: string | null;
 }
 
-export function KindPicker({ suggestedKind = null, onConfirm, confirming, blockedReason, onSelect, inline, sniffedKind = null }: KindPickerProps) {
-  const suggestionValid =
-    suggestedKind !== null && (INGEST_UPLOAD_KINDS as readonly string[]).includes(suggestedKind) &&
-    !ingestKindNotYetAccepted(suggestedKind);
-  const [selected, setSelected] = useState<IngestKind | null>(
-    suggestionValid ? (suggestedKind as IngestKind) : null,
-  );
+export function KindPicker({ onConfirm, confirming, blockedReason, onSelect, inline, sniffedKind = null }: KindPickerProps) {
+  const [selected, setSelected] = useState<IngestKind | null>(null);
 
   return (
     <div

@@ -39,7 +39,6 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
   fetchIngestMine: (...a: unknown[]) => fetchIngestMine(...a),
   retryIngest: (...a: unknown[]) => retryIngest(...a),
-  disputeIngestOrigin: vi.fn(),
   correctIngestLeaf: vi.fn(),
 }));
 vi.mock("./LiveAnswerStrip", () => ({ LiveAnswerStrip: () => null }));
@@ -176,20 +175,10 @@ describe("a drop is a turn on the rail", () => {
     expect(fetchIngestStatus.mock.calls.length, "polled after promoted").toBe(calls);
   });
 
-  it("a remembered terminal drop is fetched once and never again", async () => {
-    recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW - 86_400_000 });
-    fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
-    render(<Harness />);
-    await tick(0);
-    await tick(INGEST_POLL_MS * 4);
-    expect(fetchIngestStatus).toHaveBeenCalledTimes(1);
-    expect(stageText()).toBe("promoted");
-    expect(badgeEl(), "a terminal drop is not in flight").toBeNull();
-  });
-
   it("is found by search on filename and on ingest id", async () => {
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
     fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null }); // the list is the id source; storage only names the file
     useCanvasStore.setState({ artifacts: [answer(1), answer(2)] });
     render(<Harness />);
     await tick(0);
@@ -217,6 +206,7 @@ describe("a drop is a turn on the rail", () => {
 
   it("keeps one id across a reload (the ingest id, not the turn id)", async () => {
     uploadIngest.mockResolvedValue({ ingest_id: ID, stage: "received", duplicate: null });
+    fetchIngestMine.mockResolvedValue({ items: [wire(ID, "review")], next: null }); // after a reload the server list is what remains
     fetchIngestStatus.mockResolvedValue(wire(ID, "review"));
     render(<Harness />);
     await sendOne();
@@ -311,6 +301,7 @@ describe("TYPE filter and the composer badge", () => {
   it("the filter holds in TYPE mode too", async () => {
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
     fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null }); // the list is the id source; storage only names the file
     useCanvasStore.setState({ artifacts: [answer(1)] });
     useAnswerPanelStore.setState({ sortMode: "TYPE", typeFilter: "INGEST" });
     render(<Harness />);
@@ -322,6 +313,7 @@ describe("TYPE filter and the composer badge", () => {
 
   it("the badge counts uploading + non-terminal drops, hides at 0, and drops as a drop goes terminal", async () => {
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW - 1000 });
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null });
     fetchIngestStatus.mockImplementation((id: string) =>
       Promise.resolve(id === OLD ? wire(OLD, "promoted") : wire(ID, flip ? "promoted" : "extracting")),
     );
@@ -343,6 +335,7 @@ describe("no My drops", () => {
   it("nothing in the composer or rail says or marks My drops, with drops present", async () => {
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
     fetchIngestStatus.mockResolvedValue(wire(OLD, "review"));
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "review")], next: null }); // the list is the id source; storage only names the file
     render(<Harness />);
     await tick(0);
     expect(document.body.textContent).not.toMatch(/my drops/i);
@@ -391,6 +384,7 @@ describe("extraction_defect on the rail", () => {
       useIngestStatusStore.getState().reset();
       useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
       fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted", over));
+      fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted", over)], next: null }); // the list is the id source; storage only names the file
       render(<Harness />);
       await tick(0);
       expect(!!marker(), JSON.stringify(over)).toBe(drawn);
@@ -455,6 +449,7 @@ describe("a failed drop's reason and the notice id on the rail", () => {
   it("notice_id is on the rail entry and the opened card, and the rail finds the entry by it", async () => {
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
     fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted", { notice_id: "PCN26-184" }));
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted", { notice_id: "PCN26-184" })], next: null }); // the list is the id source; storage only names the file
     useCanvasStore.setState({ artifacts: [answer(1), answer(2)] });
     render(<Harness />);
     await tick(0);
@@ -618,6 +613,7 @@ describe("GET /ingest/mine: the server's list is the record, browser storage the
     recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
     fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null });
     fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
+    fetchIngestMine.mockResolvedValue({ items: [wire(OLD, "promoted")], next: null }); // the list is the id source; storage only names the file
     render(<Harness />);
     await tick(0);
     const mine = useCanvasStore.getState().artifacts.filter((a) => a.id.startsWith("ingest:"));
@@ -630,16 +626,6 @@ describe("GET /ingest/mine: the server's list is the record, browser storage the
     await tick(0);
     await tick();
     expect(fetchIngestStatus).not.toHaveBeenCalled();
-  });
-
-  it("a fleet with no /ingest/mine (404): the stored drops still draw, nothing errors", async () => {
-    recordMyDrop("user-a", { ingestId: OLD, filename: "old.pdf", droppedAt: NOW });
-    fetchIngestMine.mockRejectedValue(Object.assign(new Error("404"), { response: { status: 404, data: { detail: "Not Found" } } }));
-    fetchIngestStatus.mockResolvedValue(wire(OLD, "promoted"));
-    render(<Harness />);
-    await tick(0);
-    expect(useIngestStatusStore.getState().mine).toBe("failed");
-    expect(useCanvasStore.getState().artifacts.map((a) => a.summary)).toEqual(["old.pdf"]);
   });
 
   it("an owner purge mid-read discards that read and the list is read AGAIN", async () => {

@@ -17,7 +17,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { IngestStatusCard } from "./IngestStatusCard";
+import { SeededCard } from "./ingestCardTestKit";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
@@ -108,7 +108,7 @@ describe("PCN26-119 live capture (rev 175) — review, the real task, the captur
     it("at hop 3, the card draws received/extracting done, review current, promoted pending", () => {
       const reviewRow = readIngestStatusRow(capture.hops[3].response.body)!;
       fetchIngestStatus.mockResolvedValue(capture.hops[3].response.body);
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       expect(
         document.querySelector('[data-ingest-ladder-stage="received"]')?.getAttribute("data-ingest-ladder-state"),
       ).toBe("done");
@@ -145,7 +145,7 @@ describe("PCN26-119 live capture (rev 175) — review, the real task, the captur
       'offers EXACTLY ["promoted","rejected"] — "approved" is never a button here',
       () => {
         useHumanTaskStore.setState({ tasks: [humanTask] });
-        render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+        render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
         const verbs = [...document.querySelectorAll("[data-ingest-verb]")].map((b) =>
           b.getAttribute("data-ingest-verb"),
         );
@@ -165,7 +165,7 @@ describe("PCN26-119 live capture (rev 175) — review, the real task, the captur
     it('clicking promote draws data-ingest-act-refusal="promotion_payload_invalid" and the live message; the ladder stays at review; the task is not resolved', async () => {
       actOnHumanTask.mockRejectedValue({ response: { status: 422, data: { detail: refusal } } });
       useHumanTaskStore.setState({ tasks: [humanTask] });
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
 
       await waitFor(() =>

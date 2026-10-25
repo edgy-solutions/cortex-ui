@@ -13,7 +13,6 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
   fetchIngestMine: () => Promise.resolve({ items: [], next: null }),
   uploadIngest: (...a: unknown[]) => uploadIngest(...a),
-  disputeIngestOrigin: vi.fn(),
   correctIngestLeaf: vi.fn(),
 }));
 vi.mock("react-oidc-context", () => ({

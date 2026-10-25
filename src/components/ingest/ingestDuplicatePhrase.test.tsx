@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import { IngestStatusCard } from "./IngestStatusCard";
+import { SeededCard } from "./ingestCardTestKit";
 import { IngestEntryBody } from "./IngestEntryBody";
 import { ingestComponentOf } from "@/lib/ingestArtifact";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
@@ -13,7 +13,6 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
 const fetchIngestStatus = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
-  disputeIngestOrigin: vi.fn(),
 }));
 vi.mock("react-oidc-context", () => ({ useAuth: () => ({ user: null }) }));
 
@@ -37,7 +36,6 @@ const row = (message: string): IngestStatusRow => ({
   duplicate: { of_ingest_id: OTHER, message },
   created_at: 1790860800000,
   updated_at: 1790860800000,
-  origin: null,
   case_id: null,
 });
 
@@ -50,7 +48,7 @@ const MESSAGES: Array<[string, string]> = [
 describe("IngestStatusCard alone", () => {
   it.each(MESSAGES)("%s: the phrase appears exactly once", (_n, message) => {
     const r = render(
-      <IngestStatusCard ingestId={ID} initialRow={row(message)} pollIntervalMs={100000} />,
+      <SeededCard ingestId={ID} seed={row(message)} />,
     );
     const dup = r.container.querySelector("[data-ingest-duplicate]")!;
     expect(count(dup.textContent ?? "")).toBe(1);

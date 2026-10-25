@@ -4,21 +4,18 @@
  * IngestStatusCard.test.tsx.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
-import { IngestStatusCard } from "./IngestStatusCard";
+import { SeededCard } from "./ingestCardTestKit";
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { promotionIngestId, type IngestStatusRow } from "@/lib/ingestWire";
-import type { IngestOrigin } from "@/lib/ingestOrigin";
 
 const fetchIngestStatus = vi.fn();
-const disputeIngestOrigin = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...args: unknown[]) => fetchIngestStatus(...args),
-  disputeIngestOrigin: (...args: unknown[]) => disputeIngestOrigin(...args),
 }));
 
 const actOnHumanTask = vi.fn().mockResolvedValue({ task_id: "t", decision: "promoted" });
@@ -29,7 +26,6 @@ vi.mock("@/api/client", () => ({
 afterEach(() => {
   cleanup();
   fetchIngestStatus.mockReset();
-  disputeIngestOrigin.mockReset();
   actOnHumanTask.mockReset();
   actOnHumanTask.mockResolvedValue({ task_id: "t", decision: "promoted" });
   useHumanTaskStore.setState({ tasks: [] });
@@ -48,7 +44,6 @@ const row = (over: Partial<IngestStatusRow> = {}): IngestStatusRow => ({
   duplicate: null,
   created_at: 1790860800000,
   updated_at: 1790860800000,
-  origin: null,
   case_id: null,
   ...over,
 });
@@ -69,17 +64,10 @@ const promotionTask = (r: IngestStatusRow, over: Partial<HumanTask> = {}): Human
   ...over,
 });
 
-const resolvedOrigin: IngestOrigin = {
-  status: "resolved",
-  document_type: "work instruction",
-  program: "Line 4 retrofit",
-  evidence_label: undefined,
-} as IngestOrigin;
-
 const renderReview = () => {
   const r = row({ stage: "review" });
   useHumanTaskStore.setState({ tasks: [promotionTask(r, { taskId: "task-9" })] });
-  render(<IngestStatusCard ingestId={r.ingest_id} initialRow={r} pollIntervalMs={100000} />);
+  render(<SeededCard ingestId={r.ingest_id} seed={r} />);
 };
 
 describe("IngestStatusCard a11y: labels and buttons", () => {
@@ -100,7 +88,7 @@ describe("IngestStatusCard a11y: labels and buttons", () => {
 
 describe("IngestStatusCard a11y: live regions", () => {
   it("the stage display is reachable by role status", () => {
-    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row()} pollIntervalMs={100000} />);
+    render(<SeededCard ingestId={INGEST_ID} seed={row()} />);
     const status = screen.getByRole("status");
     expect(status.textContent).toBe("extracting");
     expect(status.getAttribute("data-ingest-status")).toBe("extracting");
@@ -121,22 +109,6 @@ describe("IngestStatusCard a11y: live regions", () => {
     expect(alert.textContent).toMatch(/Refused \(ingest_node_absent\): ingest node absent\. Nothing was written\./);
   });
 
-  it("an origin-dispute refusal is reachable by role alert and carries its text", async () => {
-    disputeIngestOrigin.mockRejectedValue({
-      response: { status: 503, data: { detail: { error: "steward_queue_unavailable", message: "Nothing was written." } } },
-    });
-    render(
-      <IngestStatusCard
-        ingestId={INGEST_ID}
-        initialRow={row({ origin: resolvedOrigin })}
-        pollIntervalMs={100000}
-        onBehalfOf="steward@example.com"
-      />,
-    );
-    fireEvent.click(document.querySelector("[data-ingest-origin-dispute]")!);
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Nothing was written."));
-    expect(screen.getByRole("alert").hasAttribute("data-ingest-origin-dispute-refusal")).toBe(true);
-  });
 });
 
 describe("IngestStatusCard a11y: AST seal over the card source", () => {

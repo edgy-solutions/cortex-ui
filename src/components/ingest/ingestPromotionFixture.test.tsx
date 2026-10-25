@@ -13,8 +13,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { IngestStatusCard } from "./IngestStatusCard";
+import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import { SeededCard, seedIngestRow } from "./ingestCardTestKit";
 import { ProvenanceFloorLabel } from "./ProvenanceFloorLabel";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
@@ -96,7 +96,7 @@ describe("PCN26-117 — review → promoted → the answer label (built fixture,
 
     it("the ladder marks received/extracting done, review current, promoted pending", () => {
       useHumanTaskStore.setState({ tasks: [humanTask] });
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       expect(
         document.querySelector('[data-ingest-ladder-stage="received"]')?.getAttribute("data-ingest-ladder-state"),
       ).toBe("done");
@@ -118,7 +118,7 @@ describe("PCN26-117 — review → promoted → the answer label (built fixture,
     it("the card offers promote/reject via payloadMatchesIngestId, finding the human_tasks row's payload", () => {
       expect(payloadMatchesIngestId(humanTask.payload, promotionIngestId(reviewRow))).toBe(true);
       useHumanTaskStore.setState({ tasks: [humanTask] });
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       expect(document.querySelector('[data-ingest-verb="promoted"]')).toBeTruthy();
       expect(document.querySelector('[data-ingest-verb="rejected"]')).toBeTruthy();
       expect(document.querySelector("[data-ingest-no-review-task]")).toBeNull();
@@ -140,7 +140,7 @@ describe("PCN26-117 — review → promoted → the answer label (built fixture,
         response: { status: 422, data: { detail: refusal } },
       });
       useHumanTaskStore.setState({ tasks: [humanTask] });
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={100000} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
 
       await waitFor(() =>
@@ -180,17 +180,15 @@ describe("PCN26-117 — review → promoted → the answer label (built fixture,
       const promotedRow = readIngestStatusRow(promotedBody)!;
 
       actOnHumanTask.mockResolvedValue(success);
-      fetchIngestStatus.mockResolvedValue(promotedBody);
       useHumanTaskStore.setState({ tasks: [humanTask] });
 
-      render(<IngestStatusCard ingestId={reviewRow.ingest_id} initialRow={reviewRow} pollIntervalMs={30} />);
+      render(<SeededCard ingestId={reviewRow.ingest_id} seed={reviewRow} />);
       fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
       await waitFor(() => expect(actOnHumanTask).toHaveBeenCalled());
 
-      await waitFor(
-        () => expect(document.querySelector("[data-ingest-status]")?.textContent).toBe("promoted"),
-        { timeout: 2000 },
-      );
+      // The store's one poller reads the next row; the card only draws it.
+      act(() => seedIngestRow(promotedRow));
+      await waitFor(() => expect(document.querySelector("[data-ingest-status]")?.textContent).toBe("promoted"));
       // The ladder draws the row's own stage as `current` — terminal stages included
       // (ingestStageLadder) — and every earlier main-track rung `done`. Asserted rung by rung.
       const ladder = Object.fromEntries(
@@ -201,12 +199,6 @@ describe("PCN26-117 — review → promoted → the answer label (built fixture,
       );
       expect(ladder).toEqual({ received: "done", extracting: "done", review: "done", promoted: "current" });
       expect(ingestPollingDone(promotedRow)).toBe(true);
-
-      // polling stops: exactly one fetch (the single successful poll that reached promoted),
-      // never a second — give it another couple of intervals to prove no further call happens.
-      const callsAtPromoted = fetchIngestStatus.mock.calls.length;
-      await new Promise((r) => setTimeout(r, 150));
-      expect(fetchIngestStatus.mock.calls.length).toBe(callsAtPromoted);
 
       // row.detail IS "record <record_id>" on the wire, but the card draws detail ONLY for
       // rejected/failed (IngestStatusCard.tsx's existing rule) — NOT promoted. Reported, not
