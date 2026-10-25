@@ -6,6 +6,8 @@ import { promotionReviewIngestId } from "@/lib/promotionReview";
 import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PromotionReviewCard } from "./PromotionReviewCard";
+import { DocumentReviewCard } from "./DocumentReviewCard";
+import { readDocumentReviewTask } from "@/lib/documentReview";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task decided by naming a verb. It acts
@@ -144,6 +146,10 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // A `document_promotion` task naming an `ingest_id` draws the review card; anything else draws
   // the generic card below, unchanged. Decided here, on the card every APPROVAL_TASK site already
   // mounts, so no call site can be the one that forgot (see `promotionReviewIngestId`).
+  // A review_shape "document" task draws the section review card (PROPOSED shape; see documentReview.ts).
+  const documentReview = readDocumentReviewTask(task);
+  if (documentReview) return <DocumentReviewCard task={task} review={documentReview} />;
+
   const ingestId = promotionReviewIngestId(task.kind, task.payload);
   return ingestId ? <PromotionReviewCard task={task} ingestId={ingestId} /> : <GenericApprovalTaskCard task={task} />;
 }

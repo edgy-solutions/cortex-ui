@@ -1,0 +1,39 @@
+/**
+ * THE CONTAINMENT OF THE PROPOSAL. The document review shape is Cortex's own proposal (no producer
+ * declares it), so its names must live where ratification is a one-file edit: the reader
+ * (`documentReview.ts`) and the body builder (`buildActBody` in `api/client.ts`). Any other file in
+ * `src/` that spells `section_verdicts`, or `"sections"` as a payload key, is a second home.
+ * Population: every .ts/.tsx under src/ except tests and the fixture (which is the wire as data).
+ */
+import { describe, it, expect } from "vitest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+
+const SRC = join(__dirname, "..");
+const skip = (f: string) => /\.test\.(ts|tsx)$/.test(f) || /documentReviewFixture\.ts$/.test(f);
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (/\.(ts|tsx)$/.test(name) && !skip(name)) out.push(p);
+  }
+  return out;
+}
+
+const PROPOSED_NAMES = /section_verdicts|["']sections["']/;
+const ALLOWED = ["api/client.ts", "lib/documentReview.ts"];
+
+describe("the document review proposal is contained", () => {
+  it("spells its proposed names only in documentReview.ts and buildActBody", () => {
+    const files = walk(SRC);
+    expect(files.length, "the walk found the source tree").toBeGreaterThan(100);
+    const spelled = files
+      .filter((f) => PROPOSED_NAMES.test(readFileSync(f, "utf8")))
+      .map((f) => relative(SRC, f).split(sep).join("/"))
+      .sort();
+    const strays = spelled.filter((f) => !ALLOWED.includes(f));
+    expect(strays, `the proposed names are spelled outside the one reader/builder: ${strays.join(", ")}`).toEqual([]);
+    expect(spelled, "both homes still spell them (a rename would leave this seal guarding nothing)").toEqual(ALLOWED);
+  });
+});
