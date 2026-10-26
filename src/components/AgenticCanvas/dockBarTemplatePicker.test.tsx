@@ -95,34 +95,25 @@ const pick = (templateId: string) => {
   fireEvent.click(el);
 };
 
-describe("a template that needs a binding is named, not offered", () => {
-  it("keeps it out of the offer buttons and leaves the bindable one there", () => {
+describe("a template that needs a binding is OFFERED, and says what it will ask", () => {
+  it("offers it beside the bindable one, with no amber line naming it unseedable", () => {
     openForm();
-    // Both assertions in one arm on purpose: "finance is absent" passes just as well when the
-    // whole menu is empty, which is the mistake a stricter predicate would make.
-    expect(offered()).toEqual(["portfolio_planning"]);
-  });
-
-  it("says what it is and what it is waiting for, in the producer's terms", () => {
-    openForm();
-    const named = document.querySelector("[data-template-unbound]");
-    expect(named?.textContent).toContain("Program finance status");
-    expect(named?.textContent).toContain("ratified, needs a binding");
-    // The slot is the whole point. Without it the reader is told to bind something unnamed.
-    expect(named?.textContent).toContain("program");
-  });
-
-  it("draws NOTHING in that bucket when every template can be bound", () => {
-    // The near side. A bucket that renders unconditionally would put an empty amber line under
-    // a healthy menu, and a reader learns to ignore a line that is always there.
-    withCatalog(PORTFOLIO);
-    openForm();
+    expect(offered()).toEqual(["portfolio_planning", "program_finance"]);
     expect(document.querySelector("[data-template-unbound]")).toBeNull();
-    expect(offered()).toEqual(["portfolio_planning"]);
+  });
+
+  it("labels the row with the slots it will ask for, from the row itself", () => {
+    openForm();
+    const row = document.querySelector(`[data-template-option="program_finance"]`);
+    expect(row?.textContent).toContain("Program finance status");
+    expect(row?.querySelector("[data-template-asks]")?.getAttribute("data-template-asks")).toBe("program");
+    // And the bindable row carries no such label.
+    const plain = document.querySelector(`[data-template-option="portfolio_planning"]`);
+    expect(plain?.querySelector("[data-template-asks]")).toBeNull();
   });
 });
 
-describe("an unbindable template cannot create a canvas", () => {
+describe("createCanvas still refuses what it cannot carry", () => {
   it("still creates a board from a template that CAN be bound", () => {
     // The load-bearing near side: if this goes red the picker has stopped working entirely,
     // which is a worse defect than the empty board it was written to prevent.
@@ -146,12 +137,12 @@ describe("an unbindable template cannot create a canvas", () => {
     */
     openForm();
     pick("portfolio_planning");
-    withCatalog({ ...PORTFOLIO, shared_slots: ["program"] }, FINANCE);
+    withCatalog(FINANCE);
     fireEvent.click(screen.getByText("Create"));
 
     expect(useStageStore.getState().canvases).toHaveLength(0);
     const said = document.querySelector("[data-create-blocked]");
-    expect(said?.textContent).toMatch(/needs a binding for program/);
+    expect(said?.textContent).toMatch(/is not on offer, so no board was created/);
     // AND THE FORM STAYS OPEN. A refusal that closes the form leaves the reader with a dialog
     // that vanished and no board, which reads as a create that worked.
     expect(document.querySelector("[data-template-picker]")).not.toBeNull();
@@ -160,7 +151,7 @@ describe("an unbindable template cannot create a canvas", () => {
   it("clears a refusal when the reader picks again, rather than leaving it to be re-read", () => {
     openForm();
     pick("portfolio_planning");
-    withCatalog({ ...PORTFOLIO, shared_slots: ["program"] }, FINANCE);
+    withCatalog(FINANCE);
     fireEvent.click(screen.getByText("Create"));
     expect(document.querySelector("[data-create-blocked]")).not.toBeNull();
     // "None" is a pick too, and it is the one a stuck reader reaches for.
@@ -180,7 +171,7 @@ describe("an unbindable template cannot create a canvas", () => {
     */
     openForm();
     pick("portfolio_planning");
-    withCatalog({ ...PORTFOLIO, shared_slots: ["program"] }, FINANCE);
+    withCatalog(FINANCE);
     fireEvent.click(screen.getByText("Create"));
     expect(document.querySelector("[data-create-blocked]")).not.toBeNull();
 

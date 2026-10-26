@@ -11,6 +11,7 @@ import { INGEST_MINE_PATH, ingestLeafPath, ingestRetryPath, ingestExtractionPath
 import { ANSWERS_PATH, answerBodyPath } from "@/lib/answersWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
+import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -536,6 +537,43 @@ export async function requestPortfolioCanvasSeed(): Promise<string[]> {
     canvas_type: "portfolio_planning",
   });
   return Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
+}
+
+/**
+ * Seed a canvas for ONE TEMPLATE, by id -- the route is the one declaration of whether it can.
+ *
+ * Sends only fields `CanvasSeedRequest` declares: `template_id`, `bindings`, and the cell
+ * (`active_persona` / `active_domains`) when the caller has one. A required shared slot left
+ * unbound answers 409 with the ask that would unblock it; that is returned as a `conflict`,
+ * not thrown, because it is a question and not a failure. Anything else is `error`, untouched.
+ *
+ * The seed is sequential server-side and takes minutes; the caller owns the pending state.
+ */
+export type TemplateSeedResult =
+  | { ok: true; artifactIds: string[] }
+  | { ok: false; conflict: AskBearingRefusal }
+  | { ok: false; error: unknown };
+
+export async function requestTemplateCanvasSeed(
+  templateId: string,
+  bindings?: Record<string, string>,
+  cell?: { active_persona?: string; active_domains?: string[] },
+): Promise<TemplateSeedResult> {
+  const body: Record<string, unknown> = { template_id: templateId };
+  if (bindings && Object.keys(bindings).length > 0) body.bindings = bindings;
+  if (cell?.active_persona) body.active_persona = cell.active_persona;
+  if (cell?.active_domains) body.active_domains = cell.active_domains;
+  try {
+    const { data } = await api.post<{ artifact_ids?: unknown }>("/canvas/seed", body);
+    const raw = Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
+    return {
+      ok: true,
+      artifactIds: raw.filter((v): v is string => typeof v === "string" && v.length > 0),
+    };
+  } catch (err) {
+    const conflict = readSeedConflict(err);
+    return conflict ? { ok: false, conflict } : { ok: false, error: err };
+  }
 }
 
 // ── ADR-0042 live views: the invalidation signal and the recomputation trigger ──────────

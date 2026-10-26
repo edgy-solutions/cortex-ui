@@ -132,42 +132,45 @@ export function readTemplateCatalog(raw: unknown): TemplateCatalog {
  * parse, and a ratified-but-unbindable template fell into the offerable one because there was
  * nowhere else for it to go.
  *
- * ── WHY NON-EMPTY IS ENOUGH, AND WHY THERE IS NO SECOND FLAG ──────────────────────────────
+ * ── WHAT NON-EMPTY MEANS NOW: "CREATE THROUGH THE SEED ROUTE", NOT "UNSEEDABLE" ────────────
  *
- * `sharedSlots` NON-EMPTY means unseedable *from this picker*, with no further question asked,
- * because the create path binds nothing: `createCanvas` takes a name, a lens, and a template
- * id, and there is no argument through which a slot could be bound. The binding set is empty by
- * construction, not by accident — so when ADR-0050 §3 lands and create DOES carry a binding,
- * this predicate is the one place that has to learn about it.
+ * `sharedSlots` NON-EMPTY used to mean unseedable from this picker, because `createCanvas`
+ * takes a name, a lens and a template id and no binding. That moment has come (ADR-0050 §3, and
+ * invincible-agent #97, unmerged at 473f9c40): the seed route answers an unbound required slot
+ * with a 409 that carries the ASK, so such a row is OFFERED, and its create goes through
+ * `POST /canvas/seed` with the template id, never through `createCanvas`.
  *
- * A producer-side `seedable: false` would be a THIRD declaration of one truth, after the
- * slots themselves and the seed route's 409, and this lane has already paid for that shape once
- * — a pinned seal that went stale while both halves it compared stayed true.
+ * THE ROUTE IS THE ONE DECLARATION OF "CAN THIS SEED". There is no `askable` flag read here:
+ * a producer-side `seedable` would be a THIRD declaration of one truth, after the slots and
+ * the route, and this lane has paid for that shape once. Before #97 rolls, the click returns a
+ * 409 with no ask and the picker draws its message quietly.
+ *
+ * This predicate therefore answers one question only: does this row create through the seed
+ * route. `refuseTemplateForCreate` still uses it as the guard on `createCanvas`.
  */
 export function needsBinding(row: TemplateRow): boolean {
   return row.sharedSlots.length > 0;
 }
 
 /**
- * Split the ready menu into what may be offered and what must be NAMED WITH ITS REASON.
+ * The ready menu, split by HOW a board is created from it.
  *
- * The unseedable rows are not dropped, for the reason the producer already gives for
- * `unreadable`: *"silently omitting it would make the list SHORTER and nothing would say why,
- * and a shorter list reads as the complete set."* A reader who came looking for the finance
- * board must find out that it exists and what it is waiting for.
+ * Every row is offered. `viaSeed` is the subset whose create goes through `/canvas/seed` (it has
+ * shared slots); the rest go through `createCanvas`. Nothing is dropped and nothing is named as
+ * unseedable, because the route, not this list, decides that.
  */
 export function partitionTemplates(rows: TemplateRow[]): {
   offerable: TemplateRow[];
-  unbound: TemplateRow[];
+  viaSeed: TemplateRow[];
 } {
-  const offerable: TemplateRow[] = [];
-  const unbound: TemplateRow[] = [];
-  for (const row of rows) (needsBinding(row) ? unbound : offerable).push(row);
-  return { offerable, unbound };
+  return { offerable: [...rows], viaSeed: rows.filter(needsBinding) };
 }
 
 /**
  * Whether a create may carry this template id, and the reason when it may not.
+ *
+ * This guards `createCanvas`, which binds nothing: a row with shared slots must reach the seed
+ * route instead, and a call that routes it here by mistake refuses with the slots named.
  *
  * ⛔ THIS ENUMERATES THE SAFE SET, NOT THE DANGEROUS ONE. It permits exactly two things — no
  * template at all, and an id the catalog currently offers — so a stale id, an id that never
