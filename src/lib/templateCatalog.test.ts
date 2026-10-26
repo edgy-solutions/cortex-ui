@@ -156,7 +156,7 @@ const BINDABLE = row({
 });
 const UNBOUND = row(); // the real shape: program_finance, shared_slots non-empty
 
-describe("a template that cannot be bound cannot be offered", () => {
+describe("a template that needs a binding creates through the seed route, not createCanvas", () => {
   it("reads the slots the producer sent rather than a flag nobody declared", () => {
     const c = ready(UNBOUND);
     if (c.status !== "ready") throw new Error("expected ready");
@@ -176,10 +176,12 @@ describe("a template that cannot be bound cannot be offered", () => {
     // went missing or one that landed in both, and both are the plausible mistakes here.
     const c = ready(BINDABLE, UNBOUND);
     if (c.status !== "ready") throw new Error("expected ready");
-    const { offerable, unbound } = partitionTemplates(c.templates);
-    expect(offerable.map((t) => t.templateId)).toEqual(["portfolio_planning"]);
-    expect(unbound.map((t) => t.templateId)).toEqual(["program_finance"]);
-    expect(offerable.length + unbound.length).toBe(c.templates.length);
+    const { offerable, viaSeed } = partitionTemplates(c.templates);
+    // EVERY row is offered; the route, not this list, decides whether a seed can run. The rows
+    // with shared slots are also named as the ones that create through /canvas/seed.
+    expect(offerable.map((t) => t.templateId)).toEqual(["portfolio_planning", "program_finance"]);
+    expect(viaSeed.map((t) => t.templateId)).toEqual(["program_finance"]);
+    expect(offerable.length).toBe(c.templates.length);
   });
 
   it("names the slot it is waiting for, so the reason is the producer's and not ours", () => {

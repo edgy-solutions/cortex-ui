@@ -14,7 +14,7 @@ import { pick } from "@/archetypes/defineArchetype";
 import { carriesItsRequest } from "@/lib/fallbackDisclosure";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { AskCardConnected } from "../elicitation/AskCardConnected";
-import { RefusalCard } from "./RefusalCard";
+import { RefusalOrChoice } from "./RefusalOrChoice";
 import { readRefusalEnvelope } from "@/lib/refusalEnvelope";
 import { NamedHole } from "./NamedHole";
 import { SourceLedger } from "../ledger/SourceLedger";
@@ -213,8 +213,9 @@ const renderComponent = (
   const refusal = readRefusalEnvelope(comp);
   if (refusal) {
     const card = (
-      <RefusalCard
+      <RefusalOrChoice
         envelope={refusal}
+        answeringArtifactId={artifactId}
         archetype={comp.archetype}
         scopeLabel={typeof comp.scope_label === "string" ? comp.scope_label : undefined}
       />

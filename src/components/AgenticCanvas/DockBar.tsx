@@ -6,7 +6,9 @@ import {
   type CustomCanvas,
 } from "@/store/useStageStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
-import { partitionTemplates, refuseTemplateForCreate } from "@/lib/templateCatalog";
+import { needsBinding, partitionTemplates, refuseTemplateForCreate } from "@/lib/templateCatalog";
+import { RefusalWithAsk } from "@/components/elicitation/RefusalWithAsk";
+import { useTemplateSeed } from "./useTemplateSeed";
 
 /**
  * DockBar — the canvas dock (ADR-0028 canvas-dock model, Stage 3). Pinned below
@@ -92,11 +94,17 @@ export function DockBar() {
    * arriving on every row since `/templates` landed and nothing read it — see
    * `templateCatalog.ts`'s seedability header for what the producer already declared and where.
    */
-  const { offerable, unbound } =
-    catalog.status === "ready"
-      ? partitionTemplates(catalog.templates)
-      : { offerable: [], unbound: [] };
+  const { offerable } =
+    catalog.status === "ready" ? partitionTemplates(catalog.templates) : { offerable: [] };
   const loadTemplates = useTemplateStore((s) => s.load);
+  const closeForm = () => {
+    setNewName("");
+    setNewUse("");
+    setNewTemplate("");
+    setCreateBlocked(null);
+    setCreating(false);
+  };
+  const seed = useTemplateSeed(closeForm);
   // Fetched when the creation form OPENS, not on mount: the menu is only needed by someone
   // about to choose from it, and the store makes the call once per session regardless.
   useEffect(() => {
@@ -131,6 +139,18 @@ export function DockBar() {
       so every other case — stale, unreadable, unknown, or newly grown a shared slot — refuses
       by default rather than by being listed.
     */
+    // A template with shared slots creates through the SEED ROUTE, which asks which value to
+    // bind when it must. It never reaches `createCanvas`, whose guard below stays as written.
+    const seedRow =
+      catalog.status === "ready"
+        ? catalog.templates.find((t) => t.templateId === newTemplate.trim())
+        : undefined;
+    if (seedRow && needsBinding(seedRow)) {
+      if (seed.busy) return;
+      setCreateBlocked(null);
+      void seed.start(seedRow.templateId, newName || seedRow.title || seedRow.templateId);
+      return;
+    }
     const refusal = refuseTemplateForCreate(newTemplate, catalog);
     if (refusal) {
       setCreateBlocked(refusal);
@@ -304,6 +324,8 @@ export function DockBar() {
               <div className="flex flex-wrap gap-1">
                 <button
                   onClick={() => {
+                    if (seed.busy) return;
+                    seed.reset();
                     setNewTemplate("");
                     setCreateBlocked(null);
                   }}
@@ -320,6 +342,8 @@ export function DockBar() {
                   <button
                     key={t.templateId}
                     onClick={() => {
+                      if (seed.busy) return;
+                      seed.reset();
                       setNewTemplate(t.templateId);
                       setCreateBlocked(null);
                     }}
@@ -334,32 +358,15 @@ export function DockBar() {
                     }`}
                   >
                     {t.title || t.templateId}
+                    {needsBinding(t) && (
+                      <span
+                        className="ml-1 normal-case tracking-normal text-slate-600"
+                        data-template-asks={t.sharedSlots.join(",")}
+                      >
+                        asks: {t.sharedSlots.join(", ")}
+                      </span>
+                    )}
                   </button>
-                ))}
-              </div>
-            )}
-            {/*
-              ── RATIFIED, AND WAITING ON A BINDING ─────────────────────────────────────────
-
-              The third state the picker did not have. These templates parse, validate and are
-              ratified — they simply cannot ARRANGE a board until something binds their shared
-              slots, which the local create path has no way to do. Offered as buttons they drew
-              an empty canvas and looked like the board on offer; dropped, the menu would read as
-              the complete set. So they are named, with the slot they are waiting for, which is
-              the reason the producer already put on the row.
-            */}
-            {unbound.length > 0 && (
-              <div className="mt-1 flex flex-col gap-0.5" data-template-unbound>
-                {unbound.map((t) => (
-                  <div
-                    key={t.templateId}
-                    className="text-[9px] font-mono text-amber-500/80"
-                    data-template-unbound-id={t.templateId}
-                    title={`${t.description || t.templateId} — ${t.panels} panels`}
-                  >
-                    {t.title || t.templateId} — ratified, needs a binding:{" "}
-                    {t.sharedSlots.join(", ")}
-                  </div>
                 ))}
               </div>
             )}
@@ -380,6 +387,21 @@ export function DockBar() {
           </div>
           {/* The create that did not happen, and why. Not a toast: it sits beside the button
               that refused, so the reader is looking at it when they reach for that button again. */}
+          {seed.refusal && (
+            <div className="mb-2" data-seed-refusal>
+              <RefusalWithAsk refusal={seed.refusal} onPick={seed.pick} busy={seed.busy} />
+            </div>
+          )}
+          {seed.busy && (
+            <div className="mb-2 text-[9px] font-mono text-slate-500" data-seed-pending>
+              seeding the board, this can take a few minutes…
+            </div>
+          )}
+          {seed.failed && (
+            <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-create-blocked>
+              {seed.failed}
+            </div>
+          )}
           {createBlocked && (
             <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-create-blocked>
               {createBlocked}
@@ -388,13 +410,17 @@ export function DockBar() {
           <div className="flex items-center gap-2">
             <button
               onClick={submitCreate}
+              disabled={seed.busy}
               className="flex-1 flex items-center justify-center gap-1 rounded-md bg-neon-cyan/15 border border-neon-cyan/40 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/25 transition-colors"
             >
               <Check className="w-3 h-3" />
               Create
             </button>
             <button
-              onClick={() => setCreating(false)}
+              onClick={() => {
+                seed.reset();
+                setCreating(false);
+              }}
               className="rounded-md border border-slate-700/60 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
             >
               Cancel

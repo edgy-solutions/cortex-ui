@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
 import { knowledgeDocumentView } from "./knowledgeDocumentView";
 import { StructuredFields, StructuredValue } from "@/archetypes/StructuredFields";
-import { RefusalCard } from "@/components/registry/RefusalCard";
+import { RefusalOrChoice } from "@/components/registry/RefusalOrChoice";
 import { decodeFencedPayload } from "@/lib/fencedPayload";
 import { readRefusalEnvelope } from "@/lib/refusalEnvelope";
 import { outputRenderFor } from "@/renders/outputRenders";
@@ -315,7 +315,7 @@ export const MarkdownRenderer = (props: any) => {
     const { prose, payload } = decoded;
     if (payload.refused === true) {
       // A refused body that reached us without an envelope: the refusal block and nothing else.
-      return <RefusalCard envelope={readRefusalEnvelope({ refusal: payload })!} archetype="KNOWLEDGE_DOCUMENT" />;
+      return <RefusalOrChoice envelope={readRefusalEnvelope({ refusal: payload })!} archetype="KNOWLEDGE_DOCUMENT" />;
     }
     const uri = payload.output_uri;
     const Render = outputRenderFor(uri);

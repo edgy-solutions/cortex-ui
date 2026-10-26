@@ -7,6 +7,9 @@
  * FRACAS reads as "no failures" -- worse than nothing. The envelope is keyed on the FIELD, not
  * on an archetype list, so any archetype that ever carries one is covered by default.
  */
+import type { AskCardPayload } from "@/components/elicitation/Elicitation.contract";
+import { readEmbeddedAsk } from "./askBearingRefusal";
+
 export const REFUSAL_FIELD = "refusal";
 
 export type RefusalEnvelope = {
@@ -18,6 +21,12 @@ export type RefusalEnvelope = {
   /** saf hazard refusals: READ AHEAD of the producer (awaited from Lane 1 -- _refusal_envelope strips them today). */
   hazard_id?: string;
   gap?: string;
+  /**
+   * A question that would unblock the refusal, validated like the chat path's own ask.
+   * `binding_slot` is NOT read here: a chat turn answers by re-asking, not by re-sending.
+   */
+  // PROPOSED (unratified): refusal envelope carries ask, the #97 409's shape
+  ask?: AskCardPayload;
 };
 
 export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
@@ -41,5 +50,8 @@ export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
   // Non-empty strings only; absent is absent (never an undefined-valued key).
   if (typeof o.hazard_id === "string" && o.hazard_id !== "") env.hazard_id = o.hazard_id;
   if (typeof o.gap === "string" && o.gap !== "") env.gap = o.gap;
+  // PROPOSED (unratified): refusal envelope carries ask, the #97 409's shape
+  const ask = readEmbeddedAsk(o.ask);
+  if (ask) env.ask = ask;
   return env;
 }
