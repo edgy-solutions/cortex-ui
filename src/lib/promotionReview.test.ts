@@ -342,6 +342,44 @@ describe("route failures name the server's code", () => {
     expect(reviewRouteFailure(new TypeError("Failed to fetch"), "source")).toBe("The source request failed before any answer (TypeError: Failed to fetch).");
     expect(reviewRouteFailure(new Error("network"), "extraction")).toBe("The extraction could not be loaded.");
   });
+
+  describe("the server's detail.message is shown after the code (generic branch only)", () => {
+    const M = "the deployment declares no authorization directory";
+    const unconfigured = { error: "authorization_unconfigured", message: M };
+
+    it("503 authorization_unconfigured shows its message, on both routes", () => {
+      expect(reviewRouteFailure(err(503, unconfigured), "extraction")).toBe(`The extraction could not be loaded (503 authorization_unconfigured): ${M}.`);
+      expect(reviewRouteFailure(err(503, unconfigured), "source")).toBe(`The source could not be loaded (503 authorization_unconfigured): ${M}.`);
+    });
+
+    it("a message that already ends in terminal punctuation gets no doubled period", () => {
+      expect(reviewRouteFailure(err(503, { error: "x", message: "It is down." }), "extraction")).toBe("The extraction could not be loaded (503 x): It is down.");
+      expect(reviewRouteFailure(err(503, { error: "x", message: "Is it down?" }), "extraction")).toBe("The extraction could not be loaded (503 x): Is it down?");
+    });
+
+    it("an empty, blank or non-string message is absent: output unchanged, no colon", () => {
+      for (const message of ["", "   ", 42]) {
+        const out = reviewRouteFailure(err(503, { error: "authorization_unconfigured", message }), "extraction");
+        expect(out).toBe("The extraction could not be loaded (503 authorization_unconfigured).");
+        expect(out).not.toContain(":");
+      }
+    });
+
+    it("a 409 with a code and a message shows the message", () => {
+      expect(reviewRouteFailure(err(409, { error: "task_resolved", message: "the task is already resolved" }), "extraction")).toBe("The extraction could not be loaded (409 task_resolved): the task is already resolved.");
+    });
+
+    it("a 403 keeps its own wording: the message is NOT appended", () => {
+      const out = reviewRouteFailure(err(403, { error: "not_entitled", message: "some server prose" }), "source");
+      expect(out).toBe("You are not entitled to this task's source (403 not_entitled). A steward's access closes when the task resolves.");
+      expect(out).not.toContain("some server prose");
+    });
+
+    it("a /source body arriving as an ArrayBuffer still shows the message", () => {
+      const buf = new TextEncoder().encode(JSON.stringify({ detail: unconfigured })).buffer;
+      expect(reviewRouteFailure({ response: { status: 503, data: buf } }, "source")).toBe(`The source could not be loaded (503 authorization_unconfigured): ${M}.`);
+    });
+  });
 });
 
 describe("sourceOpenFailure: a /source that answered, and could not be drawn (P0 2026-10-18)", () => {
