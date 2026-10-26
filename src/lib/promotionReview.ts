@@ -437,7 +437,8 @@ function errorBody(data: unknown): unknown {
  * Why one of the review's two routes failed, in words a steward can act on. The server's own
  * `detail.error` code is named whenever it sent one. A PLAIN 404 (no code) is the route not
  * being served at all: before 193 rolls, FastAPI answers an unknown path that way. That is
- * different from 404 `ingest_not_found`, which the route itself sends.
+ * different from 404 `ingest_not_found`, which the route itself sends. The server's `detail.message`
+ * is shown after the code when it sent one.
  */
 export function reviewRouteFailure(err: unknown, route: "extraction" | "source"): string {
   const res = isObj(err) && isObj(err.response) ? err.response : null;
@@ -445,10 +446,15 @@ export function reviewRouteFailure(err: unknown, route: "extraction" | "source")
   const body = res ? errorBody(res.data) : null;
   const detail = isObj(body) ? body.detail : null;
   const code = isObj(detail) ? str(detail.error) : null;
+  const message = isObj(detail) ? str(detail.message) : null;
   const what = route === "extraction" ? "The extraction" : "The source";
   if (status === 404 && code === null) return `${what} route is not served here yet (404). It lands with 193.`;
   if (status === 403) return `You are not entitled to this task's ${route} (403${code ? ` ${code}` : ""}). A steward's access closes when the task resolves.`;
-  if (status !== null) return `${what} could not be loaded (${status}${code ? ` ${code}` : ""}).`;
+  if (status !== null) {
+    const head = `${what} could not be loaded (${status}${code ? ` ${code}` : ""})`;
+    if (message === null) return `${head}.`;
+    return `${head}: ${message}${/[.!?]$/.test(message) ? "" : "."}`;
+  }
   if (route === "extraction") return "The extraction could not be loaded.";
   return `The source request failed before any answer (${errorText(err)}).`;
 }
