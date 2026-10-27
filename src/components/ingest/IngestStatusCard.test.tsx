@@ -374,7 +374,7 @@ describe("out-of-band document statuses (defect: the card froze at extracting)",
   });
 
   it("no_parts draws a neutral terminal note with the row detail, the current rung, and no Retry", () => {
-    render(<IngestStatusCard ingestId={INGEST_ID} initialRow={row({ stage: "no_parts", detail: "no parts (confirmed by ana)" })} pollIntervalMs={100000} />);
+    render(<SeededCard ingestId={INGEST_ID} seed={row({ stage: "no_parts", detail: "no parts (confirmed by ana)" })} />);
     expect(document.querySelector("[data-ingest-no-parts]")?.textContent).toBe("No parts — no parts (confirmed by ana)");
     expect(document.querySelector("[data-ingest-no-parts]")?.className).not.toMatch(/amber|red/);
     expect(document.querySelector("[data-ingest-detail]")).toBeNull();
