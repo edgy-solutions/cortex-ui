@@ -283,6 +283,10 @@ const CALLS: Record<string, Case[]> = {
     },
   ],
   requestPortfolioCanvasSeed: [{ name: "plain", op: "POST /canvas/seed", run: () => (client as any).requestPortfolioCanvasSeed() }],
+  requestTemplateCanvasSeed: [
+    { name: "template only", op: "POST /canvas/seed", run: () => (client as any).requestTemplateCanvasSeed("t1") },
+    { name: "bindings + cell", op: "POST /canvas/seed", run: () => (client as any).requestTemplateCanvasSeed("t1", { program: "p" }, { active_persona: "a", active_domains: ["d"] }) },
+  ],
   fetchPlanStateVersion: [
     { name: "with a state_ref", op: "GET /plan/state_version", run: () => (client as any).fetchPlanStateVersion("scn-1") },
     { name: "baseline (no ref)", op: "GET /plan/state_version", run: () => (client as any).fetchPlanStateVersion() },

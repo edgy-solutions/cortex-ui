@@ -683,12 +683,12 @@ export async function requestTemplateCanvasSeed(
   bindings?: Record<string, string>,
   cell?: { active_persona?: string; active_domains?: string[] },
 ): Promise<TemplateSeedResult> {
-  const body: Record<string, unknown> = { template_id: templateId };
+  const body: BffOps["POST /canvas/seed"]["body"] = { template_id: templateId };
   if (bindings && Object.keys(bindings).length > 0) body.bindings = bindings;
   if (cell?.active_persona) body.active_persona = cell.active_persona;
   if (cell?.active_domains) body.active_domains = cell.active_domains;
   try {
-    const { data } = await api.post<{ artifact_ids?: unknown }>("/canvas/seed", body);
+    const data = (await request("POST /canvas/seed", { body })) as { artifact_ids?: unknown } | undefined;
     const raw = Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
     return {
       ok: true,
