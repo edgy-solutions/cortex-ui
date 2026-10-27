@@ -175,33 +175,6 @@ export async function request<K extends OpKey>(
   return (await requestFull(op, args, cfg)).data;
 }
 
-/**
- * Routes cortex calls that the BFF snapshot does NOT declare. Each is dead or unbuilt (the reason is the
- * row text from docs/api/consumed-routes.md §6); item 4 deletes the callers. client.requestSeal.test.ts
- * goes red the day the producer declares one of these ("move it onto request()").
- */
-export const UNDECLARED_ROUTES = {
-  "POST /artifacts/reevaluate":
-    "the route is absent on both shas; it fires on every plan-version change, and a 404 is swallowed",
-  "POST /analyze":
-    'absent on both shas; every error toasts "Analyst Service unreachable"',
-  "POST /ingest/{ingest_id}/origin/dispute":
-    "cortex-proposed and never built (`/internal/origin/write` exists; the public dispute route does not)",
-} as const;
-
-/** The ONE escape for a route the snapshot does not declare. It must be listed in UNDECLARED_ROUTES. */
-export async function requestUndeclared<T = unknown>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
-  pathTemplate: string,
-  args: LooseArgs = {},
-  cfg?: AxiosRequestConfig,
-): Promise<T> {
-  if (!Object.prototype.hasOwnProperty.call(UNDECLARED_ROUTES, `${method} ${pathTemplate}`)) {
-    throw new Error(`requestUndeclared: ${method} ${pathTemplate} is not in UNDECLARED_ROUTES`);
-  }
-  return (await send(method, fillPath(pathTemplate, args.path), args, cfg)).data as T;
-}
-
 /** axios throws on non-2xx where fetch did not; callers that showed `${status} ${statusText}` keep that line. */
 function throwStatusLine(e: unknown): never {
   const r = (e as { response?: { status?: number; statusText?: string } })?.response;
@@ -1247,7 +1220,9 @@ export interface IngestSource {
 export async function fetchIngestSource(ingestId: string): Promise<IngestSource> {
   const res = await requestFull("GET /ingest/{ingest_id}/source", { path: { ingest_id: ingestId } }, { responseType: "arraybuffer" });
   const ct = res.headers?.["content-type"];
-  return { bytes: res.data as ArrayBuffer, status: res.status, contentType: typeof ct === "string" && ct ? ct : null };
+  // b59e4a0f declares /source binary, so the generated body type is `Blob`; `responseType: "arraybuffer"`
+  // is what axios honours, and it hands back an ArrayBuffer.
+  return { bytes: res.data as unknown as ArrayBuffer, status: res.status, contentType: typeof ct === "string" && ct ? ct : null };
 }
 
 /**
