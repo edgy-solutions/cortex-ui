@@ -93,11 +93,11 @@ function declares200Json(doc: Doc, op: string): boolean {
   return schema !== undefined && Object.keys(schema as object).length > 0;
 }
 
+// V1_SOURCED is empty since b59e4a0f, when the BFF declared all nine ops it held. The loop runs
+// over nothing, and that is the healthy state. It is a record with no live exceptions, not a vacuous
+// seal: an op added later gets both arms the moment it is listed.
 describe("v1 expiry: V1_SOURCED ops are typed from ingest-v1 only while the BFF is silent about them", () => {
-  it("V1_SOURCED is not empty", () => {
-    expect(V1_SOURCED.length).toBeGreaterThan(0);
-  });
-  for (const op of V1_SOURCED) {
+  for (const op of V1_SOURCED as readonly string[]) {
     it(`${op}: undeclared in the BFF snapshot, declared in v1`, () => {
       expect(
         declares200Json(bff, op),
