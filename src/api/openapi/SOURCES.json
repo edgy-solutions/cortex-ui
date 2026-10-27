@@ -1,16 +1,16 @@
 {
   "cortex-bff.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "2705c33595b2ee67b4d6c57e5badafb5d1c589aa",
+    "sha": "b59e4a0fcc15fcb2aa35539c9d562dff17fecb2c",
     "branch": "master",
     "path": "docs/api/cortex-bff.openapi.json",
-    "sha256": "24bf2e4f174f31ce6cfdd582e21b345e9cb7135cf4c7955b75b91dde47f901a8"
+    "sha256": "51e687e2017326dd0ea04a74cca0690110109595043ee81dcd8eb226b5556fd6"
   },
   "ingest-v1.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "1fb9e242b53700f13a9873cabc1733fd4f5040cb",
-    "branch": "lane/01-ingest-v1",
+    "sha": "b59e4a0fcc15fcb2aa35539c9d562dff17fecb2c",
+    "branch": "master",
     "path": "docs/api/ingest-v1.openapi.json",
-    "sha256": "486cd24f7dfe367861a3189b848318a9a286607143d266b3418772563fc4dbc4"
+    "sha256": "e59707ba907a7b14f809fc7a4ca060349962275ef81a35418e0fce971804ecda"
   }
 }

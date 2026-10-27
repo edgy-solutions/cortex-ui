@@ -10,7 +10,8 @@
  *   - multipart: every FormData field name is a property of the multipart schema, required ones present.
  *
  * The POPULATION is censused from client.ts, not listed: an exported function with no entry in CALLS or
- * NOT_TRANSPORT fails this file, by name. UNDECLARED_ROUTES is checked both ways.
+ * NOT_TRANSPORT fails this file, by name. Every CALLS op is a snapshot op: there is no escape for an
+ * undeclared route. The UNDECLARED_ROUTES ledger died with its three callers (item 4, #31).
  *
  * This seals the REQUEST. The response side is pass B.
  */
@@ -57,7 +58,6 @@ vi.mock("@/lib/frontendVersion", () => ({
 
 import { config } from "@/config";
 import * as client from "./client";
-import { UNDECLARED_ROUTES } from "./client";
 
 // ── the snapshot ───────────────────────────────────────────────────────────────────────────
 type Schema = Record<string, any>;
@@ -81,11 +81,6 @@ for (const [p, item] of Object.entries<Schema>(doc.paths)) {
   }
 }
 const BY_KEY = new Map(SNAP.map((o) => [o.key, o]));
-
-const UNDECLARED = Object.keys(UNDECLARED_ROUTES).map((key) => {
-  const i = key.indexOf(" ");
-  return { key, method: key.slice(0, i), template: key.slice(i + 1), re: templateRe(key.slice(i + 1)) };
-});
 
 function resolve(s: Schema | undefined): Schema {
   let cur = s ?? {};
@@ -222,7 +217,7 @@ function violations(cap: Capture, snap: SnapOp): string[] {
 // ── the population ─────────────────────────────────────────────────────────────────────────
 interface Case {
   name: string;
-  /** The op key the call must resolve to: a snapshot op, or an UNDECLARED_ROUTES key. */
+  /** The op key the call must resolve to: a snapshot op. */
   op: string;
   run: () => Promise<unknown>;
 }
@@ -282,7 +277,6 @@ const CALLS: Record<string, Case[]> = {
       },
     },
   ],
-  requestPortfolioCanvasSeed: [{ name: "plain", op: "POST /canvas/seed", run: () => (client as any).requestPortfolioCanvasSeed() }],
   requestTemplateCanvasSeed: [
     { name: "template only", op: "POST /canvas/seed", run: () => (client as any).requestTemplateCanvasSeed("t1") },
     { name: "bindings + cell", op: "POST /canvas/seed", run: () => (client as any).requestTemplateCanvasSeed("t1", { program: "p" }, { active_persona: "a", active_domains: ["d"] }) },
@@ -294,14 +288,6 @@ const CALLS: Record<string, Case[]> = {
   forkPlanScenario: [{ name: "plain", op: "POST /plan/scenario", run: () => (client as any).forkPlanScenario("s1", "n") }],
   reschedulePlanProject: [
     { name: "plain", op: "POST /plan/scenario/{scenario_id}/reschedule", run: () => (client as any).reschedulePlanProject({ scenarioId: "s1", projectId: "p", start: "2026-01-01", end: "2026-02-01" }) },
-  ],
-  requestReevaluation: [{ name: "plain", op: "POST /artifacts/reevaluate", run: () => (client as any).requestReevaluation("a1") }],
-  compileWorkflow: [
-    {
-      name: "plain",
-      op: "POST /workflow/compile",
-      run: () => (client as any).compileWorkflow({ session_id: "s", bpmn_payload: { tasks: [], gateways: [], sequence_flows: [] } }),
-    },
   ],
   fetchCanvases: [{ name: "plain", op: "GET /me/canvases", run: () => (client as any).fetchCanvases() }],
   saveCanvases: [{ name: "plain", op: "PUT /me/canvases", run: () => (client as any).saveCanvases([]) }],
@@ -319,7 +305,6 @@ const CALLS: Record<string, Case[]> = {
     },
   ],
   healthCheck: [{ name: "plain", op: "GET /health", run: () => (client as any).healthCheck() }],
-  publishToSuperset: [{ name: "plain", op: "POST /analyze", run: () => (client as any).publishToSuperset("select 1", "t") }],
   fetchBffVersion: [{ name: "plain", op: "GET /fleet/version", run: () => (client as any).fetchBffVersion() }],
   fetchTemplates: [{ name: "plain", op: "GET /templates", run: () => (client as any).fetchTemplates() }],
   fetchTaskKinds: [{ name: "plain", op: "GET /task_kinds", run: () => (client as any).fetchTaskKinds() }],
@@ -347,7 +332,6 @@ const CALLS: Record<string, Case[]> = {
   fetchIngestExtraction: [{ name: "plain", op: "GET /ingest/{ingest_id}/extraction", run: () => (client as any).fetchIngestExtraction("i1") }],
   fetchIngestSource: [{ name: "plain", op: "GET /ingest/{ingest_id}/source", run: () => (client as any).fetchIngestSource("i1") }],
   fetchCaseResponse: [{ name: "raw fetch seam", op: "GET /cases/{case_id}", run: () => (client as any).fetchCaseResponse("c/1") }],
-  disputeIngestOrigin: [{ name: "plain", op: "POST /ingest/{ingest_id}/origin/dispute", run: () => (client as any).disputeIngestOrigin("i1", "a@b.c") }],
   correctIngestLeaf: [{ name: "plain", op: "POST /ingest/{ingest_id}/leaf", run: () => (client as any).correctIngestLeaf("i1", "pdn") }],
   fetchDataModuleFigures: [{ name: "plain", op: "GET /data_module/figures", run: () => (client as any).fetchDataModuleFigures("dm://x?y=1&z=2") }],
   fetchGraphNode: [{ name: "plain", op: "GET /graph/node/{node_id}", run: () => (client as any).fetchGraphNode("n/1") }],
@@ -362,7 +346,6 @@ const NOT_TRANSPORT: Record<string, string> = {
   opPath: "pure: fills an op's path template (URL building for the raw-fetch and SSE seams)",
   request: "the typed core: exercised by every CALLS case",
   requestFull: "the typed core, whole-response variant: exercised by fetchEntitlements / healthCheck / fetchIngestSource",
-  requestUndeclared: "the one escape: exercised by requestReevaluation / publishToSuperset / disputeIngestOrigin",
   fetchIllustrationContent: "GET {content_path}: producer-chosen path from an ILLUSTRATION payload, guarded by gatewayRelativePath; not a BFF op (consumed-routes.md, 'Not BFF routes')",
 };
 
@@ -405,38 +388,18 @@ describe("every transport function's request fits the BFF snapshot", () => {
         expect(caps.length, `${fn} sent ${caps.length} requests, expected 1`).toBe(1);
         const cap = caps[0];
         const snap = BY_KEY.get(c.op);
-        if (snap) {
-          expect(violations(cap, snap), `${fn} (${c.name})`).toEqual([]);
-          return;
-        }
-        // not in the snapshot: must be a listed undeclared route, and the URL must still fit its template
-        const und = UNDECLARED.find((u) => u.key === c.op);
-        expect(und, `${fn} expects ${c.op}, which is neither in the BFF snapshot nor in UNDECLARED_ROUTES`).toBeDefined();
-        expect(cap.method, `${fn} method`).toBe(und!.method);
-        expect(und!.re.test(cap.path), `${fn}: ${cap.path} does not fit ${und!.template}`).toBe(true);
+        expect(snap, `${fn} expects ${c.op}, which the BFF snapshot does not declare`).toBeDefined();
+        expect(violations(cap, snap!), `${fn} (${c.name})`).toEqual([]);
       });
     }
   }
 });
 
-describe("UNDECLARED_ROUTES is checked both ways", () => {
-  it("is not empty (instrument)", () => {
-    expect(UNDECLARED.length).toBeGreaterThan(0);
-  });
-  for (const u of UNDECLARED) {
-    it(`${u.key}: still absent from the snapshot`, () => {
-      const declared = SNAP.some((o) => o.method === u.method && o.re.test(u.template.replace(/\{[^}]+\}/g, "x")));
-      expect(declared, `declared now -- move ${u.key} onto request()`).toBe(false);
-    });
-    it(`${u.key}: some CALLS case reaches it`, () => {
-      const reached = Object.values(CALLS).some((cs) => cs.some((c) => c.op === u.key));
-      expect(reached, `no CALLS case exercises ${u.key}`).toBe(true);
-    });
-  }
-  it("every CALLS op is either in the snapshot or in UNDECLARED_ROUTES", () => {
+describe("no undeclared route", () => {
+  it("every CALLS op is in the snapshot", () => {
     const bad = Object.values(CALLS)
       .flat()
-      .filter((c) => !BY_KEY.has(c.op) && !(c.op in UNDECLARED_ROUTES))
+      .filter((c) => !BY_KEY.has(c.op))
       .map((c) => c.op);
     expect(bad).toEqual([]);
   });
