@@ -187,7 +187,15 @@ env:
   #   document_empty_confirm.yaml (new) (control: 34 files changed). Check 3: uv.lock iagent-mesh
   #   v0.9.10 at both. Gate: the full suite against a git-archive export of e8b4f346 placed as the
   #   sibling; and CI run 40065753003 on this PR, before the rebase onto f5dbf53.
-  PRODUCER_REF: e8b4f346c09367597d8f6adf74e8cab5556458fc
+  # 2026-10-27 RE-PIN to b59e4a0f (platform master; the merge of lane/01-chart-0.4.70, PR #111,
+  #   chart 0.4.70), which carries 208: e8b4f346 is its ancestor, and so are a31b61cb and fin #97's
+  #   merge e676f58e. The "RE-PIN ... at that merge" promised above is this entry. ⚠ NOT read off
+  #   the pods (the sandbox is frozen through the dry run; no cluster reads). RE-READ OFF THE PODS
+  #   once 0.4.70 rolls. Check 2: task_kinds diff (every task_kinds dir) a31b61cb..b59e4a0f is ONE
+  #   file, document_empty_confirm.yaml (new) (control: 136 files changed). Check 3: uv.lock
+  #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
+  #   b59e4a0f placed as the sibling, on this branch rebased onto master aec5628.
+  PRODUCER_REF: b59e4a0fcc15fcb2aa35539c9d562dff17fecb2c
 
 permissions:
   contents: read
