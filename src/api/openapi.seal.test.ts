@@ -93,10 +93,35 @@ function declares200Json(doc: Doc, op: string): boolean {
   return schema !== undefined && Object.keys(schema as object).length > 0;
 }
 
-// V1_SOURCED is empty since b59e4a0f, when the BFF declared all nine ops it held. The loop runs
-// over nothing, and that is the healthy state. It is a record with no live exceptions, not a vacuous
-// seal: an op added later gets both arms the moment it is listed.
+/** Every "METHOD /path" in `doc` with a non-empty 200 JSON schema. */
+function ops200(doc: Doc): string[] {
+  return Object.entries(doc.paths).flatMap(([p, methods]) =>
+    Object.keys(methods)
+      .map((m) => `${m.toUpperCase()} ${p}`)
+      .filter((op) => declares200Json(doc, op)),
+  );
+}
+
+// V1_SOURCED has been empty since b59e4a0f, when the BFF declared all nine ops it held. The per-op
+// loop then runs over nothing. So the arm below keeps the suite from being a record of nothing: the
+// empty list is a COMPUTED claim, and it goes red the day ingest-v1 again declares a response the
+// pinned BFF does not. Its population is every op the BFF knows, called or not, and that is wider
+// than cortex needs. Aimed at the 2705c335 BFF it names 11 ops: the nine that were listed, plus
+// GET /ingest/retries and POST /ingest/{ingest_id}/title_leaf, which no cortex code calls. Listing
+// an uncalled op is harmless; a called op going unlisted is not.
 describe("v1 expiry: V1_SOURCED ops are typed from ingest-v1 only while the BFF is silent about them", () => {
+  it("every op v1 declares a 200 for, which the BFF knows but leaves silent, is in V1_SOURCED", () => {
+    const listed = new Set<string>(V1_SOURCED);
+    const ahead = ops200(v1).filter((op) => {
+      const i = op.indexOf(" ");
+      return bff.paths[op.slice(i + 1)]?.[op.slice(0, i).toLowerCase()] !== undefined && !declares200Json(bff, op);
+    });
+    expect(ops200(v1).length, "ingest-v1 declares no 200 JSON op at all -- the census read nothing").toBeGreaterThan(0);
+    expect(
+      ahead.filter((op) => !listed.has(op)),
+      "ingest-v1 types these responses and the BFF snapshot does not -- list them in V1_SOURCED",
+    ).toEqual([]);
+  });
   for (const op of V1_SOURCED as readonly string[]) {
     it(`${op}: undeclared in the BFF snapshot, declared in v1`, () => {
       expect(
