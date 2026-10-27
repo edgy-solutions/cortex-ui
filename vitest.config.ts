@@ -23,13 +23,35 @@ import path from "node:path";
  * and fail as timeouts, not assertions (10-17: 85/85 alone, four timeouts in the full run), and
  * the tree grows every beat. Architect, 10-17: they "run serial with their own timeout", so they
  * are their own project, run AFTER the parallel suite (groupOrder 1), one file at a time.
+ *
+ * Architect, 10-27: "Whole-tree checks get a 30 s limit, marked as such; nothing else changes."
+ * Of the eleven below the line, six timed out at 5 s in a 306 s full run on 10-25 and passed
+ * alone, 42/42. A WHOLE-TREE CHECK here is a test that walks every file under
+ * `src/` (or `sessions/`) recursively, so its cost grows with the repo, not with the code
+ * under test. A walk of ONE directory is not one, and neither is `featureFlags` (it spawns a
+ * shell). Both stay in `unit` at the 5 s default.
  */
 export const SOURCE_SCANS = [
   "src/lib/sessionIsolation.test.ts",
   "src/lib/askFold.test.ts",
   "src/components/registry/projectedTupleParity.test.ts",
   "src/lib/nginxModuleMime.test.ts",
+  // ── whole-tree walkers, 10-27 ──
+  "src/api/taskState.test.ts",
+  "src/components/registry/RefusalOrChoice.test.tsx",
+  "src/components/tables/ExtractedTableView.test.tsx",
+  "src/hooksAfterEarlyReturn.test.ts",
+  "src/lib/cases.test.ts",
+  "src/lib/deepLink.test.ts",
+  "src/lib/documentReviewContainment.test.ts",
+  "src/lib/drawnLineage.test.ts",
+  "src/lib/noNodeBuiltinsInTheBundle.test.ts",
+  "src/lib/seedPortfolioCanvas.reachability.test.ts",
+  "src/runtimeConfig.guard.test.ts",
 ];
+
+/** The limit for a whole-tree check (the `source-scans` project). Everything else keeps 5 s. */
+export const WHOLE_TREE_TIMEOUT_MS = 30_000;
 
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
@@ -55,7 +77,7 @@ export default defineConfig({
           include: SOURCE_SCANS,
           groupOrder: 1,
           fileParallelism: false,
-          testTimeout: 30_000,
+          testTimeout: WHOLE_TREE_TIMEOUT_MS,
         },
       },
     ],
