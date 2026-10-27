@@ -91,18 +91,12 @@ export type OpKey = keyof BffOps;
  * Operations whose RESPONSE type comes from the ingest-v1 document, because the BFF snapshot declares no
  * 200 schema for them yet (Lane 1: use v1 for response types until v1 merges to master).
  * openapi.seal.test.ts goes red the day the BFF snapshot declares one of these.
+ *
+ * EMPTY IS THE HEALTHY STATE. v1 merged, and the BFF snapshot at b59e4a0f declares a 200 schema for
+ * all nine ops that were listed here (the expiry arm went red on every one), so each is typed from
+ * bff.ts now. Add an op only when ingest-v1 declares its response and the pinned BFF does not.
  */
-export const V1_SOURCED = [
-  "GET /me/entitlements",
-  "GET /me/human_tasks",
-  "POST /human_tasks/{task_id}/act",
-  "POST /ingest",
-  "GET /ingest/mine",
-  "GET /ingest/{ingest_id}/status",
-  "POST /ingest/{ingest_id}/retry",
-  "GET /ingest/{ingest_id}/extraction",
-  "POST /ingest/{ingest_id}/leaf",
-] as const satisfies readonly (keyof V1Operations & OpKey)[];
+export const V1_SOURCED = [] as const satisfies readonly (keyof V1Operations & OpKey)[];
 type V1Key = (typeof V1_SOURCED)[number];
 
 export type Resp<K extends OpKey> = K extends V1Key ? V1Operations[K]["response"] : BffOps[K]["response"];
