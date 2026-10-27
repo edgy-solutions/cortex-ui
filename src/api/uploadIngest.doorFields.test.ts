@@ -72,16 +72,33 @@ function splitTopLevel(s: string): string[] {
 function parseDoorFields(src: string): string[] {
   const m = /async\s+def\s+ingest_document\s*\(/.exec(src);
   if (!m) throw new Error("no `async def ingest_document(` found");
-  const start = m.index + m[0].length;
+  // Walk the signature dropping Python `#` comments (outside string literals) as it goes: a
+  // comment's commas and parens are prose, not syntax. b59e4a0f put one above `on_behalf_of`
+  // ("... could run, so the documented ..."), and its comma split the param, so the door read
+  // without a field it still declares.
   let depth = 1;
-  let i = start;
-  for (; i < src.length && depth > 0; i++) {
-    if (src[i] === "(") depth++;
-    else if (src[i] === ")") depth--;
+  let sig = "";
+  let quote: string | null = null;
+  for (let i = m.index + m[0].length; i < src.length; i++) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === "\\") {
+        sig += ch + (src[i + 1] ?? "");
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = null;
+    } else if (ch === "#") {
+      while (i + 1 < src.length && src[i + 1] !== "\n") i++;
+      continue;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && --depth === 0) break;
+    sig += ch;
   }
   if (depth !== 0) throw new Error("ingest_document signature never closes");
   const names: string[] = [];
-  for (const p of splitTopLevel(src.slice(start, i - 1))) {
+  for (const p of splitTopLevel(sig)) {
     const pm = /^\s*([A-Za-z_]\w*)\s*(?::[^=]*)?=\s*(File|Form)\s*\(/s.exec(p);
     if (pm) names.push(pm[1]);
   }
@@ -101,6 +118,34 @@ describe("parseDoorFields (on fixture strings, before the real file)", () => {
       "    pass",
     ].join("\n");
     expect(parseDoorFields(src)).toEqual(["file", "kind", "content_kind"]);
+  });
+  it("a comment inside the signature (a comma, parens) does not split a param -- b59e4a0f's shape", () => {
+    const src = [
+      "async def ingest_document(",
+      "    file: UploadFile = File(...),",
+      "    kind: str = Form(...),",
+      "    # Blank or absent means the caller (`_admit_on_behalf_of`). `Form(...)` refused a blank as",
+      '    # `missing` before that rule could run, so the documented "send it blank" was a 422.',
+      '    on_behalf_of: str = Form(""),',
+      "    content_kind: Optional[str] = Form(None),",
+      "):",
+      "    pass",
+    ].join("\n");
+    expect(parseDoorFields(src)).toEqual(["file", "kind", "on_behalf_of", "content_kind"]);
+  });
+  it("an unbalanced paren in a comment does not move the signature's end", () => {
+    const src = [
+      "async def ingest_document(",
+      "    file: UploadFile = File(...),  # see (note",
+      "    kind: str = Form(...),",
+      "):",
+      "    leaf = Form(None)",
+    ].join("\n");
+    expect(parseDoorFields(src)).toEqual(["file", "kind"]);
+  });
+  it("a `#` inside a string default is not a comment", () => {
+    const src = 'async def ingest_document(\n    tag: str = Form("#a, b"),\n    kind: str = Form(...),\n):\n    pass';
+    expect(parseDoorFields(src)).toEqual(["tag", "kind"]);
   });
   it("excludes non-Form params such as Depends(...)", () => {
     const src =
