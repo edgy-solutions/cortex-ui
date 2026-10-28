@@ -23,7 +23,7 @@ export function viewerIsDropper(payload: unknown, viewerAuthzId: string | null):
  * The viewer's `acted_by`: `authz_id` from /me/entitlements only. Not `useDropIdentity`, whose OIDC
  * email fallback is not `acted_by` at work. Unknown means no hold; the server still refuses.
  */
-export function viewerAuthzIdOf(entitlements: { authz_id?: string } | null | undefined): string | null {
+export function viewerAuthzIdOf(entitlements: { authz_id?: string | null } | null | undefined): string | null {
   const id = entitlements?.authz_id;
   return typeof id === "string" && id !== "" ? id : null;
 }

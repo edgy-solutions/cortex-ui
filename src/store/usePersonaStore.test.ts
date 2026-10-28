@@ -124,3 +124,69 @@ describe("the fetch is bootstrap, not card data", () => {
     expect(app).toMatch(/loadEntitlements\(fetchEntitlements\)/);
   });
 });
+
+// ── a null persona / domain / user_id is SHOWN as "unset", never coerced (ruling 2026-10-28) ──
+type Cell = { persona: string | null; domain: string | null };
+const ent = (cells: Cell[], extra: Record<string, unknown> = {}) =>
+  ({ user_id: "sub-1", source: "topaz", default: null, cells, ...extra }) as unknown as Entitlements;
+const loadE = (e: Entitlements) => usePersonaStore.getState().loadEntitlements(async () => e, noSleep);
+
+describe("unset entitlement fields", () => {
+  it("A: a null persona never enters personas(); unsetPersona() says so", async () => {
+    await loadE(ent([{ persona: null, domain: "ENG" }, { persona: "engineer", domain: "ENG" }]));
+    const st = usePersonaStore.getState();
+    expect(st.personas()).toEqual(["engineer"]);
+    expect(st.unsetPersona()).toBe(true);
+    expect(st.selectedPersona).toBe("engineer");
+  });
+
+  it("B: a null domain never enters domainsFor(); unsetDomainFor() says so", async () => {
+    await loadE(ent([{ persona: "engineer", domain: null }, { persona: "engineer", domain: "ENG" }]));
+    const st = usePersonaStore.getState();
+    expect(st.domainsFor("engineer")).toEqual(["ENG"]);
+    expect(st.unsetDomainFor("engineer")).toBe(true);
+    expect(st.unsetDomainFor("analyst")).toBe(false);
+    expect(st.unsetPersona()).toBe(false);
+  });
+
+  it("C: a default that is not SET is ignored; the first SET cell seeds", async () => {
+    await loadE(ent(
+      [{ persona: "analyst", domain: "FIN" }, { persona: "engineer", domain: null }],
+      { default: { persona: "engineer", domain: null } },
+    ));
+    const st = usePersonaStore.getState();
+    expect(st.selectedPersona).toBe("analyst");
+    expect(st.selectedDomains).toEqual(["FIN"]);
+    expect(st.selectedDomains).not.toContain(null);
+  });
+
+  it("D: user_id null -- two loads never read as the same user; the selection is reset to the SET default", async () => {
+    const e = ent([{ persona: "analyst", domain: "FIN" }, { persona: "engineer", domain: "ENG" }], {
+      user_id: null,
+      default: { persona: "analyst", domain: "FIN" },
+    });
+    await loadE(e);
+    usePersonaStore.setState({ selectedPersona: "engineer", selectedDomains: ["ENG"] } as never);
+    await loadE(e);
+    const st = usePersonaStore.getState();
+    expect(st.ownerSub).toBeNull();
+    expect(st.selectedPersona).toBe("analyst");
+    expect(st.selectedDomains).toEqual(["FIN"]);
+  });
+
+  it("E: only unset cells -- nothing is selected, and the picker still counts the matrix", async () => {
+    await loadE(ent([{ persona: null, domain: null }]));
+    const st = usePersonaStore.getState();
+    expect(st.selectedPersona).toBeNull();
+    expect(st.selectedDomains).toEqual([]);
+    expect(st.hasEntitlements()).toBe(true);
+    expect(st.personas()).toEqual([]);
+  });
+
+  it("resetForSub with a non-SET default gives null / []", () => {
+    usePersonaStore.getState().resetForSub(null, { persona: "engineer", domain: null });
+    const st = usePersonaStore.getState();
+    expect(st.selectedPersona).toBeNull();
+    expect(st.selectedDomains).toEqual([]);
+  });
+});

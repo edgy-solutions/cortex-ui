@@ -195,10 +195,7 @@ export async function fetchEntitlements(): Promise<Entitlements> {
     // being abandoned before it is dispatched.
     timeout: 15000,
   });
-  // NOT YET TYPED FROM THE GENERATED SHAPE. The producer declares user_id / persona / domain nullable and the
-  // persona store reads them as strings (usePersonaStore.ts:120-208, dropperHold.ts:32): typing this read is a
-  // behaviour decision about null cells, which pass B does not make. The RESPONSE SEAL still reads this body.
-  return resp.data as unknown as Entitlements;
+  return resp.data;
 }
 
 // ── HITL HumanTask queue (Slice 2 — workflow-ack) ───────────

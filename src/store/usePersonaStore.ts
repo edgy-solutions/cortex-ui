@@ -67,7 +67,7 @@ interface PersonaState {
   setSelectedDomains: (domains: string[]) => void;
 
   /** Reset on user switch. */
-  resetForSub: (sub: string, defaultCell?: EntitlementCell | null) => void;
+  resetForSub: (sub: string | null, defaultCell?: EntitlementCell | null) => void;
 
   // -- derived helpers ------------------------------------------------
 
@@ -77,9 +77,20 @@ interface PersonaState {
   /** Domains entitled to a given persona for this user. */
   domainsFor: (persona: string) => string[];
 
-  /** All personas the user is entitled to (deduped). */
+  /** All SET personas the user is entitled to (deduped). A null persona never enters. */
   personas: () => string[];
+
+  /** Some cell has a null persona (a backend defect, shown as "unset", never selectable). */
+  unsetPersona: () => boolean;
+
+  /** Some cell with this persona has a null domain (shown as "unset", never selectable). */
+  unsetDomainFor: (persona: string) => boolean;
 }
+
+/** A cell is SET when persona and domain are both strings. */
+type SetCell = { persona: string; domain: string };
+const isSet = (c: EntitlementCell | null | undefined): c is SetCell =>
+  !!c && typeof c.persona === "string" && typeof c.domain === "string";
 
 /**
  * Two retries after the first attempt, then a VISIBLE failure. Bounded because an unbounded
@@ -116,24 +127,27 @@ export const usePersonaStore = create<PersonaState>()(
           // If this fetch is for a DIFFERENT user than the store's
           // current owner (e.g. after a user switch), reset selection
           // to that user's default before revealing the new matrix.
-          if (st.ownerSub !== e.user_id) {
-            get().resetForSub(e.user_id, e.default);
+          // user_id null = the owner is unknown; two nulls must never compare as "the same user",
+          // so the persisted selection is never carried over.
+          if (e.user_id === null || st.ownerSub !== e.user_id) {
+            get().resetForSub(e.user_id, isSet(e.default) ? e.default : null);
           }
           set({
             entitlements: e,
             entitlementsLoading: false,
           });
           // If no selection yet (fresh session), seed from `default`.
-          if (get().selectedPersona === null && e.default !== null) {
+          const firstSet = e.cells.find(isSet);
+          if (get().selectedPersona === null && isSet(e.default)) {
             set({
               selectedPersona: e.default.persona,
               selectedDomains: [e.default.domain],
             });
-          } else if (get().selectedPersona === null && e.cells.length > 0) {
-            // No `default` — pick the first cell as a starting point.
+          } else if (get().selectedPersona === null && firstSet) {
+            // No SET `default` — pick the first SET cell as a starting point.
             set({
-              selectedPersona: e.cells[0].persona,
-              selectedDomains: [e.cells[0].domain],
+              selectedPersona: firstSet.persona,
+              selectedDomains: [firstSet.domain],
             });
           }
           // A PLATFORM DOMAIN IS NEVER THE PICK. `default`, the first cell, or a selection
@@ -175,8 +189,8 @@ export const usePersonaStore = create<PersonaState>()(
       resetForSub(sub, defaultCell) {
         set({
           ownerSub: sub,
-          selectedPersona: defaultCell?.persona ?? null,
-          selectedDomains: defaultCell ? [defaultCell.domain] : [],
+          selectedPersona: isSet(defaultCell) ? defaultCell.persona : null,
+          selectedDomains: isSet(defaultCell) ? [defaultCell.domain] : [],
         });
       },
 
@@ -190,7 +204,7 @@ export const usePersonaStore = create<PersonaState>()(
         const seen = new Set<string>();
         const out: string[] = [];
         for (const c of cells) {
-          if (c.persona === persona && !seen.has(c.domain)) {
+          if (c.persona === persona && typeof c.domain === "string" && !seen.has(c.domain)) {
             seen.add(c.domain);
             out.push(c.domain);
           }
@@ -203,12 +217,20 @@ export const usePersonaStore = create<PersonaState>()(
         const seen = new Set<string>();
         const out: string[] = [];
         for (const c of cells) {
-          if (!seen.has(c.persona)) {
+          if (typeof c.persona === "string" && !seen.has(c.persona)) {
             seen.add(c.persona);
             out.push(c.persona);
           }
         }
         return out;
+      },
+
+      unsetPersona() {
+        return (get().entitlements?.cells ?? []).some((c) => c.persona === null);
+      },
+
+      unsetDomainFor(persona) {
+        return (get().entitlements?.cells ?? []).some((c) => c.persona === persona && c.domain === null);
       },
     }),
     {

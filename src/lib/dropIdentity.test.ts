@@ -3,7 +3,7 @@ import { dropIdentity } from "./dropIdentity";
 import type { Entitlements } from "@/api/types";
 
 const ENT = (extra: Record<string, unknown>): Entitlements =>
-  ({ user_id: "sub-1", email: "a@example.com", cells: [], default: null, source: "topaz", ...extra }) as Entitlements;
+  ({ user_id: "sub-1", email: "a@example.com", cells: [], default: null, source: "topaz", ...extra }) as unknown as Entitlements; // authz_id deliberately absent in some rows (older BFF)
 
 // One row per branch, near side included: every row where the answer is the email is a row the
 // broken behaviour (always the email) also passes, so the authz_id rows carry the proof.

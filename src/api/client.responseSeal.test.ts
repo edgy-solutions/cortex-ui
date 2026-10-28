@@ -502,9 +502,8 @@ describe("the population is computed, and every member is accounted for", () => 
 
 // ── no double-cast on a typed read ──────────────────────────────────────────
 describe("a typed read carries no `as unknown as` cast", () => {
-  // Entitlements: nullable user_id/persona/domain need a null-handling decision pass B does not make (reported).
   // ArrayBuffer: fetchIngestSource's binary body.
-  const ALLOWED = new Set(["Entitlements", "ArrayBuffer"]);
+  const ALLOWED = new Set(["ArrayBuffer"]);
   it("every `as unknown as X` in client.ts is on the allow-list, and no pass-B marker remains", () => {
     const casts = [...CLIENT_SRC.matchAll(/as unknown as (\w+)/g)].map((m) => m[1]);
     expect(casts.filter((c) => !ALLOWED.has(c)), "a cast on a typed read: type it, or ledger the field").toEqual([]);
