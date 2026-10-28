@@ -974,8 +974,36 @@ describe("the steward can read every page (the architect, 197: PAGE 1 / 2 with n
       fireEvent.click(document.querySelector('[data-show-row="row-0"]')!);
       expect(selectedKey()).toBe("row-0");
       expect(shownPage()).toBe("1");
-      expect(sc.scrollTop).toBe(0);
-      expect(centred).toContain(outline());
+      expect(sc.scrollTop).toBe(centreOf(outline() as HTMLElement, 1));
+      expect(centred).not.toContain(outline());
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  // The outline's centre, as the pane's own scrollTop: its slot's top, plus its middle, less half the
+  // 700px view. Not the page top: a jump that only paged would leave the crop off-centre.
+  const centreOf = (o: HTMLElement, page: number) =>
+    Math.max(0, (page - 1) * H + parseFloat(o.style.top) + parseFloat(o.style.height) / 2 - 700 / 2);
+
+  it("centring the crop scrolls the pane, never what holds it (10-28: the expanded card scrolled its tabs off the top)", async () => {
+    const called: Element[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element) {
+      called.push(this);
+    };
+    try {
+      await mountPromotable();
+      await waitFor(() => expect(outline()).not.toBeNull());
+      const sc = scroller();
+      called.length = 0;
+      fireEvent.click(document.querySelector('[data-show-row="row-5"]')!); // row 5 is on page 2
+      await waitFor(() => expect(outline()?.getAttribute("data-evidence-outline-page")).toBe("2"));
+      await waitFor(() => expect(sc.scrollTop).toBe(centreOf(outline() as HTMLElement, 2)));
+      expect(sc.scrollTop, "centred on the crop, not parked at page 2's top").not.toBe(H);
+      // scrollIntoView scrolls EVERY scrollable ancestor; nothing inside the pane may call it.
+      expect(called.filter((e) => e.closest("[data-pdf-scroller]")), "an element in the pane called scrollIntoView").toEqual([]);
     } finally {
       if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
       else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;

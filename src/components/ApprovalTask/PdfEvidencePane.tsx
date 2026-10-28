@@ -261,10 +261,20 @@ export function PdfEvidencePane({
   const box = target && target.bbox !== null && targetDrawn ? scaleBox(target.bbox, target.page_dims, targetDrawn) : null;
 
   const boxKey = box ? `${targetPage}:${box.left}:${box.top}:${box.width}` : null;
+  // Centre the outline by scrolling THIS pane only. `scrollIntoView` would scroll every scrollable
+  // ancestor too: an expanded card jumped until its tabs left the top of the view (10-28).
   useEffect(() => {
     if (boxKey && pendingJump.current) {
       pendingJump.current = false;
-      outlineRef.current?.scrollIntoView?.({ block: "center", inline: "nearest" });
+      const sc = boxRef.current;
+      const slot = targetPage !== null ? slotRefs.current[targetPage] : null;
+      if (!sc || !slot || !box) return;
+      sc.scrollTop = Math.max(0, slot.offsetTop + box.top + box.height / 2 - sc.clientHeight / 2);
+      if (sc.clientWidth > 0) {
+        const left = slot.offsetLeft + box.left;
+        if (left < sc.scrollLeft) sc.scrollLeft = left;
+        else if (left + box.width > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = left + box.width - sc.clientWidth;
+      }
     }
   }, [boxKey, jumpKey, target]);
 
