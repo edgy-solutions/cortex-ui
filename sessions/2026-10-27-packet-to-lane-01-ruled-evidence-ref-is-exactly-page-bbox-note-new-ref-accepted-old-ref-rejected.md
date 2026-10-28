@@ -53,15 +53,21 @@ lands it must be rejected because `page_dims` and `units` are not keys of the co
 
 ## The consequence we can see and you own
 
-The rowFractionSeal header says OLD_REF "is what the deployed doc-tools image still writes, and what
-every already-stored row renders as". If `Extraction` is a validated `response_model`, then every
-stored pixel-form row fails validation at serve once `extra` is forbidden. So either:
+7f's packet (same day, in this directory) measured that the deployed doc-tools, v0.2.2, already
+emits `{page, bbox, note?}` with no `page_dims`. The rowFractionSeal header's line that OLD_REF "is
+what the deployed doc-tools image still writes" is out of date. The hazard that remains is rows
+stored BEFORE `b08468f`. If `Extraction` is a validated `response_model`, those pixel-form rows fail
+validation at serve once `extra` is forbidden. So either:
 - the route converts pixel + `page_dims` to fractions when it serves (doc-tools' converter is the
   rule: `x / width`, `y / height`); or
 - stored rows are migrated.
 
-We have not checked which rows PCN-2683's 915 are. Cortex's banner now names the failing check per
-row (cortex #37, on master), so a look at the card after the next roll answers it.
+7f predicts that PCN-2683's 915 rows are fraction rows which the current model serializes with
+`page_dims: null`. Cortex's reader sends any present `page_dims` key down the page_dims path, so
+those rows fail there. Cortex #37 (on master, not yet rolled; the sandbox is frozen) names the check
+per row. If 7f is right, the banner after the next roll reads "915 page_dims is not an object", and
+its sample line shows `page_dims: null` verbatim. The reader stays strict about that `null` on
+purpose: under the ruling, a served `page_dims` key of any value is a contract violation.
 
 ## What cortex does at the merge
 
