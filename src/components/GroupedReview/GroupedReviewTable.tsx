@@ -13,11 +13,9 @@
  * `items` is per-approver-filtered server-side (Seal 2); this renders what it's given and never
  * filters. Mirrors SupplyTable's shell + TaskCard's act-with-optimism.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, FileSearch, Trash2, Pencil, Plus } from "lucide-react";
-import { useEvidenceStore } from "@/store/useEvidenceStore";
-import { useStageStore } from "@/store/useStageStore";
+import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, Trash2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import {
@@ -28,6 +26,8 @@ import {
 import { actOnHumanTask, type GroupedRejectCode, type RowEdits } from "@/api/client";
 import { actFailureFallback, actRefusal, buildRowEdits, isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
 import type { ReviewBatch, ReviewItem } from "./types";
+import type { ProvenanceItem } from "../Evidence/EvidenceCard";
+import { ProvenanceSourcePane } from "./ProvenanceSourcePane";
 
 interface OverrideDraft {
   disposition: Disposition;
@@ -162,23 +162,6 @@ export function GroupedReviewTable({
   /** What the row SHOWS as its MPN: the correction if any, else the extracted value. */
   const shownMpn = (mpn: string) => (rowEdits ? corrected[mpn] ?? mpn : mpn);
 
-  // Summon the evidence card for a part — the document region its value came
-  // from. Subordinate to this review; leaves when the review does.
-  const summon = useEvidenceStore((s) => s.summon);
-  const summoned = useEvidenceStore((s) => s.summoned);
-  // The part whose evidence is open FOR THIS review — the row that must visually
-  // PAIR with the evidence header ("Evidence · <mpn>"), so a reviewer studying the
-  // now-majority crop never loses which row the decision belongs to (the review
-  // yields SPACE but keeps PRIMACY; this is the connector that keeps it legible).
-  const summonedMpn =
-    summoned && summoned.reviewId === batch.batch_id ? summoned.mpn : null;
-  const showSource = (mpn: string) => {
-    summon({ reviewId: batch.batch_id, noticeId: batch.notice_id, mpn });
-    // Open the composite (review + evidence flap) so the flap has room to dock —
-    // "the review card makes place for the evidence card."
-    useStageStore.getState().openFullPane();
-  };
-
   const setOverride = (mpn: string, patch: Partial<OverrideDraft>) =>
     setOverrides((prev) => {
       const base: OverrideDraft = prev[mpn] ?? { disposition: "dispatchQualification", reason: "" };
@@ -244,6 +227,40 @@ export function GroupedReviewTable({
   const activeCount = rows.filter((r) => !isDeleted(r.mpn)).length;
   // Added rows are the approver's own work: never hidden behind the preview cap.
   const previewItems: Row[] = [...previewServerItems, ...rows.filter((r) => r.added)];
+  // ---- selection: the row whose evidence the in-card source pane shows. SELECTION and PAGE are
+  // separate state: a selection change sets the page to the row item's page; the navigator sets
+  // the page only.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [page, setPage] = useState<number | null>(null);
+  const [provItems, setProvItems] = useState<ProvenanceItem[]>([]);
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const activeRows = previewItems.filter((r) => !isDeleted(r.mpn));
+  const activeKey = activeRows.map((r) => r.mpn).join("\u0000");
+  useEffect(() => {
+    // first active row on mount; and if the selected row stops being active, fall back to the first
+    if (selected === null || !activeRows.some((r) => r.mpn === selected)) setSelected(activeRows[0]?.mpn ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, selected]);
+  useEffect(() => {
+    const it = selected === null ? undefined : provItems.find((i) => i.mpn === selected);
+    if (it) setPage(it.page_number);
+  }, [selected, provItems]);
+  useEffect(() => {
+    const el = selected === null ? null : rowRefs.current[selected];
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+  const onRowsKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable]")) return;
+    e.preventDefault();
+    const i = activeRows.findIndex((r) => r.mpn === selected);
+    const next = Math.min(Math.max(i + (e.key === "ArrowDown" ? 1 : -1), 0), activeRows.length - 1);
+    if (activeRows[next]) setSelected(activeRows[next].mpn);
+  };
+  const onRowClick = (mpn: string, e: React.MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest("button, input, select, textarea, a")) return;
+    setSelected(mpn);
+  };
   const exceptionCount = Object.keys(overrides).filter((m) => !isDeleted(m)).length;
 
   // ---- row-edit handlers (flag on only; the controls that call them are not rendered otherwise) ----
@@ -438,9 +455,13 @@ export function GroupedReviewTable({
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
         <div className="flex items-center gap-2 min-w-0">
           <PackageX className="w-4 h-4 text-neon-blue shrink-0" />
-          <span className="font-mono text-[10px] font-bold text-slate-300 tracking-widest uppercase truncate">
-            {batch.notice_type} {batch.notice_id} · {activeCount} parts
-          </span>
+          <p data-review-topline className="font-mono text-[10px] font-bold text-slate-300 tracking-widest uppercase truncate">
+            <span data-topline="notice">{batch.notice_type} {batch.notice_id}</span>
+            {" · "}
+            <span data-topline="stage">disposition review</span>
+            {" · "}
+            {activeCount} parts
+          </p>
         </div>
         {needsReviewCount > 0 && (
           <div className="flex items-center gap-1.5 text-amber-400" title="Parts with an uncertain MPN extraction">
@@ -483,8 +504,9 @@ export function GroupedReviewTable({
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto font-mono">
+      {/* Table (LEFT) and the notice source pane (RIGHT) — the PromotionReviewCard layout. */}
+      <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="overflow-x-auto font-mono min-w-0">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-900/50">
@@ -503,7 +525,7 @@ export function GroupedReviewTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-white/5" tabIndex={0} onKeyDown={onRowsKeyDown} data-review-rows>
             {previewItems.map((it) => {
               const ov = overrides[it.mpn];
               const eff = effectiveDisposition(it, ov);
@@ -549,11 +571,15 @@ export function GroupedReviewTable({
               return (
                 <tr
                   key={it.mpn}
-                  className={`transition-colors ${
-                    it.mpn === summonedMpn
-                      // Strong selected state that PAIRS with the evidence header
-                      // (both neon-pink) — the reviewer's anchor between the crop
-                      // being studied and the row the decision belongs to.
+                  ref={(el) => {
+                    rowRefs.current[it.mpn] = el;
+                  }}
+                  onClick={(e) => onRowClick(it.mpn, e)}
+                  aria-selected={it.mpn === selected}
+                  data-review-row={it.mpn}
+                  data-selected={it.mpn === selected ? "" : undefined}
+                  className={`cursor-pointer transition-colors ${
+                    it.mpn === selected
                       ? "bg-neon-pink/10 ring-1 ring-inset ring-neon-pink/40"
                       : it.needs_review
                         ? "bg-amber-500/5"
@@ -573,7 +599,7 @@ export function GroupedReviewTable({
                         // whitespace-nowrap keeps it whole (the table scrolls-x if a
                         // long MPN needs it) so the eye never reassembles a part number.
                         className={`text-sm whitespace-nowrap ${
-                          it.mpn === summonedMpn ? "font-semibold text-neon-pink" : "text-white"
+                          it.mpn === selected ? "font-semibold text-neon-pink" : "text-white"
                         }`}
                       >
                         {shownMpn(it.mpn)}
@@ -599,15 +625,6 @@ export function GroupedReviewTable({
                         >
                           added
                         </span>
-                      )}
-                      {!it.added && (
-                      <button
-                        onClick={() => showSource(it.mpn)}
-                        title="Show where this came from in the notice"
-                        className="text-slate-500 hover:text-neon-pink transition-colors shrink-0"
-                      >
-                        <FileSearch className="w-3 h-3" />
-                      </button>
                       )}
                       {rowEdits && !it.added && (
                         <button
@@ -765,11 +782,6 @@ export function GroupedReviewTable({
                       <button
                         onClick={() => {
                           setOverride(it.mpn, {});
-                          // The unverified row exists BECAUSE verification failed —
-                          // summon its evidence eagerly as the override form opens,
-                          // so the reason field isn't asking the human to attest to
-                          // something they were given no way to check.
-                          if (it.needs_review) showSource(it.mpn);
                         }}
                         disabled={submitting || resolved}
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] uppercase tracking-tighter disabled:opacity-40 cursor-pointer ${
@@ -804,6 +816,16 @@ export function GroupedReviewTable({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="min-w-0 p-2">
+        <ProvenanceSourcePane
+          noticeId={batch.notice_id}
+          mpn={selected}
+          page={page}
+          onPage={setPage}
+          onLoaded={setProvItems}
+        />
+      </div>
       </div>
 
       {/* ROW EDITS (flag on): add a part the extraction missed. The row has no proposal, so it needs

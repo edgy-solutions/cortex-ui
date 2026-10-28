@@ -1,4 +1,5 @@
-import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { PageNavigator } from "./PageNavigator";
 import { fetchIngestSource } from "@/lib/ingestTransport";
 import type { IngestSource } from "@/api/client";
 import { openPdf, RenderCancelled, type PdfDoc, type RenderedPage } from "@/lib/pdfSource";
@@ -292,50 +293,29 @@ export function PdfEvidencePane({
     }
     setDraft(null);
   };
-  const onDraftKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitDraft();
-    } else if (e.key === "Escape") {
-      e.stopPropagation();
-      setDraft(null);
-    }
-  };
-
   const aspect = (() => {
     const first = Object.values(drawn)[0];
     return first && first.width > 0 ? first.height / first.width : LETTER;
   })();
   const pages = Array.from({ length: numPages }, (_, i) => i + 1);
-  const navBtn =
-    "px-1.5 rounded border border-slate-500/40 text-slate-300 hover:bg-white/5 disabled:opacity-30 disabled:cursor-default cursor-pointer";
 
   return (
     <div className="flex flex-col min-w-0" data-pdf-pane data-pdf-state={state.phase}>
       <div className="flex items-center justify-between mb-1.5 text-[10px] font-mono uppercase tracking-widest text-slate-500">
         <span>source</span>
         {doc && (
-          <span className="flex items-center gap-1" data-pdf-page={current} data-pdf-pages={numPages}>
-            <button type="button" className={navBtn} onClick={() => goTo(current - 1)} disabled={current <= 1} aria-label="previous page" title="previous page ([)" data-pdf-prev>
-              ‹
-            </button>
-            page
-            <input
-              type="text"
-              inputMode="numeric"
-              aria-label="page number"
-              className="w-8 px-1 rounded border border-slate-500/40 bg-transparent text-center text-slate-300"
-              value={draft ?? String(current)}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onDraftKey}
-              onBlur={commitDraft}
-              data-pdf-page-input
-            />
-            / {numPages}
-            <button type="button" className={navBtn} onClick={() => goTo(current + 1)} disabled={current >= numPages} aria-label="next page" title="next page (])" data-pdf-next>
-              ›
-            </button>
-          </span>
+          <PageNavigator
+            current={current}
+            total={numPages}
+            draft={draft}
+            onDraft={setDraft}
+            onCommit={commitDraft}
+            onCancel={() => setDraft(null)}
+            onPrev={() => goTo(current - 1)}
+            onNext={() => goTo(current + 1)}
+            prevDisabled={current <= 1}
+            nextDisabled={current >= numPages}
+          />
         )}
       </div>
       {outOfRange && target && (
