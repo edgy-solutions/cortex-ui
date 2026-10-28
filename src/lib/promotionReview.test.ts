@@ -27,6 +27,8 @@ import {
   rowsSharingEvidence,
   headerEditComparands,
   MFR_COMPARED_SOURCES,
+  MALFORMED_REASON_LABELS,
+  type MalformedReason,
   type Extraction,
 } from "./promotionReview";
 import { fixtureExtractionBody, fixturePromotionPayload } from "./promotionReviewFixture";
@@ -82,6 +84,8 @@ describe("the extraction body", () => {
     expect(reviewFlags(merged)).toEqual({
       absentEvidence: 0,
       malformedEvidence: 0,
+      malformedByReason: {},
+      malformedSample: null,
       partsMismatch: null,
       partsUnknown: false,
       evidenceCountMismatch: null,
@@ -165,6 +169,56 @@ describe("rows", () => {
   });
 });
 
+describe("a malformed evidence_ref names WHICH check failed (P0 PCN-2683)", () => {
+  const one = (row: Record<string, unknown>) => read({ rows: [{ mpn: "A", ...row }] }).rows[0].evidence;
+  const dims = { width: 612, height: 792 };
+  // [expected code, a failing ref, the valid value one step from the failure]
+  const CASES: [MalformedReason, unknown, unknown][] = [
+    ["not_an_object", "p1", { page: 1 }],
+    ["not_an_object", [1], { page: 1 }],
+    ["not_an_object", 7, { page: 1 }],
+    ["page_missing_or_not_positive_int", { bbox: null }, { page: 1, bbox: null }],
+    ["page_missing_or_not_positive_int", { page: 0, bbox: [0.1, 0.1, 0.2, 0.2] }, { page: 1, bbox: [0.1, 0.1, 0.2, 0.2] }],
+    ["page_missing_or_not_positive_int", { ...ev, page: 1.5 }, { ...ev, page: 2 }],
+    ["bbox_not_fractions", { page: 1, bbox: [40, 60, 560, 110] }, { page: 1, bbox: [0.4, 0.6, 0.5, 0.9] }],
+    ["bbox_not_four_numbers", { ...ev, bbox: [1, 2, 3] }, { ...ev, bbox: [1, 2, 3, 4] }],
+    ["bbox_not_four_numbers", { ...ev, bbox: [1, 2, "3", 4] }, { ...ev, bbox: [1, 2, 3, 4] }],
+    ["page_dims_not_object", { ...ev, page_dims: "612x792" }, { ...ev, page_dims: dims }],
+    ["page_dims_not_positive", { ...ev, page_dims: { width: 612, height: 0 } }, { ...ev, page_dims: { width: 612, height: 1 } }],
+    ["page_dims_not_positive", { ...ev, page_dims: { width: "612", height: 792 } }, { ...ev, page_dims: dims }],
+    ["bbox_no_area", { ...ev, bbox: [10, 20, 10, 40] }, { ...ev, bbox: [10, 20, 11, 40] }],
+    ["bbox_no_area", { ...ev, bbox: [10, 40, 110, 20] }, { ...ev, bbox: [10, 20, 110, 40] }],
+  ];
+
+  it.each(CASES)("%s: %j is that code, carries the raw value, and its near side reads ok", (code, bad, good) => {
+    const got = one({ evidence_ref: bad });
+    expect(got, `expected code ${code}`).toMatchObject({ state: "malformed", reason: code });
+    expect((got as { raw: unknown }).raw).toEqual(bad);
+    expect(one({ evidence_ref: good }).state).toBe("ok");
+  });
+
+  it("census: the codes the cases hit are exactly the exported union", () => {
+    const hit = [...new Set(CASES.map(([c]) => c))].sort();
+    expect(hit).toEqual(Object.keys(MALFORMED_REASON_LABELS).sort());
+  });
+
+  it("flags count by reason and sample the FIRST malformed row", () => {
+    const f = flagsOf(
+      read({
+        rows: [
+          { mpn: "A", evidence_ref: "p1" },
+          { mpn: "B", evidence_ref: { page: 1, bbox: [1, 2, 3, 4] } },
+          { mpn: "C", evidence_ref: "p3" },
+        ],
+      }),
+    );
+    expect(f.malformedEvidence).toBe(3);
+    expect(f.malformedByReason).toEqual({ not_an_object: 2, bbox_not_fractions: 1 });
+    expect(f.malformedSample).toEqual({ reason: "not_an_object", raw: "p1" });
+    expect(flagsOf(read()).malformedSample).toBeNull();
+  });
+});
+
 describe("evidence has three states, with different owners", () => {
   const one = (row: Record<string, unknown>) => read({ rows: [{ mpn: "A", ...row }] }).rows[0].evidence;
 
@@ -201,18 +255,18 @@ describe("evidence has three states, with different owners", () => {
   });
 
   it("a row evidence_ref with a null bbox and no page is malformed", () => {
-    expect(one({ evidence_ref: { bbox: null } })).toEqual({ state: "malformed" });
-    expect(one({ evidence_ref: { bbox: null, page_dims: { width: 612, height: 792 } } })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: { bbox: null } })).toMatchObject({ state: "malformed" });
+    expect(one({ evidence_ref: { bbox: null, page_dims: { width: 612, height: 792 } } })).toMatchObject({ state: "malformed" });
   });
 
   it("a row evidence_ref with no bbox key is read as page-only, the same as null", () => {
     expect(one({ evidence_ref: { page: 1 } })).toMatchObject({ state: "ok", ref: { page: 1, bbox: null } });
     expect(one({ evidence_ref: { page: 1, page_dims: { width: 612, height: 792 } } })).toMatchObject({ state: "ok", ref: { page: 1, bbox: null } });
-    expect(one({ evidence_ref: { bbox: null } })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: { bbox: null } })).toMatchObject({ state: "malformed" });
   });
 
   it("a row evidence_ref with no page_dims and a pixel bbox is malformed", () => {
-    expect(one({ evidence_ref: { page: 1, bbox: [40, 60, 560, 110] } })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: { page: 1, bbox: [40, 60, 560, 110] } })).toMatchObject({ state: "malformed" });
   });
 
   it.each([
@@ -227,7 +281,7 @@ describe("evidence has three states, with different owners", () => {
     ["no page_dims", { page: 1, bbox: ev.bbox }],
     ["zero page height", { ...ev, page_dims: { width: 612, height: 0 } }],
   ])("%s is MALFORMED, not absent", (_label, ref) => {
-    expect(one({ evidence_ref: ref })).toEqual({ state: "malformed" });
+    expect(one({ evidence_ref: ref })).toMatchObject({ state: "malformed" });
   });
 });
 
