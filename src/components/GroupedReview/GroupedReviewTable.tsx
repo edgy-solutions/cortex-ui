@@ -358,7 +358,7 @@ export function GroupedReviewTable({
         toast.error(res.reason ? `Refused — ${res.reason}` : "Review refused — still pending");
         return;
       }
-      const count = res.resolved_count ?? batch.items.length;
+      const count = typeof res.resolved_count === "number" ? res.resolved_count : batch.items.length;
       reviewDraftCache.delete(batch.batch_id); // draft consumed
       setResolved(true);
       toast.success(

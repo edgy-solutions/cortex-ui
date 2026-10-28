@@ -24,11 +24,8 @@
  * Match key is IDENTITY (uri), strict. A renamed/re-URI'd node reads as
  * gone (ghost), never fuzzy-matched to a successor.
  */
-import type {
-  RouteDecision,
-  GraphTraceNode,
-  DecisionSubgraphResponse,
-} from "@/api/types";
+import type { RouteDecision, GraphTraceNode } from "@/api/types";
+import type { DecisionSubgraphResponse } from "@/api/client";
 
 export type NodeState = "matched" | "ghost" | "dim" | "capturedOnly";
 
@@ -131,7 +128,7 @@ export function buildCorridorData(
 ): CorridorData {
   const captured = collectCapturedDecision(routing, graphTrace, alternates);
   const available = live.available;
-  const liveSet = new Set(live.live_nodes.map((n) => n.uri));
+  const liveSet = new Set((live.live_nodes ?? []).map((n) => n.uri));
   const nodeStates: Record<string, CorridorNodeState> = {};
   const mark = (name: string, uri: string | null | undefined) => {
     if (available && uri && !liveSet.has(uri)) nodeStates[name] = "missing";
@@ -320,15 +317,16 @@ export function buildMapModel(
     };
   }
 
-  const liveSet = new Set(live.live_nodes.map((n) => n.uri));
+  const liveSet = new Set((live.live_nodes ?? []).map((n) => n.uri));
   const stateOf = (uri: string): NodeState =>
     liveSet.has(uri) ? "matched" : "ghost";
 
   // Spine = the live ancestor_chain (full, subject-first). Fall back to the
   // captured subject (+ancestor) if the chain came back empty (e.g. subject
   // gone → walk returns nothing → the subject renders ghost).
-  const chain = live.ancestor_chain.length
-    ? live.ancestor_chain
+  const ancestorChain = live.ancestor_chain ?? [];
+  const chain = ancestorChain.length
+    ? ancestorChain
     : [captured.subjectUri, ...(captured.ancestorUri ? [captured.ancestorUri] : [])];
   const spine: MapSpineNode[] = chain.map((uri, i) => ({
     uri,
@@ -364,7 +362,7 @@ export function buildMapModel(
 
   // Dim context: live neighbors NOT on the spine and NOT captured.
   const capturedSet = new Set(captured.classUris);
-  const context: MapContextNode[] = live.context_nodes
+  const context: MapContextNode[] = (live.context_nodes ?? [])
     .filter((n) => !spineSet.has(n.uri) && !capturedSet.has(n.uri))
     .map((n) => ({ uri: n.uri, label: labelOf(n.uri) }));
 

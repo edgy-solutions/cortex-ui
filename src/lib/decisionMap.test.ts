@@ -33,11 +33,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import type {
-  RouteDecision,
-  GraphTraceNode,
-  DecisionSubgraphResponse,
-} from "@/api/types";
+import type { RouteDecision, GraphTraceNode } from "@/api/types";
+import type { DecisionSubgraphResponse } from "@/api/client";
 import {
   buildCorridorData,
   collectCapturedDecision,
@@ -435,7 +432,7 @@ describe("buildCorridorData — the honesty states come from distinct captured c
     const data = buildCorridorData(collide, TRACE, [], live());
 
     expect(data.nodeStates!["Owning Team"]).toBe("missing");
-    expect(live().live_nodes.map((n) => n.uri)).toContain("urn:x:Team"); // the object IS live
+    expect((live().live_nodes ?? []).map((n) => n.uri)).toContain("urn:x:Team"); // the object IS live
     expect(data.predicates[0].object).toBe("Owning Team"); // ...and renders as gone
   });
 });
