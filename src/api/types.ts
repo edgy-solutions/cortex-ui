@@ -11,6 +11,7 @@ export {
 import type { FallbackReason } from '@/lib/routing';
 import type { ProvenanceFloor } from '@/lib/ingestWire';
 import type { SourcesProvenance } from '@/lib/sourceProvenance';
+import type { Cell as GeneratedCell, Entitlements as GeneratedEntitlements } from './generated/bff';
 
 import type {
   DashboardUI,
@@ -999,26 +1000,21 @@ export interface InterviewRequest {
 
 // ── ADR-0026 entitlement matrix ────────────────────────────
 
-/** One (persona, domain) cell the user is entitled to. */
-export interface EntitlementCell {
-  persona: string;
-  domain: string;
-}
+/**
+ * One (persona, domain) cell the user is entitled to. The GENERATED shape: the producer declares
+ * persona and domain `str | None`. A null is a backend defect that cortex SHOWS as "unset" and never
+ * coerces (architect ruling 2026-10-28); usePersonaStore keeps it out of every selection.
+ */
+export type EntitlementCell = GeneratedCell;
 
-/** Response body for GET /me/entitlements */
-export interface Entitlements {
-  user_id: string;
-  /**
-   * The key a drop's `on_behalf_of` must echo to be a self-drop (gateway `_admit_on_behalf_of`).
-   * NOT the email: at work `USER_ENTITLEMENT_CLAIM` is `preferred_username`. Absent from a BFF
-   * older than invincible-agent `7a98f7bd` — see `src/lib/dropIdentity.ts` for the fallback.
-   */
-  authz_id?: string;
-  /** Display only — never an `on_behalf_of`. */
-  email: string;
-  cells: EntitlementCell[];
-  default: EntitlementCell | null;
-  /** Provenance flag — the two honest post-step-6 states: topaz | none. */
-  source: string;
-}
+/**
+ * Response body for GET /me/entitlements -- the GENERATED shape.
+ *
+ * `authz_id`: the key a drop's `on_behalf_of` must echo to be a self-drop (gateway
+ * `_admit_on_behalf_of`). NOT the email: at work `USER_ENTITLEMENT_CLAIM` is `preferred_username`.
+ * Null from a BFF older than invincible-agent `7a98f7bd` -- see `src/lib/dropIdentity.ts`.
+ * `email`: display only -- never an `on_behalf_of`.
+ * `source`: provenance flag (topaz | cache | none); null is shown, not defaulted.
+ */
+export type Entitlements = GeneratedEntitlements;
 

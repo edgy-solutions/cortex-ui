@@ -69,6 +69,8 @@ export function PersonaPicker() {
     hasEntitlements,
     domainsFor,
     personas,
+    unsetPersona,
+    unsetDomainFor,
   } = usePersonaStore();
 
   const [open, setOpen] = useState(false);
@@ -102,8 +104,8 @@ export function PersonaPicker() {
     };
   }, [open]);
 
-  const source = entitlements?.source ?? "unknown";
-  const topazAuthoritative = source === "topaz" || source === "cache";
+  // A null source is shown as null, never defaulted to a string (ruling 2026-10-28).
+  const topazAuthoritative = entitlements?.source === "topaz" || entitlements?.source === "cache";
   const entitled = hasEntitlements();
 
   // Legacy path / loading / error → a bolt with nothing behind it.
@@ -186,7 +188,7 @@ export function PersonaPicker() {
                 className="pp-request"
                 onClick={() => {
                   console.warn("[access-request] request-access placeholder", {
-                    source,
+                    source: entitlements?.source,
                     at: new Date().toISOString(),
                   });
                   alert(
@@ -284,6 +286,16 @@ export function PersonaPicker() {
                 </div>
               );
             })}
+            {unsetPersona() && (
+              <div
+                data-pp-unset="persona"
+                className="pp-item pp-unset"
+                aria-disabled="true"
+                title="The server sent an entitlement cell with no persona (a backend defect); it cannot be picked."
+              >
+                <span>unset</span>
+              </div>
+            )}
           </div>
           <div className="pp-divider" />
           <div className="pp-col pp-col-domain">
@@ -304,6 +316,16 @@ export function PersonaPicker() {
                 </div>
               );
             })}
+            {selectedPersona && unsetDomainFor(selectedPersona) && (
+              <div
+                data-pp-unset="domain"
+                className="pp-item pp-unset"
+                aria-disabled="true"
+                title="The server sent an entitlement cell with no domain (a backend defect); it cannot be picked."
+              >
+                <span>unset</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -364,6 +386,7 @@ const PickerStyles = () => (
       cursor: pointer; display: flex; justify-content: space-between;
       align-items: center; gap: 14px; transition: all .14s;
     }
+    .pp-unset { opacity: .5; cursor: not-allowed; font-style: italic; }
     .pp-col-persona .pp-item:hover { background: rgba(63,230,214,.08); }
     .pp-col-domain  .pp-item:hover { background: rgba(91,140,255,.08); }
     .pp-item.pp-selected {
