@@ -322,25 +322,6 @@ export interface DecisionSubgraphRequest {
   subject_uri?: string;
 }
 
-export interface SubgraphNode {
-  uri: string;
-  labels?: string[];
-}
-export interface SubgraphEdge {
-  source: string;
-  target: string;
-  type: string;
-}
-export interface DecisionSubgraphResponse {
-  available: boolean;
-  reason?: string;
-  live_nodes: SubgraphNode[];
-  live_edges: SubgraphEdge[];
-  context_nodes: SubgraphNode[];
-  /** Ordered subClassOf spine, subject-first — the map's vertical
-   *  backbone with every intermediate class a real node. */
-  ancestor_chain: string[];
-}
 
 /** Parsed stream event types — Option A clean cut (2026-06-22).
  *
@@ -1040,3 +1021,4 @@ export interface Entitlements {
   /** Provenance flag — the two honest post-step-6 states: topaz | none. */
   source: string;
 }
+

@@ -16,7 +16,6 @@ import {
   type InterviewRequest,
   type Entitlements,
   type DecisionSubgraphRequest,
-  type DecisionSubgraphResponse,
 } from "./types";
 import type { Operations as BffOperations } from "./generated/bff";
 import type { Operations as V1Operations } from "./generated/ingestV1";
@@ -196,7 +195,10 @@ export async function fetchEntitlements(): Promise<Entitlements> {
     // being abandoned before it is dispatched.
     timeout: 15000,
   });
-  return resp.data as unknown as Entitlements; // pass B: hand shape vs Entitlements (ingest-v1)
+  // NOT YET TYPED FROM THE GENERATED SHAPE. The producer declares user_id / persona / domain nullable and the
+  // persona store reads them as strings (usePersonaStore.ts:120-208, dropperHold.ts:32): typing this read is a
+  // behaviour decision about null cells, which pass B does not make. The RESPONSE SEAL still reads this body.
+  return resp.data as unknown as Entitlements;
 }
 
 // ── HITL HumanTask queue (Slice 2 — workflow-ack) ───────────
@@ -206,13 +208,9 @@ export async function fetchEntitlements(): Promise<Entitlements> {
  * injects), so this and the live subscription agree by construction. The live
  * path is the Electric subscription; this is the on-open snapshot.
  */
-export interface MyHumanTasksResponse {
-  email: string;
-  tasks: Array<Record<string, unknown>>;
-}
+export type MyHumanTasksResponse = Resp<"GET /me/human_tasks">;
 export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
-  const data = await request("GET /me/human_tasks", {});
-  return data as unknown as MyHumanTasksResponse; // pass B: hand shape vs HumanTasksListing (ingest-v1)
+  return request("GET /me/human_tasks", {});
 }
 
 /**
@@ -220,35 +218,16 @@ export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
  * before acting; on approve of a workflow_ack task it resolves the Restate
  * promise so the suspended workflow resumes. `workflow_resumed` reflects that.
  */
-export interface ActOnTaskResult {
-  task_id: string;
-  decision: string;
-  rows_resolved?: number;
-  workflow_resumed?: boolean;
-  // grouped_review bridge: the /act handler validates the decision against the durable workflow
-  // (submit_decision) and only resolves the projection on acceptance. A policy-refused submission
-  // (e.g. an unverified row riding accept-all) comes back accepted:false + status "still_pending".
-  accepted?: boolean;
-  status?: string;
-  /** A promotion promote with row_edits: counts of what the server applied. */
-  row_edits?: { corrected: number; added: number; deleted: number; header?: number };
-  corrections?: unknown[];
-  /** The key of the extraction_defect task the corrections were filed as. */
-  extraction_defect?: string;
-  review_dispatched?: boolean;
-  resolved_count?: number;
-  reason?: string;
-  /**
-   * `document_empty_confirm` (spec 208) answers with the ingest's NEW STAGE, not a workflow resume:
-   * EmptyConfirmed = {ingest_id, task_id, decision, stage: "no_parts", rows_resolved}, and
-   * EmptyHasParts = {ingest_id, task_id, decision, stage: "received", attempt, extraction_defect,
-   * force_text_fallback: true, rows_resolved}. `extraction_defect` (above) is the filed task id there.
-   */
-  stage?: string;
-  attempt?: number;
-  ingest_id?: string;
-  force_text_fallback?: boolean;
-}
+/**
+ * `/act` answers one of seven declared shapes (ActGeneric | ActPromotion | Empty* | ActGrouped*), told apart
+ * by which fields are present. Every field below IS declared, on at least one member; this view lays the
+ * union's keys out as optional so a consumer can ask `res.stage` without a narrowing it does not need
+ * (a missing key reads `undefined`, which every reader already treats as "not this shape"). The response
+ * seal checks reads against the union of all seven.
+ */
+type AllKeys<U> = U extends unknown ? keyof U : never;
+type Loosened<U> = { [K in AllKeys<U>]?: U extends unknown ? (K extends keyof U ? U[K] : never) : never };
+export type ActOnTaskResult = Loosened<Resp<"POST /human_tasks/{task_id}/act">>;
 /** The verbs a task may be acted on with. PER SPECIES, not universal: a triage task ("this
  *  notice could not be prepared for review") takes acknowledged/redriven, and the API REFUSES
  *  approved/rejected on it with 422 — storing "approved" on an extraction failure writes a
@@ -352,11 +331,10 @@ export async function actOnHumanTask(
   page?: number
 ): Promise<ActOnTaskResult> {
   const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page);
-  const data = await request("POST /human_tasks/{task_id}/act", {
+  return request("POST /human_tasks/{task_id}/act", {
     path: { task_id: taskId },
     body: body as BffOps["POST /human_tasks/{task_id}/act"]["body"],
   });
-  return data as unknown as ActOnTaskResult; // pass B: hand shape vs the ActGeneric | ActPromotion | Empty* | ActGrouped* union (ingest-v1)
 }
 
 /**
@@ -655,7 +633,7 @@ export async function requestTemplateCanvasSeed(
   if (cell?.active_persona) body.active_persona = cell.active_persona;
   if (cell?.active_domains) body.active_domains = cell.active_domains;
   try {
-    const data = (await request("POST /canvas/seed", { body })) as { artifact_ids?: unknown } | undefined;
+    const data = await request("POST /canvas/seed", { body });
     const raw = Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
     return {
       ok: true,
@@ -814,12 +792,35 @@ export async function getMeshConfig(): Promise<any> {
  * failure surfaces as the COULDN'T-CHECK state — the caller renders
  * "captured-only, cannot verify", never an empty map.
  */
+export type SubgraphNode = {
+  uri: string;
+  labels?: string[];
+};
+export type SubgraphEdge = {
+  source: string;
+  target: string;
+  type: string;
+};
+/**
+ * The producer declares the three node/edge lists as arrays of open objects, so the fields cortex reads
+ * off them (`uri`, `labels`, `source`, `target`, `type`) are not declared: AWAITING_DECLARATION below,
+ * typed here and only here.
+ */
+export type DecisionSubgraphResponse = Omit<
+  Resp<"POST /decision_subgraph">,
+  "live_nodes" | "live_edges" | "context_nodes"
+> & {
+  live_nodes?: SubgraphNode[];
+  live_edges?: SubgraphEdge[];
+  context_nodes?: SubgraphNode[];
+};
 export async function fetchDecisionSubgraph(
   req: DecisionSubgraphRequest,
 ): Promise<DecisionSubgraphResponse> {
   try {
-    const data = await request("POST /decision_subgraph", { body: req });
-    return data as unknown as DecisionSubgraphResponse; // pass B: hand shape vs DecisionSubgraphResponse (bff)
+    // The one assertion left on a typed read: the ledgered reads (AWAITING_DECLARATION) narrow the producer's open
+    // objects to the fields cortex reads off them. A widening to `unknown` is not needed, only the narrowing.
+    return (await request("POST /decision_subgraph", { body: req })) as DecisionSubgraphResponse;
   } catch (e) {
     // The transport itself failed — treat as couldn't-check, same shape
     // the backend returns on a live-read failure. Never fabricate a base
@@ -855,13 +856,13 @@ export interface FrontendCapabilityPayload {
   domain_fit?: string[];
 }
 
+export type RegisterFrontendCapabilitiesResult = Resp<"POST /register_frontend_capabilities">;
 export async function registerFrontendCapabilities(payload: {
   frontend_id: string;
   frontend_version: string;
   capabilities: FrontendCapabilityPayload[];
-}): Promise<{ accepted: number; frontend_id: string; unchanged?: boolean }> {
-  const data = await request("POST /register_frontend_capabilities", { body: payload });
-  return data;
+}): Promise<RegisterFrontendCapabilitiesResult> {
+  return request("POST /register_frontend_capabilities", { body: payload });
 }
 
 // ── Health Check ─────────────────────────────────────────
@@ -914,9 +915,11 @@ export type BffVersionResult =
   /** Nothing came back at all — DNS, connection refused, timeout, offline. */
   | { kind: "unreachable" };
 
+/** The producer declares /fleet/version as an open object, so `self` is undeclared: AWAITING_DECLARATION. */
+type FleetVersionResponse = Resp<"GET /fleet/version"> & { self?: ServiceVersion };
 export async function fetchBffVersion(): Promise<BffVersionResult> {
   try {
-    const data = await request("GET /fleet/version", {});
+    const data = (await request("GET /fleet/version", {})) as FleetVersionResponse;
     return { kind: "ok", version: data?.self ?? {} };
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status;
@@ -1125,13 +1128,14 @@ export async function downloadExportArtifact(uri: string): Promise<Blob> {
  * which. A blank `leaf` is refused (422 `leaf_unknown`), so "Not sure" sends NO field, never "".
  * `leaf_requires_pdf` / `leaf_conflicts_with_content_kind` are 422s too, read by `readIngestRefusal`.
  */
+export type IngestUploadResult = Resp<"POST /ingest">;
 export async function uploadIngest(
   file: File,
   kind: string,
   onBehalfOf: string,
   contentKind: string,
   leaf: IngestLeaf | null = null,
-): Promise<unknown> {
+): Promise<IngestUploadResult> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kind", kind);
@@ -1148,7 +1152,8 @@ export async function uploadIngest(
  * `readIngestStatusRow` in `src/lib/ingestWire.ts` are how a caller reads that without guessing
  * at a reason the server deliberately did not give.
  */
-export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
+export type IngestStatus = Resp<"GET /ingest/{ingest_id}/status">;
+export async function fetchIngestStatus(ingestId: string): Promise<IngestStatus> {
   return request("GET /ingest/{ingest_id}/status", { path: { ingest_id: ingestId } });
 }
 
@@ -1158,7 +1163,8 @@ export async function fetchIngestStatus(ingestId: string): Promise<unknown> {
  * `next`, passed back verbatim (opaque; never built here), and left off for the first page. A failure
  * is read by the caller as "no server list".
  */
-export async function fetchIngestMine(limit: number, before: string | null = null): Promise<unknown> {
+export type IngestMineListing = Resp<"GET /ingest/mine">;
+export async function fetchIngestMine(limit: number, before: string | null = null): Promise<IngestMineListing> {
   return request("GET /ingest/mine", { query: before === null ? { limit } : { limit, before } });
 }
 
@@ -1183,7 +1189,8 @@ export async function fetchAnswerBody(id: string): Promise<unknown> {
  * 200 `{ingest_id, stage:"received", attempt}`; 409 `not_failed` and 403 `retry_is_pin_driven` throw
  * (FastAPI wraps them under `detail`; read with `readIngestRetryRefusal`).
  */
-export async function retryIngest(ingestId: string): Promise<unknown> {
+export type IngestRetryResult = Resp<"POST /ingest/{ingest_id}/retry">;
+export async function retryIngest(ingestId: string): Promise<IngestRetryResult> {
   return request("POST /ingest/{ingest_id}/retry", { path: { ingest_id: ingestId } });
 }
 
@@ -1191,7 +1198,8 @@ export async function retryIngest(ingestId: string): Promise<unknown> {
  * `GET /ingest/{id}/extraction` (`ingestExtractionPath`; Lane 1, 193): the review card's rows
  * and header. Returned RAW; `readExtraction` reads it.
  */
-export async function fetchIngestExtraction(ingestId: string): Promise<unknown> {
+export type IngestExtraction = Resp<"GET /ingest/{ingest_id}/extraction">;
+export async function fetchIngestExtraction(ingestId: string): Promise<IngestExtraction> {
   return request("GET /ingest/{ingest_id}/extraction", { path: { ingest_id: ingestId } });
 }
 
@@ -1254,7 +1262,8 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
  * `leaf_not_changeable`. Every refusal carries a `message`: 422 `unknown_leaf`, 409 `no_leaf_for_kind`, 409
  * `leaf_not_changeable` (`leaf_fixed_at_review` no longer exists). Answers the status body. Same `api` instance as every call above, so it needs no `check:transport` declaration.
  */
-export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<unknown> {
+export type IngestLeafCorrection = Resp<"POST /ingest/{ingest_id}/leaf">;
+export async function correctIngestLeaf(ingestId: string, leaf: IngestLeaf): Promise<IngestLeafCorrection> {
   return request("POST /ingest/{ingest_id}/leaf", { path: { ingest_id: ingestId }, body: { leaf } });
 }
 
@@ -1278,3 +1287,22 @@ export async function fetchIllustrationContent(path: string): Promise<string> {
   });
   return data;
 }
+
+// 51 of the 70 ops are UNTYPED (the producer declares no response); their hand shapes stay in pass B.
+/**
+ * Reads cortex makes of fields the producer sends but does not declare. The read-side twin of AWAITING_DOOR.
+ * Shape: { "<METHOD /path>": { "<dotted.path>": "<reason, evidence file>" } }. `[]` is an array step.
+ * client.responseSeal.test.ts fails an entry the schema now declares, and one nothing reads.
+ */
+export const AWAITING_DECLARATION: Record<string, Record<string, string>> = {
+  "POST /decision_subgraph": {
+    "live_nodes.[].uri": "(b) the producer declares list[dict] but builds {uri, labels} per node; evidence: producer src/iagent/gateway.py:10573 at 4a5ff6b6 (and src/lib/decisionMap.test.ts fixtures)",
+    "context_nodes.[].uri": "(b) same open dict, {uri, labels}; evidence: producer src/iagent/gateway.py:10525-10575 at 4a5ff6b6",
+  },
+  "GET /ingest/{ingest_id}/extraction": {
+    "rows.[].evidence_ref.page_dims": "retired after the 0.4.71 roll (architect 10-28), reader branch still live for pre-roll rows",
+  },
+  "GET /fleet/version": {
+    self: "(b) the producer sends {self: {...}} but declares the body as an open object; evidence: producer src/iagent/gateway.py:971 at 4a5ff6b6 and src/api/bffVersion.test.ts",
+  },
+};
