@@ -782,6 +782,9 @@ export function GroupedReviewTable({
                       <button
                         onClick={() => {
                           setOverride(it.mpn, {});
+                          // The one control that DOES select (architect, 10-27): the reason field
+                          // asks the approver to attest to this row, so the pane shows its evidence.
+                          setSelected(it.mpn);
                         }}
                         disabled={submitting || resolved}
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] uppercase tracking-tighter disabled:opacity-40 cursor-pointer ${

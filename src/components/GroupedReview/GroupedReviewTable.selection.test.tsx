@@ -149,6 +149,16 @@ describe("whole-row selection", () => {
     expect(selectedMpns(c), "delete button click leaves row 5 selected").toEqual(["M5"]);
   });
 
+  it("J: opening a row's override selects that row and the page follows", async () => {
+    const c = await ready();
+    await selectM5(c);
+    const open = Array.from(row(c, "M6").querySelectorAll("button")).find((b) => b.textContent?.trim() === "Override");
+    expect(open, "row 6 has an Override button").toBeTruthy();
+    fireEvent.click(open!);
+    await waitFor(() => expect(selectedMpns(c), "opening row 6's override selects row 6").toEqual(["M6"]));
+    await waitFor(() => expect(paneAttr(c, "data-provenance-page"), "page followed the override to row 6's page").toBe("4"));
+  });
+
   it("F: the per-row page icon is gone, edit and delete stay", async () => {
     const c = await ready();
     expect(c.querySelector('[title="Show where this came from in the notice"]'), "old page-icon title absent").toBeNull();
