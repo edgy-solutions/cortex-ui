@@ -33,15 +33,40 @@ import type { Artifact } from "@/api/types";
 import type { HumanTask } from "@/store/useHumanTaskStore";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import { useCanvasStore } from "@/store/useCanvasStore";
-import { taskKindDisplay } from "@/lib/taskKindRegistry";
+import type { TaskDeclaration } from "@/lib/taskDeclaration";
+
+/** A served menu for the given kind -> archetype pairs (the shape `useTaskKindStore.byKind` holds). */
+const servedMenu = (m: Record<string, string>): Record<string, TaskDeclaration> =>
+  Object.fromEntries(
+    Object.entries(m).map(([kind, archetype]) => [
+      kind,
+      { kind, declared: true, archetype, badge: "", title: "", accepts: [], reasonRequired: new Set<string>() },
+    ]),
+  );
+
+/** What the deployment serves for the registry's kinds; the archetype column used to live in the table. */
+const SERVED_ARCHETYPE: Record<string, string> = {
+  grouped_review: "GROUPED_REVIEW",
+  pcn_disposition: "APPROVAL_TASK",
+  access_request: "APPROVAL_TASK",
+  workflow_ack: "APPROVAL_TASK",
+  extraction_refusal: "TRIAGE_TASK",
+  document_empty_confirm: "APPROVAL_TASK",
+};
+const SERVED = servedMenu(SERVED_ARCHETYPE);
+
 import {
-  taskToArtifact,
+  taskToArtifact as taskToArtifactRaw,
   taskArtifactId,
   taskRowIdOf,
   isTaskArtifact,
   taskKindLabel,
   TASK_ARTIFACT_PREFIX,
 } from "./taskArtifact";
+
+/** The adapter with the served menu supplied, as production supplies it from `useTaskKindStore`. */
+const taskToArtifact = (t: HumanTask, batch?: ReviewBatch, menu: Record<string, TaskDeclaration> = SERVED) =>
+  taskToArtifactRaw(t, batch, menu);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -274,15 +299,13 @@ describe("taskToArtifact — the card species, keyed on ARCHETYPE not on the kin
     // Asserted against `taskKindDisplay` rather than literals, so a `kind === "..."` branch
     // sneaked into the adapter diverges from the table and fails — while a table edit does not.
     const withBody = DECLARED_KINDS.filter(
-      (k) => taskKindDisplay(k).archetype !== "GROUPED_REVIEW",
+      (k) => SERVED_ARCHETYPE[k] !== "GROUPED_REVIEW",
     );
     expect(withBody.length).toBeGreaterThanOrEqual(4);
-    expect(new Set(withBody.map((k) => taskKindDisplay(k).archetype)).size).toBeGreaterThanOrEqual(2);
+    expect(new Set(withBody.map((k) => SERVED_ARCHETYPE[k])).size).toBeGreaterThanOrEqual(2);
 
     for (const kind of withBody) {
-      expect(comp(taskToArtifact(task({ kind }))).archetype, kind).toBe(
-        taskKindDisplay(kind).archetype,
-      );
+      expect(comp(taskToArtifact(task({ kind }), undefined, SERVED)).archetype, kind).toBe(SERVED_ARCHETYPE[kind]);
     }
   });
 
@@ -405,8 +428,9 @@ describe("taskToArtifact — the card species, keyed on ARCHETYPE not on the kin
     // fetched batch alive — and why the batchless `null` body is the shape that actually ships.
     const SYNC_SRC = readFileSync(path.join(__dirname, "useTaskArtifactSync.ts"), "utf8");
 
-    expect(SYNC_SRC).toContain("taskToArtifact(t)");
-    expect(SYNC_SRC).not.toMatch(/taskToArtifact\([^)]*,/);
+    // It now also passes the SERVED menu as the third argument; the batch slot stays `undefined`.
+    expect(SYNC_SRC).toContain("taskToArtifact(t, undefined, byKind)");
+    expect(SYNC_SRC).not.toMatch(/taskToArtifact\(t, [^u]/);
   });
 });
 
@@ -416,7 +440,7 @@ describe("FILED FINDING 2 — the reuse optimisation is defeated by fresh body o
     // `rendered_output` by reference; this module builds a new `{ components: [...] }` (and a
     // new component object inside it) each time it is called, so two adaptations of the SAME
     // task object can never be reference-equal. Deep-equal, but never identical.
-    const withBody = DECLARED_KINDS.filter((k) => taskKindDisplay(k).archetype !== "GROUPED_REVIEW");
+    const withBody = DECLARED_KINDS.filter((k) => SERVED_ARCHETYPE[k] !== "GROUPED_REVIEW");
     expect(withBody.length).toBeGreaterThanOrEqual(4);
 
     for (const kind of withBody) {
@@ -544,5 +568,26 @@ describe("FILED FINDING 3 — the lazy-fetched batch across a task-state update"
 
     expect(byId("task:row-77")).toBe(before);
     expect(comp(byId("task:row-77")).batch).toBe(b);
+  });
+});
+
+describe("the SERVED archetype decides the card (refactor item 3, step 10)", () => {
+  const unheard = "kind_this_client_has_never_heard_of";
+  it("a kind the client does not know, served TRIAGE_TASK, renders the triage card", () => {
+    const menu = servedMenu({ [unheard]: "TRIAGE_TASK" });
+    expect(comp(taskToArtifact(task({ kind: unheard }), undefined, menu)).archetype).toBe("TRIAGE_TASK");
+  });
+  it("a kind the client does not know, served GROUPED_REVIEW, renders it from the fetched batch", () => {
+    const menu = servedMenu({ [unheard]: "GROUPED_REVIEW" });
+    expect(comp(taskToArtifact(task({ kind: unheard }), batch("b1"), menu)).archetype).toBe("GROUPED_REVIEW");
+  });
+  it("a served kind that CHANGES archetype changes the card, whatever the kind's name suggests", () => {
+    const menu = servedMenu({ grouped_review: "APPROVAL_TASK" });
+    expect(comp(taskToArtifact(task({ kind: "grouped_review" }), undefined, menu)).archetype).toBe("APPROVAL_TASK");
+  });
+  it("a kind served NO archetype (or one this client has no card for) draws the generic read-only card, never a guess", () => {
+    expect(comp(taskToArtifact(task({ kind: "extraction_refusal" }), undefined, {})).archetype).toBe("APPROVAL_TASK");
+    const menu = servedMenu({ [unheard]: "SOME_FUTURE_CARD" });
+    expect(comp(taskToArtifact(task({ kind: unheard }), undefined, menu)).archetype).toBe("APPROVAL_TASK");
   });
 });

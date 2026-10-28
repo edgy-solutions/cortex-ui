@@ -57,6 +57,7 @@
  */
 import type { Bbox, PageDims } from "./bboxScale";
 import { FRACTION_PAGE, isFractionBox } from "./evidenceRef";
+import { HumanTaskActRequest_reason_code, Notice_mfr_source } from "../api/generated/bff";
 import { readCorrectedBy, readLeafSource, type IngestLeafSource } from "./ingestWire";
 
 export interface EvidenceRef {
@@ -140,7 +141,7 @@ export interface Extraction {
  * `notice_identity` fallback, null when there is no value. A BFF without the key is read as
  * `"header"` (what `notice.mfr` always meant before 199); any other value reads as null.
  */
-export type MfrSource = "header" | "identity" | null;
+export type MfrSource = (typeof Notice_mfr_source)[number] | null;
 
 /**
  * The sources whose `notice.mfr` the server compares a header edit against. The act route passes
@@ -200,12 +201,18 @@ export interface PromotionReview {
  * from 198) the grouped act's _GROUPED_REJECT_CODES too. rowEditsWireParity.test.ts seals this list and the
  * grouped table's against both, in order.
  */
-export const DEFAULT_REJECT_CODES: RejectCode[] = [
-  { code: "not_a_notice", label: "not a PCN/PDN" },
-  { code: "unreadable", label: "the source cannot be read" },
-  { code: "parts_unusable", label: "the parts list cannot be used" },
-  { code: "duplicate", label: "already promoted under another drop" },
-];
+const REJECT_LABELS: Readonly<Record<string, string>> = {
+  not_a_notice: "not a PCN/PDN",
+  unreadable: "the source cannot be read",
+  parts_unusable: "the parts list cannot be used",
+  duplicate: "already promoted under another drop",
+};
+/** CODES derived from the BFF snapshot's `HumanTaskActRequest.reason_code` enum (generated, in its order); only
+ *  the label is ours, and an unlabelled code shows its raw token. */
+export const DEFAULT_REJECT_CODES: RejectCode[] = HumanTaskActRequest_reason_code.map((code) => ({
+  code,
+  label: REJECT_LABELS[code] ?? code,
+}));
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -294,8 +301,8 @@ export function readExtraction(body: unknown): Extraction | null {
     manufacturer: str(notice.mfr),
     manufacturer_source: !("mfr_source" in notice)
       ? "header"
-      : notice.mfr_source === "header" || notice.mfr_source === "identity"
-        ? notice.mfr_source
+      : typeof notice.mfr_source === "string" && (Notice_mfr_source as readonly string[]).includes(notice.mfr_source)
+        ? (notice.mfr_source as MfrSource)
         : null,
     notice_date: str(notice.notice_date),
     attempt: posInt(body.attempt),

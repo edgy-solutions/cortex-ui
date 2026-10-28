@@ -29,27 +29,40 @@ export interface TaskKindDisplay {
   badge: string;
   /** Full descriptive title (HUD, card). */
   title: string;
-  /** Which canvas archetype renders this kind's card. */
-  archetype: "GROUPED_REVIEW" | "APPROVAL_TASK" | "TRIAGE_TASK";
 }
 
-// The single hardcoded table. `access_request` / `workflow_ack` are generic task
+/** The card archetypes a task can render as. WHICH one a kind gets is SERVED (`/task_kinds`' `archetype`, or the
+ *  row's own declaration): this file no longer decides it. See `taskArchetype` in `taskArtifact.ts`. */
+export type TaskCardArchetype = "GROUPED_REVIEW" | "APPROVAL_TASK" | "TRIAGE_TASK";
+
+/** The generic card for a kind that is served no archetype this client has a card for: the read-only
+ *  approval card (see ApprovalTaskCard's no-verb mode). Never a guess at what the kind "probably" is. */
+export const GENERIC_TASK_ARCHETYPE: TaskCardArchetype = "APPROVAL_TASK";
+
+/** Resolve a SERVED archetype name to a card, or the generic fallback. */
+export function resolveTaskArchetype(served: unknown): TaskCardArchetype {
+  return served === "GROUPED_REVIEW" || served === "APPROVAL_TASK" || served === "TRIAGE_TASK" ? served : GENERIC_TASK_ARCHETYPE;
+}
+
+// The single hardcoded table of DISPLAY hints (badge + title). The ARCHETYPE column is gone: the served
+// `/task_kinds` declaration decides it. The badge/title STAY here as the fallback, because the server sends
+// none (or not always); a served badge/title, where present, is the endstate and would delete these rows. `access_request` / `workflow_ack` are generic task
 // kinds; `pcn_*` are domain values that leaked in with the first consumer — both
 // live here as DATA rows, awaiting served hints, not as code branches.
 const REGISTRY: Record<string, TaskKindDisplay> = {
-  grouped_review: { badge: "REVIEW", title: "Disposition review", archetype: "GROUPED_REVIEW" },
-  pcn_disposition: { badge: "QUALIFY", title: "Qualification task", archetype: "APPROVAL_TASK" },
-  access_request: { badge: "ACCESS", title: "Access request", archetype: "APPROVAL_TASK" },
-  workflow_ack: { badge: "APPROVE", title: "Workflow approval", archetype: "APPROVAL_TASK" },
+  grouped_review: { badge: "REVIEW", title: "Disposition review" },
+  pcn_disposition: { badge: "QUALIFY", title: "Qualification task" },
+  access_request: { badge: "ACCESS", title: "Access request" },
+  workflow_ack: { badge: "APPROVE", title: "Workflow approval" },
   // A THIRD SPECIES, not an approval. "Approve"/"Reject" on *"this notice could not be
   // prepared for review"* is not an awkward label — it records a decision the data cannot
   // represent, and ADR-0034's decision records would archive that immutably as promotion
   // evidence. Registered here BEFORE the card exists on purpose: an unregistered kind falls
   // back to APPROVAL_TASK, which is exactly how the bug shipped.
-  extraction_refusal: { badge: "TRIAGE", title: "Unprocessable notice", archetype: "TRIAGE_TASK" },
+  extraction_refusal: { badge: "TRIAGE", title: "Unprocessable notice" },
   // Spec 208: the producer declares it (policy/task_kinds/document_empty_confirm.yaml) as an
   // APPROVAL_TASK; EmptyConfirmCard draws it. taskKindParity reds on a declared kind we omit.
-  document_empty_confirm: { badge: "EMPTY", title: "Confirm a document has no parts", archetype: "APPROVAL_TASK" },
+  document_empty_confirm: { badge: "EMPTY", title: "Confirm a document has no parts" },
 };
 
 // THE DEFAULT WAS HONEST ABOUT LABELS AND DISHONEST ABOUT AFFORDANCES. "TASK" as a badge says
@@ -64,7 +77,7 @@ const REGISTRY: Record<string, TaskKindDisplay> = {
 // reached it, which by this very default is every UNDECLARED kind. Corrected in place rather
 // than deleted, because a false reason that is deleted is a false reason somebody re-derives.
 // The behaviour now matches the claim, and `approvalTaskCard.test.tsx` is what keeps it true.
-const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task", archetype: "APPROVAL_TASK" };
+const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task" };
 
 /** Is this kind explicitly declared, or is it riding the default? Consumers use this to
  *  degrade honestly rather than assert affordances they cannot justify. */

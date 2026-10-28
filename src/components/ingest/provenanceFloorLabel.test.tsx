@@ -127,4 +127,18 @@ describe("ProvenanceFloorLabel, wired through SemanticInterpreter", () => {
     expect(document.querySelector("[data-provenance-floor-unverified]")).toBeNull();
     expect(document.querySelector("[data-provenance-floor]")).toBeNull();
   });
+
+  it("draws the steward-corrected rung as a quiet chip carrying the raw token (step 8)", () => {
+    render(
+      <SemanticInterpreter
+        payload={payload([
+          { archetype: "SOME_ARCHETYPE_A", provenance_floor: { obtained_via: "steward-corrected", ingest_ids: [], unidentified: 0 } },
+        ])}
+      />,
+    );
+    const chip = document.querySelector('[data-provenance-floor="steward-corrected"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toBe("steward-corrected");
+    expect(document.querySelector("[data-provenance-floor-unverified]")).toBeNull();
+  });
 });

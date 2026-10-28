@@ -73,6 +73,7 @@ import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration, type TaskDeclaration } from "./taskDeclaration";
 import { taskKindDisplay, isRegisteredKind } from "./taskKindRegistry";
+import { taskArchetype } from "./taskArtifact";
 
 /**
  * The REGISTRY's kinds, read from its SOURCE rather than exported for this test.
@@ -278,7 +279,6 @@ describe.skipIf(!HAVE_PRODUCER)("REGISTRY -> declarations: everything cortex har
       const ui = taskKindDisplay(kind);
       if (ui.badge !== d.badge) drift.push(`${kind}.badge: cortex "${ui.badge}" vs declared "${d.badge}"`);
       if (ui.title !== d.title) drift.push(`${kind}.title: cortex "${ui.title}" vs declared "${d.title}"`);
-      if (ui.archetype !== d.archetype) drift.push(`${kind}.archetype: cortex ${ui.archetype} vs declared ${d.archetype}`);
     }
     expect(
       drift,
@@ -298,7 +298,10 @@ describe.skipIf(!HAVE_PRODUCER)("REGISTRY -> declarations: everything cortex har
     for (const kind of REGISTRY_KINDS) {
       const d = all.get(kind);
       if (!d) continue;
-      expect(taskKindDisplay(kind).archetype, `${kind}`).toBe(d.archetype);
+      // SERVED: the declared archetype, run through the resolver the canvas uses, must come out unchanged.
+      // A producer archetype cortex has no card for resolves to the generic fallback and reds here.
+      const served = { [kind]: { kind, declared: true, archetype: d.archetype, badge: d.badge, title: d.title, accepts: [], reasonRequired: new Set<string>() } };
+      expect(taskArchetype({ kind, declaration: undefined }, served), `${kind}`).toBe(d.archetype);
     }
   });
 });

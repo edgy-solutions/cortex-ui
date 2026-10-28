@@ -52,18 +52,19 @@
  * see `IngestStatusCard`'s header for the full reasoning.) `ingestStageLadder` stays a bespoke
  * list, now drawn from the REAL `STAGES` tuple rather than the old `STATUSES`.
  */
+import { LEAF as V1_LEAF, LEAF_SOURCE as V1_LEAF_SOURCE } from "../api/generated/ingestV1";
 import { readFractionEvidenceRef, type FractionEvidenceRef } from "./evidenceRef";
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
 
 /** `iagent_mesh.provenance.OBTAINED_VIA` — closed, ordered nearest-to-truth first. */
-export const OBTAINED_VIA = ["direct", "etl", "warehouse", "manual-export", "user-drop"] as const;
+export const OBTAINED_VIA = ["direct", "etl", "warehouse", "manual-export", "user-drop", "steward-corrected"] as const;
 export type ObtainedVia = (typeof OBTAINED_VIA)[number];
 
 /**
- * `provenance_floor.obtained_via`'s legal set: the five SDK rungs PLUS `"unstamped"` — a
+ * `provenance_floor.obtained_via`'s legal set: the six SDK rungs PLUS `"unstamped"` — a
  * component can carry material with no provenance stamp at all, which is not one of the SDK's
- * five rungs. `"unstamped"` is scoped to this field only.
+ * six rungs. `"unstamped"` is scoped to this field only.
  */
 export const PROVENANCE_FLOOR_RUNGS = [...OBTAINED_VIA, "unstamped"] as const;
 export type ProvenanceFloorRung = (typeof PROVENANCE_FLOOR_RUNGS)[number];
@@ -97,7 +98,7 @@ function isStringArray(v: unknown): v is string[] {
  * ingest_ids}`: no `label` field — the warning text is fixed (`PROVENANCE_FLOOR_WARNING_LABEL`),
  * never carried on the wire, never inferred from anything else.
  *
- * `null` unless `provenance_floor` is present, `obtained_via` is one of the five SDK rungs or
+ * `null` unless `provenance_floor` is present, `obtained_via` is one of the six SDK rungs or
  * `"unstamped"` (the producer's `null` — "drew on nothing" — is not a rung, so it draws nothing),
  * `unidentified` is a non-negative integer, AND `ingest_ids` is an array of strings (possibly empty — an empty array is a
  * valid, non-null floor with nothing to warn about; see `ProvenanceFloorLabel`, which is the
@@ -228,6 +229,12 @@ export type IngestRowStage =
   | typeof INGEST_AWAITING_KIND_STATUS
   | typeof INGEST_NO_PARTS_STATUS;
 
+/** A `stage` token this client has no position for. ingest-v1 §7: the stage is a STRING by design and
+ *  "unknown means not finished". The reader KEEPS the row and its raw token (never refuses it: a refused row
+ *  plus the poller's keep-last froze every .pdf drop at "extracting" for two weeks, over `awaiting_origin`).
+ *  Plain `string` is the honest type: it is every token the closed lists above do not name. */
+export type IngestUnknownStage = string;
+
 /** The out-of-band DOCUMENT statuses (everything in `IngestRowStage` that is neither a ladder
  *  stage nor the event-only `case_opened`). */
 export const INGEST_OOB_DOCUMENT_STATUSES = [
@@ -238,15 +245,14 @@ export const INGEST_OOB_DOCUMENT_STATUSES = [
 ] as const;
 export type IngestOobDocumentStatus = (typeof INGEST_OOB_DOCUMENT_STATUSES)[number];
 
-/** The leaf content kinds the chip can name (PROPOSED, 10-21 packet §3). This literal list stands for Thursday's
- *  dry run (architect 10-21); after it the allowed leaves are read from the content-kind registry's
- *  domain-declaring kinds, never widened by hand. */
-export const INGEST_LEAVES = ["pcn", "pdn"] as const;
+/** The leaf content kinds the chip can name: DERIVED from the ingest-v1 snapshot's `StatusBody.leaf` enum
+ *  (generated `LEAF`; the generator throws if the four copies of it ever split). Not hand-kept. */
+export const INGEST_LEAVES = V1_LEAF;
 export type IngestLeaf = (typeof INGEST_LEAVES)[number];
 /** Where a leaf came from (architect ruling 10-21, one enum on the status row, the review route and
  *  the decision record): the drop carried it, the document's title was read, or a person changed it.
  *  WRITTEN with the leaf and stored on the row, never computed from the stored kind. */
-export const INGEST_LEAF_SOURCES = ["declared", "title", "corrected"] as const;
+export const INGEST_LEAF_SOURCES = V1_LEAF_SOURCE;
 export type IngestLeafSource = (typeof INGEST_LEAF_SOURCES)[number];
 
 /** A leaf's source is known iff it is in `INGEST_LEAF_SOURCES`; the retired names (`ingest`,
@@ -306,7 +312,7 @@ export interface IngestStatusRow {
   ingest_id: string;
   sha256: string;
   kind: IngestKind;
-  stage: IngestRowStage | null;
+  stage: IngestRowStage | IngestUnknownStage | null;
   detail: string | null;
   duplicate: { of_ingest_id: string; message: string } | null;
   /** Epoch milliseconds — a NUMBER on the live wire (roll-11 capture exchanges [1]/[3]), never a
@@ -446,7 +452,7 @@ export function readNoticeId(raw: unknown): string | null | undefined {
   return undefined;
 }
 
-const DETAIL_REQUIRED_STAGES: ReadonlySet<IngestRowStage> = new Set(["rejected", "failed", INGEST_REVIEW_REJECTED_STATUS]);
+const DETAIL_REQUIRED_STAGES: ReadonlySet<string> = new Set(["rejected", "failed", INGEST_REVIEW_REJECTED_STATUS]);
 
 /**
  * The PROPOSED leaf pair (see `IngestStatusRow.leaf`). `undefined` = NO CLAIM: the `leaf_source` key
@@ -468,8 +474,8 @@ function readLeafPair(
 }
 
 /**
- * `GET /ingest/{id}/status` → the row, or `null` on anything malformed — including an
- * unrecognised `stage` value, which this client has no ladder position for.
+ * `GET /ingest/{id}/status` → the row, or `null` on anything malformed. An unrecognised `stage`
+ * STRING is not malformed: it is read and carried verbatim (see `IngestUnknownStage`).
  */
 export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   if (!isRecord(raw)) return null;
@@ -486,7 +492,7 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
     return null;
   }
 
-  let stage: IngestRowStage | null;
+  let stage: IngestRowStage | IngestUnknownStage | null;
   if (raw.stage === null) {
     stage = null;
   } else if (typeof raw.stage === "string" && (INGEST_STAGES as readonly string[]).includes(raw.stage)) {
@@ -500,8 +506,19 @@ export function readIngestStatusRow(raw: unknown): IngestStatusRow | null {
   } else if (raw.stage === INGEST_CASE_OPENED_STATUS && raw.kind === "event") {
     // Out-of-band, event-only: a document row at `case_opened` is not a state the producer writes.
     stage = INGEST_CASE_OPENED_STATUS;
+  } else if (
+    typeof raw.stage === "string" &&
+    raw.stage !== "" &&
+    // A KNOWN out-of-band token on the wrong kind (an event at awaiting_origin, a document at case_opened) is
+    // not a state the producer writes: that stays a refusal. Only a token NO list names is "unknown".
+    !(INGEST_OOB_DOCUMENT_STATUSES as readonly string[]).includes(raw.stage) &&
+    raw.stage !== INGEST_CASE_OPENED_STATUS
+  ) {
+    // An unknown stage string has no ladder position, but it is READ, carrying the raw token: the card
+    // draws it as not finished and polling continues (ingestPollingDone is false for it).
+    stage = raw.stage;
   } else {
-    // An unknown stage string — including a non-string, non-null value — has no ladder position.
+    // A non-string, non-null (or blank) stage is malformed, not unknown.
     return null;
   }
 
@@ -823,7 +840,7 @@ export function payloadMatchesIngestId(payload: unknown, wanted: string): boolea
 const MAIN_STAGES: readonly IngestStage[] = ["received", "extracting", "review", "promoted"];
 
 export interface StageRung {
-  stage: IngestStage | IngestOobDocumentStatus;
+  stage: IngestStage | IngestOobDocumentStatus | IngestUnknownStage;
   state: "done" | "current" | "pending";
 }
 
@@ -842,7 +859,19 @@ export interface StageRung {
  * happened. Marking `extracting`/`review` done would be a claim this row does not
  * support, so they stay `pending` and `failed` is the current rung on its own.
  */
-export function ingestStageLadder(stage: IngestStage | IngestOobDocumentStatus): StageRung[] {
+export function ingestStageLadder(stage: IngestStage | IngestOobDocumentStatus | IngestUnknownStage): StageRung[] {
+  // A token with no position (ingest-v1 §7: unknown means not finished): nothing before it is claimed done,
+  // and the token itself is drawn verbatim as the current rung.
+  if (
+    !(INGEST_STAGES as readonly string[]).includes(stage) &&
+    stage !== "failed" &&
+    stage !== INGEST_AWAITING_ORIGIN_STATUS &&
+    stage !== INGEST_AWAITING_KIND_STATUS &&
+    stage !== INGEST_NO_PARTS_STATUS &&
+    stage !== INGEST_REVIEW_REJECTED_STATUS
+  ) {
+    return [...MAIN_STAGES.map((s): StageRung => ({ stage: s, state: "pending" })), { stage, state: "current" } as StageRung];
+  }
   // Parked waiting on a person. awaiting_origin sits after extraction (received/extracting happened,
   // review has not). awaiting_kind sits after the title read, BEFORE parts extraction (architect,
   // 10-21): extraction has started but not finished, so it stays pending until a pick resumes it.
@@ -899,7 +928,7 @@ export interface EventRung {
  * invented for it. Deliberately a separate list from `ingestStageLadder`: `case_opened` is
  * out-of-band and never a rung of the document ladder.
  */
-export function ingestEventLadder(stage: IngestRowStage | null): EventRung[] | null {
+export function ingestEventLadder(stage: IngestRowStage | IngestUnknownStage | null): EventRung[] | null {
   const at = INGEST_EVENT_LADDER.findIndex((s) => s === stage);
   if (at < 0) return null;
   return INGEST_EVENT_LADDER.map((s, i) => ({

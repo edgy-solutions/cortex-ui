@@ -96,12 +96,14 @@ describe("readIngestStatusRow", () => {
     expect(readIngestStatusRow(row({ kind: "spreadsheet" }))).toBeNull();
   });
 
-  it("rejects an unknown stage string rather than passing it through", () => {
-    expect(readIngestStatusRow(row({ stage: "made_up_stage" }))).toBeNull();
+  it("READS an unknown stage string and carries the raw token; a non-string stage is still malformed", () => {
+    expect(readIngestStatusRow(row({ stage: "made_up_stage" }))?.stage).toBe("made_up_stage");
+    expect(readIngestStatusRow(row({ stage: 7 }))).toBeNull();
+    expect(readIngestStatusRow(row({ stage: "" }))).toBeNull();
   });
 
-  it("refuses the retired `awaiting_disposition` name — the vocabulary is closed, not dual", () => {
-    expect(readIngestStatusRow(row({ stage: "awaiting_disposition" }))).toBeNull();
+  it("reads the retired `awaiting_disposition` name as UNKNOWN (not finished), no longer a refusal", () => {
+    expect(readIngestStatusRow(row({ stage: "awaiting_disposition" }))?.stage).toBe("awaiting_disposition");
   });
 
   it("accepts `review`, the renamed stage", () => {
@@ -523,5 +525,22 @@ describe("INGEST_KINDS_NOT_YET_ACCEPTED", () => {
     expect(ingestKindNotYetAcceptedReason("cad")).toMatch(/kind_unregistered/);
     expect(ingestKindNotYetAcceptedReason("xml")).toBeNull();
     expect(ingestKindNotYetAcceptedReason("pdf")).toBeNull();
+  });
+});
+
+describe("an unknown stage is NOT finished (refactor item 3, step 11; ingest-v1 s7)", () => {
+  it("the row is read, polling continues, and a known terminal stage still stops it", () => {
+    const r = readIngestStatusRow(row({ stage: "a_stage_from_the_future" }));
+    expect(r?.stage).toBe("a_stage_from_the_future");
+    expect(ingestPollingDone({ stage: r!.stage, duplicate: null, failure: null })).toBe(false);
+    for (const stage of ["promoted", "rejected", "failed"] as const) {
+      expect(ingestPollingDone({ stage, duplicate: null, failure: null }), stage).toBe(true);
+    }
+  });
+
+  it("the ladder draws the raw token as the current rung and claims no stage done", () => {
+    const ladder = ingestStageLadder("a_stage_from_the_future");
+    expect(ladder.at(-1)).toEqual({ stage: "a_stage_from_the_future", state: "current" });
+    expect(ladder.filter((x) => x.state === "done")).toEqual([]);
   });
 });

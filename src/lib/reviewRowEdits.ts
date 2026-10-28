@@ -1,5 +1,6 @@
 import { readRuntimeConfig } from "@/config";
 import type { HeaderEdit, RowEdits } from "@/api/client";
+import { HeaderEdit_field } from "@/api/generated/bff";
 
 /**
  * Grouped-review ROW EDITS (delete / add / correct an MPN) and the Reject control.
@@ -101,7 +102,8 @@ export function buildRowEdits(d: RowEditDraft): RowEdits {
   return { deleted, added, corrected };
 }
 
-export const HEADER_EDIT_FIELDS: ReadonlyArray<HeaderEdit["field"]> = ["mfr", "notice_id", "notice_date"];
+/** The `HeaderEdit.field` enum of the BFF snapshot (generated), in its order; not a hand list. */
+export const HEADER_EDIT_FIELDS: ReadonlyArray<HeaderEdit["field"]> = HeaderEdit_field;
 
 /**
  * The `header_edits` wire list, from the card's drafts, in field order. Typed strings are trimmed.

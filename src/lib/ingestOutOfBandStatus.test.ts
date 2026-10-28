@@ -38,8 +38,8 @@ describe("reader: out-of-band stages", () => {
     expect(readIngestStatusRow(wire({ stage: "review_rejected", detail }))).toBeNull();
   });
 
-  it("control: an unknown stage is still refused", () => {
-    expect(readIngestStatusRow(wire({ stage: "awaiting_something" }))).toBeNull();
+  it("control: an unknown stage is READ, carrying its raw token (it was a refusal; refusal + keep-last froze rows)", () => {
+    expect(readIngestStatusRow(wire({ stage: "awaiting_something" }))?.stage).toBe("awaiting_something");
   });
 
   it("readIngestMinePage counts a no_parts item as read, not unreadable", () => {

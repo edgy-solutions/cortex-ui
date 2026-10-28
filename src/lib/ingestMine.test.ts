@@ -26,9 +26,15 @@ describe("readIngestMinePage", () => {
   });
 
   it("an unreadable item is left out AND counted, never silently", () => {
-    const page = readIngestMinePage({ items: [wire(), { ingest_id: 7 }, wire({ stage: "no-such-stage" })], next: null });
+    const page = readIngestMinePage({ items: [wire(), { ingest_id: 7 }, wire({ stage: 7 })], next: null });
     expect(page!.items).toHaveLength(1);
     expect(page!.unreadable).toBe(2);
+  });
+
+  it("an item at an UNKNOWN stage string is read (token kept), not counted unreadable", () => {
+    const page = readIngestMinePage({ items: [wire({ stage: "no-such-stage" })], next: null });
+    expect(page!.items.map((r) => r.stage)).toEqual(["no-such-stage"]);
+    expect(page!.unreadable).toBe(0);
   });
 
   it("no drops: an empty page, not a refusal", () => {

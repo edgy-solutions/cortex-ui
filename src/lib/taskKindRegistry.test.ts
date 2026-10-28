@@ -27,8 +27,20 @@ import {
   taskKindLabel,
   taskKindTitle,
   isRegisteredKind,
-  type TaskKindDisplay,
+  type TaskCardArchetype,
 } from "./taskKindRegistry";
+import { taskArchetype } from "./taskArtifact";
+import type { TaskDeclaration } from "./taskDeclaration";
+
+/** A served menu for the given kind -> archetype pairs (the shape `useTaskKindStore.byKind` holds). */
+const servedMenu = (m: Record<string, string>): Record<string, TaskDeclaration> =>
+  Object.fromEntries(
+    Object.entries(m).map(([kind, archetype]) => [
+      kind,
+      { kind, declared: true, archetype, badge: "", title: "", accepts: [], reasonRequired: new Set<string>() },
+    ]),
+  );
+
 
 const MODULE_SRC = readFileSync(path.join(__dirname, "taskKindRegistry.ts"), "utf8");
 
@@ -41,8 +53,8 @@ const DECLARED_KINDS = (() => {
 
 /** The archetype vocabulary, read from the interface's union. */
 const DECLARED_ARCHETYPES = (() => {
-  const union = MODULE_SRC.match(/archetype:\s*("[A-Z_]+"(?:\s*\|\s*"[A-Z_]+")*)/)?.[1] ?? "";
-  return [...union.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1] as TaskKindDisplay["archetype"]);
+  const union = MODULE_SRC.match(/type TaskCardArchetype =\s*("[A-Z_]+"(?:\s*\|\s*"[A-Z_]+")*)/)?.[1] ?? "";
+  return [...union.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1] as TaskCardArchetype);
 })();
 
 /**
@@ -50,7 +62,7 @@ const DECLARED_ARCHETYPES = (() => {
  * from the registry, precisely so it is NOT a tautology: adding a row without deciding its
  * species fails the coverage assertion below instead of quietly inheriting a default.
  */
-const EXPECTED_ARCHETYPE: Record<string, TaskKindDisplay["archetype"]> = {
+const EXPECTED_ARCHETYPE: Record<string, TaskCardArchetype> = {
   grouped_review: "GROUPED_REVIEW",
   pcn_disposition: "APPROVAL_TASK",
   access_request: "APPROVAL_TASK",
@@ -90,7 +102,7 @@ describe("taskKindDisplay — every declared kind resolves to a complete, distin
       const d = taskKindDisplay(kind);
       expect(d.badge.length, kind).toBeGreaterThan(0);
       expect(d.title.length, kind).toBeGreaterThan(0);
-      expect(DECLARED_ARCHETYPES, kind).toContain(d.archetype);
+      expect(DECLARED_ARCHETYPES, kind).toContain(EXPECTED_ARCHETYPE[kind]);
       expect(isRegisteredKind(kind), kind).toBe(true);
     }
   });
@@ -101,7 +113,11 @@ describe("taskKindDisplay — every declared kind resolves to a complete, distin
     // recording a decision the data cannot represent. The mapping is the contract, so the
     // exact values are asserted rather than a shape.
     for (const [kind, archetype] of Object.entries(EXPECTED_ARCHETYPE)) {
-      expect(taskKindDisplay(kind).archetype, kind).toBe(archetype);
+      // SERVED: the archetype comes from the menu, not the table.
+      expect(taskArchetype({ kind, declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE)), kind).toBe(archetype);
+      // ...and with nothing served, the kind draws the generic fallback, never a guessed species.
+      expect(taskArchetype({ kind, declaration: undefined }, {}), kind).toBe("APPROVAL_TASK");
+      expect(taskArchetype({ kind, declaration: undefined }), kind).toBe("APPROVAL_TASK");
     }
   });
 
@@ -142,7 +158,6 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     expect(taskKindDisplay("a_kind_nobody_registered")).toEqual({
       badge: DEFAULT_BADGE,
       title: DEFAULT_TITLE,
-      archetype: "APPROVAL_TASK",
     });
     expect(isRegisteredKind("a_kind_nobody_registered")).toBe(false);
   });
@@ -159,10 +174,10 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     // projector emitting " grouped_review " silently downgrades a review batch to a generic
     // approval card — visibly wrong only to someone who knows what the card should have been.
     for (const variant of ["GROUPED_REVIEW", "Grouped_Review", " grouped_review", "grouped_review "]) {
-      expect(taskKindDisplay(variant).archetype, variant).toBe("APPROVAL_TASK");
+      expect(taskArchetype({ kind: variant, declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE)), variant).toBe("APPROVAL_TASK");
       expect(isRegisteredKind(variant), variant).toBe(false);
     }
-    expect(taskKindDisplay("grouped_review").archetype).toBe("GROUPED_REVIEW");
+    expect(taskArchetype({ kind: "grouped_review", declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE))).toBe("GROUPED_REVIEW");
   });
 
   it("an INHERITED Object.prototype key is NOT a task kind — it degrades to the default", () => {
@@ -183,7 +198,6 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
       expect(taskKindDisplay(key), key).toEqual({
         badge: DEFAULT_BADGE,
         title: DEFAULT_TITLE,
-        archetype: "APPROVAL_TASK",
       });
       // The visible symptom the fix removes: a blank chip and `undefined` in the HUD.
       expect(taskKindLabel(key), key).toBe(DEFAULT_BADGE);

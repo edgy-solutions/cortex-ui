@@ -18,6 +18,7 @@ import {
   type DecisionSubgraphRequest,
 } from "./types";
 import type { Operations as BffOperations } from "./generated/bff";
+import type { HeaderEdit_field, HumanTaskActRequest_reason_code } from "./generated/bff";
 import type { Operations as V1Operations } from "./generated/ingestV1";
 
 // ── Auth Utilities ─────────────────────────────────────────
@@ -263,7 +264,8 @@ export const SEED_TASK_DECISIONS = ["approved", "rejected", "acknowledged", "red
  */
 /** A steward correction of one header field of a promotion (gateway.py HeaderEdit, extra="forbid", every string non-blank). Sent top-level as `header_edits`, promote only. */
 export interface HeaderEdit {
-  field: "mfr" | "notice_id" | "notice_date";
+  /** The `HeaderEdit.field` enum of the BFF snapshot (generated `HeaderEdit_field`); not a hand union. */
+  field: (typeof HeaderEdit_field)[number];
   value: string;
   evidence_ref: string;
   reason: string;
@@ -278,7 +280,7 @@ export interface RowEdits {
 
 /** The four `reason_code` values a grouped-review REJECT may carry: gateway.py _GROUPED_REJECT_CODES, which the
  *  architect ruled equal to promotion.py's PROMOTION_REJECT_CODES (every reject surface takes the same four). */
-export type GroupedRejectCode = "not_a_notice" | "unreadable" | "parts_unusable" | "duplicate";
+export type GroupedRejectCode = (typeof HumanTaskActRequest_reason_code)[number];
 
 /**
  * The /act request body. `HumanTaskActRequest` refuses `reason_code` on anything but `rejected` and
