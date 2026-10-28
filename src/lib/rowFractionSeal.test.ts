@@ -19,12 +19,15 @@
  * their converter, so the two legs cannot quietly diverge by each computing
  * its own expectation. If the legs ever disagree, THIS one is the authority.
  *
- * `OLD_REF` is the reference, not merely the "before": it is what the deployed
- * doc-tools image still writes, and what every already-stored row renders as.
- * Nothing is being rewritten, so both forms stay live for the foreseeable
- * future — which is the whole reason `readEvidence` discriminates them.
+ * `OLD_REF` is the pixel form that rows stored before doc-tools `b08468f` carry.
+ * The deployed doc-tools (v0.2.2, 7f's measurement, 10-27) no longer writes it,
+ * and since platform #121 the published contract refuses it (the leg at the
+ * foot of this file). `readEvidence` still discriminates the two forms until no
+ * served row can carry the pixel form; retiring that branch is its own commit.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { scaleBox, type PageDims } from "./bboxScale";
 import { isFractionBox } from "./evidenceRef";
@@ -212,5 +215,82 @@ describe("a several-box row reads as its union", () => {
         expect(drawn.top + drawn.height).toBeGreaterThanOrEqual(y1 * sy - slackY);
       }
     }
+  });
+});
+
+/**
+ * The CONTRACT leg (architect, 10-27): the evidence_ref schema the BFF publishes is exactly
+ * `{page, bbox, note?}` under `additionalProperties: false`. A schema that admits both shapes seals
+ * nothing, so this file's refs must resolve both ways: NEW_REF and MULTI_REF accepted, OLD_REF
+ * REJECTED, and rejected by a key the contract does not have, not by a missing one. Before Lane 1's
+ * #121 (pin b59e4a0f) both were rejected, OLD_REF only for lacking `bboxes` and `quality`.
+ *
+ * It reads the COMMITTED snapshot, which openapi.seal.test.ts holds byte-equal to the producer at
+ * PRODUCER_REF, and follows ExtractionRow.evidence_ref's $ref rather than trusting a schema's name.
+ * The validator covers only the keywords that schema uses, and fails on any keyword it does not
+ * know, so a schema that grows past it cannot pass by being half read.
+ */
+type Schema = Record<string, unknown>;
+const KNOWN = new Set(["type", "required", "properties", "additionalProperties", "anyOf", "items", "minItems", "maxItems", "minimum", "maximum", "pattern", "title", "description", "$ref"]);
+
+function violations(s: Schema, v: unknown, at: string, all: Record<string, Schema>): string[] {
+  const unknown = Object.keys(s).filter((k) => !KNOWN.has(k));
+  if (unknown.length) return [`${at}: unread keyword(s) ${unknown.join(",")}`];
+  if (typeof s.$ref === "string") return violations(all[s.$ref.split("/").pop()!], v, at, all);
+  if (Array.isArray(s.anyOf)) {
+    const each = (s.anyOf as Schema[]).map((b) => violations(b, v, at, all));
+    return each.some((e) => e.length === 0) ? [] : [`${at}: matches no branch (${each.flat().join("; ")})`];
+  }
+  const t = s.type;
+  if (t === "null") return v === null ? [] : [`${at}: not null`];
+  if (t === "integer" && !Number.isInteger(v)) return [`${at}: not an integer`];
+  if (t === "number" && (typeof v !== "number" || !Number.isFinite(v))) return [`${at}: not a number`];
+  if (t === "string" && typeof v !== "string") return [`${at}: not a string`];
+  if (t === "array" && !Array.isArray(v)) return [`${at}: not an array`];
+  if (t === "object" && (typeof v !== "object" || v === null || Array.isArray(v))) return [`${at}: not an object`];
+  const out: string[] = [];
+  if (typeof v === "number") {
+    if (typeof s.minimum === "number" && v < s.minimum) out.push(`${at}: below ${s.minimum}`);
+    if (typeof s.maximum === "number" && v > s.maximum) out.push(`${at}: above ${s.maximum}`);
+  }
+  if (typeof v === "string" && typeof s.pattern === "string" && !new RegExp(s.pattern).test(v)) out.push(`${at}: fails pattern`);
+  if (Array.isArray(v)) {
+    if (typeof s.minItems === "number" && v.length < s.minItems) out.push(`${at}: fewer than ${s.minItems}`);
+    if (typeof s.maxItems === "number" && v.length > s.maxItems) out.push(`${at}: more than ${s.maxItems}`);
+    if (s.items) v.forEach((x, i) => out.push(...violations(s.items as Schema, x, `${at}[${i}]`, all)));
+  }
+  if (t === "object") {
+    const o = v as Record<string, unknown>;
+    const props = (s.properties ?? {}) as Record<string, Schema>;
+    for (const k of (s.required ?? []) as string[]) if (!(k in o)) out.push(`MISSING ${k}`);
+    for (const k of Object.keys(o)) {
+      if (k in props) out.push(...violations(props[k], o[k], k, all));
+      else if (s.additionalProperties === false) out.push(`EXTRA ${k}`);
+    }
+  }
+  return out;
+}
+
+describe("the contract leg: the published evidence_ref schema resolves this file's refs the ruled way", () => {
+  const doc = JSON.parse(readFileSync(path.join(__dirname, "../api/openapi/cortex-bff.openapi.json"), "utf8"));
+  const all = doc.components.schemas as Record<string, Schema>;
+  const field = all.ExtractionRow?.properties as Record<string, Schema> | undefined;
+  const ref = ((field?.evidence_ref?.anyOf as Schema[] | undefined) ?? []).map((b) => b.$ref).find((r): r is string => typeof r === "string");
+  const schema = ref ? all[ref.split("/").pop()!] : undefined;
+
+  it("ExtractionRow.evidence_ref resolves to a closed object schema", () => {
+    expect(schema, `ExtractionRow.evidence_ref names no schema (ref=${ref}) -- the arms below would read nothing`).toBeDefined();
+    expect(schema!.additionalProperties, "a schema open to extra keys admits OLD_REF's page_dims -- it seals nothing").toBe(false);
+  });
+
+  it("NEW_REF and MULTI_REF are ACCEPTED", () => {
+    expect(violations(schema!, NEW_REF, "NEW_REF", all), "doc-tools' one-box wire ref").toEqual([]);
+    expect(violations(schema!, MULTI_REF, "MULTI_REF", all), "doc-tools' several-box wire ref, with its note").toEqual([]);
+  });
+
+  it("OLD_REF is REJECTED by keys the contract does not have, and by nothing it is missing", () => {
+    const why = violations(schema!, OLD_REF, "OLD_REF", all);
+    expect(why.filter((w) => w.startsWith("EXTRA ")).sort(), "OLD_REF refused for page_dims and units").toEqual(["EXTRA page_dims", "EXTRA units"]);
+    expect(why.filter((w) => w.startsWith("MISSING ")), "OLD_REF must not be refused for a missing key -- that is the pre-ruling schema").toEqual([]);
   });
 });

@@ -195,7 +195,16 @@ env:
   #   file, document_empty_confirm.yaml (new) (control: 136 files changed). Check 3: uv.lock
   #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
   #   b59e4a0f placed as the sibling, on this branch rebased onto master aec5628.
-  PRODUCER_REF: b59e4a0fcc15fcb2aa35539c9d562dff17fecb2c
+  # 2026-10-27 RE-PIN to 4a5ff6b6 (platform master; the merge of lane/01-evidence-ref-contract,
+  #   PR #121). b59e4a0f is its ancestor. It publishes the ruled evidence_ref, exactly
+  #   {page, bbox, note?} with additionalProperties: false (architect, 10-27), which
+  #   rowFractionSeal.test.ts's contract leg now holds: NEW_REF accepted, OLD_REF rejected by
+  #   page_dims and units. Chart is still 0.4.70 at this sha: no release carries #121 yet. ⚠ NOT
+  #   read off the pods (sandbox frozen through the dry run). Check 2: task_kinds diff (every
+  #   task_kinds dir) b59e4a0f..4a5ff6b6 is EMPTY (control: 33 files changed). Check 3: uv.lock
+  #   iagent-mesh v0.9.10 at both. Gate: the full suite against a git-archive export of 4a5ff6b6
+  #   placed as the sibling.
+  PRODUCER_REF: 4a5ff6b6ed28b034a906ebaf815972c2cfac5b33
 
 permissions:
   contents: read

@@ -4,7 +4,7 @@ Every call cortex-ui makes to the BFF (`cortex-bff`, FastAPI app `src.iagent.gat
 method, the fields cortex sends and reads, and the component that makes the call.
 
 - **Snapshots moved, 2026-10-27.** The committed snapshots in `src/api/openapi/` (both the BFF and ingest-v1) are now
-  taken from platform master `b59e4a0f` (chart 0.4.70), where ingest-v1 is merged. The `1fb9e242` and `2705c335` joins
+  taken from platform master `4a5ff6b6` (PR #121, the ruled evidence_ref; chart 0.4.70), where ingest-v1 is merged. The `1fb9e242` and `2705c335` joins
   below are the reads this census was written from, and they are kept as written. `src/api/openapi/SOURCES.json` is the pin.
 - **Who it is for.** This is the list Lane 1's ingest-v1 doc must cover. It is also the population that
   the contract seal for the whole UI will be keyed on.
