@@ -43,6 +43,7 @@ vi.mock("axios", async (importOriginal) => {
 import { DockBar } from "./DockBar";
 import { useStageStore } from "@/store/useStageStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import { readTemplateCatalog } from "@/lib/templateCatalog";
 import {
   FINANCE_TEMPLATE_ID,
@@ -85,7 +86,10 @@ beforeEach(() => {
     });
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  usePersonaStore.setState({ entitlements: null, selectedPersona: null, selectedDomains: [] } as never);
+});
 
 const chooseFinanceAndCreate = () => {
   render(<DockBar />);
@@ -118,6 +122,33 @@ describe("the finance row, through /canvas/seed", () => {
     expect(c.items.map((i) => i.id)).toEqual(["f1", "f2", "f3", "f4", "f5", "f6"]);
     // The form closed on success: no choice left on screen.
     expect(document.querySelector("[data-refusal-choice]")).toBeNull();
+  });
+
+  it("the post-pick re-send carries the caller's cell exactly as the first send and the chat path do", async () => {
+    // The pick re-sends through the same run() as Create; this arm pins that the cell rides along.
+    // DOCS is entitled but never on the menu: `inScope` adds it, as it does on every chat turn.
+    act(() => {
+      usePersonaStore.setState({
+        entitlements: {
+          cells: [
+            { persona: "PROGRAM_FINANCE_ANALYST", domain: "PROGRAM_FINANCE" },
+            { persona: "PROGRAM_FINANCE_ANALYST", domain: "DOCS" },
+          ],
+        } as never,
+        selectedPersona: "PROGRAM_FINANCE_ANALYST",
+        selectedDomains: ["PROGRAM_FINANCE"],
+      });
+    });
+    serve.push({ status: 409, data: { detail: SEED_409_ASK } });
+    serve.push({ status: 200, data: { artifact_ids: ["f1"] } });
+    chooseFinanceAndCreate();
+    await waitFor(() => expect(document.querySelector('[data-ask-option="NP-MERIDIAN"]')).not.toBeNull());
+    fireEvent.click(document.querySelector('[data-ask-option="NP-MERIDIAN"]')!);
+    await waitFor(() => expect(useStageStore.getState().canvases).toHaveLength(1));
+
+    const cell = { active_persona: "PROGRAM_FINANCE_ANALYST", active_domains: ["PROGRAM_FINANCE", "DOCS"] };
+    expect(body(0)).toEqual({ template_id: "program_finance", ...cell });
+    expect(body(1)).toEqual({ template_id: "program_finance", bindings: { program: "NP-MERIDIAN" }, ...cell });
   });
 
   it("never reaches createCanvas: a 409 leaves no board behind", async () => {
