@@ -14,7 +14,8 @@
 import type { Artifact, TaskRef } from "@/api/types";
 import type { HumanTask } from "@/store/useHumanTaskStore";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
-import { taskKindDisplay } from "@/lib/taskKindRegistry";
+import { resolveTaskArchetype, type TaskCardArchetype } from "@/lib/taskKindRegistry";
+import { readTaskDeclaration, type TaskDeclaration } from "@/lib/taskDeclaration";
 
 export const TASK_ARTIFACT_PREFIX = "task:";
 
@@ -36,13 +37,28 @@ export const isTaskArtifact = (a: Pick<Artifact, "id" | "task_ref">): boolean =>
 export { taskKindLabel, taskKindTitle } from "@/lib/taskKindRegistry";
 
 /**
+ * The archetype a task renders as is SERVED, never hand-keyed: the row's own declaration first, then the
+ * `/task_kinds` menu (`byKind`), else the generic read-only card. A kind this client has never heard of, served
+ * an archetype it has a card for, renders that card; a kind served none draws the generic fallback.
+ * `Object.hasOwn`: `kind` is a projection field ("constructor" must not walk the prototype).
+ */
+export function taskArchetype(
+  task: Pick<HumanTask, "kind" | "declaration">,
+  byKind?: Readonly<Record<string, TaskDeclaration>>,
+): TaskCardArchetype {
+  const own = readTaskDeclaration(task.declaration);
+  const served = own ?? (byKind && Object.hasOwn(byKind, task.kind) ? byKind[task.kind] : null);
+  return resolveTaskArchetype(served?.archetype);
+}
+
+/**
  * The archetype component a task renders as on the canvas — keyed on the kind's
  * ARCHETYPE (from the registry), NOT on the kind string. A GROUPED_REVIEW needs
  * the fetched ReviewBatch (absent until lazy-fetched on selection); everything
  * else is an APPROVAL_TASK card (accept/reject, no batch).
  */
-function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
-  const archetype = taskKindDisplay(task.kind).archetype;
+function taskComponents(task: HumanTask, batch?: ReviewBatch, byKind?: Readonly<Record<string, TaskDeclaration>>): unknown[] {
+  const archetype = taskArchetype(task, byKind);
   if (archetype === "GROUPED_REVIEW") {
     return batch ? [{ archetype: "GROUPED_REVIEW", batch }] : [];
   }
@@ -94,8 +110,8 @@ function taskComponents(task: HumanTask, batch?: ReviewBatch): unknown[] {
  * lifecycle rides `task_ref.task_state`. A grouped-review artifact has no body
  * until its batch is fetched — the card then shows its title until selected.
  */
-export function taskToArtifact(task: HumanTask, batch?: ReviewBatch): Artifact {
-  const components = taskComponents(task, batch);
+export function taskToArtifact(task: HumanTask, batch?: ReviewBatch, byKind?: Readonly<Record<string, TaskDeclaration>>): Artifact {
+  const components = taskComponents(task, batch, byKind);
   const task_ref: TaskRef = {
     taskId: task.taskId,
     workflowId: task.workflowId,

@@ -103,7 +103,7 @@ export const CORTEX_UI_CAPABILITIES: FrontendCapability[] = [
     subject_uri: "mesh:LineageTopology",
     object_uri: "mesh:ProcessTopology",
     archetype: "PROCESS_TOPOLOGY",
-    component: "WorkflowCanvas",
+    component: "ProcessTopologyCard",
     layout: "full-width",
     expected_fields: ["root_asset", "upstream_chain", "downstream_chain", "topology_depth"],
     persona_fit: ["DATA_STEWARD"],

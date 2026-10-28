@@ -810,6 +810,31 @@ export type _OriginWriteDroppedBy = {
   authz_id: string;
 };
 
+// Enum constants: one per schema property that declares an enum; <FIELD> where >1 schema repeats it identically.
+export const CanvasSeedAsk_disposition = ["ask","abstain"] as const;
+export const CanvasSeedAsk_status = ["slot_elicitation","slot_abstain"] as const;
+export const CanvasSeedPolicy_repair = ["switch_cell","grant_member","join_group","declare_group"] as const;
+export const EmptyAccount_why = ["no_table","no_parts_column","zero_rows","unknown"] as const;
+export const Extraction_leaf = ["pcn","pdn"] as const;
+export const Extraction_leaf_source = ["declared","title","corrected"] as const;
+export const HeaderEdit_field = ["mfr","notice_id","notice_date"] as const;
+export const HumanTaskActRequest_reason_code = ["not_a_notice","unreadable","parts_unusable","duplicate"] as const;
+export const IngestEmptyRequest_decision = ["confirmed_no_parts","has_parts"] as const;
+export const LeafResponse_leaf = ["pcn","pdn"] as const;
+export const LeafResponse_leaf_source = ["declared","title","corrected"] as const;
+export const LeafResponse_review_shape = ["empty","promotion"] as const;
+export const Notice_mfr_source = ["header","identity"] as const;
+export const RetryFiled_task_status = ["FILED","ALREADY_FILED","NO_TASK_KIND_SKIPS_PROMOTION"] as const;
+export const StatusBody_leaf = ["pcn","pdn"] as const;
+export const StatusBody_leaf_source = ["declared","title","corrected"] as const;
+export const StatusBody_review_shape = ["empty","promotion"] as const;
+export const TitleLeafResponse_leaf = ["pcn","pdn"] as const;
+export const TitleLeafResponse_leaf_source = ["declared","title","corrected"] as const;
+
+export const LEAF = ["pcn","pdn"] as const;
+export const LEAF_SOURCE = ["declared","title","corrected"] as const;
+export const REVIEW_SHAPE = ["empty","promotion"] as const;
+
 // Header parameters (e.g. X-Frontend-Id) are not modelled; they are set by the transport, not the caller.
 export interface Operations {
   "GET /answers": {

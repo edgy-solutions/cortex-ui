@@ -25,6 +25,7 @@ import {
 } from "@/lib/dispositions";
 import { actOnHumanTask, type GroupedRejectCode, type RowEdits } from "@/api/client";
 import { actFailureFallback, actRefusal, buildRowEdits, isReviewRowEditsEnabled } from "@/lib/reviewRowEdits";
+import { HumanTaskActRequest_reason_code } from "@/api/generated/bff";
 import type { ReviewBatch, ReviewItem } from "./types";
 import type { ProvenanceItem } from "../Evidence/EvidenceCard";
 import { ProvenanceSourcePane } from "./ProvenanceSourcePane";
@@ -78,12 +79,16 @@ function refused(verb: "Resolve" | "Reject", err: unknown) {
 /** The four reasons a whole notice can be rejected for, the promotion card's four (the architect: one set
  *  for every reject surface). Order is the display order AND the producer's order. A wrong value or a missing
  *  part is not a reject; it is a row edit, which files the extraction_defect itself. */
-export const REJECT_REASONS = [
-  { code: "not_a_notice", label: "Not a PCN/PDN" },
-  { code: "unreadable", label: "The source cannot be read" },
-  { code: "parts_unusable", label: "The parts list cannot be used" },
-  { code: "duplicate", label: "Already promoted under another drop" },
-] as const;
+const REJECT_LABELS: Readonly<Record<string, string>> = {
+  not_a_notice: "Not a PCN/PDN",
+  unreadable: "The source cannot be read",
+  parts_unusable: "The parts list cannot be used",
+  duplicate: "Already promoted under another drop",
+};
+/** The CODES are the BFF snapshot's `HumanTaskActRequest.reason_code` enum (generated, in its order); only the
+ *  display label is ours. A code the server adds before we label it shows its raw token, never blank. */
+export const REJECT_REASONS: ReadonlyArray<{ code: GroupedRejectCode; label: string }> =
+  HumanTaskActRequest_reason_code.map((code) => ({ code, label: REJECT_LABELS[code] ?? code }));
 
 type Row = ReviewItem & { added?: boolean };
 

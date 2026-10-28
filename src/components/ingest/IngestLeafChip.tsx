@@ -34,7 +34,7 @@ import {
 /** Past these the server will not take a correction; it decides the finer line and says so.
  *  no_parts IS ONE (spec 208): the /leaf route answers 409 leaf_not_changeable at a stage it does not
  *  list as changeable, so a Change button there would only be refused. */
-const LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected", "failed", "review_rejected", INGEST_NO_PARTS_STATUS]);
+export const LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected", "failed", "review_rejected", INGEST_NO_PARTS_STATUS]);
 
 export interface LeafChipProps {
   ingestId: string;

@@ -13,16 +13,18 @@
 import { useEffect, useRef } from "react";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
-import { taskToArtifact, TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
-import { taskKindDisplay } from "@/lib/taskKindRegistry";
+import { taskArchetype, taskToArtifact, TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { fetchReviewBatch } from "@/api/client";
 
 export function useTaskArtifactSync(): void {
   const tasks = useHumanTaskStore((s) => s.tasks);
   const reconcile = useCanvasStore((s) => s.reconcileTaskArtifacts);
+  // The served menu decides each task's archetype, so a menu that arrives AFTER the tasks must re-map them.
+  const byKind = useTaskKindStore((s) => s.byKind);
   useEffect(() => {
-    reconcile(tasks.map((t) => taskToArtifact(t)));
-  }, [tasks, reconcile]);
+    reconcile(tasks.map((t) => taskToArtifact(t, undefined, byKind)));
+  }, [tasks, reconcile, byKind]);
 
   // Lazy-load the review batch when a grouped-review task-card is SELECTED. The
   // task-artifact has no body until then (get_batch is authored per-approver, so
@@ -36,7 +38,9 @@ export function useTaskArtifactSync(): void {
     const st = useCanvasStore.getState();
     const art = st.artifacts.find((a) => a.id === currentId);
     if (!art?.task_ref) return;
-    if (taskKindDisplay(art.task_ref.kind).archetype !== "GROUPED_REVIEW") return;
+    const tasksNow = useHumanTaskStore.getState().tasks;
+    const task = tasksNow.find((t) => t.taskId === art.task_ref?.taskId) ?? { kind: art.task_ref.kind, declaration: undefined };
+    if (taskArchetype(task, useTaskKindStore.getState().byKind) !== "GROUPED_REVIEW") return;
     if ((art.rendered_output?.components.length ?? 0) > 0) return; // already loaded
     const wf = art.task_ref.workflowId;
     if (!wf || fetching.current.has(currentId)) return;
@@ -53,7 +57,7 @@ export function useTaskArtifactSync(): void {
         /* leave body empty — the card falls back to the task title */
       })
       .finally(() => fetching.current.delete(currentId));
-  }, [currentId]);
+  }, [currentId, byKind]);
 }
 
 /**

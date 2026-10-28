@@ -435,22 +435,22 @@ Fields marked **unread** are typed or parsed but consumed by nothing.
 | `INGEST_STAGES` | `ingestWire.ts:178` | received, extracting, review, promoted, rejected, failed | ✓ same test, vs `STAGES` | stays a string in v1 by design (§7 of ingest-v1: unknown means "not finished"); keep the parity seal, and stop refusing unknowns |
 | duplicate, case_opened | `ingestWire.ts:190,197` | | ✓ same test | an enum |
 | **out-of-band statuses** | `ingestWire.ts:203-227` | awaiting_origin, review_rejected, awaiting_kind | **✗**, but all three are in master's `ALL_STATUSES` | seal now vs `ALL_STATUSES − STAGES − {duplicate, case_opened}`; 208's `no_parts` then reds it until added |
-| **`INGEST_LEAVES`** | `ingestWire.ts:237` | pcn, pdn | **✗** | **v1 `StatusBody.leaf` enum (pcn, pdn)**: derive from the snapshot |
-| **`INGEST_LEAF_SOURCES`** | `ingestWire.ts:242` | declared, title, corrected | **✗** | **v1 `StatusBody.leaf_source` enum**: derive from the snapshot |
+| **`INGEST_LEAVES`** | `ingestWire.ts:237` | pcn, pdn | **✗** | **v1 `StatusBody.leaf` enum (pcn, pdn)**: derive from the snapshot — **done in this PR** (derived from v1 `LEAF` (registriesDerived.test.ts)) |
+| **`INGEST_LEAF_SOURCES`** | `ingestWire.ts:242` | declared, title, corrected | **✗** | **v1 `StatusBody.leaf_source` enum**: derive from the snapshot — **done in this PR** (derived from v1 `LEAF_SOURCE` (registriesDerived.test.ts)) |
 | `INGEST_KIND_NOT_YET_ACCEPTED_REASON` | `ingestWire.ts:160` | {cad} | cortex policy | delete when 7f's cad row is live |
 | `INGEST_FAILURE_TIMEOUT`, `…_KIND_UNREGISTERED` | `ingestWire.ts:394` | timeout, kind_unregistered | **✗** | a `reason_code` enum (the field is open today) |
 | `LOCKED_STAGES` (leaf chip) | `IngestLeafChip.tsx` | promoted, rejected, review_rejected | **✗**, a copy of the server's `leaf_not_changeable` rule | a server-sent `leaf_changeable` on the row |
-| reject codes | `promotionReview.ts:183`, `GroupedReviewTable.tsx:81` | not_a_notice, unreadable, parts_unusable, duplicate | ✓ `rowEditsWireParity.test.ts` vs `PROMOTION_REJECT_CODES` | **v1 `HumanTaskActRequest.reason_code` enum**: derive from the snapshot |
-| `HeaderEdit.field` | `client.ts` | mfr, notice_id, notice_date | ✓ `rowEditsWireParity.test.ts` | an enum |
-| `mfr_source` | `promotionReview.ts` | header, identity | ✓ same test | **v1 `Notice.mfr_source` enum**: derive from the snapshot |
-| task-kind `REGISTRY` (archetype + badge) | `taskKindRegistry.ts` | grouped_review, pcn_disposition, access_request, workflow_ack, extraction_refusal | ✓ `taskKindParity.test.tsx` (YAML) | `/task_kinds`' served `archetype`, which cortex already receives and ignores |
+| reject codes | `promotionReview.ts:183`, `GroupedReviewTable.tsx:81` | not_a_notice, unreadable, parts_unusable, duplicate | ✓ `rowEditsWireParity.test.ts` vs `PROMOTION_REJECT_CODES` | **v1 `HumanTaskActRequest.reason_code` enum**: derive from the snapshot — **done in this PR** (derived from BFF `HumanTaskActRequest_reason_code` (registriesDerived.test.ts)) |
+| `HeaderEdit.field` | `client.ts` | mfr, notice_id, notice_date | ✓ `rowEditsWireParity.test.ts` | an enum — **done in this PR** (derived from BFF `HeaderEdit_field` (registriesDerived.test.ts)) |
+| `mfr_source` | `promotionReview.ts` | header, identity | ✓ same test | **v1 `Notice.mfr_source` enum**: derive from the snapshot — **done in this PR** (derived from BFF `Notice_mfr_source` (registriesDerived.test.ts)) |
+| task-kind `REGISTRY` (archetype + badge) | `taskKindRegistry.ts` | grouped_review, pcn_disposition, access_request, workflow_ack, extraction_refusal | ✓ `taskKindParity.test.tsx` (YAML) | `/task_kinds`' served `archetype`, which cortex already receives and ignores — **done in this PR** (archetype column deleted, the served `archetype` decides (taskKindRegistry.test.ts, taskArtifact.test.ts)) |
 | fallback verbs | `IngestStatusCard.tsx:87`, `useTaskAct` | promoted/rejected; approved/rejected | **✗** | delete once `/task_kinds` is guaranteed |
 | `HumanTask.status` | `useHumanTaskStore.ts:27` | 6 values, type only | **✗** | an enum |
 | export statuses | `canvasExport.ts` | producing, exists, failed, partial | **✗** | an enum |
 | SSE event names | `client.ts:335-408` and 2 copies | 11 events | **✗** (three hand copies) | one table; the stream has no OpenAPI, so it needs a producer-side list |
 | `PipelineStageKind` | `types.ts:55` and 3 copies | understanding … composing | **✗** | an enum |
 | `CORTEX_UI_CAPABILITIES` | `src/registry/` | the menu cortex SENDS | cortex is the origin | stays (this is cortex's declaration) |
-| `OBTAINED_VIA` / provenance rungs | `ingestWire.ts:61` | direct, etl, warehouse, manual-export, user-drop | **✗**, and 1 behind the pin (`steward-corrected`), 2 behind SDK 0.9.11 (`steward-entered`) | seal now vs `src/iagent/provenance.py`; an unknown rung nulls the floor label |
+| `OBTAINED_VIA` / provenance rungs | `ingestWire.ts:61` | direct, etl, warehouse, manual-export, user-drop | **✗**, and 1 behind the pin (`steward-corrected`), 2 behind SDK 0.9.11 (`steward-entered`) | seal now vs `src/iagent/provenance.py`; an unknown rung nulls the floor label — **done in this PR** (`steward-corrected` added, sealed in producerRegistriesParity.test.ts) |
 | `METHOD_TONE` | `EvidenceCard.tsx:48` | unique, region_preferred, ambiguous, not_found | **✗** | an enum on the provenance response |
 
 ## 5. What today's build does with 208
