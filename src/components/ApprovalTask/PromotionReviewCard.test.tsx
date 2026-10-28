@@ -328,6 +328,28 @@ describe("rows and the source", () => {
     await waitFor(() => expectOutlineOn(4));
   });
 
+  it("the malformed banner lists each failing check, largest first, and samples the FIRST bad row", async () => {
+    const b = exBody();
+    const bad = (i: number, ref: unknown) => (b.rows[i] = { ...b.rows[i], evidence_ref: ref as Row["evidence_ref"] });
+    bad(0, { page: 1, bbox: [40, 60, 560, 110] }); // bbox_not_fractions (first)
+    bad(1, "p2"); // not_an_object
+    bad(2, { page: 1, bbox: [40, 60, 560, 110] });
+    bad(3, { page: 1, bbox: [70, 80, 570, 120] }); // same reason, a different value: the LAST row must not be the sample
+    fetchIngestExtraction.mockResolvedValue(b);
+    await mount();
+    const spans = [...document.querySelectorAll("[data-review-flag-reason]")];
+    expect(spans.map((e) => [e.getAttribute("data-review-flag-reason"), e.getAttribute("data-count")])).toEqual([
+      ["bbox_not_fractions", "3"],
+      ["not_an_object", "1"],
+    ]);
+    expect(flag("malformed-evidence")!.textContent).toContain("4 rows carry an evidence_ref that cannot be read: 3 bbox is not page fractions (no page_dims)");
+    const sample = flag("malformed-evidence-sample")!;
+    expect(sample.querySelector("code")!.textContent).toBe(JSON.stringify({ page: 1, bbox: [40, 60, 560, 110] }));
+    const badge = within(rowEls()[1]).getByText("unreadable");
+    expect(badge.getAttribute("data-malformed-reason")).toBe("not_an_object");
+    expect(badge.getAttribute("title")).toBe("evidence_ref is not an object");
+  });
+
   it("a row with no evidence_ref says so instead of a show button, and the card flags the miss", async () => {
     const b = exBody();
     b.rows[1].evidence_ref = null;

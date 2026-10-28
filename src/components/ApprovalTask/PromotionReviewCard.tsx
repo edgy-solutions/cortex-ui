@@ -22,6 +22,8 @@ import {
   evidenceQuality,
   rowsSharingEvidence,
   headerEditComparands,
+  MALFORMED_REASON_LABELS,
+  type MalformedReason,
 } from "@/lib/promotionReview";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
@@ -99,6 +101,12 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
 };
 /** One hold, three causes: the kind sent the document back, a re-class superseded this task, or the server said stale. */
 type ReviewHold = { leaf: IngestLeaf | null; cause: "sent-back" | "superseded" | "stale"; newTaskId: string | null };
+/** The served evidence_ref, verbatim, for the malformed banner: JSON, cut at 240 characters. */
+const sampleText = (raw: unknown): string => {
+  const t = JSON.stringify(raw) ?? String(raw);
+  return t.length > 240 ? `${t.slice(0, 240)}…` : t;
+};
+
 const sentBackText = (h: ReviewHold): string => {
   const LEAF = h.leaf ? h.leaf.toUpperCase() : "?";
   if (h.cause === "stale") {
@@ -624,7 +632,21 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           )}
           {flags && flags.malformedEvidence > 0 && (
             <li data-review-flag="malformed-evidence">
-              {flags.malformedEvidence} row{flags.malformedEvidence === 1 ? "" : "s"} carry an evidence_ref that cannot be read.
+              {flags.malformedEvidence} row{flags.malformedEvidence === 1 ? "" : "s"} carry an evidence_ref that cannot be read:{" "}
+              {(Object.entries(flags.malformedByReason) as [MalformedReason, number][])
+                .sort((a, b) => b[1] - a[1])
+                .map(([code, n], i) => (
+                  <span key={code} data-review-flag-reason={code} data-count={n}>
+                    {i > 0 ? "; " : ""}
+                    {n} {MALFORMED_REASON_LABELS[code]}
+                  </span>
+                ))}
+              .
+            </li>
+          )}
+          {flags && flags.malformedSample && (
+            <li data-review-flag="malformed-evidence-sample">
+              First unreadable evidence_ref: <code>{sampleText(flags.malformedSample.raw)}</code>
             </li>
           )}
           {flags?.partsMismatch && (
@@ -748,7 +770,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                           {r.evidence.ref.bbox === null ? " · no box" : ""}
                         </button>
                       ) : (
-                        <span className="text-[9px] uppercase tracking-widest text-amber-400/80" data-evidence-state={r.evidence.state}>
+                        <span
+                          className="text-[9px] uppercase tracking-widest text-amber-400/80"
+                          data-evidence-state={r.evidence.state}
+                          title={r.evidence.state === "malformed" ? MALFORMED_REASON_LABELS[r.evidence.reason] : undefined}
+                          data-malformed-reason={r.evidence.state === "malformed" ? r.evidence.reason : undefined}
+                        >
                           {r.evidence.state === "absent" ? "no evidence" : "unreadable"}
                         </span>
                       )}

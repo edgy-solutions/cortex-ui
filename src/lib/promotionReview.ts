@@ -70,10 +70,30 @@ export interface EvidenceRef {
   units: string | null;
 }
 
+/** Why an `evidence_ref` could not be read: one code per failing branch of `readEvidence`. Closed. */
+export type MalformedReason =
+  | "not_an_object"
+  | "page_missing_or_not_positive_int"
+  | "bbox_not_fractions"
+  | "bbox_not_four_numbers"
+  | "page_dims_not_object"
+  | "page_dims_not_positive"
+  | "bbox_no_area";
+
+export const MALFORMED_REASON_LABELS: Record<MalformedReason, string> = {
+  not_an_object: "evidence_ref is not an object",
+  page_missing_or_not_positive_int: "page is missing or not a positive integer",
+  bbox_not_fractions: "bbox is not page fractions (no page_dims)",
+  bbox_not_four_numbers: "bbox is not four finite numbers (with page_dims)",
+  page_dims_not_object: "page_dims is not an object",
+  page_dims_not_positive: "page_dims width/height is not a positive number",
+  bbox_no_area: "bbox has no area (x1 <= x0 or y1 <= y0)",
+};
+
 export type RowEvidence =
   | { state: "ok"; ref: EvidenceRef }
   | { state: "absent" }
-  | { state: "malformed" };
+  | { state: "malformed"; reason: MalformedReason; raw: unknown };
 
 export interface ReviewRow {
   /** `row-<row_index>` when served, else `row-at-<position>`: React keys and keyboard selection only. */
@@ -200,11 +220,12 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
     return { state: "absent" };
   }
   const e = raw.evidence_ref;
-  if (!isObj(e)) return { state: "malformed" };
+  const bad = (reason: MalformedReason): RowEvidence => ({ state: "malformed", reason, raw: e });
+  if (!isObj(e)) return bad("not_an_object");
   const page = posInt(e.page);
   // A null (or absent) bbox: stated on this page, no box we can draw. Either form; page_dims is not validated.
   if (!Object.hasOwn(e, "bbox") || e.bbox === null) {
-    if (page === null) return { state: "malformed" };
+    if (page === null) return bad("page_missing_or_not_positive_int");
     return { state: "ok", ref: { page, bbox: null, page_dims: FRACTION_PAGE, units: str(e.units) } };
   }
   const b = e.bbox;
@@ -212,15 +233,18 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
   // The ruled form (architect 10-21): page fractions, no page_dims. The page's own size is 1x1.
   // Extra keys are not checked here: the served row body carries others.
   if (!Object.hasOwn(e, "page_dims") || d === undefined) {
-    if (page === null || !isFractionBox(b)) return { state: "malformed" };
+    if (page === null) return bad("page_missing_or_not_positive_int");
+    if (!isFractionBox(b)) return bad("bbox_not_fractions");
     return { state: "ok", ref: { page, bbox: b, page_dims: FRACTION_PAGE, units: null } };
   }
-  if (page === null || !Array.isArray(b) || b.length !== 4 || !b.every(finite) || !isObj(d)) return { state: "malformed" };
+  if (page === null) return bad("page_missing_or_not_positive_int");
+  if (!Array.isArray(b) || b.length !== 4 || !b.every(finite)) return bad("bbox_not_four_numbers");
+  if (!isObj(d)) return bad("page_dims_not_object");
   const { width, height } = d;
-  if (!finite(width) || !finite(height) || width <= 0 || height <= 0) return { state: "malformed" };
+  if (!finite(width) || !finite(height) || width <= 0 || height <= 0) return bad("page_dims_not_positive");
   const [x0, y0, x1, y1] = b as Bbox;
   // A box with no area, or turned inside out, outlines nothing a steward could read against.
-  if (x1 <= x0 || y1 <= y0) return { state: "malformed" };
+  if (x1 <= x0 || y1 <= y0) return bad("bbox_no_area");
   return { state: "ok", ref: { page, bbox: [x0, y0, x1, y1], page_dims: { width, height }, units: str(e.units) } };
 }
 
@@ -339,6 +363,10 @@ export interface ReviewFlags {
   absentEvidence: number;
   /** Rows whose `evidence_ref` cannot be read: a producer bug (Lane 1). */
   malformedEvidence: number;
+  /** The malformed rows, counted by the check that failed. */
+  malformedByReason: Partial<Record<MalformedReason, number>>;
+  /** The first malformed row's reason and `evidence_ref` as served, for the banner; null when none. */
+  malformedSample: { reason: MalformedReason; raw: unknown } | null;
   /** `part_count` disagrees with the parts drawn; null when it agrees or did not travel. */
   partsMismatch: { declared: number; drawn: number } | null;
   /** `part_count` did not travel, so the table cannot be shown to be whole. */
@@ -357,9 +385,18 @@ export function reviewFlags(review: PromotionReview): ReviewFlags | null {
   if (!ex) return null;
   const drawn = partsDrawn(ex.rows);
   const absent = ex.rows.filter((r) => r.evidence.state === "absent").length;
+  const malformedByReason: Partial<Record<MalformedReason, number>> = {};
+  let malformedSample: ReviewFlags["malformedSample"] = null;
+  for (const r of ex.rows) {
+    if (r.evidence.state !== "malformed") continue;
+    malformedByReason[r.evidence.reason] = (malformedByReason[r.evidence.reason] ?? 0) + 1;
+    malformedSample ??= { reason: r.evidence.reason, raw: r.evidence.raw };
+  }
   return {
     absentEvidence: absent,
     malformedEvidence: ex.rows.filter((r) => r.evidence.state === "malformed").length,
+    malformedByReason,
+    malformedSample,
     partsMismatch: review.part_count !== null && review.part_count !== drawn ? { declared: review.part_count, drawn } : null,
     partsUnknown: review.part_count === null,
     evidenceCountMismatch:
