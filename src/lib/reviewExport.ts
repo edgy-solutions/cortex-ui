@@ -13,7 +13,11 @@
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
  * `{name, format, granularity, label}`, granularity `notice_part | notice`. It was `scope: row | notice`
  * in cortex's proposal; 7f §2 records `scope` as a three-way collision, so lane 01 renamed it.
- * Refusals are a non-2xx status whose JSON body carries `error` (or `reason`) as a code string.
+ * Routes 1-3 and the profile keys are DECLARED at lane 01's #154 (`lane/01-review-export` @ a14e21b5,
+ * preview, unmerged -- not at our pin). A refusal there is FastAPI's `HTTPException(detail={error, ...})`,
+ * so the code is `detail.error` (`ingest_not_promoted`, `not_entitled_to_export_batch`,
+ * `export_profile_unknown`, ...). The file routes fetch as a Blob, so the client re-reads a refusal
+ * body as JSON before `refusalCode` sees it (`jsonRefusalBody`).
  *
  * The gate is `stage === "promoted"` on `GET /ingest/{id}/status` (a REAL, declared route).
  */
@@ -88,12 +92,24 @@ export function filenameFromDisposition(header: string | undefined | null): stri
   return null;
 }
 
+/** Re-read a Blob refusal body as JSON, in place; anything unreadable is left as it was. */
+export async function jsonRefusalBody(err: unknown): Promise<void> {
+  const res = isRecord(err) && isRecord(err.response) ? err.response : null;
+  if (!res || !(res.data instanceof Blob)) return;
+  try {
+    res.data = JSON.parse(await res.data.text());
+  } catch {
+    /* not JSON: refusalCode reads no code */
+  }
+}
+
 export function refusalCode(err: unknown): { status: number | null; code: string | null } {
   const res = isRecord(err) && isRecord(err.response) ? err.response : null;
   if (!res) return { status: null, code: null };
   const status = typeof res.status === "number" ? res.status : null;
   const data = isRecord(res.data) ? res.data : null;
-  const raw = data ? (data.error ?? data.reason) : null;
+  const detail = data && isRecord(data.detail) ? data.detail : null;
+  const raw = detail ? detail.error : null;
   return { status, code: typeof raw === "string" ? raw : null };
 }
 

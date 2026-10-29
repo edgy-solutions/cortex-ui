@@ -94,15 +94,15 @@ describe("BatchExportPanel", () => {
   });
 
   it("renders a refusal with its code, and a network error as failed", async () => {
-    downloadBatchExport.mockRejectedValueOnce({ response: { status: 403, data: { error: "not_in_group" } } });
+    downloadBatchExport.mockRejectedValueOnce({ response: { status: 403, data: { detail: { error: "not_entitled_to_export_batch" } } } });
     const { container } = render(<BatchExportPanel />);
     await shown(container);
     setDate(container, "[data-batch-from]", "2026-10-01");
     setDate(container, "[data-batch-to]", "2026-10-05");
     fireEvent.click(q(container, '[data-export-profile="alpha-x"]')!);
     fireEvent.click(q(container, "[data-batch-download]")!);
-    await waitFor(() => expect(q(container, '[data-export-refusal="not_in_group"]')).not.toBeNull());
-    expect(q(container, "[data-export-refusal]")!.textContent).toBe("Refused (403): not_in_group");
+    await waitFor(() => expect(q(container, '[data-export-refusal="not_entitled_to_export_batch"]')).not.toBeNull());
+    expect(q(container, "[data-export-refusal]")!.textContent).toBe("Refused (403): not_entitled_to_export_batch");
     downloadBatchExport.mockRejectedValueOnce(new Error("network"));
     fireEvent.click(q(container, "[data-batch-download]")!);
     await waitFor(() => expect(q(container, "[data-export-failed]")).not.toBeNull());
