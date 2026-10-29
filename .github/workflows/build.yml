@@ -204,7 +204,14 @@ env:
   #   task_kinds dir) b59e4a0f..4a5ff6b6 is EMPTY (control: 33 files changed). Check 3: uv.lock
   #   iagent-mesh v0.9.10 at both. Gate: the full suite against a git-archive export of 4a5ff6b6
   #   placed as the sibling.
-  PRODUCER_REF: 4a5ff6b6ed28b034a906ebaf815972c2cfac5b33
+  # 2026-10-28 RE-PIN to 47502b35 (platform master; the merge of lane/gov-recipient-readers-rail,
+  #   PR #127). 4a5ff6b6 is its ancestor, and so is fin #137's merge ddc9c411, which declares
+  #   POST /export/package/recipients (the export offer this branch reads). Chart 0.4.71 at this
+  #   sha. ⚠ NOT read off the pods (sandbox frozen through the dry run). Check 2: task_kinds diff
+  #   (every task_kinds dir) 4a5ff6b6..47502b35 is EMPTY (control: 113 files changed). Check 3:
+  #   uv.lock iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive
+  #   export of 47502b35 placed as the sibling.
+  PRODUCER_REF: 47502b3582111488a124fa9bca053a74df418ff0
 
 permissions:
   contents: read
