@@ -17,7 +17,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 
 const actOnHumanTask = vi.fn();
-vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
+const fetchIngestStatus = vi.fn();
+vi.mock("@/api/client", () => ({
+  actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a),
+  fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 const fetchIngestSource = vi.fn();
@@ -98,7 +102,10 @@ beforeEach(() => {
   useTaskKindStore.setState({ status: "idle", byKind: {} });
   usePersonaStore.setState({ entitlements: null });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 const card = () => document.querySelector("[data-promotion-review]") as HTMLElement;
 const rowEls = () => [...document.querySelectorAll("[data-review-row]")] as HTMLElement[];
@@ -148,6 +155,16 @@ function expectOutlineOn(rowIndex: number, body: Body = exBody()) {
 }
 
 describe("which card draws", () => {
+  it("a pending task renders no export control, even when the status would say promoted", async () => {
+    window.localStorage.setItem("cortex.reviewExport", "1");
+    fetchIngestStatus.mockReset().mockResolvedValue({ stage: "promoted" });
+    await mount();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(card()).not.toBeNull();
+    expect(document.querySelector("[data-review-export]")).toBeNull();
+    expect(fetchIngestStatus).not.toHaveBeenCalled();
+  });
+
   it("a document_promotion task naming an ingest_id draws the review card, and fetches both routes by that id", async () => {
     await mount();
     expect(card()).not.toBeNull();

@@ -14,6 +14,7 @@ import { railCutoff, shownByCutoff, sourcesToLoad, type RailSource } from "@/lib
 import { INGEST_AWAITING_KIND_STATUS } from "@/lib/ingestWire";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { IngestFailureExtras } from "@/components/ingest/IngestFailureExtras";
+import { BatchExportPanel } from "@/components/ingest/BatchExportPanel";
 import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
 import {
   useAnswerPanelStore,
@@ -368,6 +369,9 @@ export function AnswersPanel() {
           </span>
         </div>
       )}
+
+      {/* Batch export (AP group; flag-gated, renders nothing otherwise): once, above the list. */}
+      <BatchExportPanel />
 
       {/* Selection is suppressed only once a drag is ACTUALLY under way (`drag.moved`), not
           from the moment a row is pressed. Gating on `drag` alone made every press disable
