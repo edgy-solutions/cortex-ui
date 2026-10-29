@@ -293,6 +293,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const sha = ingestId;
   const flags = reviewFlags(review);
   const rows = review.rows;
+  // A row that inherits the document-level date AND has a box to qualify. One predicate for the row's via cell and the
+  // header note, so the note's count is the number of rows that say doc_level.
+  const isDocLevel = (r: (typeof rows)[number]) =>
+    r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "inherited";
+  const docLevelRows = rows.filter(isDocLevel);
+  const docLevelFields = [...new Set(docLevelRows.map((r) => r.field ?? "the date"))];
   const selected = rows[sel] ?? null;
   const target = selected && selected.evidence.state === "ok" ? selected.evidence.ref : null;
   const targetQuality = selected ? evidenceQuality(selected.obtained_via) : "unknown";
@@ -585,6 +591,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             </span>
           )}
         </p>
+        {docLevelRows.length > 0 && (
+          <p className="mt-1 text-[10px] font-mono text-violet-300/70" data-review-inherited-note>
+            {docLevelFields.join(", ")} inherited from the document-level date ({docLevelRows.length} {docLevelRows.length === 1 ? "row" : "rows"})
+          </p>
+        )}
         {editsActive &&
           HEADER_FIELDS.map((wire) =>
             headerDraft[wire] ? (
@@ -746,11 +757,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                       )}
                     </td>
                     <td className="px-2 py-1 text-slate-500" data-cell="via">
-                      {r.obtained_via ?? "—"}
-                      {r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "inherited" && (
-                        <span className="block text-[9px] text-violet-300/70" data-evidence-note="inherited">
-                          from the document-level date
-                        </span>
+                      {isDocLevel(r) ? (
+                        <span className="text-violet-300/70" data-evidence-note="doc_level">doc_level</span>
+                      ) : (
+                        (r.obtained_via ?? "—")
                       )}
                       {r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "region" && (
                         <span className="block text-[9px] text-amber-400/70" data-evidence-note="region">

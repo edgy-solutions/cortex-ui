@@ -52,7 +52,7 @@ const DECL = {
   accepts: ["promoted", "rejected"],
   reason_required: ["rejected"],
 };
-type Row = Record<string, unknown> & { evidence_ref: { page: number; bbox: number[]; page_dims: { width: number; height: number } } | null };
+type Row = Record<string, unknown> & { evidence_ref: { page: number; bbox: number[] } | null };
 type Body = Record<string, unknown> & { rows: Row[] };
 const exBody = (): Body => fixtureExtractionBody(SHA) as unknown as Body;
 /** The 193 payload. The task's TITLE is left the pre-193 sha, to show the card never draws it. */
@@ -138,9 +138,9 @@ function expectOutlineOn(rowIndex: number, body: Body = exBody()) {
   expect(el, `outline for row ${rowIndex}`).not.toBeNull();
   expect(el!.getAttribute("data-evidence-outline-page")).toBe(String(ref.page));
   const [x0, y0, x1, y1] = ref.bbox;
-  // Scaled by the row's OWN page_dims, so a px row and a pt row land alike on a 612pt-wide page.
-  const sx = W / ref.page_dims.width;
-  const sy = (W * 792) / 612 / ref.page_dims.height;
+  // Rows are page fractions: the box scales by the drawn page (1x1 in the reader).
+  const sx = W;
+  const sy = (W * 792) / 612;
   expect(parseFloat(el!.style.left)).toBeCloseTo(x0 * sx, 3);
   expect(parseFloat(el!.style.top)).toBeCloseTo(y0 * sy, 3);
   expect(parseFloat(el!.style.width)).toBeCloseTo((x1 - x0) * sx, 3);
@@ -303,7 +303,7 @@ describe("rows and the source", () => {
     // Control: a boxed region row keeps its note, so the selector is live.
     expect(note(0, "region")).not.toBeNull();
     expect(note(1, "region")).toBeNull();
-    expect(note(2, "inherited")).toBeNull();
+    expect(note(2, "doc_level")).toBeNull();
   });
 
   it("clicking the row itself selects it too", async () => {
@@ -342,7 +342,7 @@ describe("rows and the source", () => {
       ["bbox_not_fractions", "3"],
       ["not_an_object", "1"],
     ]);
-    expect(flag("malformed-evidence")!.textContent).toContain("4 rows carry an evidence_ref that cannot be read: 3 bbox is not page fractions (no page_dims)");
+    expect(flag("malformed-evidence")!.textContent).toContain("4 rows carry an evidence_ref that cannot be read: 3 bbox is not page fractions");
     const sample = flag("malformed-evidence-sample")!;
     expect(sample.querySelector("code")!.textContent).toBe(JSON.stringify({ page: 1, bbox: [40, 60, 560, 110] }));
     const badge = within(rowEls()[1]).getByText("unreadable");
@@ -476,14 +476,14 @@ describe("evidence quality", () => {
   it("inherited LTB rows: noted, jump to the stating sentence, and say one look clears all that share it", async () => {
     const b = exBody();
     // doc-tools #132: every inherited row carries the header date's ONE page + bbox.
-    const sentence = { ...b.rows[0].evidence_ref!, page: 2, bbox: [72, 100, 400, 114] };
+    const sentence = { ...b.rows[0].evidence_ref!, page: 2, bbox: [0.12, 0.13, 0.65, 0.15] };
     for (const i of [0, 2]) {
       b.rows[i].obtained_via = "inherited_doc_level";
       b.rows[i].evidence_ref = { ...sentence };
     }
     fetchIngestExtraction.mockResolvedValue(b);
     await mount();
-    expect(rowEls()[2].querySelector('[data-evidence-note="inherited"]')!.textContent).toBe("from the document-level date");
+    expect(rowEls()[2].querySelector('[data-evidence-note="doc_level"]')!.textContent).toBe("doc_level");
     expect(rowEls()[1].querySelector("[data-evidence-note]")).toBeNull();
     await waitFor(() => expect(quality()).toBe("inherited"));
     expect(outline()!.getAttribute("data-evidence-outline-page")).toBe("2"); // not the row's page 1
@@ -502,6 +502,49 @@ describe("evidence quality", () => {
     expect(outline()!.className).toContain("border-dashed");
     expect(caption()).toMatch(/not claimed to be the cell/);
     expect(flag("unknown-method")!.textContent).toMatch(/^1 row came by a method this card does not know/);
+  });
+});
+
+describe("the inherited-date note is on the header, once; the rows say doc_level", () => {
+  const via = (i: number) => rowEls()[i].querySelector('[data-cell="via"]')!;
+  const setup = (spec: Array<[string, string]>) => {
+    const b = exBody();
+    spec.forEach(([field, ob], i) => {
+      b.rows[i].field = field;
+      b.rows[i].obtained_via = ob;
+    });
+    fetchIngestExtraction.mockResolvedValue(b);
+  };
+
+  it("three inherited ltb_date rows and one cell row: ONE header note, three doc_level rows, no per-row sentence", async () => {
+    setup([["ltb_date", "inherited_doc_level"], ["ltb_date", "inherited_doc_level"], ["ltb_date", "inherited_doc_level"], ["eol_date", "text_layer_cell"]]);
+    await mount();
+    const notes = document.querySelectorAll("[data-review-inherited-note]");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain("ltb_date inherited from the document-level date");
+    expect(notes[0].textContent).toContain("3");
+    for (const i of [0, 1, 2]) {
+      expect(via(i).textContent, `row ${i}`).toBe("doc_level");
+      expect(via(i).querySelector('[data-evidence-note="doc_level"]'), `row ${i}`).not.toBeNull();
+    }
+    for (const el of rowEls()) expect(el.textContent).not.toContain("from the document-level date");
+    expect(via(3).textContent).toBe("text_layer_cell");
+    expect(via(3).querySelector("[data-evidence-note]")).toBeNull();
+  });
+
+  it("inherited rows from two fields: the note names both, in row order, with the inherited count", async () => {
+    setup([["notice_date", "inherited_doc_level"], ["ltb_date", "inherited_doc_level"], ["notice_date", "inherited_doc_level"], ["eol_date", "text_layer_cell"]]);
+    await mount();
+    const note = document.querySelector("[data-review-inherited-note]")!.textContent!;
+    expect(note).toContain("notice_date, ltb_date inherited from the document-level date");
+    expect(note).toContain("3 rows");
+  });
+
+  it("no inherited rows: no note", async () => {
+    setup([["ltb_date", "text_layer_cell"], ["ltb_date", "region_preferred"]]);
+    await mount();
+    expect(document.querySelector("[data-review-inherited-note]")).toBeNull();
+    expect(document.querySelector('[data-evidence-note="doc_level"]')).toBeNull();
   });
 });
 
