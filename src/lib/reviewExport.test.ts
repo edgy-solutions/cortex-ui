@@ -78,9 +78,15 @@ describe("filenameFromDisposition", () => {
 });
 
 describe("refusalCode", () => {
-  it("reads status and error, then reason", () => {
-    expect(refusalCode({ response: { status: 409, data: { error: "not_promoted" } } })).toEqual({ status: 409, code: "not_promoted" });
-    expect(refusalCode({ response: { status: 403, data: { reason: "no_group" } } })).toEqual({ status: 403, code: "no_group" });
+  it("reads status and #154's detail.error", () => {
+    expect(refusalCode({ response: { status: 409, data: { detail: { error: "ingest_not_promoted" } } } })).toEqual({ status: 409, code: "ingest_not_promoted" });
+  });
+  it("a top-level error or reason is not #154's shape: no code", () => {
+    expect(refusalCode({ response: { status: 409, data: { error: "ingest_not_promoted" } } })).toEqual({ status: 409, code: null });
+    expect(refusalCode({ response: { status: 403, data: { reason: "no_group" } } })).toEqual({ status: 403, code: null });
+  });
+  it("a 422 validation detail (an array) reads no code", () => {
+    expect(refusalCode({ response: { status: 422, data: { detail: [{ loc: ["query", "profile"] }] } } })).toEqual({ status: 422, code: null });
   });
   it("is null/null for a plain error", () => {
     expect(refusalCode(new Error("network"))).toEqual({ status: null, code: null });

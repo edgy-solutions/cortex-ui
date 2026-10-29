@@ -14,6 +14,7 @@ import {
   EXPORT_PROFILES_PATH,
   exportOnePath,
   filenameFromDisposition,
+  jsonRefusalBody,
   readExportProfiles,
   type ExportProfile,
 } from "@/lib/reviewExport";
@@ -1313,7 +1314,12 @@ export async function downloadIngestExport(
   ingestId: string,
   profile: string,
 ): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await api.get<Blob>(exportOnePath(ingestId), { params: { profile }, responseType: "blob" });
+  const res = await api
+    .get<Blob>(exportOnePath(ingestId), { params: { profile }, responseType: "blob" })
+    .catch(async (err: unknown) => {
+      await jsonRefusalBody(err);
+      throw err;
+    });
   return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 
@@ -1322,7 +1328,12 @@ export async function downloadBatchExport(
   from: string,
   to: string,
 ): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await api.get<Blob>(EXPORT_BATCH_PATH, { params: { profile, from, to }, responseType: "blob" });
+  const res = await api
+    .get<Blob>(EXPORT_BATCH_PATH, { params: { profile, from, to }, responseType: "blob" })
+    .catch(async (err: unknown) => {
+      await jsonRefusalBody(err);
+      throw err;
+    });
   return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 

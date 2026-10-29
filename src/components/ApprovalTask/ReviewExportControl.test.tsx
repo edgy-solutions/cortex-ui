@@ -104,14 +104,14 @@ describe("ReviewExportControl", () => {
   });
 
   it("a refusal renders its code; a network error is failed, not refused", async () => {
-    downloadIngestExport.mockRejectedValueOnce({ response: { status: 409, data: { error: "not_promoted" } } });
+    downloadIngestExport.mockRejectedValueOnce({ response: { status: 409, data: { detail: { error: "ingest_not_promoted", status: "review" } } } });
     const { container } = render(<ReviewExportControl ingestId={ID} />);
     await waitFor(() => expect(names(container).length).toBe(2));
     pick(container, "alpha-x");
     fireEvent.click(container.querySelector("[data-export-download]")!);
-    await waitFor(() => expect(container.querySelector('[data-export-refusal="not_promoted"]')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('[data-export-refusal="ingest_not_promoted"]')).not.toBeNull());
     expect(root(container)!.getAttribute("data-review-export")).toBe("refused");
-    expect(container.querySelector("[data-export-refusal]")!.textContent).toBe("Refused (409): not_promoted");
+    expect(container.querySelector("[data-export-refusal]")!.textContent).toBe("Refused (409): ingest_not_promoted");
 
     downloadIngestExport.mockRejectedValueOnce(new Error("network"));
     fireEvent.click(container.querySelector("[data-export-download]")!);
