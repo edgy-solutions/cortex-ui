@@ -33,7 +33,7 @@ import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { buildReviewCoverage } from "@/lib/reviewCoverage";
-import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, SHARED_RULE } from "@/lib/reviewRuns";
+import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, RUN_RULE, SHARED_RULE } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
 import { ReviewRunsList } from "./ReviewRunsList";
@@ -1199,7 +1199,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 >
                   proposed, not sent: the producer does not declare review_coverage yet. Looked at {record!.looked_at.length} of {record!.parts} parts,
                   of which {record!.sampled.length} were sampled; {record!.covered.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
-                  {record!.covered.length} rules; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
+                  {record!.covered.length} {record!.covered.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>
               </div>
             )}

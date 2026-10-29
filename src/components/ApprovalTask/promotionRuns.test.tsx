@@ -403,6 +403,12 @@ describe("record preview", () => {
     expect(prop.textContent).toContain("proposed, not sent: the producer does not declare review_coverage yet");
     expect(prop.textContent).toContain("Looked at 1 of 10 parts,");
     expect(prop.textContent).toContain("shared facts confirmed once");
+    // One rule groups many runs: the line counts RUNS and names the rule (it once said "15 rules").
+    const runs = document.querySelectorAll("[data-run]").length;
+    expect(runs).toBeGreaterThan(0);
+    expect(prop.textContent, "the record line counts the runs drawn and names the one rule that grouped them").toMatch(
+      new RegExp(`covered by ${runs} ${runs === 1 ? "run" : "runs"}, each grouped by the rule same_shape_run;`),
+    );
     expect(prop.getAttribute("data-record-coverage-parts")).toBe("10");
     const sampled = Number(prop.getAttribute("data-record-coverage-sampled"));
     expect(sampled).toBeGreaterThan(0);
