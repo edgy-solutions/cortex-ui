@@ -287,6 +287,18 @@ export function artifactLink(
  * not answers and are excluded by id, per section A's contract population; so are drops
  * (`INGEST_ARTIFACT_PREFIX`, `ingestArtifact.ts`) — client-made, never in the graph of record.
  */
+/**
+ * The words a person reads for one answer: the non-empty `summary`, else the non-empty
+ * `question_text`, else the id. Trimmed; no other coercion.
+ */
+export function answerLabel(a: { id: string; summary?: string; question_text?: string }): string {
+  const summary = typeof a.summary === "string" ? a.summary.trim() : "";
+  if (summary) return summary;
+  const question = typeof a.question_text === "string" ? a.question_text.trim() : "";
+  if (question) return question;
+  return a.id;
+}
+
 export function canvasAnswerIds(artifacts: { id: string }[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

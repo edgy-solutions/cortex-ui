@@ -7,6 +7,7 @@ import {
   downloadExportArtifact,
 } from "@/api/client";
 import {
+  answerLabel,
   artifactLink,
   canvasAnswerIds,
   isCanvasExportEnabled,
@@ -59,7 +60,7 @@ export interface CanvasExportButtonProps {
    * "export sends what is ON THE BOARD, never the whole store — 856 answers for a 3-card board is
    * a bug". Required, so no mount can fall back to the store by omission.
    */
-  board: { id: string }[];
+  board: { id: string; summary?: string; question_text?: string }[];
 }
 
 export function CanvasExportButton({ board }: CanvasExportButtonProps) {
@@ -261,6 +262,7 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
                 <ExportDocumentRow
                   key={`${doc.engine}-${i}`}
                   doc={doc}
+                  board={board}
                   downloading={downloading}
                   onDownload={onDownload}
                 />
@@ -349,10 +351,12 @@ const DOC_STATUS_CLASS: Record<string, string> = {
  */
 function ExportDocumentRow({
   doc,
+  board,
   downloading,
   onDownload,
 }: {
   doc: CanvasExportDocument;
+  board: CanvasExportButtonProps["board"];
   downloading: string | null;
   onDownload: (link: { href: string; filename?: string }) => Promise<void>;
 }) {
@@ -365,14 +369,40 @@ function ExportDocumentRow({
       className="rounded-md border border-slate-700/50 px-2 py-1 flex flex-col gap-0.5"
     >
       <div className="text-[9px] font-mono uppercase tracking-wider text-slate-300">
-        {doc.engine}{" "}
-        <span
-          {...(doc.status === "failed" ? { "data-export-reason": "" } : {})}
-          className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}
-        >
-          {statusText(doc.status, doc.reason)}
-        </span>
+        {doc.engine}
+        {doc.status !== "failed" && (
+          <>
+            {" "}
+            <span className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}>
+              {statusText(doc.status, doc.reason)}
+            </span>
+          </>
+        )}
       </div>
+      {doc.status === "failed" &&
+        doc.answers.map((id) => {
+          const entry = board.find((b) => b.id === id);
+          return (
+            <div
+              key={id}
+              data-export-refused-answer={id}
+              {...(entry ? {} : { "data-export-answer-unknown": "" })}
+              className="flex flex-col gap-0.5 pl-2 text-[9px] font-mono"
+            >
+              <span data-export-answer-label className="text-slate-300">
+                {entry ? answerLabel(entry) : id}
+              </span>
+              <span data-export-reason className={DOC_STATUS_CLASS.failed}>
+                {statusText("failed", doc.reason)}
+              </span>
+              {doc.reason_code && (
+                <span data-export-reason-code className="text-[8px] text-slate-500">
+                  {doc.reason_code}
+                </span>
+              )}
+            </div>
+          );
+        })}
       {doc.status === "failed" && doc.outcome && (
         <div data-export-outcome className="text-[8px] font-mono text-slate-500">
           {doc.outcome}
