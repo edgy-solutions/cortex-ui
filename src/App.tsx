@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { NeuralStream } from "@/components/NeuralStream/NeuralStream";
 import { HUD } from "@/components/HUD/HUD";
 import { RequireAuth } from "@/auth/RequireAuth";
+import { config } from "@/config";
 import { CanvasPersistence } from "@/hooks/useCanvasPersistence";
 import { GlobalCanvasStage } from "@/components/AgenticCanvas/GlobalCanvasStage";
 import {
@@ -359,19 +360,23 @@ function useTaskKindDeclarations(): void {
 
 function useSessionIsolation(): boolean {
   const auth = useAuth();
-  const owner = auth.user?.profile?.sub ?? null;
+  // PROTOTYPE (promotion-review-at-scale): no-auth dev mode has no identity, so it never had an
+  // owner and the surface stayed blank. It gets the same stand-in owner the review card keys on;
+  // a real session is unaffected because VITE_NO_AUTH is never "true" where Keycloak runs.
+  const noAuth = config.VITE_NO_AUTH === "true";
+  const owner = auth.user?.profile?.sub ?? (noAuth ? "no-auth" : null);
   // Track WHICH owner we've reconciled, not just a boolean — so an in-place
   // account switch (owner changes without a full reload) also blanks the surface
   // until THIS owner's purge has run. Ready iff the reconciled owner === current.
   const [readyOwner, setReadyOwner] = useState<string | null>(null);
   useEffect(() => {
-    if (!auth.isAuthenticated || !owner) {
+    if ((!auth.isAuthenticated && !noAuth) || !owner) {
       setReadyOwner(null);
       return;
     }
     reconcileSessionOwner(owner);
     setReadyOwner(owner);
-  }, [auth.isAuthenticated, owner]);
+  }, [auth.isAuthenticated, noAuth, owner]);
   return owner != null && readyOwner === owner;
 }
 

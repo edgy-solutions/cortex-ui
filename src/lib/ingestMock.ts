@@ -42,6 +42,13 @@ import {
 } from "./ingestWire";
 import type { IngestSource } from "@/api/client";
 import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
+import {
+  scaleFixtureExtractionBody,
+  scaleFixturePdfBytes,
+  scaleFixturePromotionPayload,
+  SCALE_FIXTURE_NOTICE_ID,
+  SCALE_FIXTURE_PART_COUNT,
+} from "./promotionReviewScaleFixture";
 
 const ADVANCE: Partial<Record<IngestStage, IngestStage>> = {
   received: "extracting",
@@ -240,7 +247,14 @@ export function mockRetryIngest(ingestId: string): Promise<unknown> {
   return Promise.reject(err);
 }
 
+/** A drop whose file name says /scale/i gets the 402-part notice instead (the review at scale); every other drop is unchanged. */
+function isScaleDrop(ingestId: string): boolean {
+  return /scale/i.test(FILE_NAMES.get(ingestId) ?? "");
+}
+
 function seedReviewTask(row: MockRow): void {
+  const scale = isScaleDrop(row.ingest_id);
+  const noticeId = scale ? SCALE_FIXTURE_NOTICE_ID : FIXTURE_NOTICE_ID;
   const task: HumanTask = {
     id: `mock-task-${row.ingest_id}`,
     taskId: `mock-task-${row.ingest_id}`,
@@ -248,12 +262,12 @@ function seedReviewTask(row: MockRow): void {
     audience: "promotion:DATA_ENGINEERING",
     kind: "document_promotion",
     status: "pending",
-    title: FIXTURE_NOTICE_ID,
-    summary: `PDN ${FIXTURE_NOTICE_ID} — Example Discretes Ltd, 2 parts, attempt 1.`,
+    title: noticeId,
+    summary: `PDN ${noticeId} — Example Discretes Ltd, ${scale ? SCALE_FIXTURE_PART_COUNT : 2} parts, attempt 1.`,
     requestedBy: "mock-caller",
     subjectRef: row.ingest_id,
     payload: {
-      ...fixturePromotionPayload(promotionIngestId(row)),
+      ...(scale ? scaleFixturePromotionPayload : fixturePromotionPayload)(promotionIngestId(row)),
       dropped_by: { authz_id: "mock-caller", on_behalf_of: null },
     },
     createdAt: Date.now(),
@@ -273,7 +287,7 @@ function ingestNotFound(): Promise<never> {
  */
 export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
   if (!STORE.has(ingestId)) return ingestNotFound();
-  return Promise.resolve(fixtureExtractionBody(ingestId));
+  return Promise.resolve((isScaleDrop(ingestId) ? scaleFixtureExtractionBody : fixtureExtractionBody)(ingestId));
 }
 
 /**
@@ -282,7 +296,7 @@ export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
  */
 export function fetchIngestSource(ingestId: string): Promise<IngestSource> {
   if (!STORE.has(ingestId)) return ingestNotFound();
-  return Promise.resolve({ bytes: fixturePdfBytes(), status: 200, contentType: "application/pdf" });
+  return Promise.resolve({ bytes: (isScaleDrop(ingestId) ? scaleFixturePdfBytes : fixturePdfBytes)(), status: 200, contentType: "application/pdf" });
 }
 
 const LEAF_LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected", "failed", "review_rejected"]);
