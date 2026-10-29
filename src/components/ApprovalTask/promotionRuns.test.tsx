@@ -63,7 +63,10 @@ const PAIRS: Array<[string, string]> = [
   ["1N4148", "1N4148W"],
 ];
 
-const ref = (page: number, bbox: Box) => ({ page, bbox, bboxes: [bbox], page_dims: DIMS, units: "pt" });
+// Served as the BFF declares it: {page, bbox}, the bbox in top-left page fractions (the boxes above are in pt).
+const ref = (page: number, [x0, y0, x1, y1]: Box) => ({ page, bbox: [x0 / DIMS.width, y0 / DIMS.height, x1 / DIMS.width, y1 / DIMS.height] });
+/** The shared ltb crop's fact key, `page:bbox`, as served (fractions). */
+const LTB_KEY = `1:${ref(1, LTB_BOX).bbox.join(",")}`;
 function body() {
   const rows: Array<Record<string, unknown>> = [];
   const push = (r: Record<string, unknown>) => rows.push({ row_index: rows.length, match_confidence: 1, needs_review: false, review_reason: null, source_snippet: "", ...r });
@@ -378,7 +381,7 @@ describe("promote hold: unchecked", () => {
     await mountRuns();
     const facts = document.querySelectorAll("[data-shared-fact]");
     expect(facts).toHaveLength(1);
-    expect(facts[0].getAttribute("data-shared-fact")).toBe("1:72,60,400,72");
+    expect(facts[0].getAttribute("data-shared-fact")).toBe(LTB_KEY);
     expect(facts[0].textContent).toContain("ltb_date 2027-03-31 · inherited from one crop on p1 · 3 rows");
   });
 
@@ -530,7 +533,7 @@ describe("resume (browser-only)", () => {
   const save = (o: Record<string, unknown>) => window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, looked: [], confirmed: [], draft: emptyDraft, headerDraft: {}, sel: 0, ...o }));
 
   it("a saved entry restores the looked set, the confirmations and the selection, and says it is this browser only", async () => {
-    save({ looked: ["p0", "p1", "p4"], confirmed: ["1:72,60,400,72"], sel: 7 }); // sel is a ROW index: p4 is the 8th row (three ltb rows precede it)
+    save({ looked: ["p0", "p1", "p4"], confirmed: [LTB_KEY], sel: 7 }); // sel is a ROW index: p4 is the 8th row (three ltb rows precede it)
     await mountRuns();
     await waitFor(() => expect(q("[data-review-resumed]")).not.toBeNull());
     expect(q("[data-review-resumed]")!.textContent).toContain("Resumed: 3 parts looked at, saved in this browser only.");
@@ -545,7 +548,7 @@ describe("resume (browser-only)", () => {
     fireEvent.click(q("[data-shared-confirm]")!);
     await waitFor(() => {
       const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null");
-      expect(saved).toMatchObject({ v: 1, looked: ["p1"], confirmed: ["1:72,60,400,72"], sel: 2 });
+      expect(saved).toMatchObject({ v: 1, looked: ["p1"], confirmed: [LTB_KEY], sel: 2 });
     });
   });
 
