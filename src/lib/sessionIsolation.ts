@@ -79,7 +79,8 @@ export const PURGE_EXEMPT_STORES: Record<string, string> = {
 export function purgeUserScopedState(): void {
   try {
     useCanvasStore.setState({ artifacts: [], currentArtifactId: null });
-    useHumanTaskStore.setState({ tasks: [] });
+    // reset(), not `tasks: []`: it also refuses the previous owner's in-flight REST snapshot.
+    useHumanTaskStore.getState().reset();
     useStageStore.setState({ canvases: [] });
     useAnswerPanelStore.setState({ pins: [] });
     useEvidenceStore.getState().dismiss();
