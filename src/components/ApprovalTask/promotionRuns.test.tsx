@@ -395,11 +395,30 @@ describe("record preview", () => {
     const sent = q("[data-record-sent]")!.textContent!;
     expect(sent).toBe("sent today: promoted, the note, 0 row edits, 0 header edits");
     const prop = q("[data-record-proposed]")!;
-    expect(prop.textContent).toContain("not recorded yet (proposed): looked at 1 of 10 parts,");
+    expect(prop.textContent).toContain("proposed, not sent: the producer does not declare review_coverage yet");
+    expect(prop.textContent).toContain("Looked at 1 of 10 parts,");
     expect(prop.textContent).toContain("shared facts confirmed once");
-    expect(prop.getAttribute("title")).toContain("packet-to-lane-01-from-cortex-promotion-review-at-scale-a-saved-draft-and-a-coverage-key.md");
+    expect(prop.getAttribute("data-record-coverage-parts")).toBe("10");
+    const sampled = Number(prop.getAttribute("data-record-coverage-sampled"));
+    expect(sampled).toBeGreaterThan(0);
+    expect(prop.textContent).toContain(`of which ${sampled} were sampled`);
+    expect(prop.getAttribute("title")).toContain("packet-to-lane-01-from-cortex-review-coverage-on-the-promotion-record.md");
     fireEvent.click(q("[data-shared-confirm]")!);
     expect(prop.textContent).toContain("1 shared facts confirmed once");
+  });
+
+  it("promote sends no review_coverage: the record is shown, not sent", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mountRuns();
+    fireEvent.click(q("[data-run]")!);
+    for (let n = 0; n < 12; n++) key("J");
+    fireEvent.click(unitEl("p0")!);
+    fireEvent.click(q("[data-shared-confirm]")!);
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    fireEvent.click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(actOnHumanTask.mock.calls)).not.toContain("review_coverage");
+    expect(actOnHumanTask.mock.calls[0][1]).toBe("promoted");
   });
 });
 

@@ -32,6 +32,7 @@ import { ReviewExportControl } from "./ReviewExportControl";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 import { isFeatureEnabled } from "@/lib/featureFlags";
+import { buildReviewCoverage } from "@/lib/reviewCoverage";
 import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, SHARED_RULE } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
@@ -113,7 +114,7 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   unchecked: "",
 };
 /** The packet that proposes recording coverage on the wire; the preview names it so nobody mistakes it for shipped. */
-const COVERAGE_PACKET = "sessions/2026-10-28-packet-to-lane-01-from-cortex-promotion-review-at-scale-a-saved-draft-and-a-coverage-key.md";
+const COVERAGE_PACKET = "sessions/2026-10-29-packet-to-lane-01-from-cortex-review-coverage-on-the-promotion-record.md";
 const emptyDraft = (): RowEditDraft => ({ deleted: {}, addedMpns: [], corrected: {}, overrides: {}, addedEvidence: {}, correctedEvidence: {} });
 /** A saved draft is applied only if it has every part of the shape the editor reads; anything else is dropped whole. */
 function isRowEditDraft(v: unknown): v is RowEditDraft {
@@ -323,9 +324,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   // that mentions it falls through to the card as it was.
   const runsOn = isFeatureEnabled("promotionRuns");
   // The seed is the document and attempt, never the clock: a resumed review walks the same sampled checks.
+  const seed = `${ingestId}:${review.attempt ?? ""}`;
   const plan = useMemo(
-    () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, `${ingestId}:${review.attempt ?? ""}`) : null),
-    [runsOn, rows, ingestId, review.attempt],
+    () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, seed) : null),
+    [runsOn, rows, seed],
   );
   // Read the auth context WITHOUT useAuth (which throws outside a provider). No sub, no owner: coverage is then not persisted (a no-auth dev build has no identity to key it by).
   const sub = useContext(AuthContext)?.user?.profile?.sub ?? null;
@@ -354,6 +356,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const runOf = useMemo(() => (plan ? runIdByUnit(plan) : new Map<number, string>()), [plan]);
   const selUnit = plan ? (plan.unitOfRow[sel] ?? 0) : -1;
   const planLooked = plan ? plan.units.filter((u) => cov.looked.has(u.id)).length : 0;
+  // PROPOSED, NOT SENT: the one record of what was sampled vs looked at, built from the plan. Shown, never sent.
+  const record = plan ? buildReviewCoverage(plan, cov.looked, cov.confirmed, seed) : null;
   const checksLeft = plan ? [...plan.checks].filter((u) => !cov.looked.has(plan.units[u].id)).length : 0;
   // A fact whose rows all state ONE value is confirmed once; one whose rows disagree cannot be, and says so.
   const unconfirmedFacts = plan ? plan.sharedFacts.filter((f) => f.values.length === 1 && !cov.confirmed.has(f.key)) : [];
@@ -1187,10 +1191,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 <p data-record-sent>
                   sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
                 </p>
-                <p data-record-proposed title={COVERAGE_PACKET}>
-                  not recorded yet (proposed): looked at {planLooked} of {plan.units.length} parts,{" "}
-                  {plan.units.length - planLooked - checksLeft} covered by runs,{" "}
-                  {plan.sharedFacts.filter((f) => cov.confirmed.has(f.key)).length} shared facts confirmed once
+                <p
+                  data-record-proposed
+                  data-record-coverage-parts={record!.parts}
+                  data-record-coverage-sampled={record!.sampled.length}
+                  title={COVERAGE_PACKET}
+                >
+                  proposed, not sent: the producer does not declare review_coverage yet. Looked at {record!.looked_at.length} of {record!.parts} parts,
+                  of which {record!.sampled.length} were sampled; {record!.covered.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
+                  {record!.covered.length} rules; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>
               </div>
             )}
