@@ -25,7 +25,7 @@ export function ExportProfilePicker({
               : "bg-white/5 border-white/20 text-slate-300 hover:bg-white/10"
           }`}
         >
-          {profileLabel(p)} <span className="text-[9px] text-slate-500">{p.format} / {p.scope}</span>
+          {profileLabel(p)} <span className="text-[9px] text-slate-500">{p.format} / {p.granularity}</span>
         </button>
       ))}
     </div>

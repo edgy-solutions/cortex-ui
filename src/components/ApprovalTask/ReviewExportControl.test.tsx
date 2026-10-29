@@ -20,8 +20,8 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
 
 const ID = "sha256:abc";
 const served = [
-  { name: "alpha-x", format: "csv", scope: "row", label: "Alpha" },
-  { name: "beta-y", format: "json", scope: "notice" },
+  { name: "alpha-x", format: "csv", granularity: "notice_part", label: "Alpha" },
+  { name: "beta-y", format: "json", granularity: "notice" },
 ];
 const root = (c: HTMLElement) => c.querySelector("[data-review-export]");
 const names = (c: HTMLElement) => [...c.querySelectorAll("[data-export-profile]")].map((e) => e.getAttribute("data-export-profile"));
