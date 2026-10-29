@@ -48,6 +48,8 @@ export function humanTaskFromRow(t: Record<string, unknown>): HumanTask | null {
 }
 
 export function seedFromRest() {
+  // Taken BEFORE the request: the snapshot is as old as its request (see `replacePending`).
+  const since = useHumanTaskStore.getState().beginSnapshot();
   fetchMyHumanTasks()
     .then((resp) => {
       const tasks: HumanTask[] = [];
@@ -55,7 +57,7 @@ export function seedFromRest() {
         const task = humanTaskFromRow(t);
         if (task) tasks.push(task);
       }
-      useHumanTaskStore.getState().replacePending(tasks);
+      useHumanTaskStore.getState().replacePending(tasks, since);
     })
     .catch((err) => console.warn("[hitl] REST seed failed (live via Electric)", err));
 }
