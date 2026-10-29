@@ -166,6 +166,8 @@ async function mountRuns() {
   const r = render(<AuthContext.Provider value={asOwner(OWNER)}><ApprovalTaskCard task={task()} /></AuthContext.Provider>);
   await waitFor(() => expect(q("[data-review-progress]")).not.toBeNull());
   await waitFor(() => expect(q("[data-pdf-slot-drawn]")).not.toBeNull());
+  // The pane reports its phase in an effect, so a drawn slot can precede the card leaving source-loading (raced under a full suite).
+  await waitFor(() => expect(q('[data-verb="promoted"]')?.getAttribute("data-promote-hold")).not.toBe("source-loading"));
   return r;
 }
 
