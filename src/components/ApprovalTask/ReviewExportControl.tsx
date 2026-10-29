@@ -1,11 +1,11 @@
 /**
  * ReviewExportControl -- export on a COMPLETED review card (`stage === "promoted"` on the real
- * `GET /ingest/{id}/status`). Profiles come from the server's list (PROPOSED route; see
+ * status row, read through `useDocument`: the one ingest poller, never a fetch of its own). Profiles come from the server's list (PROPOSED route; see
  * `src/lib/reviewExport.ts`). Renders nothing unless the `reviewExport` flag is on, and nothing
  * (not even a marker) until the status read says promoted.
  */
 import { useEffect, useState } from "react";
-import { fetchIngestStatus } from "@/api/client";
+import { useDocument } from "@/lib/useDocument";
 import { isReviewExportEnabled } from "@/lib/reviewExportFlag";
 import { isExportStage, type ExportProfile } from "@/lib/reviewExport";
 import { exportOne, loadExportProfiles } from "@/lib/reviewExportSource";
@@ -21,19 +21,16 @@ export function ReviewExportControl({ ingestId }: { ingestId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<ExportFailure | null>(null);
 
+  // The stage comes from the shared status store (documents.test.tsx's census: one poller).
+  const { row } = useDocument(ingestId);
+  const promoted = isExportStage(row?.stage);
+
   useEffect(() => {
     if (!enabled) return;
     let live = true;
     setPhase("gate");
     (async () => {
-      let promoted = false;
-      try {
-        const row = (await fetchIngestStatus(ingestId)) as unknown as { stage?: unknown } | null;
-        promoted = isExportStage(row?.stage);
-      } catch {
-        promoted = false;
-      }
-      if (!live || !promoted) return;
+      if (!promoted) return;
       setPhase("loading");
       try {
         const list = await loadExportProfiles();
@@ -49,7 +46,7 @@ export function ReviewExportControl({ ingestId }: { ingestId: string }) {
     return () => {
       live = false;
     };
-  }, [enabled, ingestId]);
+  }, [enabled, promoted]);
 
   if (!enabled || phase === "gate") return null;
 
