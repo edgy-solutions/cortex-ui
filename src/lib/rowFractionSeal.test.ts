@@ -22,8 +22,10 @@
  * `OLD_REF` is the pixel form that rows stored before doc-tools `b08468f` carry.
  * The deployed doc-tools (v0.2.2, 7f's measurement, 10-27) no longer writes it,
  * and since platform #121 the published contract refuses it (the leg at the
- * foot of this file). `readEvidence` still discriminates the two forms until no
- * served row can carry the pixel form; retiring that branch is its own commit.
+ * foot of this file). `readEvidence` NO LONGER reads the pixel form (directive
+ * 10-28): fractions are the only form, and a stray `page_dims` is ignored. So
+ * "before" below is the pixel cell placed by `scaleBox` directly, and the reader
+ * is asked only about the fraction form.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -97,7 +99,7 @@ function draw(ref: unknown, rendered: { width: number; height: number }) {
 describe("the row-fraction conversion is invisible to this reader", () => {
   for (const rendered of RENDER_SIZES) {
     it(`lands on the same cell at ${rendered.name} (${rendered.width}x${rendered.height})`, () => {
-      const before = draw(OLD_REF, rendered);
+      const before = scaleBox(OLD_REF.bbox as [number, number, number, number], PAGE_DIMS, rendered);
       const after = draw(NEW_REF, rendered);
 
       const slack = MAX_FRACTION_ERROR * Math.max(rendered.width, rendered.height);
@@ -114,7 +116,7 @@ describe("the row-fraction conversion is invisible to this reader", () => {
 
   it("drifts sub-pixel, and the bound is stated rather than merely met", () => {
     const rendered = { width: 1700, height: 2200 };
-    const before = draw(OLD_REF, rendered);
+    const before = scaleBox(OLD_REF.bbox as [number, number, number, number], PAGE_DIMS, rendered);
     const after = draw(NEW_REF, rendered);
     const worst = Math.max(
       ...(["left", "top", "width", "height"] as const).map((k) =>
@@ -130,26 +132,20 @@ describe("the row-fraction conversion is invisible to this reader", () => {
     expect(isFractionBox(NEW_REF.bbox)).toBe(true);
   });
 
-  it("reads a nulled page_dims as the PIXEL form, so omitting it is the signal", () => {
-    // doc-tools omits the key. This pins why: a `page_dims: null` takes the
-    // pixel branch and is refused, which reaches a steward as a card with no
-    // outline and nothing logged anywhere.
-    const nulled = { ...NEW_REF, page_dims: null };
-    const extraction = readExtraction(body(nulled));
-    expect(extraction!.rows[0].evidence.state).toBe("malformed");
+  it("refuses the pixel form: a pixel bbox with its page_dims is malformed, not drawn", () => {
+    const extraction = readExtraction(body(OLD_REF));
+    expect(extraction!.rows[0].evidence).toMatchObject({ state: "malformed", reason: "bbox_not_fractions" });
   });
 
-  it("draws a corner speck if the box is converted and the dims are KEPT", () => {
-    // Cortex's own hazard (a3cf4d1 packet, section 2), and the reason the two
-    // halves are one commit upstream: converting the box while leaving the
-    // dims behind is WORSE than converting neither, because the result is
-    // well-formed and silently wrong.
-    const halfConverted = { ...NEW_REF, page_dims: PAGE_DIMS };
-    const speck = draw(halfConverted, { width: 1700, height: 2200 });
-    expect(speck.width).toBeLessThan(1);
-    expect(speck.height).toBeLessThan(1);
-    expect(speck.left).toBeLessThan(1);
-    expect(speck.top).toBeLessThan(1);
+  it("ignores a stray page_dims beside a fraction box: it lands on the same cell, no corner speck", () => {
+    // Fractions are the only form, so the dims are not read. (Before 10-28 the dims
+    // were taken as the pixel form and the converted box drew as a corner speck.)
+    const rendered = { width: 1700, height: 2200 };
+    const withDims = draw({ ...NEW_REF, page_dims: PAGE_DIMS }, rendered);
+    const without = draw(NEW_REF, rendered);
+    expect(withDims).toEqual(without);
+    expect(withDims.width).toBeGreaterThan(100);
+    expect(withDims.height).toBeGreaterThan(10);
   });
 });
 

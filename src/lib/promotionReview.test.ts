@@ -34,7 +34,9 @@ import {
 import { fixtureExtractionBody, fixturePromotionPayload } from "./promotionReviewFixture";
 
 const SHA = `sha256:${"5b15f205".padEnd(64, "0")}`;
-const ev = { page: 1, bbox: [10, 20, 110, 40], page_dims: { width: 612, height: 792 }, units: "pt" };
+const ev = { page: 1, bbox: [0.1, 0.2, 0.5, 0.4] };
+/** A pre-roll row: pixel bbox with page_dims. The reader no longer has a form for it. */
+const PIXEL_EV = { page: 1, bbox: [10, 20, 110, 40], page_dims: { width: 612, height: 792 }, units: "pt" };
 const extraction = (over: Record<string, unknown> = {}) => ({
   ingest_id: SHA,
   notice_id: "EOL-36",
@@ -171,7 +173,6 @@ describe("rows", () => {
 
 describe("a malformed evidence_ref names WHICH check failed (P0 PCN-2683)", () => {
   const one = (row: Record<string, unknown>) => read({ rows: [{ mpn: "A", ...row }] }).rows[0].evidence;
-  const dims = { width: 612, height: 792 };
   // [expected code, a failing ref, the valid value one step from the failure]
   const CASES: [MalformedReason, unknown, unknown][] = [
     ["not_an_object", "p1", { page: 1 }],
@@ -181,13 +182,11 @@ describe("a malformed evidence_ref names WHICH check failed (P0 PCN-2683)", () =
     ["page_missing_or_not_positive_int", { page: 0, bbox: [0.1, 0.1, 0.2, 0.2] }, { page: 1, bbox: [0.1, 0.1, 0.2, 0.2] }],
     ["page_missing_or_not_positive_int", { ...ev, page: 1.5 }, { ...ev, page: 2 }],
     ["bbox_not_fractions", { page: 1, bbox: [40, 60, 560, 110] }, { page: 1, bbox: [0.4, 0.6, 0.5, 0.9] }],
-    ["bbox_not_four_numbers", { ...ev, bbox: [1, 2, 3] }, { ...ev, bbox: [1, 2, 3, 4] }],
-    ["bbox_not_four_numbers", { ...ev, bbox: [1, 2, "3", 4] }, { ...ev, bbox: [1, 2, 3, 4] }],
-    ["page_dims_not_object", { ...ev, page_dims: "612x792" }, { ...ev, page_dims: dims }],
-    ["page_dims_not_positive", { ...ev, page_dims: { width: 612, height: 0 } }, { ...ev, page_dims: { width: 612, height: 1 } }],
-    ["page_dims_not_positive", { ...ev, page_dims: { width: "612", height: 792 } }, { ...ev, page_dims: dims }],
-    ["bbox_no_area", { ...ev, bbox: [10, 20, 10, 40] }, { ...ev, bbox: [10, 20, 11, 40] }],
-    ["bbox_no_area", { ...ev, bbox: [10, 40, 110, 20] }, { ...ev, bbox: [10, 20, 110, 40] }],
+    ["bbox_not_fractions", PIXEL_EV, { ...PIXEL_EV, bbox: [0.1, 0.2, 0.5, 0.4] }],
+    ["bbox_not_fractions", { ...ev, bbox: [0.1, 0.2, 0.3] }, ev],
+    ["bbox_not_fractions", { ...ev, bbox: [0.1, 0.2, "0.3", 0.4] }, ev],
+    ["bbox_not_fractions", { ...ev, bbox: [0.5, 0.2, 0.5, 0.4] }, { ...ev, bbox: [0.4, 0.2, 0.5, 0.4] }],
+    ["bbox_not_fractions", { ...ev, bbox: [0.1, 0.2, 0.5, 1.2] }, { ...ev, bbox: [0.1, 0.2, 0.5, 1] }],
   ];
 
   it.each(CASES)("%s: %j is that code, carries the raw value, and its near side reads ok", (code, bad, good) => {
@@ -227,9 +226,24 @@ describe("evidence has three states, with different owners", () => {
     expect(one({ evidence_ref: null })).toEqual({ state: "absent" });
   });
 
-  it("a readable ref is ok, carried exactly, units and all", () => {
-    expect(one({ evidence_ref: ev })).toEqual({ state: "ok", ref: { page: 1, bbox: [10, 20, 110, 40], page_dims: { width: 612, height: 792 }, units: "pt" } });
-    expect(one({ evidence_ref: { ...ev, units: undefined } })).toMatchObject({ state: "ok", ref: { units: null } });
+  it("a readable ref is ok, carried exactly, on a 1x1 page with no units", () => {
+    expect(one({ evidence_ref: ev })).toEqual({ state: "ok", ref: { page: 1, bbox: [0.1, 0.2, 0.5, 0.4], page_dims: { width: 1, height: 1 }, units: null } });
+  });
+
+  it("a fraction bbox WITH a stray page_dims is ok: page_dims and units are ignored, not read", () => {
+    expect(one({ evidence_ref: { ...ev, page_dims: { width: 0, height: "x" }, units: "pt", bboxes: [] } })).toEqual({
+      state: "ok",
+      ref: { page: 1, bbox: [0.1, 0.2, 0.5, 0.4], page_dims: { width: 1, height: 1 }, units: null },
+    });
+  });
+
+  it("a pixel bbox that comes with page_dims is malformed (bbox_not_fractions)", () => {
+    expect(one({ evidence_ref: PIXEL_EV })).toMatchObject({ state: "malformed", reason: "bbox_not_fractions" });
+  });
+
+  it("x0 >= x1 and y1 > 1 are malformed", () => {
+    expect(one({ evidence_ref: { page: 1, bbox: [0.5, 0.1, 0.5, 0.4] } })).toMatchObject({ state: "malformed", reason: "bbox_not_fractions" });
+    expect(one({ evidence_ref: { page: 1, bbox: [0.1, 0.2, 0.5, 1.01] } })).toMatchObject({ state: "malformed", reason: "bbox_not_fractions" });
   });
 
   it("a row evidence_ref in page fractions with no page_dims is read on a 1x1 page", () => {
@@ -250,7 +264,7 @@ describe("evidence has three states, with different owners", () => {
     // page_dims is deliberately INVALID: it must not be validated when there is no box.
     expect(one({ evidence_ref: { page: 4, bbox: null, page_dims: { width: 0, height: 0 }, units: "pt" } })).toEqual({
       state: "ok",
-      ref: { page: 4, bbox: null, page_dims: { width: 1, height: 1 }, units: "pt" },
+      ref: { page: 4, bbox: null, page_dims: { width: 1, height: 1 }, units: null },
     });
   });
 
@@ -274,12 +288,11 @@ describe("evidence has three states, with different owners", () => {
     ["page 0 (pages are 1-based)", { ...ev, page: 0 }],
     ["fractional page", { ...ev, page: 1.5 }],
     ["three-number bbox", { ...ev, bbox: [1, 2, 3] }],
-    ["a NaN in the bbox", { ...ev, bbox: [1, 2, NaN, 4] }],
-    ["a string in the bbox", { ...ev, bbox: [1, 2, "3", 4] }],
-    ["a box with no width", { ...ev, bbox: [10, 20, 10, 40] }],
-    ["a box turned upside down", { ...ev, bbox: [10, 40, 110, 20] }],
-    ["no page_dims", { page: 1, bbox: ev.bbox }],
-    ["zero page height", { ...ev, page_dims: { width: 612, height: 0 } }],
+    ["a NaN in the bbox", { ...ev, bbox: [0.1, 0.2, NaN, 0.4] }],
+    ["a string in the bbox", { ...ev, bbox: [0.1, 0.2, "0.3", 0.4] }],
+    ["a box with no width", { ...ev, bbox: [0.1, 0.2, 0.1, 0.4] }],
+    ["a box turned upside down", { ...ev, bbox: [0.1, 0.4, 0.5, 0.2] }],
+    ["a pixel box", { page: 1, bbox: [40, 60, 560, 110] }],
   ])("%s is MALFORMED, not absent", (_label, ref) => {
     expect(one({ evidence_ref: ref })).toMatchObject({ state: "malformed" });
   });
@@ -503,7 +516,7 @@ describe("evidence quality: what the outline IS (7f, doc-tools #132)", () => {
   it("rowsSharingEvidence counts the rows on the SAME page and bbox, and only those", () => {
     const row = (i: number, e: unknown) => ({ row_index: i, part_index: 0, mpn: "A-1", field: "ltb_date", extracted_value: "v", obtained_via: "inherited_doc_level", evidence_ref: e });
     const ex = read({
-      rows: [row(0, ev), row(1, ev), row(2, { ...ev, page: 2 }), row(3, { ...ev, bbox: [10, 20, 110, 41] }), row(4, null)],
+      rows: [row(0, ev), row(1, ev), row(2, { ...ev, page: 2 }), row(3, { ...ev, bbox: [0.1, 0.2, 0.5, 0.41] }), row(4, null)],
       rows_without_evidence: 1,
     });
     const ref = ex.rows[0].evidence.state === "ok" ? ex.rows[0].evidence.ref : null;

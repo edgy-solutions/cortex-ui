@@ -76,14 +76,6 @@ export function buildPdf(pages: Line[][]): Uint8Array {
 
 const NOTICE_ID = "EOL-36_BYV34-400,-BYV34-500";
 
-/**
- * A layout raster's resolution, for the rows measured in `px`. Lane 1: `units` is `pt` when
- * `obtained_via` is `text_layer_cell`, and layout `px` otherwise, with `page_dims` in the same
- * units. So the prose rows here carry 150-dpi pixels, and only a card that scales by `page_dims`
- * puts their outline on their text.
- */
-const PX_PER_PT = 150 / 72;
-
 interface FixtureRow {
   row_index: number;
   part_index: number;
@@ -91,7 +83,6 @@ interface FixtureRow {
   field: string;
   extracted_value: string;
   obtained_via: string;
-  units: "pt" | "px";
   page: number;
   line: Line;
 }
@@ -106,7 +97,6 @@ const row = (part: number, field: string, label: string, value: string, page: nu
   extracted_value: value,
   // Both are doc-tools match_methods (7f, 2026-10-17): the cell, and the enclosing table box (px).
   obtained_via: prose ? "region_preferred" : "text_layer_cell",
-  units: prose ? "px" : "pt",
   page,
   line: { text: `${PARTS[part].padEnd(12)}${label.padEnd(26)}${value}`, x: 72, y },
 });
@@ -152,9 +142,9 @@ export const FIXTURE_PAGE_COUNT = PAGES.length;
 export const FIXTURE_NOTICE_ID = NOTICE_ID;
 
 function evidenceRef(r: FixtureRow) {
-  const k = r.units === "px" ? PX_PER_PT : 1;
-  const bbox = lineBox(r.line).map((v) => v * k);
-  return { page: r.page, bbox, bboxes: [bbox], page_dims: { width: PAGE.width * k, height: PAGE.height * k }, units: r.units };
+  // The BFF's declared form: {page, bbox} with the bbox in page fractions (top-left origin). Nothing else is served.
+  const [x0, y0, x1, y1] = lineBox(r.line);
+  return { page: r.page, bbox: [x0 / PAGE.width, y0 / PAGE.height, x1 / PAGE.width, y1 / PAGE.height] };
 }
 
 /** `GET /ingest/{id}/extraction`'s body, in Lane 1's 193 shape. Every row carries evidence. */

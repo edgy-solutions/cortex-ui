@@ -7,9 +7,9 @@
  *
  * Positions come from pdf.js's `getTextContent()` (its `transform` is the text's baseline in PDF
  * space, bottom-left origin), converted to the evidence pane's top-left origin here, independently
- * of `lineBox`, so the expectation is not computed by the helper it checks. Each box is brought
- * to points through its own `page_dims` (pdf.js's page is 612 pt wide), so a row served in layout
- * `px` lands on its text only if its `page_dims` agree with its `bbox`.
+ * of `lineBox`, so the expectation is not computed by the helper it checks. Each box is page fractions,
+ * brought to points by pdf.js's page (612 x 792 pt), so a row lands on its text only if its fractions
+ * are of that page.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildPdf, fixturePdfBytes, fixtureExtractionBody, FIXTURE_PAGE_COUNT } from "./promotionReviewFixture";
@@ -45,16 +45,14 @@ describe("the fixture PDF", () => {
 
   it("every row's box holds the text pdf.js reads for that row: its mpn AND its value", () => {
     const body = fixtureExtractionBody("sha256:x") as {
-      rows: Array<{ mpn: string; extracted_value: string; evidence_ref: { page: number; bbox: number[]; units: string; page_dims: { width: number; height: number } } }>;
+      rows: Array<{ mpn: string; extracted_value: string; evidence_ref: { page: number; bbox: number[] } }>;
     };
     expect(body.rows).toHaveLength(6);
-    expect(new Set(body.rows.map((r) => r.evidence_ref.units))).toEqual(new Set(["pt", "px"])); // both units are exercised
     const PAGE_PT = { width: 612, height: 792 };
     for (const row of body.rows) {
-      const { page, bbox, page_dims } = row.evidence_ref;
-      const k = PAGE_PT.width / page_dims.width; // page_dims units -> points
-      expect(page_dims.height * k, "page_dims keeps the page's aspect").toBeCloseTo(PAGE_PT.height, 6);
-      const [x0, y0, x1, y1] = bbox.map((v) => v * k);
+      const { page, bbox } = row.evidence_ref;
+      expect(Object.keys(row.evidence_ref).sort(), "only {page, bbox} is served").toEqual(["bbox", "page"]);
+      const [x0, y0, x1, y1] = [bbox[0] * PAGE_PT.width, bbox[1] * PAGE_PT.height, bbox[2] * PAGE_PT.width, bbox[3] * PAGE_PT.height];
       const inside = pages[page - 1].filter((it) => {
         const x = it.transform[4];
         const baseline = PAGE_PT.height - it.transform[5]; // to top-left origin

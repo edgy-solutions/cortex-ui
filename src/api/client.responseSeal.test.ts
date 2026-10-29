@@ -406,7 +406,7 @@ const READ_FLOOR: Record<string, number> = {
   fetchIngestStatus: 3,
   fetchIngestMine: 6,
   retryIngest: 1,
-  fetchIngestExtraction: 25,
+  fetchIngestExtraction: 24,
   correctIngestLeaf: 3,
 };
 

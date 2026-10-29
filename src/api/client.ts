@@ -1298,9 +1298,6 @@ export const AWAITING_DECLARATION: Record<string, Record<string, string>> = {
     "live_nodes.[].uri": "(b) the producer declares list[dict] but builds {uri, labels} per node; evidence: producer src/iagent/gateway.py:10573 at 4a5ff6b6 (and src/lib/decisionMap.test.ts fixtures)",
     "context_nodes.[].uri": "(b) same open dict, {uri, labels}; evidence: producer src/iagent/gateway.py:10525-10575 at 4a5ff6b6",
   },
-  "GET /ingest/{ingest_id}/extraction": {
-    "rows.[].evidence_ref.page_dims": "retired after the 0.4.71 roll (architect 10-28), reader branch still live for pre-roll rows",
-  },
   "GET /fleet/version": {
     self: "(b) the producer sends {self: {...}} but declares the body as an open object; evidence: producer src/iagent/gateway.py:971 at 4a5ff6b6 and src/api/bffVersion.test.ts",
   },

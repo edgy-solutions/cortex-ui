@@ -16,8 +16,9 @@
  *         part_count, rows_without_evidence, review_ref,
  *         rows: [{ row_index, part_index, mpn, field, extracted_value, obtained_via,
  *                  match_confidence, needs_review, review_reason, source_snippet,
- *                  evidence_ref: {page, bbox, bboxes, page_dims, units} | null }] }
- *       (or, in the ruled form of 10-21, evidence_ref: {page, bbox} with the bbox in page fractions, no page_dims)
+ *                  evidence_ref: {page, bbox} | null }] }
+ *       The BFF declares evidence_ref as {page, bbox}, bbox in page fractions [x0,y0,x1,y1] (top-left origin) or null:
+ *       "Nothing else is served: no bboxes, page_dims, units or quality." (cortex-bff.openapi.json, evidence_ref)
  *
  * The top line takes each field from the PAYLOAD when it carries a value, and from the extraction
  * otherwise. Both come from the same manifest, so on ordinary data they agree. A field where both
@@ -43,14 +44,11 @@
  * - A row's evidence has THREE states, not two. ABSENT (`evidence_ref` missing or `null`) is the
  *   corpus-gate miss the standard names (7f). MALFORMED (present but unreadable) is a producer bug
  *   (Lane 1). They have different owners, so they are flagged differently.
- * - An evidence_ref arrives in one of two forms. With `page_dims` present: today's form below. With `page_dims`
- *   ABSENT: the ruled form (architect 10-21), `{page, bbox}` with the bbox in page fractions, read on a 1x1 page
- *   (`FRACTION_PAGE`); a bbox outside 0..1 or with no area is malformed.
- * - In EITHER form, `bbox: null` with a valid page is "stated on this page, no box we can draw" (architect 10-21):
- *   read as page-only, `page_dims` not validated. An absent `bbox` key is the same as null (Lane 1, 205); a bad page is malformed.
- * - `bbox` (with `page_dims`) is in `page_dims` units: `pt` for `text_layer_cell`, layout `px` otherwise. The card
- *   scales by `page_dims` (the evidence pane's sealed rule, `bboxScale.ts`), so `units` is carried
- *   but never needed to place the box.
+ * - An evidence_ref has ONE form: {page, bbox}, the bbox in page fractions (0<=x0<x1<=1, 0<=y0<y1<=1) read on a 1x1
+ *   page (`FRACTION_PAGE`), or null / absent = "stated on this page, no box we can draw" (architect 10-21; Lane 1, 205).
+ *   A bbox that is not four finite numbers inside those bounds is malformed (`bbox_not_fractions`); so is a bad page.
+ * - A `page_dims`, `units` or `bboxes` key on the row is IGNORED: not read, not validated, not an error (a pre-roll
+ *   row may still carry it). Every ok ref carries `page_dims: FRACTION_PAGE` and `units: null`.
  * - Two completeness counts travel, and each is CHECKED, never corrected:
  *   - `part_count` against the parts drawn (distinct `part_index`, else distinct mpn);
  *   - `rows_without_evidence` against the absent rows drawn.
@@ -75,20 +73,12 @@ export interface EvidenceRef {
 export type MalformedReason =
   | "not_an_object"
   | "page_missing_or_not_positive_int"
-  | "bbox_not_fractions"
-  | "bbox_not_four_numbers"
-  | "page_dims_not_object"
-  | "page_dims_not_positive"
-  | "bbox_no_area";
+  | "bbox_not_fractions";
 
 export const MALFORMED_REASON_LABELS: Record<MalformedReason, string> = {
   not_an_object: "evidence_ref is not an object",
   page_missing_or_not_positive_int: "page is missing or not a positive integer",
-  bbox_not_fractions: "bbox is not page fractions (no page_dims)",
-  bbox_not_four_numbers: "bbox is not four finite numbers (with page_dims)",
-  page_dims_not_object: "page_dims is not an object",
-  page_dims_not_positive: "page_dims width/height is not a positive number",
-  bbox_no_area: "bbox has no area (x1 <= x0 or y1 <= y0)",
+  bbox_not_fractions: "bbox is not page fractions",
 };
 
 export type RowEvidence =
@@ -220,7 +210,6 @@ function isObj(v: unknown): v is Record<string, unknown> {
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v : null);
 const posInt = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : null);
 const count = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
-const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 function readEvidence(raw: Record<string, unknown>): RowEvidence {
   if (!Object.hasOwn(raw, "evidence_ref") || raw.evidence_ref === null || raw.evidence_ref === undefined) {
@@ -230,29 +219,14 @@ function readEvidence(raw: Record<string, unknown>): RowEvidence {
   const bad = (reason: MalformedReason): RowEvidence => ({ state: "malformed", reason, raw: e });
   if (!isObj(e)) return bad("not_an_object");
   const page = posInt(e.page);
-  // A null (or absent) bbox: stated on this page, no box we can draw. Either form; page_dims is not validated.
-  if (!Object.hasOwn(e, "bbox") || e.bbox === null) {
-    if (page === null) return bad("page_missing_or_not_positive_int");
-    return { state: "ok", ref: { page, bbox: null, page_dims: FRACTION_PAGE, units: str(e.units) } };
-  }
-  const b = e.bbox;
-  const d = e.page_dims;
-  // The ruled form (architect 10-21): page fractions, no page_dims. The page's own size is 1x1.
-  // Extra keys are not checked here: the served row body carries others.
-  if (!Object.hasOwn(e, "page_dims") || d === undefined) {
-    if (page === null) return bad("page_missing_or_not_positive_int");
-    if (!isFractionBox(b)) return bad("bbox_not_fractions");
-    return { state: "ok", ref: { page, bbox: b, page_dims: FRACTION_PAGE, units: null } };
-  }
   if (page === null) return bad("page_missing_or_not_positive_int");
-  if (!Array.isArray(b) || b.length !== 4 || !b.every(finite)) return bad("bbox_not_four_numbers");
-  if (!isObj(d)) return bad("page_dims_not_object");
-  const { width, height } = d;
-  if (!finite(width) || !finite(height) || width <= 0 || height <= 0) return bad("page_dims_not_positive");
-  const [x0, y0, x1, y1] = b as Bbox;
-  // A box with no area, or turned inside out, outlines nothing a steward could read against.
-  if (x1 <= x0 || y1 <= y0) return bad("bbox_no_area");
-  return { state: "ok", ref: { page, bbox: [x0, y0, x1, y1], page_dims: { width, height }, units: str(e.units) } };
+  // A null (or absent) bbox: stated on this page, no box we can draw.
+  if (!Object.hasOwn(e, "bbox") || e.bbox === null) {
+    return { state: "ok", ref: { page, bbox: null, page_dims: FRACTION_PAGE, units: null } };
+  }
+  // Page fractions are the only form; extra keys (page_dims, units, bboxes) are ignored, not read.
+  if (!isFractionBox(e.bbox)) return bad("bbox_not_fractions");
+  return { state: "ok", ref: { page, bbox: e.bbox, page_dims: FRACTION_PAGE, units: null } };
 }
 
 function scalarText(v: unknown): string | null {
