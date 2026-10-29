@@ -5,8 +5,8 @@
  *
  * The parts are built the way a real series notice reads: three long RUNS whose pairs differ only in
  * a counter, broken by 22 STRAGGLERS (a few of which split a run in two). Six rows carry the flags the
- * review has to surface: three the extractor doubts, two whose evidence is the enclosing table (px
- * units, like the prose rows of the small fixture), one with no box at all. Some sit inside runs, on
+ * review has to surface: three the extractor doubts, two whose evidence is the enclosing table
+ * (`region_preferred`, like the prose rows of the small fixture), one with no box at all. Some sit inside runs, on
  * purpose: a flagged part stays in its run.
  *
  * Every part's `ltb_date` is `inherited_doc_level`, all citing the ONE sentence on page 1. Every
@@ -19,7 +19,6 @@ import { buildPdf, lineBox } from "./promotionReviewFixture";
 type Line = Parameters<typeof lineBox>[0];
 
 const PAGE = { width: 612, height: 792 } as const;
-const PX_PER_PT = 150 / 72;
 const LINE_PITCH = 14;
 const TOP_Y = 700;
 const BOTTOM_Y = 72;
@@ -180,12 +179,12 @@ export function scaleFixturePdfBytes(): ArrayBuffer {
 
 export const SCALE_FIXTURE_PAGE_COUNT = PAGES.length;
 
-const ptDims = { width: PAGE.width, height: PAGE.height };
-const pxDims = { width: PAGE.width * PX_PER_PT, height: PAGE.height * PX_PER_PT };
+/** The BFF's declared form: {page, bbox}, the bbox in top-left page fractions. Nothing else is served (as #52 made the small fixture). */
+const frac = ([x0, y0, x1, y1]: Bbox): Bbox => [x0 / PAGE.width, y0 / PAGE.height, x1 / PAGE.width, y1 / PAGE.height];
 
 /** `GET /ingest/{id}/extraction`'s body for the scale notice: 402 parts, an `ltb_date` row and a `replacement_mpn` row each. */
 export function scaleFixtureExtractionBody(ingestId: string): Record<string, unknown> {
-  const sentenceBox = lineBox(SENTENCE_LINE);
+  const sentenceBox = frac(lineBox(SENTENCE_LINE));
   const rows: Record<string, unknown>[] = [];
   placed.forEach((x, i) => {
     const [mpn, replacement] = x.pair;
@@ -200,12 +199,10 @@ export function scaleFixtureExtractionBody(ingestId: string): Record<string, unk
       needs_review: false,
       review_reason: null,
       source_snippet: LTB_SENTENCE,
-      evidence_ref: { page: 1, bbox: sentenceBox, bboxes: [sentenceBox], page_dims: ptDims, units: "pt" },
+      evidence_ref: { page: 1, bbox: sentenceBox },
     });
     const region = REGION.has(i);
-    const cell = lineBox(x.line);
-    const k = region ? PX_PER_PT : 1;
-    const box = region ? tableBox(x.page).map((v) => v * k) : cell;
+    const box = frac(region ? tableBox(x.page) : lineBox(x.line));
     rows.push({
       row_index: rows.length,
       part_index: i,
@@ -219,8 +216,8 @@ export function scaleFixtureExtractionBody(ingestId: string): Record<string, unk
       source_snippet: x.line.text,
       evidence_ref:
         i === NO_BOX
-          ? { page: x.page, bbox: null, page_dims: ptDims, units: "pt" }
-          : { page: x.page, bbox: box, bboxes: [box], page_dims: region ? pxDims : ptDims, units: region ? "px" : "pt" },
+          ? { page: x.page, bbox: null }
+          : { page: x.page, bbox: box },
     });
   });
   return {

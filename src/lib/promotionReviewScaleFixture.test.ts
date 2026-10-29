@@ -18,8 +18,9 @@ describe("the scale fixture", () => {
     expect(scaleFixturePromotionPayload("ing-1").part_count).toBe(402);
   });
 
-  it("puts every evidence box inside its page, in its own units", () => {
+  it("puts every evidence box inside its page, as page fractions, and no row is malformed", () => {
     const pages = SCALE_FIXTURE_PAGE_COUNT;
+    expect(ex.rows.flatMap((r, i) => (r.evidence.state === "malformed" ? [i] : [])), "a malformed row is skipped below, so none may exist").toEqual([]);
     for (const r of ex.rows) {
       if (r.evidence.state !== "ok" || r.evidence.ref.bbox === null) continue;
       const { page, bbox, page_dims } = r.evidence.ref;
