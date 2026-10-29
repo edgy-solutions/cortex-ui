@@ -488,7 +488,7 @@ describe("every module that can outlive a reload is in a register", () => {
     "lib/myDrops.ts":
       "keys are COMPUTED per owner (cortex.myDrops.v1:<sub>), so A's list of ingest ids is unreachable from B's session by construction (read and write both take the owner; no owner, no access); deliberately unpurged, because a purge would also erase the SAME user's list on a re-login, which is exactly when 'closing a panel never loses it' has to hold",
     "components/ApprovalTask/useReviewCoverage.ts":
-      "keys are COMPUTED per owner (cortex.promotionReview.v1:<sub>.<task>.<ingest>.<attempt>), so A's looked set and unsent fixes are unreachable from B's session by construction; a null owner writes nothing at all; deliberately unpurged, because a re-login by the SAME steward is exactly when a resume must hold. The literal owner no-auth is used only when VITE_NO_AUTH is on, where there are no identities to isolate",
+      "keys are COMPUTED per owner (cortex.promotionReview.v1:<sub>.<task>.<ingest>.<attempt>), so A's looked set and unsent fixes are unreachable from B's session by construction; a null owner writes nothing at all; deliberately unpurged, because a re-login by the SAME steward is exactly when a resume must hold",
     "api/client.ts":
       "writes cortex-session-id to sessionStorage, which dies with the tab — a new tab is a new session id by construction, so the localStorage list's remit does not reach it",
     "lib/sessionIsolation.ts":

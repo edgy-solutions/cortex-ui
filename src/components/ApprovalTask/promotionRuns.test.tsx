@@ -599,12 +599,13 @@ describe("resume is per owner", () => {
     expect(Object.keys(window.localStorage)).toEqual([]);
   });
 
-  it("no sub but VITE_NO_AUTH on: the literal owner no-auth is used", async () => {
+  it("no sub, even with VITE_NO_AUTH on: no owner, so nothing is persisted", async () => {
     setCfg({ ...ON, VITE_NO_AUTH: "true" });
     OWNER = null;
     await mountRuns();
     key("j");
-    await waitFor(() => expect(window.localStorage.getItem(keyFor("no-auth"))).not.toBeNull());
+    expect(progress().looked).toBe(1);
+    expect(Object.keys(window.localStorage)).toEqual([]);
   });
 });
 

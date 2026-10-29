@@ -34,7 +34,6 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
-import { config } from "@/config";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
 import { ReviewRunsList } from "./ReviewRunsList";
 import { ReviewProgress } from "./ReviewProgress";
@@ -328,9 +327,9 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, `${ingestId}:${review.attempt ?? ""}`) : null),
     [runsOn, rows, ingestId, review.attempt],
   );
-  // config is frozen at import, so the runtime value is read live too. Read the auth context WITHOUT useAuth (which throws outside a provider). No sub: only no-auth mode has an owner.
+  // Read the auth context WITHOUT useAuth (which throws outside a provider). No sub, no owner: coverage is then not persisted (a no-auth dev build has no identity to key it by).
   const sub = useContext(AuthContext)?.user?.profile?.sub ?? null;
-  const owner = sub ?? ((window.__RUNTIME_CONFIG__?.VITE_NO_AUTH || config.VITE_NO_AUTH) === "true" ? "no-auth" : null);
+  const owner = sub ?? null;
   const cov = useReviewCoverage({
     enabled: plan !== null,
     owner,
