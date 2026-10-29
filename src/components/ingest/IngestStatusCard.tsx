@@ -11,8 +11,8 @@
  *
  * `GET /ingest/{id}/status` returns the whole row in one shot; there is no second envelope
  * layer. The row itself carries NO TASK, though — review is an ordinary `document_promotion`
- * HumanTask found among what this app already tracks in `useHumanTaskStore`, matched by
- * `promotionIngestId(row)` against each pending task's `payload.ingest_id`. THE BRIDGE IS GONE
+ * HumanTask found among what this app already tracks in `useHumanTaskStore` by `useDocument`
+ * (`documentReviewIngestId`, the dispatcher's own predicate, over pending tasks). THE BRIDGE IS GONE
  * as of 0f48fe2f — the row's own `ingest_id` is already `sha256:`-prefixed, so
  * `promotionIngestId` is an identity read now; see its doc comment in `src/lib/ingestWire.ts`.
  *
@@ -44,6 +44,7 @@ import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { useDocument } from "@/lib/useDocument";
 import { taskArtifactId } from "@/lib/taskArtifact";
 import {
   readActRefusal,
@@ -54,8 +55,6 @@ import {
   INGEST_CASE_OPENED_STATUS,
   INGEST_NO_PARTS_STATUS,
   INGEST_REVIEW_REJECTED_STATUS,
-  promotionIngestId,
-  payloadMatchesIngestId,
   type IngestStatusRow,
 } from "@/lib/ingestWire";
 import { IngestFailureExtras } from "./IngestFailureExtras";
@@ -184,7 +183,7 @@ export interface IngestStatusCardProps {
 }
 
 export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: IngestStatusCardProps) {
-  const row = useIngestStatusStore((s) => s.rows[ingestId] ?? null);
+  const { row, reviewTask: pendingReview } = useDocument(ingestId);
   const notFound = useIngestStatusStore((s) => !!s.notFound[ingestId]);
   const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
   const [acting, setActing] = useState<string | null>(null);
@@ -222,14 +221,8 @@ export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: Ing
 
   const isDuplicate = row.duplicate !== null;
 
-  const reviewTask = isDuplicate
-    ? null
-    : tasks.find(
-        (t) =>
-          t.kind === "document_promotion" &&
-          t.status === "pending" &&
-          payloadMatchesIngestId(t.payload, promotionIngestId(row)),
-      ) ?? null;
+  // The attach is `useDocument`'s (one predicate with the dispatcher); a duplicate row carries none.
+  const reviewTask = isDuplicate ? null : pendingReview;
 
   const decl = declarationFor("document_promotion");
   const verbs = decl ? decl.accepts : FALLBACK_ACCEPTS;
