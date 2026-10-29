@@ -19,24 +19,27 @@ describe("readExportProfiles", () => {
     expect(readExportProfiles({ profiles: [] })).toBeNull();
   });
   it("returns null when one entry has no name", () => {
-    expect(readExportProfiles([{ name: "a", format: "csv", scope: "row" }, { format: "csv", scope: "row" }])).toBeNull();
+    expect(readExportProfiles([{ name: "a", format: "csv", granularity: "notice_part" }, { format: "csv", granularity: "notice_part" }])).toBeNull();
   });
   it("returns null for format xml", () => {
-    expect(readExportProfiles([{ name: "a", format: "xml", scope: "row" }])).toBeNull();
+    expect(readExportProfiles([{ name: "a", format: "xml", granularity: "notice_part" }])).toBeNull();
   });
-  it("returns null for scope page", () => {
-    expect(readExportProfiles([{ name: "a", format: "csv", scope: "page" }])).toBeNull();
+  it("returns null for granularity page", () => {
+    expect(readExportProfiles([{ name: "a", format: "csv", granularity: "page" }])).toBeNull();
+  });
+  it("returns null for the pre-rename key: scope row, no granularity", () => {
+    expect(readExportProfiles([{ name: "a", format: "csv", scope: "row" }])).toBeNull();
   });
   it("drops a numeric label but keeps the entry", () => {
-    const out = readExportProfiles([{ name: "a", format: "csv", scope: "row", label: 7 }]);
-    expect(out).toEqual([{ name: "a", format: "csv", scope: "row" }]);
+    const out = readExportProfiles([{ name: "a", format: "csv", granularity: "notice_part", label: 7 }]);
+    expect(out).toEqual([{ name: "a", format: "csv", granularity: "notice_part" }]);
   });
 });
 
 describe("profileLabel", () => {
   it("uses the label, else the name", () => {
-    expect(profileLabel({ name: "n", format: "csv", scope: "row", label: "L" })).toBe("L");
-    expect(profileLabel({ name: "n", format: "csv", scope: "row" })).toBe("n");
+    expect(profileLabel({ name: "n", format: "csv", granularity: "notice_part", label: "L" })).toBe("L");
+    expect(profileLabel({ name: "n", format: "csv", granularity: "notice_part" })).toBe("n");
   });
 });
 

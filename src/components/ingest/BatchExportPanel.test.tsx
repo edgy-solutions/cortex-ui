@@ -15,7 +15,7 @@ vi.mock("@/lib/saveBlob", () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a)
 
 import { BatchExportPanel } from "./BatchExportPanel";
 
-const served = [{ name: "alpha-x", format: "csv", scope: "row" }];
+const served = [{ name: "alpha-x", format: "csv", granularity: "notice_part" }];
 const q = (c: HTMLElement, s: string) => c.querySelector(s) as HTMLElement | null;
 
 beforeEach(() => {
