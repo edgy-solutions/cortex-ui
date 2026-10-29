@@ -164,12 +164,10 @@ export function StageCard({
 
   // A card that carries its OWN dimensions is a PANEL; one that does not is a PREVIEW.
   //
-  // FitBox shrinks a fixed 640-wide block to fit, by the smaller of the width and height
-  // ratios. That is right for the global overview, where every card is a uniform 360x280 and
-  // the point is to see the whole answer at a glance. It is wrong for a workspace canvas: a
-  // chart whose natural block is taller than the card's aspect ratio gets scaled by HEIGHT and
-  // then under-fills the width, so it reads as a thumbnail floating in margins rather than as
-  // a panel. On a 360x280 card that is roughly 30% of the width left empty.
+  // FitBox scales a fixed 640-wide block to the card's width and scrolls whatever is taller
+  // (until 10-29 it scaled by the smaller of the width and height ratios, so a tall answer shrank
+  // to a sliver). That suits the global overview, where every card is a uniform 360x280. A
+  // workspace canvas wants more: a card someone sized should not be a scaled preview at all.
   //
   // Arrangement is UI-owned (ADR-0042 §4), so a card the user or a template gave dimensions to
   // has already declared how much room its content gets. Honour that: render at the card's
@@ -467,9 +465,9 @@ export function StageCard({
               </div>
             </div>
           ) : showBody ? (
-            // PREVIEW. Shrink the WHOLE answer to fit the card — nothing clipped, so the
-            // chart / table / document is fully legible at card scale (the point
-            // of the canvas). Rendered at a natural width, then scaled down.
+            // PREVIEW. Rendered at a natural width, then scaled to the card's WIDTH; an answer
+            // taller than the card scrolls inside it (FitBox), rather than shrinking until it
+            // is unreadable.
             <div className="absolute inset-0 p-2">
               <FitBox naturalWidth={640}>
                 <div className="[&_.glass-panel]:!my-0 [&_.grid]:!gap-3">
