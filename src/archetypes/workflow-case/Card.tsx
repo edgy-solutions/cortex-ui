@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import type {
   CaseApproval,
@@ -34,8 +35,66 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const artifact = payload.output_artifact;
   const released = !!artifact && !!artifact.uri && !!artifact.released_at;
 
+  // Selection: row 0 on mount (the card standard: the first row).
+  const [sel, setSel] = useState(0);
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  useEffect(() => {
+    rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
+  }, [sel]);
+  const onKeyDown = (e: KeyboardEvent<HTMLOListElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSel(Math.min(sel + 1, history.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSel(Math.max(sel - 1, 0));
+    }
+  };
+
+  // TOP LINE — the LAST instance is the latest act (chain order).
+  const last = instances.length > 0 ? instances[instances.length - 1] : undefined;
+  const lastStage = last?.current_stage ?? null;
+  const lastStageKnown =
+    !!last && lastStage !== null && last.definition.domain_stages.includes(lastStage);
+
+  const selEntry: CaseHistoryEntry | undefined = history[sel];
+  const selInstance = selEntry
+    ? instances.find((inst) => inst.workflow_id === selEntry.workflow_id)
+    : undefined;
+  const selStep =
+    selEntry && selEntry.step_id && selInstance
+      ? findStep(selInstance.definition, selEntry.step_id)
+      : undefined;
+  const selApproval =
+    selEntry && selEntry.step_id
+      ? approvals.find(
+          (a) => a.workflow_id === selEntry.workflow_id && a.step_id === selEntry.step_id,
+        )
+      : undefined;
+
   return (
     <section className="flex flex-col gap-3" data-archetype="WORKFLOW_CASE">
+      {/* TOP LINE — names the subject and the stage of the latest instance. */}
+      <p className="font-mono text-[11px] text-slate-300" data-case-topline>
+        <span data-topline="subject">{payload.subject_ref}</span>
+        {last && (
+          <>
+            <span className="text-slate-600"> · </span>
+            <span data-topline="workflow">{last.definition.name}</span>
+            <span className="text-slate-600"> · </span>
+            {lastStageKnown ? (
+              <span data-topline="stage">{lastStage}</span>
+            ) : (
+              <span data-topline="stage" data-case-topline-stage-absent>
+                stage not stated
+              </span>
+            )}
+            <span className="text-slate-600"> · </span>
+            <span data-topline="status">{last.status}</span>
+          </>
+        )}
+      </p>
+
       {/* HEADER — the subject, and each instance by its definition's own name. Nothing here
           is a domain label; `definition.name` is the producer's own string. */}
       <div className="flex flex-col gap-1">
@@ -90,18 +149,84 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
         })}
       </div>
 
-      {/* HISTORY — entries in the order given, never resorted. */}
+      {/* HISTORY — entries in the order given, never resorted. Rows left, the selected entry's
+          detail right. The pane shows the step and the approval; it NEVER draws ApprovalTaskCard,
+          so a pending task's verbs are drawn once, in the approvals section. */}
       <div className="flex flex-col gap-1" data-history>
         {history.length > 0 ? (
-          <ol className="flex flex-col gap-0.5">
-            {history.map((entry: CaseHistoryEntry, i) => (
-              <li key={i} className="font-mono text-[10px] text-slate-500">
-                <span className="text-slate-400">{entry.at}</span> {entry.event}
-                {entry.stage ? ` · ${entry.stage}` : ""}
-                {entry.actor ? ` · ${entry.actor}` : ""}
-              </li>
-            ))}
-          </ol>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <ol
+              role="listbox"
+              aria-label="case history"
+              tabIndex={0}
+              onKeyDown={onKeyDown}
+              className="flex max-h-[50vh] min-w-0 flex-col gap-0.5 overflow-auto"
+            >
+              {history.map((entry: CaseHistoryEntry, i) => (
+                <li
+                  key={i}
+                  ref={(el) => {
+                    rowRefs.current[i] = el;
+                  }}
+                  role="option"
+                  aria-selected={i === sel}
+                  data-case-row={i}
+                  {...(i === sel ? { "data-selected": "" } : {})}
+                  onClick={() => setSel(i)}
+                  className={`cursor-pointer rounded px-1 font-mono text-[10px] ${
+                    i === sel ? "bg-cyan-500/10 text-slate-200" : "text-slate-500"
+                  }`}
+                >
+                  <span className="text-slate-400">{entry.at}</span> {entry.event}
+                  {entry.stage ? ` · ${entry.stage}` : ""}
+                  {entry.actor ? ` · ${entry.actor}` : ""}
+                </li>
+              ))}
+            </ol>
+            {selEntry && (
+              <div
+                className="min-w-0 rounded border border-white/5 p-2 font-mono text-[10px] text-slate-400"
+                data-case-pane
+                data-case-pane-row={sel}
+              >
+                <p className="text-slate-200">{selEntry.event}</p>
+                <p>{selEntry.at}</p>
+                {selEntry.stage && <p>{selEntry.stage}</p>}
+                {selEntry.actor && <p>{selEntry.actor}</p>}
+                {selStep ? (
+                  <p data-case-pane-step={selStep.id}>
+                    {selStep.title ?? selStep.id} · {selStep.kind}
+                    {selStep.audience ? ` · ${selStep.audience}` : ""}
+                  </p>
+                ) : (
+                  <p
+                    className="uppercase tracking-widest text-amber-400/80"
+                    data-case-pane-step-absent
+                  >
+                    no step recorded
+                  </p>
+                )}
+                {selApproval && (
+                  <div data-case-pane-approval>
+                    <p>{selApproval.status}</p>
+                    {selApproval.status === "decided" ? (
+                      <>
+                        <p>{selApproval.decided_by}</p>
+                        <p>{selApproval.decision}</p>
+                        <p>
+                          {!selApproval.reason || selApproval.reason.trim() === ""
+                            ? "no reason given"
+                            : selApproval.reason}
+                        </p>
+                      </>
+                    ) : (
+                      <p>awaiting a decision; act on it below</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <p
             className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
@@ -208,8 +333,9 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
         )}
       </div>
 
-      {/* ARTIFACT — shown only when the producer released one (both `uri` and `released_at`
-          present). Otherwise the absence is on the card, not a blank slot. */}
+      {/* ARTIFACT — shown only when the producer attached one (both `uri` and `released_at`
+          present). A released case may carry no artifact (a release that emits an
+          ActionRecord carries none), so the card states the ABSENCE of an artifact, not the case's state. */}
       <div data-artifact-section>
         {released && artifact ? (
           <a
@@ -222,9 +348,9 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
         ) : (
           <p
             className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
-            data-artifact-unreleased
+            data-artifact-absent
           >
-            not yet released
+            no artifact
           </p>
         )}
       </div>

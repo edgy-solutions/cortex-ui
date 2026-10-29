@@ -113,12 +113,12 @@ describe("the artifact is shown iff released — both halves of the condition", 
   it("fixture 3: uri AND released_at present — shown, never the absence", () => {
     const { container } = render(<Card case={FIXTURE_3.payload} />);
     expect(container.querySelector("[data-artifact]")).not.toBeNull();
-    expect(container.querySelector("[data-artifact-unreleased]")).toBeNull();
+    expect(container.querySelector("[data-artifact-absent]")).toBeNull();
   });
 
   it("fixture 1: no output_artifact at all — the absence, never a link", () => {
     const { container } = render(<Card case={FIXTURE_1.payload} />);
-    expect(container.querySelector("[data-artifact-unreleased]")).not.toBeNull();
+    expect(container.querySelector("[data-artifact-absent]")).not.toBeNull();
     expect(container.querySelector("[data-artifact]")).toBeNull();
   });
 });

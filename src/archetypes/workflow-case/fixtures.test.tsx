@@ -107,6 +107,15 @@ describe("WORKFLOW_CASE fixtures discriminate", () => {
       "data-approval-awaiting",
       "data-artifact-section",
       "data-artifact",
+      // Selection / pane / top line: structural. Their two ABSENCES are in WORKFLOW_CASE_ABSENCES, flipped by the set.
+      "data-case-row",
+      "data-selected",
+      "data-case-pane",
+      "data-case-pane-row",
+      "data-case-pane-step",
+      "data-case-pane-approval",
+      "data-case-topline",
+      "data-topline",
     ]);
     const covered = new Set<string>([...WORKFLOW_CASE_ABSENCES, ...structural]);
     expect(unique.filter((a) => !covered.has(a)), "the card declares an absence no fixture flips").toEqual([]);

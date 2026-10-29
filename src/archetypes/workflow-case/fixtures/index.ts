@@ -28,8 +28,10 @@ export const WORKFLOW_CASE_ABSENCES = [
   "data-history-absent",
   "data-options-absent",
   "data-approvals-absent",
-  "data-artifact-unreleased",
+  "data-artifact-absent",
   "data-reason-absent",
+  "data-case-topline-stage-absent",
+  "data-case-pane-step-absent",
 ] as const;
 
 export type WorkflowCaseAbsence = (typeof WORKFLOW_CASE_ABSENCES)[number];
@@ -537,9 +539,10 @@ const MAINT_TASK: ApprovalTaskPayload = {
   kind: "maint_fault_approval",
   task_state: "pending",
   title: `Fault ${MAINT_TRIGGER.faultCode} on ${MAINT_TRIGGER.assetId}: choose a disposition`,
+  // The per-choice consequence text follows once lane 01 sends the exact string; not invented here.
   summary:
-    "Four options, each citing the manual and the spares record. Choosing one approves it; " +
-    "reject sends it back for a new proposal, defer parks it until a revisit time. Both need a " +
+    "Four options, each citing the manual and the spares record. " +
+    "Reject sends it back for a new proposal, defer parks it until a revisit time. Both need a " +
     "reason. An unanswered proposal escalates; it is never approved by silence.",
   audience: `maint_fault_approval:${MAINT_TRIGGER.owningTier}`,
   requested_by: "",
@@ -567,37 +570,37 @@ export const WORKFLOW_CASE_FIXTURES: WorkflowCaseFixture[] = [
   {
     name: "safety acceptance (Medium), pending — the served HAZ-1003 row",
     payload: FIXTURE_1_PAYLOAD,
-    declares: ["data-history-absent", "data-options-absent", "data-artifact-unreleased"],
+    declares: ["data-history-absent", "data-options-absent", "data-artifact-absent"],
   },
   {
     name: "safety Serious chain — concurrence decided, acceptance pending (hand-built)",
     payload: FIXTURE_2_PAYLOAD,
-    declares: ["data-history-absent", "data-options-absent", "data-artifact-unreleased"],
+    declares: ["data-history-absent", "data-options-absent", "data-artifact-absent"],
   },
   {
     name: "options with data, artifact released (hand-built, neutral domain)",
     payload: FIXTURE_3_PAYLOAD,
-    declares: [],
+    declares: ["data-case-pane-step-absent"],
   },
   {
     name: "decided with no reason",
     payload: FIXTURE_4_PAYLOAD,
-    declares: ["data-reason-absent"],
+    declares: ["data-reason-absent", "data-case-pane-step-absent"],
   },
   {
     name: "stage not in the definition",
     payload: FIXTURE_5_PAYLOAD,
-    declares: ["data-stage-unknown"],
+    declares: ["data-stage-unknown", "data-case-topline-stage-absent", "data-case-pane-step-absent"],
   },
   {
     name: "artifact prepared, not released — no decision yet",
     payload: FIXTURE_6_PAYLOAD,
-    declares: ["data-approvals-absent", "data-artifact-unreleased"],
+    declares: ["data-approvals-absent", "data-artifact-absent", "data-case-pane-step-absent"],
   },
   {
     name: "maintenance fault — propose a disposition, awaiting approval (hand-built instance, transcribed definition)",
     payload: FIXTURE_7_PAYLOAD,
-    declares: ["data-history-absent", "data-artifact-unreleased"],
+    declares: ["data-history-absent", "data-artifact-absent"],
   },
 ];
 
