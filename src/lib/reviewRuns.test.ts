@@ -145,7 +145,7 @@ describe("flags", () => {
   });
   it("no-evidence is an absent or malformed ref, and says nothing about its method", () => {
     expect(flagsOfOnly({ evidence: { state: "absent" }, via: null })).toEqual([{ kind: "no-evidence" }]);
-    expect(flagsOfOnly({ evidence: { state: "malformed", reason: "bbox_no_area", raw: null }, via: null })).toEqual([{ kind: "no-evidence" }]);
+    expect(flagsOfOnly({ evidence: { state: "malformed", reason: "bbox_not_fractions", raw: null }, via: null })).toEqual([{ kind: "no-evidence" }]);
   });
   it("straggler marks a single, but only when the notice has a run", () => {
     const withRun = buildReviewPlan(rowsOf(series(3, "AB"), part({ mpn: "ZZ-1", rep: "ZZ-1Y" })), "s");
