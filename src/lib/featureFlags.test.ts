@@ -69,6 +69,17 @@ describe("isFeatureEnabled", () => {
     expect(isFeatureEnabled("canvasExport")).toBe(false);
   });
 
+  it("promotionRuns is off with VITE_FEATURES unset and with it set to the empty string", () => {
+    expect(isFeatureEnabled("promotionRuns")).toBe(false);
+    setRuntimeFeatures("");
+    expect(isFeatureEnabled("promotionRuns")).toBe(false);
+  });
+
+  it("promotionRuns is off under the dev set that omits it", () => {
+    setRuntimeFeatures("ingest,ingestMock");
+    expect(isFeatureEnabled("promotionRuns")).toBe(false);
+  });
+
   it("turns on via window.__RUNTIME_CONFIG__.VITE_FEATURES", () => {
     setRuntimeFeatures("canvasExport");
     expect(isFeatureEnabled("canvasExport")).toBe(true);
