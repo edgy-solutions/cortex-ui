@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { actOnHumanTask, type HeaderEdit, type RowEdits } from "@/api/client";
 import { actRefusal } from "@/lib/reviewRowEdits";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
+import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
+import { PROPOSED_MOVED_ERROR } from "@/lib/accessProposal";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
@@ -58,7 +60,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
    * deliberately. See `act()` for the three-field precedence (`message`, `error`, the bare
    * string) and why this never auto-retries.
    */
-  const [refusal, setRefusal] = useState<{ message: string; code?: string; newTaskId?: string | null } | null>(null);
+  const [refusal, setRefusal] = useState<{ message: string; code?: string; newTaskId?: string | null; policy?: PolicyRefusal } | null>(null);
 
   /**
    * WHAT THE SERVER SAID IT ACTUALLY ACCEPTS, after refusing what we offered.
@@ -201,6 +203,20 @@ export function useTaskAct(task: ApprovalTaskPayload) {
       // THE ROW STAYS PENDING: roll #12's gateway (`/human_tasks/{id}/act`) answers a failed
       // resume with an error rather than a 200 carrying `workflow_resumed:false` — the task is
       // NOT resolved, so the person can read why and retry.
+      // A POLICY REFUSAL (the declared envelope) on 401/403/409 is drawn inline with who can grant, not
+      // toasted away. Only an envelope that reads whole; any other 401/403/409 keeps its old arm below.
+      if (status === 401 || status === 403 || status === 409) {
+        const policy = readPolicyRefusal(err);
+        if (policy) {
+          setRefusal({ message: policy.message ?? policy.error, code: policy.error, policy });
+          return;
+        }
+      }
+      // PROPOSED (ADR-0062 section 7): the grant card approved a head sha that moved after review.
+      if (status === 409 && errorCode === PROPOSED_MOVED_ERROR) {
+        setRefusal({ message: "The proposal changed after review.", code: errorCode });
+        return;
+      }
       if (status === 409 && errorCode === "task_already_resolved") {
         /**
          * NOT ACTIONABLE ANY MORE — a member of the same audience resolved it first. Mark it

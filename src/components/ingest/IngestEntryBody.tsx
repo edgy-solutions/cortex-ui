@@ -12,6 +12,7 @@
  */
 import { FileText } from "lucide-react";
 import { IngestStatusCard } from "./IngestStatusCard";
+import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
 import { duplicatePhrase } from "@/lib/ingestWire";
 import type { IngestComponent } from "@/lib/ingestArtifact";
 
@@ -46,6 +47,11 @@ export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
         <p className="mt-2 text-[10px] font-mono text-amber-400" data-ingest-refusal>
           {ingest.reason}
         </p>
+      )}
+      {ingest.badge === "refused" && ingest.policy && (
+        <div className="mt-2">
+          <PolicyRefusalNotice policy={ingest.policy} />
+        </div>
       )}
       {ingest.duplicate_message !== null && (
         <p className="mt-2 text-[11px] font-mono text-slate-300" data-ingest-turn-result="duplicate">

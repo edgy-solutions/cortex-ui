@@ -13,6 +13,7 @@
  * the status row it polled, including the `failed` reason and the notice id when the row carries one.
  */
 import type { Artifact } from "@/api/types";
+import type { PolicyRefusal } from "@/lib/policyRefusal";
 import { INGEST_AWAITING_KIND_STATUS, INGEST_AWAITING_ORIGIN_STATUS, INGEST_DUPLICATE_STATUS, INGEST_STAGES, ingestPollingDone, type ExtractionDefect, type IngestKind, type IngestRefusal, type IngestStage, type IngestStatusRow } from "@/lib/ingestWire";
 
 export const INGEST_ARTIFACT_PREFIX = "ingest:";
@@ -52,6 +53,8 @@ export interface IngestComponent {
   content_kind: string | null;
   /** The kinds the door said it accepts, when the drop was refused with a list; null otherwise. */
   registered: string[] | null;
+  /** The declared policy envelope of a refused drop, when it carried one whole; absent otherwise. */
+  policy?: PolicyRefusal;
 }
 
 /** What the sync hook knows about one drop. */
@@ -107,6 +110,7 @@ export function ingestComponentOf(e: IngestEntry): IngestComponent {
     notice_id: e.row?.notice_id ?? null,
     content_kind: e.row?.content_kind ?? null,
     registered: refused ? (e.refusal?.registered ?? null) : null,
+    ...(refused && e.refusal?.policy ? { policy: e.refusal.policy } : {}),
   };
 }
 

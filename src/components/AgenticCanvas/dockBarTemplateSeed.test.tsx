@@ -44,6 +44,7 @@ import { DockBar } from "./DockBar";
 import { useStageStore } from "@/store/useStageStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { POLICY_REFUSAL_DETAIL } from "@/lib/policyRefusalFixture";
 import { readTemplateCatalog } from "@/lib/templateCatalog";
 import {
   FINANCE_TEMPLATE_ID,
@@ -210,6 +211,23 @@ describe("the finance row, through /canvas/seed", () => {
       "TimeoutError",
     );
     noAlarmClasses();
+  });
+
+  it("a 403 WITH a policy envelope draws the notice in place of the fixed text", async () => {
+    serve.push({ status: 403, data: { detail: POLICY_REFUSAL_DETAIL } });
+    chooseFinanceAndCreate();
+    await waitFor(() => expect(document.querySelector("[data-policy-refusal]")).not.toBeNull());
+    expect(document.querySelector("[data-policy-missing]")?.textContent).toBe("Missing: member(NP-MERIDIAN)");
+    expect(document.body.textContent).not.toMatch(/did not complete/);
+    expect(useStageStore.getState().canvases).toHaveLength(0);
+  });
+
+  it("a 403 WITHOUT one keeps the fixed text exactly", async () => {
+    serve.push({ status: 403, data: { detail: "forbidden" } });
+    chooseFinanceAndCreate();
+    await waitFor(() => expect(document.querySelector("[data-create-blocked]")).not.toBeNull());
+    expect(document.querySelector("[data-create-blocked]")?.textContent).toBe("The seed did not complete, so no board was created.");
+    expect(document.querySelector("[data-policy-refusal]")).toBeNull();
   });
 
   it("any other failure uses the create-failure path and leaves no board", async () => {

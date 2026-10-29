@@ -8,6 +8,7 @@ import {
 import { useTemplateStore } from "@/store/useTemplateStore";
 import { needsBinding, partitionTemplates, refuseTemplateForCreate } from "@/lib/templateCatalog";
 import { RefusalWithAsk } from "@/components/elicitation/RefusalWithAsk";
+import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
 import { useTemplateSeed } from "./useTemplateSeed";
 
 /**
@@ -397,7 +398,12 @@ export function DockBar() {
               seeding the board, this can take a few minutes…
             </div>
           )}
-          {seed.failed && (
+          {seed.failed && seed.policy && (
+            <div className="mb-2" data-create-blocked>
+              <PolicyRefusalNotice policy={seed.policy} />
+            </div>
+          )}
+          {seed.failed && !seed.policy && (
             <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-create-blocked>
               {seed.failed}
             </div>

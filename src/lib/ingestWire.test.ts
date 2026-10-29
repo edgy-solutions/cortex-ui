@@ -21,6 +21,7 @@ import {
   INGEST_UPLOAD_KINDS,
   INGEST_STAGES,
 } from "./ingestWire";
+import { POLICY_REFUSAL_DETAIL } from "./policyRefusalFixture";
 
 const SHA_A = "a".repeat(64);
 const SHA_B = "b".repeat(64);
@@ -491,6 +492,13 @@ describe("readIngestRefusal — a 4xx with a readable body", () => {
       status: 422, message: "file: field required", code: null, registered: null,
     });
     expect(readIngestRefusal(http(413, "file too large"))).toEqual({ status: 413, message: "file too large", code: null, registered: null });
+  });
+  it("a 403 carrying the policy envelope returns it as `policy`; a partial one does not", () => {
+    const r = readIngestRefusal(http(403, POLICY_REFUSAL_DETAIL));
+    expect(r?.policy?.refusal.policy_id).toBe("program_members");
+    expect(r?.message).toBe(POLICY_REFUSAL_DETAIL.message);
+    const partial = { ...POLICY_REFUSAL_DETAIL, refusal: { ...POLICY_REFUSAL_DETAIL.refusal, grantable_by: "" } };
+    expect(readIngestRefusal(http(403, partial))).toEqual({ status: 403, message: POLICY_REFUSAL_DETAIL.message, code: "policy_refused", registered: null });
   });
   it("registered that is not an array of strings is null", () => {
     expect(readIngestRefusal(http(400, { error: "x", message: "m", registered: [1, 2] }))?.registered).toBeNull();

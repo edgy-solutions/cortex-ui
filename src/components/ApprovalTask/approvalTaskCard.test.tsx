@@ -1200,3 +1200,60 @@ describe("ApprovalTaskCard — generic suggestion/evidence sections (CORTEX-PROP
     expect(matches, `ApprovalTaskCard.tsx contains forbidden word(s): ${JSON.stringify(matches)}`).toEqual([]);
   });
 });
+
+describe("a policy refusal on /act (the declared envelope)", () => {
+  const press = () => {
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    fireEvent.click(document.querySelector('[data-verb="approved"]')!);
+  };
+  const err = (status: number, detail: unknown) =>
+    Object.assign(new Error(String(status)), { response: { status, data: { detail } } });
+  const ENVELOPE = {
+    error: "policy_refused",
+    message: "You are not a member of this program.",
+    refusal: {
+      policy_id: "program_members",
+      missing_binding: "member(NP-MERIDIAN)",
+      grantable_by: "program owner; ask in #meridian",
+      candidates: ["alice"],
+    },
+  };
+
+  beforeEach(() => {
+    vi.mocked(toast.error).mockReset();
+  });
+
+  it("a 403 WITH an envelope draws the notice inline and does not toast", async () => {
+    actOnHumanTask.mockRejectedValue(err(403, ENVELOPE));
+    press();
+    await waitFor(() => expect(document.querySelector('[data-policy-refusal="program_members"]')).not.toBeNull());
+    expect(document.querySelector("[data-act-refusal]")?.textContent).toContain("You are not a member of this program.");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+  it("a 403 WITHOUT one keeps the old toast text exactly", async () => {
+    actOnHumanTask.mockRejectedValue(err(403, { error: "not_authorized_to_act" }));
+    press();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Not authorized to act on this task"));
+    expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+    expect(document.querySelector("[data-act-refusal]")).toBeNull();
+  });
+  it("a 403 with a PARTIAL envelope also keeps the toast", async () => {
+    actOnHumanTask.mockRejectedValue(err(403, { ...ENVELOPE, refusal: { ...ENVELOPE.refusal, grantable_by: "" } }));
+    press();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Not authorized to act on this task"));
+    expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+  });
+  it("the 409 message arm is unchanged (no envelope, no notice)", async () => {
+    actOnHumanTask.mockRejectedValue(err(409, { error: "task_unresumable", message: "The workflow cannot resume." }));
+    press();
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")).not.toBeNull());
+    expect(document.querySelector("[data-act-refusal]")?.textContent).toContain("The workflow cannot resume.");
+    expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+  });
+  it("the 422 message arm is unchanged", async () => {
+    actOnHumanTask.mockRejectedValue(err(422, { error: "reason_too_short", message: "Say more." }));
+    press();
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")?.textContent).toContain("Say more."));
+    expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+  });
+});
