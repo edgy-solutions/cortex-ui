@@ -686,4 +686,14 @@ describe("refused documents — one row per answer", () => {
       expect(e.textContent).not.toMatch(/failed/i);
     });
   });
+
+  it("G. a failed document with no answer ids keeps its reason on the header line, never silent", async () => {
+    await runBoard(
+      five.slice(0, 1),
+      top([failedDoc([], { reason: "engine unreachable" })], "0 of 1 answers refused"),
+    );
+    expect(rows().length).toBe(0);
+    const doc = document.querySelector("[data-export-document]")!;
+    expect(doc.querySelector("[data-export-reason]")?.textContent).toBe("engine unreachable");
+  });
 });

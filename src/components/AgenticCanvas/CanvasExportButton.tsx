@@ -370,10 +370,14 @@ function ExportDocumentRow({
     >
       <div className="text-[9px] font-mono uppercase tracking-wider text-slate-300">
         {doc.engine}
-        {doc.status !== "failed" && (
+        {/* A failed document with no answer ids (none expected) keeps its reason on the header line. */}
+        {(doc.status !== "failed" || doc.answers.length === 0) && (
           <>
             {" "}
-            <span className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}>
+            <span
+              {...(doc.status === "failed" ? { "data-export-reason": "" } : {})}
+              className={DOC_STATUS_CLASS[doc.status] ?? "text-slate-400"}
+            >
               {statusText(doc.status, doc.reason)}
             </span>
           </>
