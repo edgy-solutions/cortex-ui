@@ -4,7 +4,7 @@
  *  (2) one poller; (3) the review card's chip draws the real stage; (4) `ingestInFlight` vs
  *  `ingestPollingDone`; (5) census: no component-side poll, no kind literal in the rail.
  */
-import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { render, cleanup, act } from "@testing-library/react";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -187,10 +187,18 @@ describe("census: one poller, no component-side poll", () => {
     return out;
   };
   const SRC = join(__dirname, "..");
+  // Read and comment-strip src/ ONCE: walking it per arm overran the 5s default under full-suite load.
+  let code: [string, string][] = [];
+  beforeAll(() => {
+    code = walk(SRC).map((f) => [
+      f.slice(SRC.length + 1).replace(/\\/g, "/"),
+      readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""),
+    ]);
+  }, 60_000);
   const callers = (name: string) =>
-    walk(SRC)
-      .filter((f) => new RegExp(`\\b${name}\\(`).test(readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "")))
-      .map((f) => f.slice(SRC.length + 1).replace(/\\/g, "/"))
+    code
+      .filter(([, text]) => new RegExp(`\\b${name}\\(`).test(text))
+      .map(([rel]) => rel)
       .sort();
 
   it("readIngestStatusRow is called only where a row is read: the parser, the store, the leaf chip's POST response", () => {
