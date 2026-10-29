@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { useViewerAuthzId, viewerIsDropper } from "@/lib/dropperHold";
@@ -31,6 +31,14 @@ import { useTaskAct } from "./useTaskAct";
 import { ReviewExportControl } from "./ReviewExportControl";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup } from "@/lib/reviewRuns";
+import { AuthContext } from "react-oidc-context";
+import { config } from "@/config";
+import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
+import { ReviewRunsList } from "./ReviewRunsList";
+import { ReviewProgress } from "./ReviewProgress";
+import { ReviewCallout } from "./ReviewCallout";
 
 /**
  * THE PROMOTION REVIEW CARD — a `document_promotion` task vetted "in a few looks" (the
@@ -55,6 +63,8 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  * KEYBOARD, while the card has focus and no text field does:
  *   j / k     next / previous row
  *   [ / ]     previous / next page of the source
+ *   Home / End / s   (flag `promotionRuns`, runs view) start / end of the part's group / a random part in it,
+ *             unlooked first
  *   p         ARMS promote; a second p, or Enter, sends it; Esc disarms. One key is too easy to hit
  *             on a surface whose every decision is archived (ADR-0034); a click on Promote is
  *             already deliberate and sends at once.
@@ -89,7 +99,7 @@ import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvid
  * does not know holds Promote rather than passing it. Reject waits on neither, because "this is not
  * a notice" is exactly the decision a steward makes about a drop with no rows or no readable source.
  */
-type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back" | "dropper";
+type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back" | "dropper" | "unchecked";
 
 const HOLD_TEXT: Record<PromoteHold, string> = {
   "rows-loading": "Promote waits for the extracted rows.",
@@ -100,7 +110,24 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   "sent-back": "",
   // Known from the payload alone; the server refuses promoted from the dropper (dropper_cannot_attest_origin).
   dropper: "Promote is off: you dropped this document, and someone else must attest its origin. Reject is still open.",
+  // Flag `promotionRuns` only; the text names the counts, so the card composes it (`uncheckedText`).
+  unchecked: "",
 };
+/** The packet that proposes recording coverage on the wire; the preview names it so nobody mistakes it for shipped. */
+const COVERAGE_PACKET = "sessions/2026-10-28-packet-to-lane-01-from-cortex-promotion-review-at-scale-a-saved-draft-and-a-coverage-key.md";
+const emptyDraft = (): RowEditDraft => ({ deleted: {}, addedMpns: [], corrected: {}, overrides: {}, addedEvidence: {}, correctedEvidence: {} });
+/** A saved draft is applied only if it has every part of the shape the editor reads; anything else is dropped whole. */
+function isRowEditDraft(v: unknown): v is RowEditDraft {
+  if (!isObj(v)) return false;
+  return (
+    Array.isArray(v.addedMpns) &&
+    isObj(v.deleted) &&
+    isObj(v.corrected) &&
+    isObj(v.overrides) &&
+    isObj(v.addedEvidence) &&
+    isObj(v.correctedEvidence)
+  );
+}
 /** One hold, three causes: the kind sent the document back, a re-class superseded this task, or the server said stale. */
 type ReviewHold = { leaf: IngestLeaf | null; cause: "sent-back" | "superseded" | "stale"; newTaskId: string | null };
 /** The served evidence_ref, verbatim, for the malformed banner: JSON, cut at 240 characters. */
@@ -241,14 +268,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const [note, setNote] = useState("");
   const editsOn = isPromotionRowEditsEnabled();
   const [headerDraft, setHeaderDraft] = useState<HeaderDraft>({});
-  const [draft, setDraft] = useState<RowEditDraft>({
-    deleted: {},
-    addedMpns: [],
-    corrected: {},
-    overrides: {},
-    addedEvidence: {},
-    correctedEvidence: {},
-  });
+  const [draft, setDraft] = useState<RowEditDraft>(emptyDraft);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const paneRef = useRef<PdfPaneHandle | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
@@ -300,6 +320,53 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     r.evidence.state === "ok" && r.evidence.ref.bbox !== null && evidenceQuality(r.obtained_via) === "inherited";
   const docLevelRows = rows.filter(isDocLevel);
   const docLevelFields = [...new Set(docLevelRows.map((r) => r.field ?? "the date"))];
+  // FLAG `promotionRuns`: parts folded into runs, with coverage. Off, `plan` is null and every branch below
+  // that mentions it falls through to the card as it was.
+  const runsOn = isFeatureEnabled("promotionRuns");
+  // The seed is the document and attempt, never the clock: a resumed review walks the same sampled checks.
+  const plan = useMemo(
+    () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, `${ingestId}:${review.attempt ?? ""}`) : null),
+    [runsOn, rows, ingestId, review.attempt],
+  );
+  // config is frozen at import, so the runtime value is read live too. Read the auth context WITHOUT useAuth (which throws outside a provider). No sub: only no-auth mode has an owner.
+  const sub = useContext(AuthContext)?.user?.profile?.sub ?? null;
+  const owner = sub ?? ((window.__RUNTIME_CONFIG__?.VITE_NO_AUTH || config.VITE_NO_AUTH) === "true" ? "no-auth" : null);
+  const cov = useReviewCoverage({
+    enabled: plan !== null,
+    owner,
+    taskId: task.task_id,
+    ingestId,
+    attempt: review.attempt,
+    draft,
+    headerDraft,
+    sel,
+    onRestore: (saved: RestoredDrafts | null) => {
+      if (saved === null) {
+        setDraft(emptyDraft());
+        setHeaderDraft({});
+        setSel(0);
+        return;
+      }
+      if (isRowEditDraft(saved.draft)) setDraft(saved.draft);
+      if (isObj(saved.headerDraft)) setHeaderDraft(saved.headerDraft as HeaderDraft);
+      if (typeof saved.sel === "number" && Number.isInteger(saved.sel) && saved.sel >= 0) setSel(saved.sel);
+    },
+  });
+  const runOf = useMemo(() => (plan ? runIdByUnit(plan) : new Map<number, string>()), [plan]);
+  const selUnit = plan ? (plan.unitOfRow[sel] ?? 0) : -1;
+  const planLooked = plan ? plan.units.filter((u) => cov.looked.has(u.id)).length : 0;
+  const checksLeft = plan ? [...plan.checks].filter((u) => !cov.looked.has(plan.units[u].id)).length : 0;
+  // A fact whose rows all state ONE value is confirmed once; one whose rows disagree cannot be, and says so.
+  const unconfirmedFacts = plan ? plan.sharedFacts.filter((f) => f.values.length === 1 && !cov.confirmed.has(f.key)) : [];
+  const uncheckedText =
+    plan && (checksLeft > 0 || unconfirmedFacts.length > 0)
+      ? `${checksLeft} checks not looked at yet${
+          unconfirmedFacts.length > 0
+            ? `; the shared ${[...new Set(unconfirmedFacts.map((f) => f.field ?? "fact"))].join(", ")} not confirmed`
+            : ""
+        }. Shift+J walks them.`
+      : null;
+  const runsView = runsOn && plan !== null && cov.view === "runs";
   const selected = rows[sel] ?? null;
   const target = selected && selected.evidence.state === "ok" ? selected.evidence.ref : null;
   const targetQuality = selected ? evidenceQuality(selected.obtained_via) : "unknown";
@@ -328,7 +395,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       : rows.length === 0
         ? "no-rows"
         : sourcePhase === "ready"
-          ? null
+          ? // STRICTER, never looser: evaluated after every existing hold, so one of those still wins.
+            uncheckedText !== null
+            ? "unchecked"
+            : null
           : sourcePhase === "loading"
             ? "source-loading"
             : "no-source";
@@ -341,6 +411,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       Object.keys(draft.corrected).filter((m) => !draft.deleted[m]).length
     : 0;
   const editCount = rowCount + headerCount;
+  // A part is EDITED when its mpn is corrected or deleted in the draft (drafts are keyed by mpn).
+  const editedUnits = useMemo(() => {
+    const out = new Set<number>();
+    if (!plan || !editsActive) return out;
+    plan.units.forEach((u, i) => {
+      if (draft.deleted[u.mpn] || Object.hasOwn(draft.corrected, u.mpn)) out.add(i);
+    });
+    return out;
+  }, [plan, editsActive, draft]);
   const extractedHeader = headerEditComparands(ex);
   const mfrFallback = ex?.manufacturer_source === "identity" && ex.manufacturer !== null ? ex.manufacturer : null;
   // The server's checks, mirrored so the steward sees them before the wire. Matching is case-insensitive.
@@ -377,7 +456,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
-  }, [sel]);
+    // `runsView` too: coming back to the table from the runs list must bring the selected row into view.
+  }, [sel, runsView]);
 
   const startHeaderFix = (wire: HeaderEdit["field"]) =>
     setHeaderDraft((h) => ({
@@ -461,10 +541,43 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       return { ...d, deleted, corrected, correctedEvidence };
     });
 
+  /** Selecting a row, by ANY path, means the steward is looking at its part: mark it, and open its run. */
+  const look = (i: number) => {
+    if (!plan) return;
+    const u = plan.unitOfRow[i];
+    if (u === undefined) return;
+    cov.markLooked(plan.units[u].id);
+    const run = runOf.get(u);
+    if (run) cov.openRun(run);
+  };
   const select = (i: number) => {
     setSel(i);
     setJumpKey((k) => k + 1);
     rootRef.current?.focus({ preventScroll: true });
+    look(i);
+  };
+  const selectUnit = (u: number) => select(plan!.units[u].primary);
+  const stepUnit = (dir: 1 | -1) => plan && selectUnit(nextUnit(plan, selUnit, dir));
+  const stepCheck = (dir: 1 | -1) => {
+    if (!plan) return;
+    const u = nextCheck(plan, selUnit, dir, cov.looked);
+    if (u !== null) selectUnit(u);
+  };
+  const jumpGroup = (which: "start" | "end") => {
+    if (!plan) return;
+    const u = groupEnd(plan, selUnit, which);
+    if (u !== null) selectUnit(u);
+  };
+  const randomGroup = () => {
+    if (!plan) return;
+    const u = randomInGroup(plan, selUnit, cov.looked, Math.random);
+    if (u !== null) selectUnit(u);
+  };
+  const stepRow = (dir: 1 | -1) => select(Math.min(Math.max(sel + dir, 0), Math.max(rows.length - 1, 0)));
+  /** A click on the page: the smallest drawn box under it, else nothing moves. */
+  const onPagePoint = (page: number, fx: number, fy: number) => {
+    const hit = hitTest(rows, page, fx, fy);
+    if (hit !== null) select(hit);
   };
   const move = (d: number) => setSel((s) => Math.min(Math.max(s + d, 0), Math.max(rows.length - 1, 0)));
 
@@ -495,6 +608,22 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       return;
     }
     if (typing) return;
+    // FLAG `promotionRuns`: j/k and the arrows walk PARTS in the runs view, rows in the table view; Shift jumps
+    // to the next / previous check not yet looked at. Every other key falls through unchanged.
+    if (runsOn && plan && (e.key === "j" || e.key === "J" || e.key === "k" || e.key === "K" || e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      const dir = e.key === "j" || e.key === "J" || e.key === "ArrowDown" ? 1 : -1;
+      if (!runsView) stepRow(dir);
+      else if (e.shiftKey || e.key === "J" || e.key === "K") stepCheck(dir);
+      else stepUnit(dir);
+      e.preventDefault();
+      return;
+    }
+    if (runsOn && plan && runsView && (e.key === "Home" || e.key === "End" || e.key === "s")) {
+      if (e.key === "s") randomGroup();
+      else jumpGroup(e.key === "Home" ? "start" : "end");
+      e.preventDefault();
+      return;
+    }
     if (e.key === "j") move(1);
     else if (e.key === "k") move(-1);
     else if (e.key === "[") paneRef.current?.step(-1);
@@ -696,6 +825,78 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* LEFT — the extracted rows. */}
         <div className="min-w-0">
+          {runsOn && plan && (
+            <>
+              {cov.resumed && (
+                <p className="mb-2 flex items-center gap-2 text-[11px] font-mono text-cyan-300/90" data-review-resumed={cov.resumed.looked}>
+                  <span>Resumed: {cov.resumed.looked} parts looked at, saved in this browser only.</span>
+                  <button type="button" onClick={cov.startOver} className={EDIT_BTN} data-review-start-over>
+                    start over
+                  </button>
+                </p>
+              )}
+              <ReviewProgress
+                looked={planLooked}
+                left={checksLeft}
+                covered={plan.units.length - planLooked - checksLeft}
+                edited={editedUnits.size}
+              />
+              {plan.sharedFacts.map((f) => {
+                const done = cov.confirmed.has(f.key);
+                return (
+                  <p
+                    key={f.key}
+                    className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-slate-400"
+                    data-shared-fact={f.key}
+                    data-shared-confirmed={done ? "" : undefined}
+                  >
+                    <span>
+                      {f.field ?? "value"} <span className="text-slate-200">{f.values.join(", ")}</span> · inherited from one crop on p{f.ref.page} · {f.rows.length} rows
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => select(f.rows[0])}
+                      className="px-1.5 py-0.5 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 text-[9px] uppercase tracking-widest cursor-pointer"
+                      data-shared-show
+                    >
+                      show
+                    </button>
+                    {f.values.length > 1 ? (
+                      <span className="text-amber-400" data-shared-disagree>
+                        the rows citing this crop disagree: {f.values.join(", ")}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => cov.toggleConfirmed(f.key)}
+                        aria-pressed={done}
+                        className={`px-1.5 py-0.5 rounded border text-[9px] uppercase tracking-widest cursor-pointer ${
+                          done ? "border-cyan-500/40 text-cyan-300 bg-cyan-500/10" : "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                        }`}
+                        data-shared-confirm
+                      >
+                        {done ? "✓ confirmed" : "confirm once"}
+                      </button>
+                    )}
+                  </p>
+                );
+              })}
+              <div className="mb-2 inline-flex rounded border border-white/10 text-[9px] font-mono uppercase tracking-widest" data-view-toggle={cov.view}>
+                {(["runs", "rows"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => cov.setView(v)}
+                    aria-pressed={cov.view === v}
+                    className={`px-2 py-0.5 cursor-pointer ${cov.view === v ? "bg-cyan-500/10 text-cyan-300" : "text-slate-500 hover:text-slate-300"}`}
+                    data-view={v}
+                  >
+                    {v === "rows" ? "all rows" : "runs"}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           {extraction.phase === "loading" && (
             <p className="px-2 py-3 text-[11px] text-slate-500" data-extraction-state="loading">
               loading extraction…
@@ -711,6 +912,20 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               The extraction has no rows.
             </p>
           )}
+          {runsView && plan && (
+            <div className="max-h-[70vh] overflow-auto">
+              <ReviewRunsList
+                plan={plan}
+                selectedUnit={selUnit}
+                looked={cov.looked}
+                edited={editedUnits}
+                open={cov.open}
+                onToggle={cov.toggleRun}
+                onSelect={selectUnit}
+              />
+            </div>
+          )}
+          {!runsView && (
           <div className="max-h-[70vh] overflow-auto rounded border border-white/5" hidden={rows.length === 0}>
             <table className="w-full text-[11px] font-mono" data-review-rows>
               <thead className="text-[9px] uppercase tracking-widest text-slate-500 text-left">
@@ -888,8 +1103,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               </tbody>
             </table>
           </div>
+          )}
           <p className="mt-1.5 text-[9px] font-mono uppercase tracking-widest text-slate-600">
-            j/k rows · [ ] pages · p promote · r reject
+            {runsOn && plan
+              ? runsView
+                ? "j/k ↑/↓ parts · shift jumps to checks · Home/End/s in group · click the page · [ ] pages · p promote · r reject"
+                : "j/k ↑/↓ rows · [ ] pages · p promote · r reject"
+              : "j/k rows · [ ] pages · p promote · r reject"}
           </p>
           {editsActive && <RowAddForm disabled={locked} draft={draft} setDraft={setDraft} />}
           {editsActive && locked && (
@@ -915,6 +1135,38 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           onPhase={setSourcePhase}
           jumpKey={jumpKey}
           ref={paneRef}
+          callout={
+            runsOn && plan && selected && selUnit >= 0 ? (
+              <ReviewCallout
+                unit={plan.units[selUnit]}
+                row={selected}
+                looked={cov.looked.has(plan.units[selUnit].id)}
+                edited={editedUnits.has(selUnit)}
+                sampled={plan.sampled.has(selUnit)}
+                canPrevCheck={nextCheck(plan, selUnit, -1, cov.looked) !== null}
+                canNextCheck={nextCheck(plan, selUnit, 1, cov.looked) !== null}
+                onPrev={() => stepUnit(-1)}
+                onNext={() => stepUnit(1)}
+                onPrevCheck={() => stepCheck(-1)}
+                onNextCheck={() => stepCheck(1)}
+                place={placeOf(plan).get(selUnit)}
+                onGroupStart={() => jumpGroup("start")}
+                onGroupEnd={() => jumpGroup("end")}
+                onGroupRandom={randomGroup}
+                onFix={
+                  editsActive && !locked && !draft.deleted[plan.units[selUnit].mpn] && !Object.hasOwn(draft.corrected, plan.units[selUnit].mpn)
+                    ? () => {
+                        const u = plan.units[selUnit];
+                        const r = rows[u.primary];
+                        cov.setView("rows");
+                        startFix(u.mpn, r.evidence.state === "ok" ? `p.${r.evidence.ref.page}` : "");
+                      }
+                    : undefined
+                }
+              />
+            ) : undefined
+          }
+          onPagePoint={runsOn && plan ? onPagePoint : undefined}
         />
       </div>
 
@@ -929,6 +1181,18 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               <p className="text-[11px] font-mono text-neon-green" role="status" data-promote-armed>
                 Press p again, or Enter, to promote. Esc cancels.
               </p>
+            )}
+            {runsOn && plan && (
+              <div className="rounded border border-white/5 px-2 py-1 text-[10px] font-mono text-slate-500" data-record-preview>
+                <p data-record-sent>
+                  sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
+                </p>
+                <p data-record-proposed title={COVERAGE_PACKET}>
+                  not recorded yet (proposed): looked at {planLooked} of {plan.units.length} parts,{" "}
+                  {plan.units.length - planLooked - checksLeft} covered by runs,{" "}
+                  {plan.sharedFacts.filter((f) => cov.confirmed.has(f.key)).length} shared facts confirmed once
+                </p>
+              </div>
             )}
             <input
               value={note}
@@ -947,7 +1211,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   data-verb={promoteVerb}
                   data-promote-hold={promoteHold ?? undefined}
                   data-row-edit-count={editCount > 0 ? editCount : undefined}
-                  title={promoteHold === "sent-back" ? sentBackText(hold!) : promoteHold ? HOLD_TEXT[promoteHold] : undefined}
+                  title={
+                    promoteHold === "sent-back"
+                      ? sentBackText(hold!)
+                      : promoteHold === "unchecked"
+                        ? (uncheckedText ?? undefined)
+                        : promoteHold
+                          ? HOLD_TEXT[promoteHold]
+                          : undefined
+                  }
                   className="flex-1 min-w-[7rem] flex items-center justify-center gap-1.5 px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />{" "}
@@ -983,9 +1255,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </button>
               ))}
             </div>
-            {promoteVerb && (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper") && (
+            {promoteVerb &&
+              (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper" || promoteHold === "unchecked") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
-                {promoteHold === "sent-back" ? sentBackText(hold!) : HOLD_TEXT[promoteHold]}
+                {promoteHold === "sent-back" ? sentBackText(hold!) : promoteHold === "unchecked" ? uncheckedText : HOLD_TEXT[promoteHold]}
               </p>
             )}
             {rejectOpen && rejectVerb && editCount > 0 && (

@@ -17,7 +17,7 @@
 
 import { readRuntimeConfig } from "@/config";
 
-export const FEATURE_FLAGS = ["canvasExport", "ingest", "ingestMock", "modelCanvas", "answerSummaries", "reviewExport", "reviewExportMock", "accessRequests", "accessRequestsMock"] as const;
+export const FEATURE_FLAGS = ["canvasExport", "ingest", "ingestMock", "modelCanvas", "answerSummaries", "reviewExport", "reviewExportMock", "accessRequests", "accessRequestsMock", "promotionRuns"] as const;
 export type FeatureFlag = (typeof FEATURE_FLAGS)[number];
 
 const FLAG_SET: ReadonlySet<string> = new Set(FEATURE_FLAGS);

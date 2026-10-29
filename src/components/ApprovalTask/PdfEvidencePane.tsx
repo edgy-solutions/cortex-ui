@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import { PageNavigator } from "./PageNavigator";
 import { fetchIngestSource } from "@/lib/ingestTransport";
 import type { IngestSource } from "@/api/client";
@@ -73,6 +73,8 @@ export function PdfEvidencePane({
   onPhase,
   jumpKey = 0,
   ref,
+  callout,
+  onPagePoint,
 }: {
   ingestId: string | null;
   target: EvidenceRef | null;
@@ -90,6 +92,14 @@ export function PdfEvidencePane({
   /** Bumped by the card on every row selection, so "show" on the row already selected jumps again. */
   jumpKey?: number;
   ref?: Ref<PdfPaneHandle>;
+  /**
+   * Drawn inside the target page, beside the outline box: at its left, 4px below its bottom, or above it
+   * when the box sits in the page's bottom quarter so the note is never cut off. Only while a box is drawn.
+   * Clicks inside it are its own and never reach `onPagePoint`.
+   */
+  callout?: ReactNode;
+  /** A click on a DRAWN page, as fractions of that page's rendered box (the same space `boxFraction` gives). */
+  onPagePoint?: (page: number, fx: number, fy: number) => void;
 }) {
   const [state, setState] = useState<Phase>(ingestId ? { phase: "loading" } : { phase: "failed", why: "This task names no ingest_id, so there is no source to fetch." });
   const [drawn, setDrawn] = useState<Record<number, Drawn>>({});
@@ -260,6 +270,8 @@ export function PdfEvidencePane({
   const targetDrawn = targetPage !== null ? drawn[targetPage] : undefined;
   const box = target && target.bbox !== null && targetDrawn ? scaleBox(target.bbox, target.page_dims, targetDrawn) : null;
 
+  const calloutAbove = box && targetDrawn ? box.top > targetDrawn.height * 0.75 : false;
+
   const boxKey = box ? `${targetPage}:${box.left}:${box.top}:${box.width}` : null;
   // Centre the outline by scrolling THIS pane only. `scrollIntoView` would scroll every scrollable
   // ancestor too: an expanded card jumped until its tabs left the top of the view (10-28).
@@ -355,8 +367,16 @@ export function PdfEvidencePane({
                   ref={(el) => {
                     slotRefs.current[n] = el;
                   }}
-                  className="relative bg-white"
+                  className={onPagePoint ? "relative bg-white cursor-crosshair" : "relative bg-white"}
                   style={{ width: d?.width ?? width, height: d?.height ?? Math.round(width * aspect) }}
+                  onClick={
+                    onPagePoint && d
+                      ? (e: MouseEvent<HTMLDivElement>) => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          if (r.width > 0 && r.height > 0) onPagePoint(n, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+                        }
+                      : undefined
+                  }
                   data-pdf-slot={n}
                   data-pdf-slot-drawn={d ? "" : undefined}
                 >
@@ -382,6 +402,23 @@ export function PdfEvidencePane({
                       data-evidence-outline-page={n}
                       data-evidence-quality={quality}
                     />
+                  )}
+                  {callout && box && targetDrawn && n === targetPage && (
+                    <div
+                      className="absolute z-10 pointer-events-auto"
+                      style={{
+                        // Kept inside the page: a box near the right edge would push the note out of the scroller.
+                        left: Math.max(0, Math.min(box.left, targetDrawn.width - 300)),
+                        ...(calloutAbove
+                          ? { bottom: targetDrawn.height - box.top + 4 }
+                          : { top: box.top + box.height + 4 }),
+                        maxWidth: Math.max(180, targetDrawn.width - box.left),
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      data-review-callout-slot={calloutAbove ? "above" : "below"}
+                    >
+                      {callout}
+                    </div>
                   )}
                 </div>
               );

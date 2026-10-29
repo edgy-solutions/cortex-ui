@@ -22,7 +22,11 @@ vi.mock("@/lib/ingestTransport", () => ({
   correctIngestLeaf: vi.fn(),
 }));
 vi.mock("@/lib/pdfSource", () => ({ openPdf: () => never(), RenderCancelled: class extends Error {} }));
-vi.mock("react-oidc-context", () => ({ useAuth: () => ({ user: { profile: { sub: "user-a" } } }) }));
+vi.mock("react-oidc-context", async () => ({
+  useAuth: () => ({ user: { profile: { sub: "user-a" } } }),
+  // the review card reads its owner from the context without useAuth (which throws outside a provider)
+  AuthContext: (await import("react")).createContext(undefined),
+}));
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { IngestStatusCard } from "@/components/ingest/IngestStatusCard";
