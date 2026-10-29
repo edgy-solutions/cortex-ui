@@ -1,6 +1,7 @@
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import type { TaskAct } from "./useTaskAct";
 import { verbLabel } from "@/lib/taskDeclaration";
+import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
 
 /**
  * The parts of an APPROVAL_TASK card that say what the decision path did or will not do, shared by
@@ -147,6 +148,11 @@ export function TaskActNotices({ a }: { a: TaskAct }) {
             <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-red-400/70">
               {refusal.code}
             </p>
+          )}
+          {refusal.policy && (
+            <div className="mt-2">
+              <PolicyRefusalNotice policy={refusal.policy} />
+            </div>
           )}
         </div>
       )}

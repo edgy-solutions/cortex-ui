@@ -10,6 +10,8 @@ import { DocumentReviewCard } from "./DocumentReviewCard";
 import { readDocumentReviewTask } from "@/lib/documentReview";
 import { EmptyConfirmCard } from "./EmptyConfirmCard";
 import { readEmptyConfirmTask } from "@/lib/emptyConfirm";
+import { GrantReviewCard } from "@/components/access/GrantReviewCard";
+import { readGrantReviewTask } from "@/lib/accessProposal";
 
 /**
  * APPROVAL_TASK archetype — the canvas card for a HITL task decided by naming a verb. It acts
@@ -148,6 +150,11 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // A `document_promotion` task naming an `ingest_id` draws the review card; anything else draws
   // the generic card below, unchanged. Decided here, on the card every APPROVAL_TASK site already
   // mounts, so no call site can be the one that forgot (see `documentReviewIngestId`).
+  // A review_shape "grant_proposal" task draws the grantor card, ONLY behind `accessRequests` (PROPOSED
+  // payload; see accessProposal.ts). Flag off, it falls through to the generic card exactly as before.
+  const grant = readGrantReviewTask(task);
+  if (grant) return <GrantReviewCard task={task} review={grant} />;
+
   // A review_shape "document" task draws the section review card (PROPOSED shape; see documentReview.ts).
   const documentReview = readDocumentReviewTask(task);
   if (documentReview) return <DocumentReviewCard task={task} review={documentReview} />;

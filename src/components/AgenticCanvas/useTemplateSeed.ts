@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { requestTemplateCanvasSeed } from "@/api/client";
 import type { AskBearingRefusal } from "@/lib/askBearingRefusal";
+import type { PolicyRefusal } from "@/lib/policyRefusal";
 import { inScope } from "@/lib/platformDomains";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { useStageStore } from "@/store/useStageStore";
@@ -19,6 +20,8 @@ export function useTemplateSeed(onDone: () => void) {
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<AskBearingRefusal | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  /** The declared policy envelope, when the seed was refused with one; drawn in place of the fixed text. */
+  const [policy, setPolicy] = useState<PolicyRefusal | null>(null);
   const bindings = useRef<Record<string, string>>({});
   const current = useRef<{ templateId: string; name: string } | null>(null);
 
@@ -27,6 +30,7 @@ export function useTemplateSeed(onDone: () => void) {
     if (!cur) return;
     setBusy(true);
     setFailed(null);
+    setPolicy(null);
     // The cell the chat path sends: the persona's pick, plus its entitled platform domains.
     const p = usePersonaStore.getState();
     const cell =
@@ -59,6 +63,7 @@ export function useTemplateSeed(onDone: () => void) {
       return;
     }
     setRefusal(null);
+    if (r.policy) setPolicy(r.policy);
     setFailed("The seed did not complete, so no board was created.");
   };
 
@@ -66,6 +71,7 @@ export function useTemplateSeed(onDone: () => void) {
     busy,
     refusal,
     failed,
+    policy,
     start: (templateId: string, name: string) => {
       bindings.current = {};
       current.current = { templateId, name };
@@ -83,6 +89,7 @@ export function useTemplateSeed(onDone: () => void) {
       current.current = null;
       setRefusal(null);
       setFailed(null);
+      setPolicy(null);
     },
   };
 }

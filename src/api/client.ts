@@ -20,6 +20,13 @@ import {
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
+import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
+import {
+  PROPOSED_PROPOSALS_PATH,
+  readAccessProposal,
+  type AccessProposalBody,
+  type AccessProposalFiled,
+} from "@/lib/accessProposal";
 import {
   type StreamEvent,
   type InterviewRequest,
@@ -629,7 +636,7 @@ export async function streamInterviewResponse(
 export type TemplateSeedResult =
   | { ok: true; artifactIds: string[] }
   | { ok: false; conflict: AskBearingRefusal }
-  | { ok: false; error: unknown };
+  | { ok: false; error: unknown; policy?: PolicyRefusal };
 
 export async function requestTemplateCanvasSeed(
   templateId: string,
@@ -649,7 +656,9 @@ export async function requestTemplateCanvasSeed(
     };
   } catch (err) {
     const conflict = readSeedConflict(err);
-    return conflict ? { ok: false, conflict } : { ok: false, error: err };
+    if (conflict) return { ok: false, conflict };
+    const policy = readPolicyRefusal(err);
+    return policy ? { ok: false, error: err, policy } : { ok: false, error: err };
   }
 }
 
@@ -1346,6 +1355,21 @@ export async function downloadBatchExport(
       throw err;
     });
   return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
+}
+
+/**
+ * CORTEX-PROPOSED, UNDECLARED: `POST /access/proposals`. Files a grant proposal for a policy refusal's
+ * `policy_id` + `missing_binding`; the requester comes from the bearer. ADR-0062 section 7 (Draft) and
+ * docs/specs/access-request-cards.md name it; the BFF snapshot does not declare it yet, so it is
+ * NOT_TRANSPORT in the request seal (like `fetchIllustrationContent`) and the wire names live in
+ * `src/lib/accessProposal.ts`. Same shared `api` instance, so the bearer attaches. A non-2xx throws
+ * the axios error untouched, so the caller can read a policy refusal off it.
+ */
+export async function fileAccessProposal(body: AccessProposalBody): Promise<AccessProposalFiled> {
+  const { data } = await api.post<unknown>(PROPOSED_PROPOSALS_PATH, body);
+  const filed = readAccessProposal(data);
+  if (!filed) throw new Error("malformed /access/proposals response");
+  return filed;
 }
 
 // 51 of the 70 ops are UNTYPED (the producer declares no response); their hand shapes stay in pass B.

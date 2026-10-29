@@ -54,6 +54,7 @@
  */
 import { LEAF as V1_LEAF, LEAF_SOURCE as V1_LEAF_SOURCE } from "../api/generated/ingestV1";
 import { readFractionEvidenceRef, type FractionEvidenceRef } from "./evidenceRef";
+import { readPolicyRefusal, type PolicyRefusal } from "./policyRefusal";
 
 // ── Provenance floor (component-level label) — unchanged by this revision ─────────────────
 
@@ -747,6 +748,8 @@ export interface IngestRefusal {
   message: string;
   code: string | null;
   registered: string[] | null;
+  /** The declared policy envelope, when the 4xx carries one whole; absent otherwise. */
+  policy?: PolicyRefusal;
 }
 
 /** Non-null ONLY for a 400-499 response whose detail `readIngestErrorMessage` can read. */
@@ -761,7 +764,8 @@ export function readIngestRefusal(err: unknown): IngestRefusal | null {
   const code = isRecord(detail) && typeof detail.error === "string" ? detail.error : null;
   const reg = isRecord(detail) ? detail.registered : null;
   const registered = Array.isArray(reg) && reg.every((x) => typeof x === "string") ? (reg as string[]) : null;
-  return { status, message, code, registered };
+  const policy = readPolicyRefusal(err);
+  return policy ? { status, message, code, registered, policy } : { status, message, code, registered };
 }
 
 /**
