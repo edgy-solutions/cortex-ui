@@ -1052,6 +1052,17 @@ export async function fetchExportRecipients(): Promise<ExportRecipient[]> {
   return recipients;
 }
 
+/**
+ * `POST /export/package/recipients` (fin #137): which recipients can take THIS board. The 200
+ * response is OPEN in the producer's schema, so the raw body is returned and the component reads
+ * it with `readExportOffer`, the contract. A 404/405 means an older BFF.
+ */
+export async function offerExportRecipients(answerIds: string[]): Promise<unknown> {
+  return request("POST /export/package/recipients", {
+    body: { answers: answerIds.map((artifact_id) => ({ artifact_id })) },
+  });
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }

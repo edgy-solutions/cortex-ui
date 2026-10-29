@@ -58,6 +58,73 @@ export function readExportRecipients(raw: unknown): ExportRecipient[] | null {
   return out;
 }
 
+export interface ExportOfferRefusal {
+  answer_id: string;
+  kind: string | null;
+  reason_code: string;
+  reason: string;
+}
+
+export interface ExportOffer extends ExportRecipient {
+  offered: boolean;
+  reason_code: string | null;
+  reason: string | null;
+  exports: string[];
+  refused: ExportOfferRefusal[];
+}
+
+/**
+ * `POST /export/package/recipients`'s whole 200 body (fin #137; packet
+ * `invincible-agent/sessions/2026-10-28-packet-to-cortex-ui-fin-the-export-picker-greys-before-export-and-a-refusal-is-a-row-per-answer.md`).
+ * The producer leaves the 200 response OPEN, so THIS reader is the contract.
+ *
+ * `null`, never a partial list, on ANY malformed part: a recipient drawn as offered on the
+ * strength of half-read data would promise an export the server then refuses, and a missing or
+ * extra answer id would make "k of n will export" lie. The packet promises every board id appears
+ * exactly once across `exports` and `refused[].answer_id`; the cardinality check holds it to that.
+ * A greyed recipient (`offered === false`) must carry a non-empty `reason`.
+ */
+export function readExportOffer(raw: unknown, boardIds: readonly string[]): ExportOffer[] | null {
+  if (!isRecord(raw) || !Array.isArray(raw.recipients)) return null;
+  const out: ExportOffer[] = [];
+  for (const item of raw.recipients) {
+    if (!isRecord(item) || !isNonEmptyString(item.value) || !isNonEmptyString(item.label)) return null;
+    if (typeof item.offered !== "boolean") return null;
+    if (!Array.isArray(item.exports) || !item.exports.every((e) => typeof e === "string")) return null;
+    if (!Array.isArray(item.refused)) return null;
+    const refused: ExportOfferRefusal[] = [];
+    for (const r of item.refused) {
+      if (
+        !isRecord(r) ||
+        typeof r.answer_id !== "string" ||
+        !(r.kind === null || typeof r.kind === "string") ||
+        typeof r.reason_code !== "string" ||
+        typeof r.reason !== "string"
+      ) {
+        return null;
+      }
+      refused.push({ answer_id: r.answer_id, kind: r.kind, reason_code: r.reason_code, reason: r.reason });
+    }
+    const reasonCode = typeof item.reason_code === "string" ? item.reason_code : null;
+    const reason = typeof item.reason === "string" ? item.reason : null;
+    if (!item.offered && !isNonEmptyString(reason)) return null;
+    const exports = item.exports as string[];
+    const seen = [...exports, ...refused.map((r) => r.answer_id)].sort();
+    const want = [...boardIds].sort();
+    if (seen.length !== want.length || seen.some((id, i) => id !== want[i])) return null;
+    out.push({
+      value: item.value,
+      label: item.label,
+      offered: item.offered,
+      reason_code: reasonCode,
+      reason,
+      exports,
+      refused,
+    });
+  }
+  return out;
+}
+
 /**
  * `POST /export/package`'s 409 body's `detail` (roll-11 capture exchange [1]) — non-null ONLY
  * when `reason === "recipient_required"` AND `options` itself passes `readExportRecipients`. A
