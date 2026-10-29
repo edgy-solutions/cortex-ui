@@ -35,6 +35,9 @@ vi.mock("@/lib/pdfSource", () => ({
 
 import { AuthContext, type AuthContextProps } from "react-oidc-context";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
+import { scaleFixtureExtractionBody } from "@/lib/promotionReviewScaleFixture";
+import { readExtraction } from "@/lib/promotionReview";
+import { buildReviewPlan, shapeOf } from "@/lib/reviewRuns";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
 
@@ -749,5 +752,34 @@ describe("group jumps and where-am-I", () => {
     expect(el.textContent).toContain("↯ STRAGGLER");
     expect(el.closest("[data-run-card]")).toBeNull();
     expect(el.getAttribute("role")).toBe("option");
+  });
+});
+
+describe("each collapsed group names the rule that grouped it (ruling 3b)", () => {
+  it("on the scale fixture every run header carries the rule and its shape key, one per run in the plan", async () => {
+    fetchIngestExtraction.mockImplementation(async () => scaleFixtureExtractionBody(SHA));
+    await mountRuns();
+    const plan = buildReviewPlan(readExtraction(scaleFixtureExtractionBody(SHA))!.rows, "seed");
+    const expected = plan.segments.flatMap((s) => (s.kind === "run" ? [s.run] : []));
+    const heads = [...document.querySelectorAll<HTMLElement>("[data-run]")];
+    expect(expected.length).toBeGreaterThan(1);
+    expect(heads).toHaveLength(expected.length);
+    expect(document.querySelectorAll('[data-run][data-run-rule="same_shape_run"]')).toHaveLength(expected.length);
+    heads.forEach((h) => {
+      const run = expected.find((r) => r.id === h.getAttribute("data-run"))!;
+      const first = plan.units[run.units[0]];
+      const key = h.getAttribute("data-run-key");
+      expect(key).toBeTruthy();
+      expect(key).toBe(`${shapeOf(first.mpn)}→${shapeOf(first.replacement ?? "")}`);
+      expect(h.textContent).toContain(key!);
+    });
+  });
+
+  it("a shared fact names its rule, and still says where the crop is", async () => {
+    await mountRuns();
+    const f = q("[data-shared-fact]")!;
+    expect(f.getAttribute("data-shared-rule")).toBe("same_inherited_crop");
+    expect(f.textContent).toContain("same crop:");
+    expect(f.textContent).toContain("inherited from one crop on p1 · 3 rows");
   });
 });

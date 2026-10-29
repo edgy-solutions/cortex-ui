@@ -2,8 +2,9 @@
  * reviewRuns — each `it` names a rule and asserts what turns red if that rule is deleted.
  */
 import { describe, it, expect } from "vitest";
-import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, shapeOf } from "./reviewRuns";
-import type { ReviewRow, RowEvidence } from "./promotionReview";
+import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, RUN_RULE, SHARED_RULE, shapeOf } from "./reviewRuns";
+import { scaleFixtureExtractionBody } from "./promotionReviewScaleFixture";
+import { readExtraction, type ReviewRow, type RowEvidence } from "./promotionReview";
 
 const DIMS = { width: 100, height: 100 };
 const ok = (page: number, bbox: [number, number, number, number] | null): RowEvidence => ({
@@ -315,5 +316,32 @@ describe("group places and jumps", () => {
     const two = buildReviewPlan(rowsOf(series(2, "AB"), part({ mpn: "ZZ-1", rep: "ZZ-1Y" })), "s", { minRun: 2 });
     expect(randomInGroup(two, 0, new Set(), () => 0.999)).toBe(1);
     expect(randomInGroup(two, 1, new Set(), () => 0)).toBe(0);
+  });
+});
+
+describe("the rule that grouped a run (ruling 3b)", () => {
+  const scalePlan = () => buildReviewPlan(readExtraction(scaleFixtureExtractionBody("ing-1"))!.rows, "seed");
+
+  it("the two rule names are the spelled-once constants", () => {
+    expect(RUN_RULE).toBe("same_shape_run");
+    expect(SHARED_RULE).toBe("same_inherited_crop");
+  });
+
+  it("every run's key is shapeOf(first member affected)→shapeOf(first member replacement), on the scale fixture", () => {
+    const plan = scalePlan();
+    const runs = plan.segments.flatMap((s) => (s.kind === "run" ? [s.run] : []));
+    expect(runs.length).toBeGreaterThan(1);
+    for (const run of runs) {
+      const first = plan.units[run.units[0]];
+      expect(run.key).not.toBe("");
+      expect(run.key).toBe(`${shapeOf(first.mpn)}→${shapeOf(first.replacement ?? "")}`);
+    }
+  });
+
+  it("a key built from the LAST member's raw value would differ: the key is a shape, not a value", () => {
+    const plan = scalePlan();
+    const run = plan.segments.flatMap((s) => (s.kind === "run" ? [s.run] : []))[0];
+    const last = plan.units[run.units[run.units.length - 1]];
+    expect(run.key).not.toBe(`${last.mpn}→${last.replacement ?? ""}`);
   });
 });

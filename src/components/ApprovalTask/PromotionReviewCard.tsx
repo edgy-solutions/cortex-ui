@@ -32,7 +32,7 @@ import { ReviewExportControl } from "./ReviewExportControl";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 import { isFeatureEnabled } from "@/lib/featureFlags";
-import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup } from "@/lib/reviewRuns";
+import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, SHARED_RULE } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
 import { ReviewRunsList } from "./ReviewRunsList";
@@ -847,10 +847,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                     key={f.key}
                     className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-slate-400"
                     data-shared-fact={f.key}
+                    data-shared-rule={SHARED_RULE}
                     data-shared-confirmed={done ? "" : undefined}
                   >
                     <span>
-                      {f.field ?? "value"} <span className="text-slate-200">{f.values.join(", ")}</span> · inherited from one crop on p{f.ref.page} · {f.rows.length} rows
+                      same crop: {f.field ?? "value"} <span className="text-slate-200">{f.values.join(", ")}</span> · inherited from one crop on p{f.ref.page} · {f.rows.length} rows
                     </span>
                     <button
                       type="button"

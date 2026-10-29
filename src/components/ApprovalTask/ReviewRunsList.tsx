@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { placeOf, type ReviewPlan, type ReviewUnit, type Template, type UnitFlag } from "@/lib/reviewRuns";
+import { placeOf, RUN_RULE, type ReviewPlan, type ReviewUnit, type Template, type UnitFlag } from "@/lib/reviewRuns";
 
 /** Why a flag is on the line, in the card's own words. A straggler is drawn apart, it is a position not a doubt. */
 export function flagText(f: UnitFlag): string {
@@ -229,6 +229,8 @@ export function ReviewRunsList({
                 aria-expanded={isOpen}
                 data-run={run.id}
                 data-run-count={members.length}
+                data-run-rule={RUN_RULE}
+                data-run-key={run.key}
                 data-run-open={isOpen ? "" : undefined}
                 className="w-full min-h-[44px] flex flex-wrap items-center gap-3 px-3 py-2 bg-[#0F1E26] text-[#D6E2F0] text-left cursor-pointer hover:brightness-125"
               >
@@ -238,6 +240,9 @@ export function ReviewRunsList({
                 </span>
                 <span>
                   <Pair mpn={run.affected.text} replacement={run.replacement?.text ?? null} affected={run.affected} repl={run.replacement} />
+                </span>
+                <span className="text-[10px] text-slate-500" data-run-rule-text>
+                  same shape {run.key}
                 </span>
                 <span className="flex-1" />
                 <span className="text-slate-400" data-run-total>×{members.length}</span>

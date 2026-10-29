@@ -51,6 +51,8 @@ export interface ReviewUnit {
 
 export interface Run {
   id: string;
+  /** The shape key that grouped it: shapeOf(affected)→shapeOf(replacement), e.g. FK2599999→FK2599999. */
+  key: string;
   /** Indices into plan.units, consecutive. */
   units: number[];
   affected: Template;
@@ -89,12 +91,18 @@ export function shapeOf(s: string): string {
   return s.replace(/[0-9]/g, "9");
 }
 
-const MIN_RUN = 3;
-const SAMPLES_PER_RUN = 2;
+/** Rule names, spelled once: the card and the coverage record both cite them. */
+/** Consecutive parts whose shapeOf(affected)→shapeOf(replacement) key is equal, at least MIN_RUN of them. */
+export const RUN_RULE = "same_shape_run";
+/** Rows of inherited quality citing one crop, at least MIN_SHARED of them. */
+export const SHARED_RULE = "same_inherited_crop";
+
+export const MIN_RUN = 3;
+export const SAMPLES_PER_RUN = 2;
 /** Crops cited by fewer rows than this are an ordinary citation, not a sentence worth confirming once. */
-const MIN_SHARED = 3;
+export const MIN_SHARED = 3;
 /** Runs this short are looked at in full: sampling two of four would leave nothing to cover. */
-const SAMPLE_ALL_UP_TO = 4;
+export const SAMPLE_ALL_UP_TO = 4;
 
 function unitIdOf(r: ReviewRow): string {
   return r.part_index !== null ? `p${r.part_index}` : `m:${r.mpn}`;
@@ -210,6 +218,7 @@ export function buildReviewPlan(
       const reps = members.map((m) => units[m].replacement);
       const run: Run = {
         id: `r:${units[i].id}`,
+        key: keyOf(units[i]),
         units: members,
         affected: templateOf(members.map((m) => units[m].mpn)),
         replacement: reps.every((r): r is string => r !== null) ? templateOf(reps) : null,
