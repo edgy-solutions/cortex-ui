@@ -4,11 +4,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const fetchExportRecipients = vi.fn();
+const offerExportRecipients = vi.fn();
 const startCanvasExport = vi.fn();
 const downloadExportArtifact = vi.fn();
 
 vi.mock("@/api/client", () => ({
   fetchExportRecipients: (...a: unknown[]) => fetchExportRecipients(...a),
+  offerExportRecipients: (...a: unknown[]) => offerExportRecipients(...a),
   startCanvasExport: (...a: unknown[]) => startCanvasExport(...a),
   downloadExportArtifact: (...a: unknown[]) => downloadExportArtifact(...a),
 }));
@@ -66,6 +68,9 @@ beforeEach(() => {
   fetchExportRecipients.mockReset();
   startCanvasExport.mockReset();
   downloadExportArtifact.mockReset();
+  // Default: an older BFF with no offer route, so the plain GET list is drawn (the pre-#137 tests).
+  offerExportRecipients.mockReset();
+  offerExportRecipients.mockRejectedValue(axiosError(404, "Not Found"));
 });
 afterEach(cleanup);
 
@@ -695,5 +700,126 @@ describe("refused documents — one row per answer", () => {
     expect(rows().length).toBe(0);
     const doc = document.querySelector("[data-export-document]")!;
     expect(doc.querySelector("[data-export-reason]")?.textContent).toBe("engine unreachable");
+  });
+});
+
+// ── fin #137: the picker greys a recipient before Export ────────────────────────────────────
+describe("export offer (POST /export/package/recipients)", () => {
+  beforeEach(() => window.localStorage.setItem(FLAG_KEY, "1"));
+
+  const board3 = [
+    { id: "a1", summary: "Plan the thing" },
+    { id: "a2", summary: "Costs by lot" },
+    { id: "a3", summary: "Other" },
+  ];
+  const grey = {
+    value: "ALPHA", label: "ALPHA", offered: false,
+    reason_code: "takes_none_of_these_answers", reason: "none of these answers is a kind this recipient takes",
+    exports: [],
+    refused: [
+      { answer_id: "a1", kind: null, reason_code: "no_verb", reason: "no verb" },
+      { answer_id: "a2", kind: "planSchedule", reason_code: "not_an_exportable_cost_verb", reason: "not cost" },
+      { answer_id: "a3", kind: null, reason_code: "no_verb", reason: "no verb" },
+    ],
+  };
+  const partial = {
+    value: "BETA", label: "BETA", offered: true, reason_code: null, reason: null,
+    exports: ["a2", "a3"],
+    refused: [{ answer_id: "a1", kind: null, reason_code: "no_verb", reason: "the question resolved no verb" }],
+  };
+  const full = { value: "GAMMA", label: "GAMMA", offered: true, reason_code: null, reason: null, exports: ["a1", "a2", "a3"], refused: [] };
+
+  async function openWith(recipients: unknown[]) {
+    offerExportRecipients.mockResolvedValue({ answers: 3, recipients });
+    render(<CanvasExportButton board={board3} />);
+    fireEvent.click(document.querySelector("[data-canvas-export]")!);
+    await waitFor(() => expect(document.querySelector("[data-export-recipient]")).not.toBeNull());
+  }
+  const startBtn = () => screen.getByText("Start export").closest("button") as HTMLButtonElement;
+
+  it("a greyed recipient is disabled, shows its reason, and clicking it leaves Export disabled", async () => {
+    await openWith([grey, full]);
+    expect(document.querySelector("[data-export-offer]")!.getAttribute("data-export-offer")).toBe("read");
+    const btn = document.querySelector('[data-export-recipient="ALPHA"]') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute("data-export-recipient-offered")).toBe("false");
+    expect(document.querySelector("[data-export-recipient-reason]")!.textContent).toContain("none of these answers");
+    fireEvent.click(btn);
+    expect(startBtn().disabled).toBe(true);
+    expect(document.querySelector('[data-export-recipient="GAMMA"]')!.getAttribute("data-export-recipient-offered")).toBe("true");
+  });
+
+  it("a partial recipient says '2 of 3 will export'; selected, it lists the refused card's title and reason, and Export is enabled", async () => {
+    await openWith([partial]);
+    expect(document.querySelector('[data-export-recipient="BETA"]')!.getAttribute("data-export-recipient-offered")).toBe("partial");
+    expect(document.querySelector("[data-export-recipient-partial]")!.textContent).toBe("2 of 3 will export");
+    expect(document.querySelector("[data-export-offer-refused]")).toBeNull();
+    fireEvent.click(document.querySelector('[data-export-recipient="BETA"]')!);
+    const row = document.querySelector('[data-export-offer-refused="a1"]')!;
+    expect(row.textContent).toContain("Plan the thing");
+    expect(row.textContent).toContain("the question resolved no verb");
+    expect(document.querySelectorAll("[data-export-offer-refused]").length).toBe(1);
+    expect(startBtn().disabled).toBe(false);
+  });
+
+  it("every recipient greyed shows the none-offered line and Export stays disabled", async () => {
+    await openWith([grey]);
+    expect(document.querySelector("[data-export-none-offered]")!.textContent).toBe("No recipient takes this board.");
+    expect(startBtn().disabled).toBe(true);
+  });
+
+  it("a 404 from the POST falls back to the GET list: everything selectable, offer 'unavailable'", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    render(<CanvasExportButton board={board3} />);
+    await openAndPickLegal();
+    expect(document.querySelector("[data-export-offer]")!.getAttribute("data-export-offer")).toBe("unavailable");
+    expect((document.querySelector('[data-export-recipient="legal"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(document.querySelector("[data-export-recipient-offered]")).toBeNull();
+    expect(startBtn().disabled).toBe(false);
+  });
+
+  it("an unreadable offer (cardinality broken) falls back to the GET list", async () => {
+    offerExportRecipients.mockResolvedValue({ answers: 3, recipients: [{ ...full, exports: ["a1"] }] });
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    render(<CanvasExportButton board={board3} />);
+    await openAndPickLegal();
+    expect(document.querySelector("[data-export-offer]")!.getAttribute("data-export-offer")).toBe("unavailable");
+    expect(fetchExportRecipients).toHaveBeenCalledTimes(1);
+  });
+
+  it("a read offer never consults the GET", async () => {
+    await openWith([full]);
+    expect(fetchExportRecipients).not.toHaveBeenCalled();
+  });
+
+  it("answer_not_found on the POST says the board is stale", async () => {
+    offerExportRecipients.mockRejectedValue(axiosError(404, { reason: "answer_not_found" }));
+    render(<CanvasExportButton board={board3} />);
+    fireEvent.click(document.querySelector("[data-canvas-export]")!);
+    await waitFor(() =>
+      expect(document.querySelector("[data-export-error]")!.textContent).toBe("An answer on this board no longer exists."),
+    );
+    expect(fetchExportRecipients).not.toHaveBeenCalled();
+  });
+
+  it("the POST body carries exactly the board's answer ids, not the store's", async () => {
+    setArtifacts(Array.from({ length: 50 }, (_, i) => `s${i}`));
+    offerExportRecipients.mockResolvedValue({ answers: 2, recipients: [] });
+    render(<CanvasExportButton board={[{ id: "s7" }, { id: "task:t1" }, { id: "s3" }]} />);
+    fireEvent.click(document.querySelector("[data-canvas-export]")!);
+    await waitFor(() => expect(offerExportRecipients).toHaveBeenCalledTimes(1));
+    expect(offerExportRecipients).toHaveBeenCalledWith(["s7", "s3"]);
+  });
+
+  it("Export after picking an offered recipient still sends its recipient_scope", async () => {
+    await openWith([grey, full]);
+    startCanvasExport.mockResolvedValue({ export_id: null, status: "producing", recipient_scope: "GAMMA" });
+    fireEvent.click(document.querySelector('[data-export-recipient="GAMMA"]')!);
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(startCanvasExport).toHaveBeenCalledTimes(1));
+    expect(startCanvasExport).toHaveBeenCalledWith({
+      answers: [{ artifact_id: "a1" }, { artifact_id: "a2" }, { artifact_id: "a3" }],
+      recipient_scope: "GAMMA",
+    });
   });
 });

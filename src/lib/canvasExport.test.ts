@@ -6,6 +6,7 @@ import {
   artifactLink,
   canvasAnswerIds,
   readExportRecipients,
+  readExportOffer,
   readRecipientRequired,
   type CanvasExport,
 } from "./canvasExport";
@@ -582,5 +583,69 @@ describe.skipIf(GATEWAY_FILES.length === 0)("mixed-board export against gateway.
 
   it("`documents` is the key the mixed path returns", () => {
     expect(src()).toMatch(/"documents": documents,/);
+  });
+});
+
+describe("readExportOffer (fin #137, POST /export/package/recipients)", () => {
+  const ids = ["a1", "a2", "a3", "a4", "a5"];
+  const rec = (over: Record<string, unknown> = {}) => ({
+    value: "X", label: "X", offered: false,
+    reason_code: "takes_none_of_these_answers", reason: "none of these answers is a kind this takes",
+    exports: ["a2", "a3"],
+    refused: [
+      { answer_id: "a1", kind: null, reason_code: "no_verb", reason: "no verb" },
+      { answer_id: "a4", kind: "planSchedule", reason_code: "not_an_exportable_cost_verb", reason: "x" },
+      { answer_id: "a5", kind: null, reason_code: "no_verb", reason: "no verb" },
+    ],
+    ...over,
+  });
+  const body = (r: unknown) => ({ answers: 5, recipients: [r] });
+
+  it("the packet's example board reads", () => {
+    const got = readExportOffer(body(rec()), ids);
+    expect(got).toHaveLength(1);
+    expect(got![0].offered).toBe(false);
+    expect(got![0].exports).toEqual(["a2", "a3"]);
+    expect(got![0].refused).toHaveLength(3);
+    expect(got![0].reason).toContain("none of these");
+  });
+  it("an offered recipient with null reason_code and reason reads", () => {
+    const got = readExportOffer(body(rec({ offered: true, reason_code: null, reason: null })), ids);
+    expect(got![0].reason).toBeNull();
+  });
+  it("offered as a string -> null", () => {
+    expect(readExportOffer(body(rec({ offered: "false" })), ids)).toBeNull();
+  });
+  it("a greyed recipient with no reason -> null", () => {
+    expect(readExportOffer(body(rec({ reason: null })), ids)).toBeNull();
+    expect(readExportOffer(body(rec({ reason: "" })), ids)).toBeNull();
+  });
+  it("exports holding a number -> null", () => {
+    expect(readExportOffer(body(rec({ exports: ["a2", 3] })), ids)).toBeNull();
+  });
+  it("a missing board id -> null", () => {
+    expect(readExportOffer(body(rec({ exports: ["a2"] })), ids)).toBeNull();
+  });
+  it("a missing board id that sorts LAST -> null (an element-wise compare alone would pass it)", () => {
+    const lastGone = rec({ refused: [{ answer_id: "a1", kind: null, reason_code: "no_verb", reason: "no verb" }, { answer_id: "a4", kind: null, reason_code: "c", reason: "r" }] });
+    expect(readExportOffer(body(lastGone), ids)).toBeNull();
+  });
+  it("an extra id -> null", () => {
+    expect(readExportOffer(body(rec({ exports: ["a2", "a3", "zz"] })), ids)).toBeNull();
+  });
+  it("a duplicated id (in exports and refused) -> null", () => {
+    expect(readExportOffer(body(rec({ exports: ["a1", "a2", "a3"] })), ids)).toBeNull();
+  });
+  it("kind: null is accepted; a numeric kind is not", () => {
+    expect(readExportOffer(body(rec()), ids)).not.toBeNull();
+    const bad = rec({ refused: [{ answer_id: "a1", kind: 3, reason_code: "c", reason: "r" }], exports: ["a2", "a3", "a4", "a5"] });
+    expect(readExportOffer(body(bad), ids)).toBeNull();
+  });
+  it("a non-record body, or recipients not an array -> null", () => {
+    expect(readExportOffer(null, ids)).toBeNull();
+    expect(readExportOffer({ recipients: {} }, ids)).toBeNull();
+  });
+  it("one bad recipient poisons the whole list", () => {
+    expect(readExportOffer({ recipients: [rec(), rec({ label: "" })] }, ids)).toBeNull();
   });
 });

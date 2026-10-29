@@ -309,6 +309,7 @@ const CALLS: Record<string, Case[]> = {
   fetchTemplates: [{ name: "plain", op: "GET /templates", run: () => (client as any).fetchTemplates() }],
   fetchTaskKinds: [{ name: "plain", op: "GET /task_kinds", run: () => (client as any).fetchTaskKinds() }],
   fetchExportRecipients: [{ name: "plain", op: "GET /export/package/recipients", run: () => (client as any).fetchExportRecipients() }],
+  offerExportRecipients: [{ name: "plain", op: "POST /export/package/recipients", run: () => (client as any).offerExportRecipients(["a", "b"]) }],
   startCanvasExport: [
     { name: "with template", op: "POST /export/package", run: () => (client as any).startCanvasExport({ answers: [{ artifact_id: "a" }], recipient_scope: "r", template_id: "t" }) },
     { name: "without template", op: "POST /export/package", run: () => (client as any).startCanvasExport({ answers: [{ artifact_id: "a" }], recipient_scope: "r" }) },
