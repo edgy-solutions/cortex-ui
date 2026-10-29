@@ -95,21 +95,24 @@ describe("every card's content starts at the same place", () => {
   it("FitBox aligns to the TOP, not the middle", () => {
     // Centering made vertical position a function of content height: a short answer floated
     // mid-card between empty bands while a tall one sat flush at the top, so two cards side by
-    // side read as two different layouts.
-    expect(FITBOX).toContain("flex items-start justify-center");
-    expect(FITBOX).not.toContain("flex items-center justify-center");
+    // side read as two different layouts. Since 10-29 the block is pinned to the top of a sizer
+    // in block flow; nothing in FitBox may centre it vertically.
+    expect(FITBOX).not.toMatch(/items-center/);
+    expect(FITBOX).toMatch(/position: "absolute",\s*top: 0,/);
   });
 
-  it("and scales from the top, because the two must agree", () => {
-    // `center center` scales toward the middle: the box shrinks from its centre and leaves half
-    // the removed height above it, reintroducing exactly the gap the alignment removed. The
-    // alignment alone looks like the fix and is half of it.
-    expect(FITBOX).toContain('transformOrigin: "top center"');
+  it("and scales from the top-left corner, because the block and its sizer must agree", () => {
+    // The sizer is exactly the scaled box. `center center` shrinks the block away from the
+    // sizer's top, reintroducing the gap the alignment removed; `top center` (the pre-10-29
+    // origin) shifts it right by half the removed width. The alignment alone looks like the fix
+    // and is half of it.
+    expect(FITBOX).toContain('transformOrigin: "top left"');
     expect(FITBOX).not.toContain('transformOrigin: "center center"');
+    expect(FITBOX).not.toContain('transformOrigin: "top center"');
   });
 
   it("horizontal centring is kept, so this is a vertical decision only", () => {
-    // Positive control: a blanket replace of the flex classes would fail this.
-    expect(FITBOX).toContain("justify-center");
+    // A block whose natural width is narrower than the card is not upscaled; the sizer centres it.
+    expect(FITBOX).toMatch(/data-fitbox-sizer\s+className="relative mx-auto"/);
   });
 });
