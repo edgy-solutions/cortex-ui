@@ -7,6 +7,7 @@ import { buildHeaderEdits, buildRowEdits, isPromotionRowEditsEnabled, type RowEd
 import type { HeaderEdit } from "@/api/client";
 import { DISPOSITIONS, presentDisposition } from "@/lib/dispositions";
 import { fetchIngestExtraction } from "@/lib/ingestTransport";
+import { useDocument } from "@/lib/useDocument";
 import { LeafChip } from "@/components/ingest/IngestLeafChip";
 import type { IngestLeaf, IngestLeafSource, IngestStatusRow } from "@/lib/ingestWire";
 import {
@@ -228,6 +229,9 @@ function RowAddForm({
 export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayload; ingestId: string }) {
   const a = useTaskAct(task);
   const { acting, act, verbs, needsReason } = a;
+  // The store's row for this drop (registered with the one poller if absent). The chip draws its
+  // real stage; "review" below is the fallback ONLY for a row not yet read.
+  const { row: docRow } = useDocument(ingestId);
   const [sel, setSel] = useState(0);
   const [jumpKey, setJumpKey] = useState(0);
   const [armed, setArmed] = useState(false);
@@ -560,7 +564,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               {k === "kind" ? (
                 <LeafChip
                   ingestId={ingestId}
-                  stage="review"
+                  stage={docRow?.stage ?? "review"}
                   leaf={chipLeaf}
                   leafSource={chipSource}
                   correctedBy={chipBy}

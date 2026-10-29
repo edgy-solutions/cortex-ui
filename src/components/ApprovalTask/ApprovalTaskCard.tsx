@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle, ClipboardCheck } from "lucide-react";
 import type { TaskState } from "@/api/types";
 import { formatRequestedBy } from "@/lib/requestedBy";
 import { verbLabel } from "@/lib/taskDeclaration";
-import { promotionReviewIngestId } from "@/lib/promotionReview";
+import { documentReviewIngestId } from "@/lib/documents";
 import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PromotionReviewCard } from "./PromotionReviewCard";
@@ -147,7 +147,7 @@ export const AFFIRMING = new Set(["approved", "accepted", "acknowledged", "concu
 export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // A `document_promotion` task naming an `ingest_id` draws the review card; anything else draws
   // the generic card below, unchanged. Decided here, on the card every APPROVAL_TASK site already
-  // mounts, so no call site can be the one that forgot (see `promotionReviewIngestId`).
+  // mounts, so no call site can be the one that forgot (see `documentReviewIngestId`).
   // A review_shape "document" task draws the section review card (PROPOSED shape; see documentReview.ts).
   const documentReview = readDocumentReviewTask(task);
   if (documentReview) return <DocumentReviewCard task={task} review={documentReview} />;
@@ -157,7 +157,7 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // order of the two checks does not matter.
   const empty = readEmptyConfirmTask(task.kind, task.payload);
   if (empty) return <EmptyConfirmCard task={task} empty={empty} />;
-  const ingestId = promotionReviewIngestId(task.kind, task.payload);
+  const ingestId = documentReviewIngestId(task);
   return ingestId ? <PromotionReviewCard task={task} ingestId={ingestId} /> : <GenericApprovalTaskCard task={task} />;
 }
 

@@ -30,6 +30,7 @@ export function useIngestArtifactSync(): void {
   const rows = useIngestStatusStore((s) => s.rows);
   const notFound = useIngestStatusStore((s) => s.notFound);
   const listed = useIngestStatusStore((s) => s.listed);
+  const tracked = useIngestStatusStore((s) => s.tracked);
   const reconcile = useCanvasStore((s) => s.reconcileIngestArtifacts);
 
   // `submit` records the drop BEFORE it patches the turn, so a change of `turns` is when the
@@ -49,8 +50,10 @@ export function useIngestArtifactSync(): void {
     const out = new Set<string>();
     for (const t of turns) if (t.ingestId) out.add(t.ingestId);
     for (const id of listed) out.add(id);
+    // Ids a card registered via `useDocument` (a review card's drop need not be on the rail).
+    for (const id of tracked) out.add(id);
     return [...out];
-  }, [turns, drops, listed]);
+  }, [turns, drops, listed, tracked]);
   const idsKey = ids.join("\n");
 
   useEffect(() => {

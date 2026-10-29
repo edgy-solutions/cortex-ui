@@ -65,6 +65,11 @@ interface State {
   loadMine: () => void;
   /** Read the next page while `next` is non-null and append it in order. */
   loadOlderDrops: () => void;
+  /** Ids a card asked the poller to cover (`track`) that the rail's own lists may not name: a review
+   *  card's ingest id arrives from a TASK. `useIngestArtifactSync` polls these with the listed ids. */
+  tracked: string[];
+  /** Register an id with the one poller. Idempotent; it does NOT fetch -- the sync hook's tick does. */
+  track: (id: string) => void;
   /** Fetch every id in `ids` that is due: never read, or read and still not terminal. */
   pollDue: (ids: readonly string[]) => void;
   /** Re-open the person's own failed drop. The UI shows `message` on refusal. */
@@ -88,6 +93,10 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
   next: null,
   olderDrops: "idle",
   epoch: 0,
+  tracked: [],
+  track: (id) => {
+    if (!get().tracked.includes(id)) set((s) => ({ tracked: [...s.tracked, id] }));
+  },
   loadMine: () => {
     if (get().mine !== "idle") return;
     set({ mine: "loading" });
@@ -214,6 +223,6 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
     inFlight.clear();
     lastFetchedAt.clear();
     seenCursors.clear();
-    set((s) => ({ rows: {}, notFound: {}, listed: [], mine: "idle", next: null, olderDrops: "idle", epoch: s.epoch + 1 }));
+    set((s) => ({ rows: {}, notFound: {}, listed: [], tracked: [], mine: "idle", next: null, olderDrops: "idle", epoch: s.epoch + 1 }));
   },
 }));
