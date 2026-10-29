@@ -502,3 +502,188 @@ describe("mixed board — documents[] (rev 187)", () => {
     expect(document.querySelector("[data-export-sha]")?.textContent).toBe(newSha);
   });
 });
+
+// Refusals as ROWS (directive 2026-10-28): the gateway's _refused_entries groups refused answers
+// into one failed document per reason_code; the panel draws one row per answer id.
+describe("refused documents — one row per answer", () => {
+  beforeEach(() => window.localStorage.setItem(FLAG_KEY, "1"));
+
+  type B = { id: string; summary?: string; question_text?: string };
+  const failedDoc = (
+    answers: string[],
+    extra: Record<string, unknown> = {},
+  ) => ({
+    engine: "fin",
+    answers,
+    status: "failed",
+    export_id: null,
+    recipient_scope: "legal",
+    outcome: "not_in_model",
+    ...extra,
+  });
+  const top = (documents: unknown[], reason: string, status = "failed") => ({
+    export_id: null,
+    status,
+    reason,
+    recipient_scope: "legal",
+    documents,
+  });
+
+  async function runBoard(board: B[], body: unknown) {
+    fetchExportRecipients.mockResolvedValue([
+      { value: "legal", label: "Legal" },
+    ]);
+    startCanvasExport.mockResolvedValue(body);
+    render(<CanvasExportButton board={board} />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() =>
+      expect(document.querySelector("[data-export-document]")).not.toBeNull(),
+    );
+  }
+  const rows = () =>
+    Array.from(document.querySelectorAll("[data-export-refused-answer]"));
+  const txt = (el: Element, sel: string) => el.querySelector(sel)?.textContent;
+  const five: B[] = [1, 2, 3, 4, 5].map((n) => ({
+    id: `a${n}`,
+    summary: `Answer ${n}`,
+  }));
+
+  it("A. five refused, one code: five rows in board order, each with the group reason", async () => {
+    await runBoard(
+      five,
+      top(
+        [
+          failedDoc(["a1", "a2", "a3", "a4", "a5"], {
+            reason: "not a ratified template",
+            reason_code: "not_a_ratified_template",
+          }),
+        ],
+        "5 of 5 answers refused",
+      ),
+    );
+    const r = rows();
+    expect(r.length).toBe(5);
+    expect(r.map((e) => e.getAttribute("data-export-refused-answer"))).toEqual([
+      "a1",
+      "a2",
+      "a3",
+      "a4",
+      "a5",
+    ]);
+    r.forEach((e, i) => {
+      expect(txt(e, "[data-export-answer-label]")).toBe(`Answer ${i + 1}`);
+      expect(txt(e, "[data-export-reason]")).toBe("not a ratified template");
+    });
+    expect(document.querySelector("[data-export-summary]")?.textContent).toBe(
+      "5 of 5 answers refused",
+    );
+  });
+
+  it("B. mixed codes: each row carries ITS document's reason and code", async () => {
+    await runBoard(
+      five,
+      top(
+        [
+          failedDoc(["a1", "a2"], {
+            reason: "reason X",
+            reason_code: "code_x",
+          }),
+          failedDoc(["a3", "a4", "a5"], {
+            reason: "reason Y",
+            reason_code: "code_y",
+          }),
+        ],
+        "5 of 5 answers refused",
+      ),
+    );
+    const r = rows();
+    expect(r.length).toBe(5);
+    const want = [
+      ["reason X", "code_x"],
+      ["reason X", "code_x"],
+      ["reason Y", "code_y"],
+      ["reason Y", "code_y"],
+      ["reason Y", "code_y"],
+    ];
+    r.forEach((e, i) => {
+      expect(txt(e, "[data-export-reason]")).toBe(want[i][0]);
+      expect(txt(e, "[data-export-reason-code]")).toBe(want[i][1]);
+    });
+  });
+
+  it("C. partial: the exists link is unchanged and holds no refused rows", async () => {
+    const mixed = loadMixed();
+    const cost = mixed.documents.find((d) => d.engine === "cost")!;
+    await runBoard(
+      [
+        { id: "c1", summary: "Cost one" },
+        { id: "f1", summary: "Fin one" },
+        { id: "f2", summary: "Fin two" },
+      ],
+      top(
+        [cost, failedDoc(["f1", "f2"], { reason: "nope", reason_code: "c" })],
+        "1 of 2 engines refused",
+        "partial",
+      ),
+    );
+    expect(rows().length).toBe(2);
+    const exists = document.querySelector('[data-export-status="exists"]')!;
+    expect(exists.querySelector("[data-export-refused-answer]")).toBeNull();
+    expect(
+      exists
+        .querySelector("[data-export-artifact]")
+        ?.getAttribute("data-export-href"),
+    ).toBe(cost.artifact_uri);
+    expect(document.querySelectorAll("[data-export-artifact]").length).toBe(1);
+  });
+
+  it("D. label fallback: summary, then question_text, then id", async () => {
+    await runBoard(
+      [
+        { id: "x1", summary: "  Sum  " },
+        { id: "x2", summary: "", question_text: " Why? " },
+        { id: "x3" },
+      ],
+      top(
+        [failedDoc(["x1", "x2", "x3"], { reason: "r" })],
+        "3 of 3 answers refused",
+      ),
+    );
+    expect(rows().map((e) => txt(e, "[data-export-answer-label]"))).toEqual([
+      "Sum",
+      "Why?",
+      "x3",
+    ]);
+  });
+
+  it("E. an id not on the board is still drawn, labelled with the id, and marked unknown", async () => {
+    await runBoard(
+      [{ id: "k1", summary: "Known" }],
+      top(
+        [failedDoc(["k1", "ghost"], { reason: "r" })],
+        "2 of 2 answers refused",
+      ),
+    );
+    const r = rows();
+    expect(r.length).toBe(2);
+    expect(r[0].hasAttribute("data-export-answer-unknown")).toBe(false);
+    expect(r[1].hasAttribute("data-export-answer-unknown")).toBe(true);
+    expect(txt(r[1], "[data-export-answer-label]")).toBe("ghost");
+  });
+
+  it("F. missing reason: every row reads the fallback, never the word failed", async () => {
+    await runBoard(
+      five.slice(0, 2),
+      top([failedDoc(["a1", "a2"])], "2 of 2 answers refused"),
+    );
+    const r = rows();
+    expect(r.length).toBe(2);
+    r.forEach((e) => {
+      expect(txt(e, "[data-export-reason]")).toBe(
+        "not exported — no reason given",
+      );
+      expect(e.textContent).not.toMatch(/failed/i);
+    });
+  });
+});
