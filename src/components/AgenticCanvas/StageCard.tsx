@@ -516,7 +516,11 @@ export function StageCard({
               <AttemptFailed artifact={artifact} />
               {hasRendered && (
                 <span data-testid="stage-tile-meta" className="text-[10px] font-mono text-slate-500">
-                  {artifact.status ? `${artifact.status} · ` : ""}
+                  {/* A TASK SAYS ITS TASK'S STATE. A task-artifact's `status` is always `complete`
+                      (taskToArtifact: it is what makes the card display), so reading it here put
+                      "complete · 24h ago" under a PENDING header on every task card (Chris's
+                      liaison screenshot, 10-28). The state lives on `task_ref.task_state`. */}
+                  {task ? `${task.task_state} · ` : artifact.status ? `${artifact.status} · ` : ""}
                   {tileAge(artifact.created_at)}
                 </span>
               )}
