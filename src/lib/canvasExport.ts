@@ -282,12 +282,6 @@ export function artifactLink(
 }
 
 /**
- * The ids of the canvas's ANSWERS, in canvas order, deduped — the population `answers` is built
- * from on export. Task-artifacts (`TASK_ARTIFACT_PREFIX`-prefixed ids, `taskArtifact.ts`) are
- * not answers and are excluded by id, per section A's contract population; so are drops
- * (`INGEST_ARTIFACT_PREFIX`, `ingestArtifact.ts`) — client-made, never in the graph of record.
- */
-/**
  * The words a person reads for one answer: the non-empty `summary`, else the non-empty
  * `question_text`, else the id. Trimmed; no other coercion.
  */
@@ -299,6 +293,12 @@ export function answerLabel(a: { id: string; summary?: string; question_text?: s
   return a.id;
 }
 
+/**
+ * The ids of the canvas's ANSWERS, in canvas order, deduped — the population `answers` is built
+ * from on export. Task-artifacts (`TASK_ARTIFACT_PREFIX`-prefixed ids, `taskArtifact.ts`) are
+ * not answers and are excluded by id, per section A's contract population; so are drops
+ * (`INGEST_ARTIFACT_PREFIX`, `ingestArtifact.ts`) — client-made, never in the graph of record.
+ */
 export function canvasAnswerIds(artifacts: { id: string }[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
