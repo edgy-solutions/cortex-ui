@@ -346,6 +346,9 @@ const NOT_TRANSPORT: Record<string, string> = {
   opPath: "pure: fills an op's path template (URL building for the raw-fetch and SSE seams)",
   request: "the typed core: exercised by every CALLS case",
   requestFull: "the typed core, whole-response variant: exercised by fetchEntitlements / healthCheck / fetchIngestSource",
+  fetchIngestExportProfiles: "CORTEX-PROPOSED, packet 2026-10-28 review-export: a route the producer does not declare (src/lib/reviewExport.ts)",
+  downloadIngestExport: "CORTEX-PROPOSED, packet 2026-10-28 review-export: a route the producer does not declare (src/lib/reviewExport.ts)",
+  downloadBatchExport: "CORTEX-PROPOSED, packet 2026-10-28 review-export: a route the producer does not declare (src/lib/reviewExport.ts)",
   fetchIllustrationContent: "GET {content_path}: producer-chosen path from an ILLUSTRATION payload, guarded by gatewayRelativePath; not a BFF op (consumed-routes.md, 'Not BFF routes')",
 };
 

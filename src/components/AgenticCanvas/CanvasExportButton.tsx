@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 import { Download } from "lucide-react";
+import { saveBlob } from "@/lib/saveBlob";
 import {
   fetchExportRecipients,
   startCanvasExport,
@@ -145,14 +146,7 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
     setErrorText(null);
     try {
       const blob = await downloadExportArtifact(link.href);
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = link.filename ?? "export";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objectUrl);
+      saveBlob(blob, link.filename ?? "export");
     } catch {
       setErrorText("Download failed.");
     } finally {

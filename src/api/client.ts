@@ -9,6 +9,14 @@ import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
 import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
 import { readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
+import {
+  EXPORT_BATCH_PATH,
+  EXPORT_PROFILES_PATH,
+  exportOnePath,
+  filenameFromDisposition,
+  readExportProfiles,
+  type ExportProfile,
+} from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
 import {
@@ -1285,6 +1293,37 @@ export async function fetchIllustrationContent(path: string): Promise<string> {
     transformResponse: (r) => r,
   });
   return data;
+}
+
+/**
+ * CORTEX-PROPOSED -- the review-export routes (packet 2026-10-28 review-export: invincible-agent
+ * `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`).
+ * The producer declares none of them, so, like `fetchIllustrationContent`, these call the shared `api`
+ * instance directly. The paths are spelled once, in `src/lib/reviewExport.ts`. A refusal is a non-2xx
+ * the caller reads with `refusalCode`.
+ */
+export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
+  const { data } = await api.get<unknown>(EXPORT_PROFILES_PATH);
+  const profiles = readExportProfiles(data);
+  if (profiles === null) throw new Error("malformed /ingest/export/profiles response");
+  return profiles;
+}
+
+export async function downloadIngestExport(
+  ingestId: string,
+  profile: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await api.get<Blob>(exportOnePath(ingestId), { params: { profile }, responseType: "blob" });
+  return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
+}
+
+export async function downloadBatchExport(
+  profile: string,
+  from: string,
+  to: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await api.get<Blob>(EXPORT_BATCH_PATH, { params: { profile, from, to }, responseType: "blob" });
+  return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 
 // 51 of the 70 ops are UNTYPED (the producer declares no response); their hand shapes stay in pass B.
