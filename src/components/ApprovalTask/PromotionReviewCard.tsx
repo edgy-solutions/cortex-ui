@@ -32,7 +32,7 @@ import { ReviewExportControl } from "./ReviewExportControl";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 import { isFeatureEnabled } from "@/lib/featureFlags";
-import { buildReviewCoverage } from "@/lib/reviewCoverage";
+import { buildReviewCoverage, coverageProblem } from "@/lib/reviewCoverage";
 import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, RUN_RULE, SHARED_RULE } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
@@ -358,6 +358,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const planLooked = plan ? plan.units.filter((u) => cov.looked.has(u.id)).length : 0;
   // PROPOSED, NOT SENT: the one record of what was sampled vs looked at, built from the plan. Shown, never sent.
   const record = plan ? buildReviewCoverage(plan, cov.looked, cov.confirmed, seed) : null;
+  const coverageBad = plan && record ? coverageProblem(record, plan, ex?.droppedRows ?? 0) : null;
+  const coverageParts = plan ? new Set(plan.units.flatMap((u) => (u.partIndex === null ? [] : [u.partIndex]))).size : 0;
   const checksLeft = plan ? [...plan.checks].filter((u) => !cov.looked.has(plan.units[u].id)).length : 0;
   // A fact whose rows all state ONE value is confirmed once; one whose rows disagree cannot be, and says so.
   const unconfirmedFacts = plan ? plan.sharedFacts.filter((f) => f.values.length === 1 && !cov.confirmed.has(f.key)) : [];
@@ -455,7 +457,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editsActive, draft, rows, headerDraft, ex]);
-  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0;
+  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0 && coverageBad === null;
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
@@ -1193,13 +1195,13 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </p>
                 <p
                   data-record-proposed
-                  data-record-coverage-parts={record!.parts}
+                  data-record-coverage-parts={coverageParts}
                   data-record-coverage-sampled={record!.sampled.length}
                   title={COVERAGE_PACKET}
                 >
-                  proposed, not sent: the producer does not declare review_coverage yet. Looked at {record!.looked_at.length} of {record!.parts} parts,
-                  of which {record!.sampled.length} were sampled; {record!.covered.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
-                  {record!.covered.length} {record!.covered.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
+                  proposed, not sent: the producer does not declare review_coverage yet. Looked at {record!.looked_at.length} of {coverageParts} parts,
+                  of which {record!.sampled.length} were sampled; {record!.groups.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
+                  {record!.groups.length} {record!.groups.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>
               </div>
             )}
@@ -1268,6 +1270,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper" || promoteHold === "unchecked") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
                 {promoteHold === "sent-back" ? sentBackText(hold!) : promoteHold === "unchecked" ? uncheckedText : HOLD_TEXT[promoteHold]}
+              </p>
+            )}
+            {promoteVerb && coverageBad && (
+              <p className="text-[11px] text-amber-400/90" data-coverage-problem={coverageBad.check}>
+                The record of what was looked at would be refused, so Promote is held: {coverageBad.message}
               </p>
             )}
             {rejectOpen && rejectVerb && editCount > 0 && (

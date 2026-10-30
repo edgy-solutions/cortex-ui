@@ -39,6 +39,8 @@ export type UnitFlag =
 export interface ReviewUnit {
   /** `p<part_index>` when part_index != null, else `m:<mpn>`. */
   id: string;
+  /** The `part_index` of the unit's rows (they share it: the unit is keyed on it); null when the rows carry none. */
+  partIndex: number | null;
   mpn: string;
   /** extracted_value of its `replacement_mpn` row, else null. */
   replacement: string | null;
@@ -198,6 +200,7 @@ export function buildReviewPlan(
     const isReplacement = rows[primary].field === "replacement_mpn";
     units.push({
       id: unitIdOf(first),
+      partIndex: first.part_index,
       mpn: first.mpn,
       replacement: isReplacement ? rows[primary].extracted_value : null,
       primary,
