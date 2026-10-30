@@ -314,7 +314,7 @@ export function buildActBody(
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only (spec 208).
   page?: number,
-  // PROPOSED, NOT DECLARED by the producer yet: the key is ABSENT unless a coverage is given.
+  // document_promotion promote: `review_coverage` (declared at producer pin 10ac02fe); the key is ABSENT unless given.
   reviewCoverage?: ReviewCoverageWire
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
@@ -348,7 +348,7 @@ export async function actOnHumanTask(
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only: the 1-based page the steward saw a part on.
   page?: number,
-  // document_promotion promote only: PROPOSED `review_coverage` (lane 01's ruling), sent only when provided.
+  // document_promotion promote only: `review_coverage` (declared at producer pin 10ac02fe), sent only when provided.
   reviewCoverage?: ReviewCoverageWire
 ): Promise<ActOnTaskResult> {
   const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage);

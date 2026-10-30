@@ -2,12 +2,13 @@
  * reviewCoverage -- what a steward looked at, versus what the review plan sampled, versus what a rule
  * folded away, as ONE record built for the promotion.
  *
- * PROPOSED wire, ruled by lane 01, NOT SENT until the producer declares it. Ruling:
- * `sessions/2026-10-29-packet-to-cortex-from-lane-01-review-coverage-ruled-part-index-ints-groups-server-checks-the-union.md`.
- * The act body at our producer pin is `HumanTaskActRequest` (gateway.py), a default pydantic model: an
- * unknown key is DROPPED SILENTLY, so sending `review_coverage` today would be a claim the server throws
- * away. The card builds the record and shows it; it does not send it until the producer declares the
- * field. `reviewCoverage.test.ts` holds a tripwire that fails when it does.
+ * DECLARED by the producer at `10ac02fe` (invincible-agent #156) as `HumanTaskActRequest.review_coverage`, and
+ * SENT on promote by the promotion card under the `promotionRuns` flag. Ruling:
+ * `sessions/2026-10-29-packet-to-cortex-from-lane-01-review-coverage-ruled-part-index-ints-groups-server-checks-the-union.md`;
+ * connect packet:
+ * `sessions/2026-10-30-packet-to-cortex-from-lane-01-review-coverage-is-in-0-4-72-connect-the-send.md`.
+ * Every schema is `additionalProperties: false`, so a key the server does not declare is a 422.
+ * `reviewCoverage.test.ts` seals the record against the declared schemas, both directions.
  *
  * A part id is the extraction's integer `part_index`. The server refuses a record that does not match the
  * extraction's part set (422 `review_coverage_invalid`); `coverageProblem` mirrors that check here, so the
@@ -15,6 +16,7 @@
  *
  * Pure: the same plan, looked set and seed give the same record.
  */
+import type { ReviewCoverage } from "@/api/generated/bff";
 import {
   MIN_RUN,
   RUN_RULE,
@@ -27,7 +29,7 @@ import {
 export const REVIEW_COVERAGE_RULES_VERSION = "cortex.reviewRuns.v1";
 
 export interface ReviewCoverageWire {
-  /** PROPOSED field `review_coverage` on the promote act. */
+  /** The promote act's `review_coverage`. */
   rules_version: string; // REVIEW_COVERAGE_RULES_VERSION
   /** part_index of the parts the steward opened, plan order. */
   looked_at: number[];
@@ -41,6 +43,9 @@ export interface ReviewCoverageWire {
   shared: { rule: typeof SHARED_RULE; page: number; bbox: number[]; parts: number[]; confirmed: boolean }[];
   sample: { seed: string; per_run: number; sample_all_up_to: number; min_run: number };
 }
+
+// Compile-time tie, no runtime cost: tsc fails if the wire type stops being assignable to the generated one.
+export const _tie: (w: ReviewCoverageWire) => ReviewCoverage = (w) => w;
 
 /**
  * A part not looked at and in no run (a straggler or a single) cannot exist at promote time, because

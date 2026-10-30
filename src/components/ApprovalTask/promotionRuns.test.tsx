@@ -16,7 +16,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 const actOnHumanTask = vi.fn();
-vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
+  actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 const fetchIngestSource = vi.fn();
@@ -35,6 +38,7 @@ vi.mock("@/lib/pdfSource", () => ({
 
 import { AuthContext, type AuthContextProps } from "react-oidc-context";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
+import { buildActBody, actOnHumanTask as actOnHumanTaskReal } from "@/api/client";
 import { scaleFixtureExtractionBody } from "@/lib/promotionReviewScaleFixture";
 import { readExtraction } from "@/lib/promotionReview";
 import { buildReviewPlan, shapeOf } from "@/lib/reviewRuns";
@@ -394,13 +398,13 @@ describe("promote hold: unchecked", () => {
 });
 
 describe("record preview", () => {
-  it("says what is sent today and what is only proposed, naming the packet", async () => {
+  it("says what is sent today and what is recorded with the promotion", async () => {
     await mountRuns();
     key("j");
     const sent = q("[data-record-sent]")!.textContent!;
     expect(sent).toBe("sent today: promoted, the note, 0 row edits, 0 header edits");
-    const prop = q("[data-record-proposed]")!;
-    expect(prop.textContent).toContain("proposed, not sent: the producer does not declare review_coverage yet");
+    const prop = q("[data-record-coverage]")!;
+    expect(prop.textContent).toContain("recorded with the promotion: Looked at");
     expect(prop.textContent).toContain("Looked at 1 of 10 parts,");
     expect(prop.textContent).toContain("shared facts confirmed once");
     // One rule groups many runs: the line counts RUNS and names the rule (it once said "15 rules").
@@ -413,23 +417,63 @@ describe("record preview", () => {
     const sampled = Number(prop.getAttribute("data-record-coverage-sampled"));
     expect(sampled).toBeGreaterThan(0);
     expect(prop.textContent).toContain(`of which ${sampled} were sampled`);
-    expect(prop.getAttribute("title")).toContain("packet-to-lane-01-from-cortex-review-coverage-on-the-promotion-record.md");
     fireEvent.click(q("[data-shared-confirm]")!);
     expect(prop.textContent).toContain("1 shared facts confirmed once");
   });
 
-  it("promote sends no review_coverage: the record is shown, not sent", async () => {
+});
+
+/** The /act body the card's promote call would put on the wire: actOnHumanTask's positional args through the real buildActBody. */
+const promotedBody = () => {
+  const [, decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage] = actOnHumanTask.mock.calls[0] as Parameters<typeof actOnHumanTaskReal>;
+  return JSON.parse(JSON.stringify(buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage))) as Record<string, unknown>;
+};
+
+describe("promote sends the coverage record (scale fixture)", () => {
+  const walkAndPromote = async () => {
     actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    fetchIngestExtraction.mockImplementation(async () => scaleFixtureExtractionBody(SHA));
     await mountRuns();
-    fireEvent.click(q("[data-run]")!);
-    for (let n = 0; n < 12; n++) key("J");
-    fireEvent.click(unitEl("p0")!);
-    fireEvent.click(q("[data-shared-confirm]")!);
+    const plan = buildReviewPlan(readExtraction(scaleFixtureExtractionBody(SHA))!.rows, `${SHA}:1`);
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("J");
+    // J walks forward from the selection; a check before the start is reached backwards.
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("K");
+    for (const el of document.querySelectorAll<HTMLElement>("[data-shared-confirm]")) fireEvent.click(el);
+    expect(progress().left).toBe(0);
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    // The card leaves this view once promoted: read the record line first.
+    const line = { text: q("[data-record-coverage]")!.textContent!, sampled: Number(q("[data-record-coverage]")!.getAttribute("data-record-coverage-sampled")) };
+    fireEvent.click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    return line;
+  };
+
+  it("flag on: the body carries review_coverage whose looked_at and groups cover the fixture's part set", async () => {
+    const line = await walkAndPromote();
+    const sent = promotedBody();
+    expect(sent.decision).toBe("promoted");
+    const rc = sent.review_coverage as { looked_at: number[]; groups: { parts: number[] }[]; sampled: number[]; rules_version: string };
+    expect(rc, "review_coverage missing from the promote body").toBeDefined();
+    const fixtureParts = new Set((scaleFixtureExtractionBody(SHA).rows as { part_index: number }[]).map((r) => r.part_index));
+    const union = new Set([...rc.looked_at, ...rc.groups.flatMap((g) => g.parts)]);
+    expect([...union].sort((x, y) => x - y)).toEqual([...fixtureParts].sort((x, y) => x - y));
+    expect(rc.looked_at.length).toBeGreaterThan(0);
+    expect(line.text).toContain(`Looked at ${rc.looked_at.length} of ${fixtureParts.size} parts`);
+    expect(rc.groups.length).toBeGreaterThan(0);
+    expect(line.text).toContain(`${rc.groups.length} ${rc.groups.length === 1 ? "run" : "runs"}`);
+    expect(line.sampled).toBe(rc.sampled.length);
+  }, 180_000);
+
+  it("flag off: the same promote has NO review_coverage key", async () => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    setCfg({ VITE_FEATURES: "" });
+    fetchIngestExtraction.mockImplementation(async () => scaleFixtureExtractionBody(SHA));
+    render(<AuthContext.Provider value={asOwner(OWNER)}><ApprovalTaskCard task={task()} /></AuthContext.Provider>);
+    await waitFor(() => expect(promoteBtn()).not.toBeNull());
     await waitFor(() => expect(promoteBtn().disabled).toBe(false));
     fireEvent.click(promoteBtn());
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
-    expect(JSON.stringify(actOnHumanTask.mock.calls)).not.toContain("review_coverage");
-    expect(actOnHumanTask.mock.calls[0][1]).toBe("promoted");
+    expect(Object.hasOwn(promotedBody(), "review_coverage")).toBe(false);
   });
 });
 

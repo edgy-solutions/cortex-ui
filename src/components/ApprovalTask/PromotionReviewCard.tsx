@@ -114,7 +114,6 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   unchecked: "",
 };
 /** The packet that proposes recording coverage on the wire; the preview names it so nobody mistakes it for shipped. */
-const COVERAGE_PACKET = "sessions/2026-10-29-packet-to-lane-01-from-cortex-review-coverage-on-the-promotion-record.md";
 const emptyDraft = (): RowEditDraft => ({ deleted: {}, addedMpns: [], corrected: {}, overrides: {}, addedEvidence: {}, correctedEvidence: {} });
 /** A saved draft is applied only if it has every part of the shape the editor reads; anything else is dropped whole. */
 function isRowEditDraft(v: unknown): v is RowEditDraft {
@@ -356,7 +355,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const runOf = useMemo(() => (plan ? runIdByUnit(plan) : new Map<number, string>()), [plan]);
   const selUnit = plan ? (plan.unitOfRow[sel] ?? 0) : -1;
   const planLooked = plan ? plan.units.filter((u) => cov.looked.has(u.id)).length : 0;
-  // PROPOSED, NOT SENT: the one record of what was sampled vs looked at, built from the plan. Shown, never sent.
+  // The one record of what was sampled vs looked at, built from the plan. Shown, and sent on promote under the flag.
   const record = plan ? buildReviewCoverage(plan, cov.looked, cov.confirmed, seed) : null;
   const coverageBad = plan && record ? coverageProblem(record, plan, ex?.droppedRows ?? 0) : null;
   const coverageParts = plan ? new Set(plan.units.flatMap((u) => (u.partIndex === null ? [] : [u.partIndex]))).size : 0;
@@ -594,6 +593,10 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       note,
       rowCount > 0 ? buildRowEdits(draft) : undefined,
       headerCount > 0 ? buildHeaderEdits(headerDraft, extractedHeader) : undefined,
+      undefined,
+      undefined,
+      // Held above while `coverageBad` is non-null, so a record that is sent has passed `coverageProblem`.
+      runsOn && record ? record : undefined,
     );
   };
   const reject = () => {
@@ -1194,12 +1197,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                   sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
                 </p>
                 <p
-                  data-record-proposed
+                  data-record-coverage
                   data-record-coverage-parts={coverageParts}
                   data-record-coverage-sampled={record!.sampled.length}
-                  title={COVERAGE_PACKET}
                 >
-                  proposed, not sent: the producer does not declare review_coverage yet. Looked at {record!.looked_at.length} of {coverageParts} parts,
+                  recorded with the promotion: Looked at {record!.looked_at.length} of {coverageParts} parts,
                   of which {record!.sampled.length} were sampled; {record!.groups.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
                   {record!.groups.length} {record!.groups.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>

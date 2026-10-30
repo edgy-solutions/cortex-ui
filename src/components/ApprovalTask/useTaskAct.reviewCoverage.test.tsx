@@ -1,5 +1,5 @@
 /**
- * The act path can carry `review_coverage`, and the promotion card does not pass it yet. The body is
+ * The act path carries `review_coverage` when given one (the promotion card gives it under the flag). The body is
  * captured at the real axios adapter, so what is checked is what would go on the wire, not an argument list.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";

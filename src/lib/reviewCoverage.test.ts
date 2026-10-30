@@ -1,5 +1,5 @@
 /**
- * reviewCoverage -- the PROPOSED record of sampled vs looked at. Each `it` names what turns red.
+ * reviewCoverage -- the record of sampled vs looked at. Each `it` names what turns red.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -196,20 +196,77 @@ describe("coverageProblem mirrors the receiver's honour condition", () => {
   });
 });
 
-describe("TRIPWIRE: the producer does not declare review_coverage yet", () => {
+describe("the producer declares review_coverage", () => {
   const bff = readFileSync(resolve(__dirname, "../api/generated/bff.ts"), "utf8");
   const start = bff.indexOf("export type HumanTaskActRequest = {");
   const block = start < 0 ? "" : bff.slice(start, bff.indexOf("\n};", start) + 3);
 
-  it("control: the HumanTaskActRequest block was found and still has row_edits", () => {
+  it("control: the HumanTaskActRequest block was found and has row_edits", () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(block).toContain("row_edits");
   });
 
-  it("the act body does not declare review_coverage", () => {
-    expect(
-      block.includes("review_coverage"),
-      "the producer now declares review_coverage on the act body: wire buildReviewCoverage into the promote send (PromotionReviewCard) and delete this tripwire",
-    ).toBe(false);
+  it("the act body declares review_coverage", () => {
+    expect(block, "the generated act body lost review_coverage: re-pin or the send is a claim the server drops").toContain(
+      "review_coverage?: ReviewCoverage | null",
+    );
+  });
+});
+
+describe("the record is the declared schema, both directions (every schema is additionalProperties: false, so an extra key is a 422)", () => {
+  const spec = JSON.parse(readFileSync(resolve(__dirname, "../api/openapi/cortex-bff.openapi.json"), "utf8")) as {
+    components: { schemas: Record<string, { properties: Record<string, unknown>; required?: string[]; additionalProperties?: unknown }> };
+  };
+  const S = spec.components.schemas;
+  const keys = (o: object) => Object.keys(o).sort();
+  const checkedRec = buildReviewCoverage(plan, LOOKED, new Set(plan.sharedFacts.map((f) => f.key)), SEED);
+
+  it("control: the record has groups and shared entries to compare", () => {
+    expect(checkedRec.groups.length).toBeGreaterThan(0);
+    expect(checkedRec.shared.length).toBeGreaterThan(0);
+  });
+
+  it("the record's keys equal ReviewCoverage.properties (sample included)", () => {
+    expect(keys(checkedRec)).toEqual(keys(S.ReviewCoverage.properties));
+  });
+
+  it("every groups[] entry's keys equal CoverageGroup.properties", () => {
+    checkedRec.groups.forEach((g) => expect(keys(g)).toEqual(keys(S.CoverageGroup.properties)));
+  });
+
+  it("every shared[] entry's keys equal CoverageShared.properties", () => {
+    checkedRec.shared.forEach((x) => expect(keys(x)).toEqual(keys(S.CoverageShared.properties)));
+  });
+
+  it("every schema's required keys are in the record, and all three refuse unknown keys", () => {
+    const has = (k: string, o: object) => k in o;
+    (S.ReviewCoverage.required ?? []).forEach((k) => expect(has(k, checkedRec), k).toBe(true));
+    (S.CoverageGroup.required ?? []).forEach((k) => expect(has(k, checkedRec.groups[0]), k).toBe(true));
+    (S.CoverageShared.required ?? []).forEach((k) => expect(has(k, checkedRec.shared[0]), k).toBe(true));
+    expect(S.ReviewCoverage.additionalProperties).toBe(false);
+    expect(S.CoverageGroup.additionalProperties).toBe(false);
+    expect(S.CoverageShared.additionalProperties).toBe(false);
+  });
+
+  it("the receiver's field constraints, mirrored: bbox, page, integer ids, rules_version, sample values", () => {
+    checkedRec.shared.forEach((x) => {
+      expect(x.bbox).toHaveLength(4);
+      x.bbox.forEach((v) => {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1);
+      });
+      expect(Number.isInteger(x.page) && x.page >= 1).toBe(true);
+    });
+    const ids = [
+      ...checkedRec.looked_at,
+      ...checkedRec.sampled,
+      ...checkedRec.flagged,
+      ...checkedRec.groups.flatMap((g) => g.parts),
+      ...checkedRec.shared.flatMap((x) => x.parts),
+    ];
+    expect(ids.length).toBeGreaterThan(0);
+    ids.forEach((n) => expect(Number.isInteger(n)).toBe(true));
+    expect(checkedRec.rules_version.length).toBeGreaterThan(0);
+    Object.values(checkedRec.sample).forEach((v) => expect(["string", "number", "boolean"]).toContain(typeof v));
   });
 });
