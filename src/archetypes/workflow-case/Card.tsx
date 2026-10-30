@@ -92,7 +92,10 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const instances = payload.instances ?? [];
   const history = payload.history ?? [];
   const pending = useHumanTaskStore(useShallow(selectPendingTasks));
-  const declarationFor = useTaskKindStore((s) => s.declarationFor);
+  // SUBSCRIBED TO `byKind`, not to the `declarationFor` function: the function is one stable reference that
+  // reads `get()`, so a card drawn before `/task_kinds` loads would keep the two seed verbs forever.
+  const byKind = useTaskKindStore((s) => s.byKind);
+  const declarationFor = (kind: string) => (Object.hasOwn(byKind, kind) ? byKind[kind] : null);
   const resolved = caseOptions(payload, pending, declarationFor);
   const options = resolved.source === "none" ? [] : resolved.options;
   const approvals = payload.approvals ?? [];

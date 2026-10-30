@@ -4,7 +4,7 @@
  * see `fixtures.test.tsx` for the one place identity with the direct import is itself the proof).
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { archetypePackage } from "../registry";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
@@ -191,6 +191,22 @@ describe("options source — the case's own key, else the pending task's, else t
     expect(container.querySelector("[data-options]")!.getAttribute("data-options-source")).toBe("task");
     expect(container.querySelector("[data-options-from-task]")).not.toBeNull();
     expect(container.textContent).not.toMatch(/no options/);
+  });
+
+  it("the four case, menu loaded AFTER the card drew: the registry's four verbs replace the two seed verbs", () => {
+    // A row with no declaration of its own: the card falls back to the served menu, which loads on
+    // boot and may land after the case panel has drawn.
+    useHumanTaskStore.setState({ tasks: [pendingTask({ declaration: undefined })] });
+    const { container } = render(<Card case={withoutOptions()} />);
+    expect(container.querySelectorAll("[data-option]")).toHaveLength(2);
+    act(() => {
+      useTaskKindStore.setState({
+        status: "loaded",
+        byKind: { some_kind: readTaskDeclaration({ kind: "some_kind", declared: true, accepts: FOUR, reason_required: [] }) } as never,
+      });
+    });
+    const ids = [...container.querySelectorAll("[data-option]")].map((li) => li.textContent);
+    expect(ids).toHaveLength(4);
   });
 
   it("[] draws 'no options' under data-options-empty", () => {
