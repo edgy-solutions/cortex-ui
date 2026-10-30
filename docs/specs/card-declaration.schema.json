@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/edgy-solutions/cortex-ui/blob/master/docs/specs/card-declaration.schema.json",
+  "title": "Card declaration",
+  "description": "What a cortex card declares about the payload it draws. This is a DOCUMENT, not code: nothing in cortex-ui loads or enforces this file. It is written down from what cortex's code and tests already hold, as the input to the OpenDDIL ADR. The root is a card CONTRACT (an exported `*_CONTRACT` object). $defs/registrationRow is the same contract as cortex sends it on POST /register_frontend_capabilities. $defs/archetypePackage is the ADR-0055 package that a contract joins in `src/archetypes/` through `defineArchetype`. Rules JSON Schema cannot express (equality and subset across fields) are listed under `x-cortex-rules`, each with the test that enforces it, or marked `enforced: none` when only the census holds it.",
+  "x-cortex-provenance": {
+    "cortex-ui": "e772cca3367ec8302e3ee25b74a6149ae1d83313",
+    "producer-pin": "invincible-agent 10ac02feeb7e44cc52707731066b63f000df8aa3 (cortex-bff.openapi.json: FrontendCapability, RegisterFrontendCapabilitiesRequest)",
+    "census": "29 exported *_CONTRACT objects in 28 files (src/**/*.contract.ts, src/**/*.contracts.ts, src/archetypes/*/contract.ts), 115 fields; 49 registration rows from assembleDerivedCapabilities(), 26 distinct archetypes, 0 legacy; 10 archetype packages in ARCHETYPE_PACKAGES. Read off the live modules by a throwaway vitest probe, not by grepping source. Every member validates against this schema, and each negative control in x-cortex-controls is refused.",
+    "sources": [
+      "src/archetypes/defineArchetype.ts and defineArchetype.test.ts (the package rules)",
+      "src/registry/assembleCapabilities.ts and assembleCapabilities.test.ts (contract -> registration row)",
+      "src/registry/frontendCapabilities.ts (FrontendCapability, cortex's type for the row)",
+      "invincible-agent docs/adr/ADR-0055-archetypes-are-packages-and-an-absence-is-a-declared-fact.md"
+    ]
+  },
+  "type": "object",
+  "required": ["archetype", "layout", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "archetype": {
+      "description": "The archetype id. Structural, never domain vocabulary. Several rows may share one contract (six output types bind MarkdownRenderer's), but one archetype has one contract.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "component": {
+      "description": "The React component that DRAWS the payload. 28 of 29 contracts.",
+      "type": "string",
+      "minLength": 1
+    },
+    "consumer": {
+      "description": "A function that ACTS ON the payload instead of drawing it. 1 of 29 (CANVAS_SEED_CONTRACT: canvasSeedFromArtifact). The registration row then carries `component: \"\"`, which is a claim (nothing renders this), not a missing value.",
+      "type": "string",
+      "minLength": 1
+    },
+    "layout": {
+      "description": "Where the card sits. Census: full-width 25, grid-col-1 2, none 1, rows 1. `none` goes with `consumer`.",
+      "enum": ["full-width", "grid-col-1", "none", "rows"],
+      "x-cortex-finding": "`rows` (COMPETING_MEASURES_CONTRACT) is outside cortex's own FrontendCapability.layout type (\"full-width\" | \"grid-col-1\" | \"none\"); assembleDerivedCapabilities passes it through an `as` cast, so it reaches the wire. The producer declares layout as an untyped string, so nothing refuses it on either side."
+    },
+    "recomputes": {
+      "description": "ADR-0042 Ruling 9's discriminant: whether re-evaluating the question would return a different answer as plan state moves. A contract field, never a refusal reason. Present on 20 of 29 (true 10, false 10). ABSENT on 9, and absent is not stated to mean false.",
+      "type": "boolean"
+    },
+    "fields": {
+      "description": "The payload keys the card reads, each with its encoding. Registration publishes Object.keys(fields), in order, as expected_fields.",
+      "$ref": "#/$defs/fieldMap"
+    },
+    "rowFields": {
+      "description": "Per-row keys of an array field, declared like `fields`. 1 of 29.",
+      "$ref": "#/$defs/fieldMap"
+    },
+    "rowRequirements": {
+      "description": "Named structural facts about the rows (minRows, absentIsNotZero, shortfallIsUpstream, ...). Tests assert them by name. 20 of 29. Keys are per-archetype; values seen: number 20, boolean 33, array 2.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+    "refusalReasons": {
+      "description": "The closed vocabulary of reasons this card may give for refusing a payload. Census: 20 non-empty, 6 empty, 3 absent. EMPTY is a statement: the card never refuses (KNOWLEDGE_DOCUMENT, the universal fallback, is asserted empty by test). ABSENT is not stated to mean empty: ILLUSTRATION, MODEL_EXPLANATION and WORKFLOW_CASE declare absences through their package instead.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "oneOf": [
+    { "required": ["component"], "not": { "required": ["consumer"] } },
+    { "required": ["consumer"], "not": { "required": ["component"] } }
+  ],
+  "$defs": {
+    "fieldMap": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "description": "snake_case payload keys. `__payload` is the one sentinel: the field IS the whole component payload (INSTANCES_BY_PROPERTY_CONTRACT, with isWholeComponentPayload: true).",
+        "pattern": "^(__payload|[a-z][a-z0-9_]*)$"
+      },
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "field": {
+      "description": "One payload key. Two spellings exist side by side: the ENCODING form (how it travels; 47 fields) and the TYPE form (the scalar it is; 68 fields). Never both. The spelling is per-contract habit, not a semantic split.",
+      "type": "object",
+      "required": ["required"],
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "description": "Census: true 31, false 84. A required field the payload lacks is a refusal, never a default.",
+          "type": "boolean"
+        },
+        "encoding": {
+          "description": "How the value travels. Census: array 25, object 10, string 8, number 1, boolean 1, json-string 1, enum 1. `json-string` is a JSON document carried in a string (CHART_WIDGET chart_data).",
+          "enum": ["array", "object", "string", "number", "boolean", "json-string", "enum"]
+        },
+        "type": {
+          "description": "The scalar it is. Census: string 52, number 12, boolean 3, enum 1.",
+          "enum": ["string", "number", "boolean", "enum"]
+        },
+        "parsesTo": {
+          "description": "What the card parses the encoded value into. Census: array-of-objects 21, object 5, array-of-strings 1. NOT required for array/object: 11 array or object fields omit it.",
+          "enum": ["array-of-objects", "object", "array-of-strings"]
+        },
+        "values": {
+          "description": "The closed value set of an enum field.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "requiredKeys": {
+          "description": "Keys an object field must carry.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "elementRequiredKeys": {
+          "description": "Keys every element of an array field must carry.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isWholeComponentPayload": {
+          "description": "The field is the entire payload, not a key in it. Paired with the `__payload` name.",
+          "const": true
+        },
+        "mapsToProp": {
+          "description": "The component prop this key is handed to when the names differ. 1 field (WARNING_CARD). The contracts' own comments call a prop that differs from its payload key \"the seam itself\"; this is the one recorded exception.",
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        { "required": ["encoding"], "not": { "required": ["type"] } },
+        { "required": ["type"], "not": { "required": ["encoding"] } }
+      ],
+      "allOf": [
+        {
+          "if": { "anyOf": [{ "properties": { "encoding": { "const": "enum" } }, "required": ["encoding"] }, { "properties": { "type": { "const": "enum" } }, "required": ["type"] }] },
+          "then": { "required": ["values"] },
+          "else": { "not": { "required": ["values"] } }
+        },
+        {
+          "if": { "required": ["parsesTo"] },
+          "then": { "required": ["encoding"], "properties": { "encoding": { "enum": ["array", "object", "json-string"] } } }
+        }
+      ]
+    },
+    "registrationRow": {
+      "description": "The contract as cortex sends it: one element of RegisterFrontendCapabilitiesRequest.capabilities on POST /register_frontend_capabilities, built by assembleDerivedCapabilities(). The mesh-vocabulary half (subject_uri, object_uri, persona_fit, domain_fit) is the registry's; the rest is projected from the contract and never restated.",
+      "type": "object",
+      "required": ["subject_uri", "object_uri", "archetype", "component", "layout", "expected_fields", "persona_fit", "domain_fit", "contract", "contract_source"],
+      "additionalProperties": false,
+      "properties": {
+        "subject_uri": { "type": "string", "minLength": 1, "description": "The engine output type that routes here. The dedupe key: one row per subject_uri." },
+        "object_uri": { "type": "string", "minLength": 1 },
+        "archetype": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "component": { "type": "string", "description": "contract.component, or \"\" when the contract names a consumer." },
+        "consumer": {
+          "type": "string",
+          "minLength": 1,
+          "x-cortex-finding": "Cortex sends `consumer` on 1 of 49 rows, but the producer's FrontendCapability (at 10ac02fe) declares no `consumer` property and sets no additionalProperties, so the receiver does not keep it as a declared field. Its only declared trace on the wire is inside the open `contract` object."
+        },
+        "layout": { "enum": ["full-width", "grid-col-1", "none", "rows"] },
+        "expected_fields": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "persona_fit": { "type": "array", "items": { "type": "string" } },
+        "domain_fit": { "type": "array", "items": { "type": "string" }, "description": "May be empty, and empty is sourced (the engine declares itself agnostic), not defaulted." },
+        "contract": { "$ref": "#" },
+        "contract_source": { "enum": ["derived", "legacy"], "description": "Census: derived 49, legacy 0." }
+      }
+    },
+    "archetypePackage": {
+      "description": "ADR-0055: an archetype is a package, and an absence is a declared fact. The JSON-able part of what defineArchetype() accepts; the React `Card` is omitted. 10 packages. 7 of the 10 are also registered (WORKFLOW_CASE, ILLUSTRATION and MODEL_EXPLANATION draw only through other paths).",
+      "type": "object",
+      "required": ["id", "contract", "row", "reads", "absences", "fixtures"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "contract": { "$ref": "#" },
+        "row": {
+          "description": "Cortex's copy of the backend row declaration (row.ts in each package).",
+          "type": "object",
+          "required": ["archetype", "payload_key", "passthrough"],
+          "additionalProperties": false,
+          "properties": {
+            "archetype": { "type": "string" },
+            "payload_key": { "type": "string", "minLength": 1 },
+            "passthrough": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "reads": {
+          "description": "The row fields the card reads.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "absences": {
+          "description": "The data-* attributes the card renders to DECLARE an absence: either a bare attribute (data-reason-absent) or an attribute with a value (data-model-question=\"deferred\"). Scoped to one card's subtree (readDeclaredAbsences).",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^data-[a-z0-9]+(-[a-z0-9]+)*(=\"[a-z0-9]+(-[a-z0-9]+)*\")?$" }
+        },
+        "noAbsence": {
+          "description": "An explicit, CHECKED claim that the card has no payload-flippable absence (its noAbsence.test renders the parity population and fails if any data-* flips). 2 of 10 (DELTA_SET, SHORTFALL_GRID).",
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": { "reason": { "type": "string", "pattern": "\\S" } }
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "declares"],
+            "description": "The other keys (payload, rows, envelope, value_unit, ...) are per-archetype.",
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "declares": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "if": { "required": ["noAbsence"] },
+      "then": { "properties": { "absences": { "maxItems": 0 } } },
+      "else": { "properties": { "absences": { "minItems": 1 } } }
+    }
+  },
+  "x-cortex-rules": [
+    { "rule": "every absence a fixture declares is in the package's absences", "on": "archetypePackage", "enforced": "defineArchetype.test.ts: \"refuses a fixture declaring an absence outside the package's absences\"" },
+    { "rule": "every reads field is in row.passthrough", "on": "archetypePackage", "enforced": "defineArchetype.test.ts: \"refuses a reads field that row.passthrough does not declare\"" },
+    { "rule": "contract.archetype == id", "on": "archetypePackage", "enforced": "defineArchetype.test.ts: \"refuses contract.archetype !== id\"" },
+    { "rule": "ids are unique across packages", "on": "archetypePackage[]", "enforced": "registry.test.ts: \"a duplicate id throws, naming the colliding path\"" },
+    { "rule": "row.archetype == id", "on": "archetypePackage", "enforced": "defineArchetype.test.ts: \"refuses row.archetype !== id\"" },
+    { "rule": "row.payload_key is a key of contract.fields", "on": "archetypePackage", "enforced": "none; it holds on 10 of 10 in the census" },
+    { "rule": "archetype == contract.archetype; component == (contract.component ?? \"\")", "on": "registrationRow", "enforced": "by construction in assembleDerivedCapabilities; assembleCapabilities.test.ts: \"no derived row advertises a component the interpreter does not dispatch\"" },
+    { "rule": "consumer names a function that is really exported", "on": "registrationRow", "enforced": "assembleCapabilities.test.ts: \"every ACTED-ON row names a consumer that is really exported\"" },
+    { "rule": "expected_fields == Object.keys(contract.fields), in order", "on": "registrationRow", "enforced": "assembleCapabilities.test.ts: \"every derived row's expected_fields is a projection of its own contract\"" },
+    { "rule": "one archetype has one contract across rows", "on": "registrationRow[]", "enforced": "assembleCapabilities.test.ts: \"ONE ARCHETYPE, ONE CONTRACT\"" },
+    { "rule": "subject_uri is unique across rows", "on": "registrationRow[]", "enforced": "assembleCapabilities.test.ts: \"never emits two entries for one subject_uri\"" }
+  ],
+  "x-cortex-controls": "Each of these, applied to a real census member, is REFUSED by this schema (ajv 8.18, draft 2020-12): a contract with both component and consumer; one with neither; layout \"grid\"; an unknown contract key; a field with both encoding and type; a field with neither; an enum field with no values; values on a non-enum field; parsesTo on a type-form field; encoding \"xml\"; an empty fields map; a camelCase field name; a package with noAbsence AND absences; one with empty absences and no noAbsence; an absence not spelled data-*; a blank noAbsence.reason; a registration row with an unknown key; contract_source \"hand\"."
+}
