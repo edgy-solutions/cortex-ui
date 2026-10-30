@@ -8,6 +8,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { archetypePackage } from "../registry";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { WORKFLOW_CASE_FIXTURES } from "./fixtures";
 import taskKindsCapture from "../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
@@ -165,5 +166,44 @@ describe("the SemanticInterpreter dispatches WORKFLOW_CASE through the registry"
   it("an envelope with NO case object does not draw the card (and does not throw)", () => {
     render(<SemanticInterpreter payload={{ components: [{ archetype: "WORKFLOW_CASE" }] }} />);
     expect(document.querySelector('[data-archetype="WORKFLOW_CASE"]')).toBeNull();
+  });
+});
+
+describe("options source — the case's own key, else the pending task's, else the stated absence", () => {
+  const FOUR = ["zeta", "alpha", "mid", "beta"];
+  const wf = FIXTURE_1.payload.instances[0].workflow_id;
+  const withoutOptions = () => {
+    const { options: _o, ...rest } = FIXTURE_1.payload;
+    return rest as typeof FIXTURE_1.payload;
+  };
+  const pendingTask = (over: Record<string, unknown> = {}) => ({
+    id: "r1", taskId: `${wf}:t1`, workflowId: wf, audience: "a", kind: "some_kind", status: "pending" as const,
+    title: "", summary: "", requestedBy: "", subjectRef: null, createdAt: 0,
+    declaration: { kind: "some_kind", declared: true, accepts: FOUR, reason_required: [] },
+    ...over,
+  });
+  afterEach(() => useHumanTaskStore.setState({ tasks: [] }));
+
+  it("the four case: options absent + a pending task declaring four verbs draws 4 options, never 'no options'", () => {
+    useHumanTaskStore.setState({ tasks: [pendingTask()] });
+    const { container } = render(<Card case={withoutOptions()} />);
+    expect(container.querySelectorAll("[data-option]")).toHaveLength(4);
+    expect(container.querySelector("[data-options]")!.getAttribute("data-options-source")).toBe("task");
+    expect(container.querySelector("[data-options-from-task]")).not.toBeNull();
+    expect(container.textContent).not.toMatch(/no options/);
+  });
+
+  it("[] draws 'no options' under data-options-empty", () => {
+    useHumanTaskStore.setState({ tasks: [pendingTask()] });
+    const { container } = render(<Card case={{ ...FIXTURE_1.payload, options: [] }} />);
+    expect(container.querySelector("[data-options-empty]")!.textContent).toBe("no options");
+    expect(container.querySelector("[data-options-absent]")).toBeNull();
+    expect(container.querySelector("[data-options]")!.getAttribute("data-options-source")).toBe("case");
+  });
+
+  it("absent with an empty store says the options were not recorded", () => {
+    const { container } = render(<Card case={withoutOptions()} />);
+    expect(container.querySelector("[data-options-absent]")!.textContent).toBe("options not recorded for this case");
+    expect(container.querySelector("[data-options]")!.getAttribute("data-options-source")).toBe("none");
   });
 });

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
+import { fetchCaseArtifact } from "@/api/client";
+import { refusalCode } from "@/lib/reviewExport";
+import { selectPendingTasks, useHumanTaskStore } from "@/store/useHumanTaskStore";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { useShallow } from "zustand/react/shallow";
+import { caseOptions } from "./caseOptions";
 import type {
   CaseApproval,
   CaseDefinition,
@@ -23,6 +29,61 @@ export interface WorkflowCaseProps {
   case: WorkflowCasePayload;
 }
 
+function recordText(v: unknown): string {
+  return v !== null && typeof v === "object" ? JSON.stringify(v) : String(v);
+}
+
+/** The released artifact: opened through the BFF with the bearer (a bare href would resolve against the
+ *  cortex origin and send no token). */
+function CaseArtifact({ uri, label }: { uri: string; label: string }) {
+  const [state, setState] = useState<
+    { s: "idle" } | { s: "loading" } | { s: "open"; record: unknown } | { s: "error"; text: string }
+  >({ s: "idle" });
+  const onClick = async () => {
+    if (state.s === "open") return setState({ s: "idle" });
+    if (state.s === "loading") return;
+    setState({ s: "loading" });
+    try {
+      setState({ s: "open", record: await fetchCaseArtifact(uri) });
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("fetchCaseArtifact: refused")) {
+        return setState({ s: "error", text: "the artifact link is not a gateway path" });
+      }
+      const { status, code } = refusalCode(err);
+      const why = [status, code].filter((x) => x !== null).join(" ");
+      setState({ s: "error", text: `could not open the record${why ? `: ${why}` : ""}` });
+    }
+  };
+  const rec = state.s === "open" && state.record !== null && typeof state.record === "object" ? (state.record as Record<string, unknown>) : null;
+  return (
+    <>
+      <button type="button" className="font-mono text-[10px] text-cyan-400/80 underline" onClick={onClick} data-artifact>
+        {label}
+      </button>
+      {state.s === "loading" && (
+        <span className="ml-2 font-mono text-[10px] text-slate-500" data-artifact-loading>
+          loading
+        </span>
+      )}
+      {state.s === "error" && (
+        <p className="font-mono text-[10px] text-red-400" data-artifact-error>
+          {state.text}
+        </p>
+      )}
+      {state.s === "open" && (
+        <dl className="mt-1 flex flex-col gap-0.5" data-artifact-record>
+          {(rec ? Object.keys(rec) : []).map((k) => (
+            <div key={k} className="flex gap-2 font-mono text-[10px] text-slate-500">
+              <dt>{k}</dt>
+              <dd className="text-slate-300">{recordText(rec![k])}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  );
+}
+
 function findStep(definition: CaseDefinition, stepId: string) {
   return definition.steps.find((s) => s.id === stepId);
 }
@@ -30,7 +91,10 @@ function findStep(definition: CaseDefinition, stepId: string) {
 export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const instances = payload.instances ?? [];
   const history = payload.history ?? [];
-  const options = payload.options ?? [];
+  const pending = useHumanTaskStore(useShallow(selectPendingTasks));
+  const declarationFor = useTaskKindStore((s) => s.declarationFor);
+  const resolved = caseOptions(payload, pending, declarationFor);
+  const options = resolved.source === "none" ? [] : resolved.options;
   const approvals = payload.approvals ?? [];
   const artifact = payload.output_artifact;
   const released = !!artifact && !!artifact.uri && !!artifact.released_at;
@@ -239,7 +303,12 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
 
       {/* OPTIONS — each with its label and its data in key order, and the artifact link if
           the option carries one. */}
-      <div className="flex flex-col gap-2" data-options>
+      <div className="flex flex-col gap-2" data-options data-options-source={resolved.source}>
+        {resolved.source === "task" && options.length > 0 && (
+          <p className="font-mono text-[10px] text-slate-500" data-options-from-task>
+            from the pending task
+          </p>
+        )}
         {options.length > 0 ? (
           <ul className="flex flex-col gap-2">
             {options.map((option: CaseOption) => (
@@ -268,10 +337,17 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
               </li>
             ))}
           </ul>
-        ) : (
+        ) : resolved.source === "none" ? (
           <p
             className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
             data-options-absent
+          >
+            options not recorded for this case
+          </p>
+        ) : (
+          <p
+            className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
+            data-options-empty
           >
             no options
           </p>
@@ -338,13 +414,7 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
           ActionRecord carries none), so the card states the ABSENCE of an artifact, not the case's state. */}
       <div data-artifact-section>
         {released && artifact ? (
-          <a
-            className="font-mono text-[10px] text-cyan-400/80 underline"
-            href={artifact.uri}
-            data-artifact
-          >
-            {artifact.label ?? artifact.uri}
-          </a>
+          <CaseArtifact uri={artifact.uri} label={artifact.label ?? artifact.uri} />
         ) : (
           <p
             className="font-mono text-[10px] uppercase tracking-widest text-slate-500"

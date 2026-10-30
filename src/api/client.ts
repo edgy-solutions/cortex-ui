@@ -1323,6 +1323,20 @@ export async function fetchIllustrationContent(path: string): Promise<string> {
 }
 
 /**
+ * `GET /cases/{case_id}/action` by the URI the case payload carries (`output_artifact.uri`). The route is
+ * caller-scoped, so it needs the bearer: this goes through the shared `api` instance (BFF base + bearer
+ * interceptor), never a bare href, which would resolve against the cortex origin with no token.
+ * `gatewayRelativePath` runs FIRST so a producer-supplied absolute URL never receives the bearer.
+ */
+export async function fetchCaseArtifact(path: string): Promise<unknown> {
+  if (gatewayRelativePath(path) === null) {
+    throw new Error(`fetchCaseArtifact: refused a non-gateway-relative path: ${path}`);
+  }
+  const { data } = await api.get<unknown>(path);
+  return data;
+}
+
+/**
  * CORTEX-PROPOSED -- the review-export routes (packet 2026-10-28 review-export: invincible-agent
  * `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`).
  * The producer declares none of them, so, like `fetchIllustrationContent`, these call the shared `api`
