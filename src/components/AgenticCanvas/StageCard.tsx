@@ -9,6 +9,7 @@ import { AnsweredChip } from "./AnsweredChip";
 import { useFlipState } from "./useFlipState";
 import { DecisionMap } from "./DecisionMap";
 import { useStageStore } from "@/store/useStageStore";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { answerSPO, answerSummary, isUnresolved } from "@/lib/answerDisplay";
 import { taskKindLabel } from "@/lib/taskArtifact";
 import { WorkflowLens } from "./WorkflowLens";
@@ -87,6 +88,7 @@ export function StageCard({
    */
   open?: boolean;
 }) {
+  const byKind = useTaskKindStore((s) => s.byKind);
   const custom = Boolean(onGripDown || onRemove);
   const focusTab = useStageStore((s) => s.focusTab);
   const spo = answerSPO(artifact);
@@ -364,7 +366,7 @@ export function StageCard({
               task && taskPending ? "text-neon-pink/90" : "text-slate-400"
             }`}
           >
-            {task ? taskKindLabel(task.kind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
+            {task ? taskKindLabel(task.kind, byKind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
             {/* SUBJECT · VERB, on one line, and only where there is room for it.
                 The header used to carry the subject alone and push the verb into a separate strip
                 below, which cost a whole row of vertical for two words. Read together they are
@@ -651,7 +653,7 @@ export function StageCard({
               task && taskPending ? "text-neon-pink/90" : "text-slate-400"
             }`}
           >
-            {task ? taskKindLabel(task.kind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
+            {task ? taskKindLabel(task.kind, byKind) : spo.subjectLabel || (fallback ? "unresolved" : "answer")}
             {/* SUBJECT · VERB, on one line, and only where there is room for it.
                 The header used to carry the subject alone and push the verb into a separate strip
                 below, which cost a whole row of vertical for two words. Read together they are

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ClipboardCheck } from "lucide-react";
 import { useCurrentArtifact } from "@/store/useCanvasStore";
 import { taskKindTitle } from "@/lib/taskKindRegistry";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { formatRequestedBy } from "@/lib/requestedBy";
 
 /**
@@ -12,6 +13,7 @@ import { formatRequestedBy } from "@/lib/requestedBy";
  * HUD swaps content on selection without an overlay war.
  */
 export function TaskContextCard() {
+  const byKind = useTaskKindStore((s) => s.byKind);
   const current = useCurrentArtifact();
   const task = current?.task_ref;
   if (!task) return null;
@@ -55,7 +57,7 @@ export function TaskContextCard() {
         </span>
       </div>
 
-      <p className="text-[11px] font-mono text-slate-200 mb-3">{taskKindTitle(task.kind)}</p>
+      <p className="text-[11px] font-mono text-slate-200 mb-3">{taskKindTitle(task.kind, byKind)}</p>
 
       <div className="space-y-1.5">
         {rows

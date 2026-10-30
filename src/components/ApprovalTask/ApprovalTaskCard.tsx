@@ -52,7 +52,7 @@ import { readGrantReviewTask } from "@/lib/accessProposal";
  * ── THE TABLE IS NO LONGER A FALLBACK (architect, 2026-10-30) ─────────────────────────────
  *
  * Declared-ness comes from the served menu or the row, never from cortex's `taskKindRegistry`
- * (`hasDisplayRow` is display only). With no declaration the card fails closed ("no declaration
+ * (which holds no kind table now; display hints are served too). With no declaration the card fails closed ("no declaration
  * served"), and calls the kind unknown only once the served menu has loaded without it.
  */
 export interface ApprovalTaskPayload {

@@ -1,23 +1,13 @@
 /**
- * CHARACTERIZATION of the task-kind PRESENTATION REGISTRY — the one address that decides
- * what a task's chip says, what the HUD calls it, and which card species renders it.
+ * CHARACTERIZATION of the task-kind presentation module: archetype resolution plus display hints.
  *
- * The property that matters here is not "the table has five rows". It is that the table is
- * the ONLY place a kind string is read. Everything downstream keys on the ARCHETYPE, so a
- * kind added as a row renders correctly with no code change, and a kind added as a
- * `kind === "..."` branch somewhere else is the bug this module exists to prevent. The
- * sweeps below are therefore stated against the registry's own declared population, read
- * from the module source, so a sixth row cannot inherit "tested" by being forgotten here.
+ * Display hints (badge/title) are the SERVED /task_kinds declaration's (the interim cortex table
+ * is retired, 2026-10-30). `taskKindDisplay` reads a `byKind` map (the shape
+ * `useTaskKindStore.byKind` holds); a kind the menu does not serve, or serves an empty badge or
+ * title for, gets the HONEST DEFAULT TASK / Task, field by field.
  *
- * That derivation carries a POSITIVE CONTROL: a regex that silently matched nothing would
- * turn every assertion under it into a pass over an empty list, which reads as coverage and
- * is none.
- *
- * The second theme is the HONEST DEFAULT. An undeclared kind gets TASK / Task /
- * APPROVAL_TASK — a label that says nothing (harmless) plus an archetype that hands the user
- * two verbs (not harmless, per the module's own comment). Both halves are pinned by exact
- * value, in both directions, because a "helpful" guess here invents an affordance nobody
- * authorised.
+ * The archetype vocabulary is read from the module's own union, with a POSITIVE CONTROL: a regex
+ * that silently matched nothing would turn every assertion under it into a pass over an empty list.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -26,7 +16,6 @@ import {
   taskKindDisplay,
   taskKindLabel,
   taskKindTitle,
-  hasDisplayRow,
   type TaskCardArchetype,
 } from "./taskKindRegistry";
 import { taskArchetype } from "./taskArtifact";
@@ -41,15 +30,12 @@ const servedMenu = (m: Record<string, string>): Record<string, TaskDeclaration> 
     ]),
   );
 
+const decl = (kind: string, badge: string, title: string): TaskDeclaration => ({
+  kind, declared: true, archetype: "APPROVAL_TASK", badge, title, accepts: [], reasonRequired: new Set<string>(),
+});
+
 
 const MODULE_SRC = readFileSync(path.join(__dirname, "taskKindRegistry.ts"), "utf8");
-
-/** The declared rows, read from the table itself rather than hand-listed. A hand list is a
- *  thing someone must remember to extend; the module's own source is not. */
-const DECLARED_KINDS = (() => {
-  const block = MODULE_SRC.match(/const REGISTRY:[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
-  return [...block.matchAll(/^ {2}([a-z_]+):\s*\{/gm)].map((m) => m[1]);
-})();
 
 /** The archetype vocabulary, read from the interface's union. */
 const DECLARED_ARCHETYPES = (() => {
@@ -74,37 +60,62 @@ const EXPECTED_ARCHETYPE: Record<string, TaskCardArchetype> = {
 const DEFAULT_BADGE = "TASK";
 const DEFAULT_TITLE = "Task";
 
-describe("taskKindRegistry — the derived population", () => {
-  it("the derivations actually read the module source — positive control", () => {
-    // Every sweep below iterates these lists. A regex that matched nothing would make each of
-    // them pass instantly over zero cases and report as coverage.
-    expect(DECLARED_KINDS).toContain("grouped_review");
-    expect(DECLARED_KINDS).toContain("extraction_refusal");
-    expect(DECLARED_KINDS.length).toBeGreaterThanOrEqual(5);
+describe("taskKindRegistry — the archetype vocabulary", () => {
+  it("the derivation actually reads the module source — positive control", () => {
     expect(DECLARED_ARCHETYPES).toEqual(["GROUPED_REVIEW", "APPROVAL_TASK", "TRIAGE_TASK"]);
-  });
-
-  it("EVERY declared row has a decided species — a new kind cannot ride in undecided", () => {
-    // The forcing function. Adding a row to the table without adding it here fails, which is
-    // the moment to ask "which card renders this?" — the question the registry exists to make
-    // someone answer once, in one place.
-    expect(Object.keys(EXPECTED_ARCHETYPE).sort()).toEqual([...DECLARED_KINDS].sort());
   });
 });
 
-describe("taskKindDisplay — every declared kind resolves to a complete, distinct row", () => {
-  it("gives each declared kind a non-empty badge, a non-empty title and a DECLARED archetype", () => {
-    // An archetype outside the union has no renderer at all: the canvas falls through to
-    // nothing and the card is blank with no error anywhere.
-    expect(DECLARED_KINDS.length).toBeGreaterThanOrEqual(5);
+describe("taskKindDisplay — display hints are the SERVED ones", () => {
+  const byKind = {
+    served_a: decl("served_a", "ALPHA", "Alpha task"),
+    served_b: decl("served_b", "BETA", "Beta task"),
+    empty_badge: decl("empty_badge", "", "Only a title"),
+    empty_title: decl("empty_title", "ONLY", ""),
+  };
 
-    for (const kind of DECLARED_KINDS) {
-      const d = taskKindDisplay(kind);
-      expect(d.badge.length, kind).toBeGreaterThan(0);
-      expect(d.title.length, kind).toBeGreaterThan(0);
-      expect(DECLARED_ARCHETYPES, kind).toContain(EXPECTED_ARCHETYPE[kind]);
-      expect(hasDisplayRow(kind), kind).toBe(true);
+  it("uses a served badge and title verbatim", () => {
+    expect(taskKindDisplay("served_a", byKind)).toEqual({ badge: "ALPHA", title: "Alpha task" });
+    expect(taskKindLabel("served_b", byKind)).toBe("BETA");
+    expect(taskKindTitle("served_b", byKind)).toBe("Beta task");
+  });
+
+  it("an unserved kind gives TASK / Task", () => {
+    expect(taskKindDisplay("a_kind_nobody_served", byKind)).toEqual({ badge: DEFAULT_BADGE, title: DEFAULT_TITLE });
+    expect(taskKindDisplay("grouped_review", {})).toEqual({ badge: DEFAULT_BADGE, title: DEFAULT_TITLE });
+  });
+
+  it("badge and title fall back INDEPENDENTLY: a served empty one takes that field's default only", () => {
+    expect(taskKindDisplay("empty_badge", byKind)).toEqual({ badge: DEFAULT_BADGE, title: "Only a title" });
+    expect(taskKindDisplay("empty_title", byKind)).toEqual({ badge: "ONLY", title: DEFAULT_TITLE });
+  });
+
+  it("an EMPTY kind takes the default rather than an empty chip", () => {
+    expect(taskKindDisplay("", byKind)).toEqual({ badge: DEFAULT_BADGE, title: DEFAULT_TITLE });
+  });
+
+  it("an INHERITED Object.prototype key is NOT a served kind — it degrades to the default", () => {
+    // `kind` is a PROJECTION FIELD: it arrives from data. `in` / bare index access walk the prototype
+    // chain and hand back a builtin (not nullish), which rendered a blank chip and `undefined`.
+    for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
+      expect(taskKindDisplay(key, byKind), key).toEqual({ badge: DEFAULT_BADGE, title: DEFAULT_TITLE });
+      expect(taskKindLabel(key, byKind), key).toBe(DEFAULT_BADGE);
+      expect(taskKindTitle(key, byKind), key).toBe(DEFAULT_TITLE);
     }
+  });
+
+  it("taskKindLabel / taskKindTitle read the SAME answer taskKindDisplay returns", () => {
+    for (const kind of [...Object.keys(byKind), "a_kind_nobody_served", ""]) {
+      const d = taskKindDisplay(kind, byKind);
+      expect(taskKindLabel(kind, byKind), kind).toBe(d.badge);
+      expect(taskKindTitle(kind, byKind), kind).toBe(d.title);
+    }
+  });
+});
+
+describe("resolveTaskArchetype / taskArchetype — the species is SERVED", () => {
+  it("the species table below covers the archetype vocabulary", () => {
+    expect(new Set(Object.values(EXPECTED_ARCHETYPE))).toEqual(new Set(DECLARED_ARCHETYPES));
   });
 
   it("pins each kind's SPECIES — the refusal is a triage card, never an approval", () => {
@@ -121,53 +132,6 @@ describe("taskKindDisplay — every declared kind resolves to a complete, distin
     }
   });
 
-  it("no declared kind wears the DEFAULT badge or title — registered and unregistered stay legible", () => {
-    // If a real row's badge were "TASK", the chip could no longer tell a declared kind from a
-    // kind nobody registered, and the honest-default signal would be invisible on the timeline.
-    for (const kind of DECLARED_KINDS) {
-      expect(taskKindDisplay(kind).badge, kind).not.toBe(DEFAULT_BADGE);
-      expect(taskKindDisplay(kind).title, kind).not.toBe(DEFAULT_TITLE);
-    }
-  });
-
-  it("badges and titles are UNIQUE across kinds — two species sharing a chip read as one", () => {
-    // The badge is the only per-kind mark on a timeline row. Duplicate it and two different
-    // tasks become indistinguishable at a glance, which is where a reviewer acts on the wrong one.
-    const badges = DECLARED_KINDS.map((k) => taskKindDisplay(k).badge);
-    const titles = DECLARED_KINDS.map((k) => taskKindDisplay(k).title);
-
-    expect(new Set(badges).size).toBe(DECLARED_KINDS.length);
-    expect(new Set(titles).size).toBe(DECLARED_KINDS.length);
-  });
-
-  it("returns the LIVE table row, not a copy — the same object every call", () => {
-    // Characterized as found, not endorsed. Nothing freezes these rows, so a consumer that
-    // mutated the returned object (`d.badge = ...`) would silently rewrite the registry for
-    // every other reader in the session. Recorded so that is a known hazard, not a surprise.
-    expect(taskKindDisplay("workflow_ack")).toBe(taskKindDisplay("workflow_ack"));
-    expect(taskKindDisplay("nope-a")).toBe(taskKindDisplay("nope-b"));
-  });
-});
-
-describe("taskKindDisplay — the honest default for an undeclared kind", () => {
-  it("returns TASK / Task / APPROVAL_TASK and reports itself UNREGISTERED", () => {
-    // Both halves matter and they disagree in spirit: the LABEL admits ignorance, the
-    // ARCHETYPE does not — it still names the approval species. The module's comment says the
-    // card degrades to a no-verb read-only mode; that gating lives in ApprovalTaskCard, not
-    // here, so this function alone cannot be read as "safe by default".
-    expect(taskKindDisplay("a_kind_nobody_registered")).toEqual({
-      badge: DEFAULT_BADGE,
-      title: DEFAULT_TITLE,
-    });
-    expect(hasDisplayRow("a_kind_nobody_registered")).toBe(false);
-  });
-
-  it("an EMPTY kind takes the same default rather than an empty chip", () => {
-    // A projection row with a blank kind is a real shape (an unmapped upstream field). A
-    // zero-width badge renders as a floating gap nobody can explain.
-    expect(taskKindDisplay("")).toEqual(taskKindDisplay("a_kind_nobody_registered"));
-    expect(hasDisplayRow("")).toBe(false);
-  });
 
   it("lookup is CASE-SENSITIVE and does NOT trim — a padded or shouted kind loses its row", () => {
     // Pinned as found. Kind casing/padding is not enforced by anything upstream, so a
@@ -175,56 +139,8 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     // approval card — visibly wrong only to someone who knows what the card should have been.
     for (const variant of ["GROUPED_REVIEW", "Grouped_Review", " grouped_review", "grouped_review "]) {
       expect(taskArchetype({ kind: variant, declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE)), variant).toBe("APPROVAL_TASK");
-      expect(hasDisplayRow(variant), variant).toBe(false);
     }
     expect(taskArchetype({ kind: "grouped_review", declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE))).toBe("GROUPED_REVIEW");
   });
 
-  it("an INHERITED Object.prototype key is NOT a task kind — it degrades to the default", () => {
-    // This test previously pinned the defect: `kind in REGISTRY` and `REGISTRY[kind]` walked
-    // the prototype chain of a plain object literal, so "constructor" / "toString" reported
-    // as declared kinds whose display row was a JS builtin. `?? DEFAULT` could not rescue it
-    // — a builtin is not nullish — so the badge came back `undefined`, rendering a blank chip
-    // and feeding `undefined` into the HUD. A lookup FAILING while presenting as success.
-    //
-    // Now closed with `Object.hasOwn`, and the test flipped to guard the fix rather than
-    // record the defect. It is kept (not deleted) because the defect is re-introduced by any
-    // return to `in` or bare index access, which are the natural things to write here.
-    //
-    // Reachability is the reason this was worth a line of code: `kind` is a PROJECTION FIELD.
-    // It arrives from data, so nothing upstream in this repo constrains it to the declared set.
-    for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
-      expect(hasDisplayRow(key), key).toBe(false);
-      expect(taskKindDisplay(key), key).toEqual({
-        badge: DEFAULT_BADGE,
-        title: DEFAULT_TITLE,
-      });
-      // The visible symptom the fix removes: a blank chip and `undefined` in the HUD.
-      expect(taskKindLabel(key), key).toBe(DEFAULT_BADGE);
-      expect(taskKindTitle(key), key).toBe(DEFAULT_TITLE);
-    }
-  });
-});
-
-describe("taskKindLabel / taskKindTitle — thin projections that must never drift", () => {
-  it("read the SAME row taskKindDisplay returns, for every declared kind and for the default", () => {
-    // Three exported readers, one table. If one of them ever grew its own lookup (a cache, a
-    // second map, a special case), the chip and the HUD would name the same task differently
-    // and nothing would throw. Swept over the declared population plus an undeclared kind.
-    const population = [...DECLARED_KINDS, "a_kind_nobody_registered", ""];
-    expect(population.length).toBeGreaterThanOrEqual(6);
-
-    for (const kind of population) {
-      const d = taskKindDisplay(kind);
-      expect(taskKindLabel(kind), kind).toBe(d.badge);
-      expect(taskKindTitle(kind), kind).toBe(d.title);
-    }
-  });
-
-  it("the undeclared kind's chip and HUD title are the exact honest strings", () => {
-    // The one place this module emits text of its own. "TASK" reads as a category admission;
-    // anything richer would be a claim about a kind nobody declared.
-    expect(taskKindLabel("nope")).toBe(DEFAULT_BADGE);
-    expect(taskKindTitle("nope")).toBe(DEFAULT_TITLE);
-  });
 });

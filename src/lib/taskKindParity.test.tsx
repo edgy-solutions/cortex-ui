@@ -1,5 +1,5 @@
 /**
- * THE PARITY SEAL — cortex's interim REGISTRY against the declarations the gateway composes.
+ * THE PARITY SEAL — cortex's UI against the declarations the gateway composes.
  *
  * ── ⚠ RUN THIS FILE WITH `npm run test`, NEVER WITH BARE `npx vitest run` ────────────────
  *
@@ -18,9 +18,8 @@
  * believed when it goes red. Recorded a second time in `.github/workflows/build.yml` beside
  * the PRODUCER_REF pin, for the reader who arrives from the bump procedure instead.
  *
- * M3.3 retires two hardcoded per-kind tables together: `taskKindRegistry` here and
- * `_VERBS_BY_KIND` in `human_tasks.py`. Between now and that cutover the two must not drift,
- * and the only way to know is to read the PRODUCER'S OWN declarations rather than assert
+ * Cortex's per-kind badge/title table is retired; `_VERBS_BY_KIND` in `human_tasks.py` is the
+ * producer's half. The only way to know the UI and the producer agree is to read the PRODUCER'S OWN declarations rather than assert
  * cortex against cortex. Same principle as `boundSlots.test.ts` reading `gateway.py`: a seal
  * that compares this repo to itself can only prove it is self-consistent.
  *
@@ -43,19 +42,16 @@
  * real fields. A red floor VOIDS the seal rather than passing it — the same rule a mutation
  * survey follows when it cannot prove its baseline.
  *
- * ── WHAT IS ASSERTED IN EACH DIRECTION, AND WHY THEY ARE NOT THE SAME ASSERTION ──────────
+ * ── WHAT IS ASSERTED, NOW THAT THE TABLE IS RETIRED ─────────────────────────────────────
  *
- * CONTAINMENT IS NOT EQUALITY, so both run:
+ * Cortex's interim badge/title table is RETIRED (architect, relayed 2026-10-30): display hints
+ * are the served declaration's, so there is no REGISTRY side to compare and no
+ * declarations -> REGISTRY gap to pin. What is asserted instead:
  *
- *   REGISTRY -> declarations   every kind cortex hardcodes must BE declared, and its render
- *                              hints must MATCH. A cortex row nobody declares is drift that a
- *                              one-directional seal calls green.
- *
- *   declarations -> REGISTRY   NOT "every declared kind must be in REGISTRY" — that would
- *                              demand cortex hardcode all twelve, which is the opposite of
- *                              M3.3. The declared-but-unregistered set is PINNED instead, so a
- *                              new species added upstream fails here loudly rather than quietly
- *                              rendering "unknown species here" to a user who could have acted.
+ *   ARCHETYPE     every composed declaration's archetype survives the resolver the canvas uses.
+ *   DISPLAY       every declared kind's badge/title reach the UI through the store, and the
+ *                 DOM shows the producer's title (the `pcn_disposition` drift is closed).
+ *   VERBS         declared verbs reach the card through the store, with no cortex code.
  *
  * ── THE TWO ORDERS ARE DIFFERENT ON PURPOSE ──────────────────────────────────────────────
  *
@@ -72,28 +68,9 @@ import path from "node:path";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration, type TaskDeclaration } from "./taskDeclaration";
-import { taskKindDisplay, hasDisplayRow } from "./taskKindRegistry";
+import { taskKindDisplay } from "./taskKindRegistry";
+import { WorkflowLens } from "@/components/AgenticCanvas/WorkflowLens";
 import { taskArchetype } from "./taskArtifact";
-
-/**
- * The REGISTRY's kinds, read from its SOURCE rather than exported for this test.
- *
- * The table is deliberately not exported as a list — it is an implementation detail with a
- * retirement date. Adding an export so a seal could read it would widen the interim surface
- * this seal exists to retire. Reading the source keeps the seal's reach one-directional.
- *
- * The regex is anchored to the object literal's own rows, and the floor below asserts the
- * result is non-empty and contains a kind known to be there — so a regex that stopped matching
- * fails the floor instead of silently reporting an empty REGISTRY as "no drift".
- */
-const REGISTRY_KINDS: string[] = (() => {
-  const src = readFileSync(path.join(__dirname, "taskKindRegistry.ts"), "utf8");
-  const body = src.slice(
-    src.indexOf("const REGISTRY: Record<string, TaskKindDisplay> = {"),
-    src.indexOf("const DEFAULT:"),
-  );
-  return [...body.matchAll(/^ {2}([a-z_][a-z0-9_]*): \{/gm)].map((m) => m[1]);
-})();
 
 /**
  * RESOLVED ACROSS KNOWN CHECKOUT NAMES, AND LOUD WHEN TWO DISAGREE.
@@ -235,131 +212,20 @@ describe.skipIf(!HAVE_PRODUCER)("THE FLOOR — a red floor VOIDS this seal, it d
       expect(d.accepts.length, `${d.kind}: empty accepts`).toBeGreaterThan(0);
     }
   });
-
-  it("the REGISTRY side is non-empty too", () => {
-    expect(REGISTRY_KINDS.length).toBeGreaterThan(0);
-    expect(REGISTRY_KINDS).toContain("pcn_disposition");
-  });
 });
 
-describe.skipIf(!HAVE_PRODUCER)("REGISTRY -> declarations: everything cortex hardcodes is declared", () => {
-  it("every REGISTRY kind has a declaration in the composed set", () => {
+describe.skipIf(!HAVE_PRODUCER)("the ARCHETYPE agrees everywhere — the field that decides which card renders", () => {
+  it("every composed declaration's archetype survives the resolver the canvas uses", () => {
+    // The one hint with a behavioural consequence rather than a cosmetic one: a disagreeing
+    // archetype routes a species to the wrong card entirely.
     const all = composed();
-    const undeclared = REGISTRY_KINDS.filter((k) => !all.has(k));
-    expect(
-      undeclared,
-      `cortex hardcodes a species nobody declares — ${PRODUCER_AT}`,
-    ).toEqual([]);
-  });
-
-  /**
-   * THE SEAL'S FIRST RESULT, PINNED EXACTLY RATHER THAN WAIVED.
-   *
-   * `pcn_disposition` renders differently on the two sides. Which is correct is a RULING and
-   * not a bug — cortex's row predates the declaration, the declaration is the surface that
-   * survives M3.3, and neither lane gets to decide that alone. So the drift is recorded here
-   * as an exact expectation instead of being reconciled locally or hidden behind a skip.
-   *
-   * NOT `it.fails`, deliberately. An xfail passes on ANY failure, so a second, unrelated drift
-   * appearing tomorrow would be absorbed by it and never reported. Pinning the exact lines
-   * means a NEW disagreement goes red, and so does a SILENT FIX — whoever changes either side
-   * has to come here and say which way the ruling went.
-   */
-  const KNOWN_DRIFT = [
-    'pcn_disposition.badge: cortex "QUALIFY" vs declared "DISPOSE"',
-    'pcn_disposition.title: cortex "Qualification task" vs declared "PCN disposition"',
-  ];
-
-  it("and its RENDER HINTS match the declaration's, field for field", () => {
-    const all = composed();
-    const drift: string[] = [];
-    for (const kind of REGISTRY_KINDS) {
-      const d = all.get(kind);
-      if (!d) continue; // named by the assertion above; not double-reported here
-      const ui = taskKindDisplay(kind);
-      if (ui.badge !== d.badge) drift.push(`${kind}.badge: cortex "${ui.badge}" vs declared "${d.badge}"`);
-      if (ui.title !== d.title) drift.push(`${kind}.title: cortex "${ui.title}" vs declared "${d.title}"`);
-    }
-    expect(
-      drift,
-      `render-hint drift between cortex and the producer — ${PRODUCER_AT}. Each line reads ` +
-        `"<kind>.<field>: cortex X vs declared Y". If the producer moved, bump the pinned ref ` +
-        `in .github/workflows/build.yml deliberately; if cortex moved, fix the registry. This ` +
-        `is a finding either way and must not be retried away.`,
-    ).toEqual(KNOWN_DRIFT);
-  });
-
-  it("the ARCHETYPE agrees everywhere — the field that decides which card renders", () => {
-    // Split out because it is the one hint with a behavioural consequence rather than a
-    // cosmetic one: a disagreeing archetype routes a species to the wrong card entirely. It
-    // holds today across all five, and pinning it separately means the known badge/title drift
-    // above cannot quietly grow to cover an archetype too.
-    const all = composed();
-    for (const kind of REGISTRY_KINDS) {
-      const d = all.get(kind);
-      if (!d) continue;
+    expect(all.size, "no declarations read — this arm would assert nothing").toBeGreaterThan(0);
+    for (const [kind, d] of all) {
       // SERVED: the declared archetype, run through the resolver the canvas uses, must come out unchanged.
       // A producer archetype cortex has no card for resolves to the generic fallback and reds here.
       const served = { [kind]: { kind, declared: true, archetype: d.archetype, badge: d.badge, title: d.title, accepts: [], reasonRequired: new Set<string>() } };
       expect(taskArchetype({ kind, declaration: undefined }, served), `${kind}`).toBe(d.archetype);
     }
-  });
-});
-
-describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, not demanded away", () => {
-  /**
-   * Not "every declared kind must be in REGISTRY" — that would demand cortex hardcode all of
-   * them, which is what M3.3 removes. These are the species the served declaration path
-   * (`taskDeclaration.ts`) covers and the interim table does not. Pinned so that a NEW species
-   * added upstream fails here rather than silently rendering "unknown species here" to a user
-   * who could have acted. The list shrinks to empty at cutover, when REGISTRY retires.
-   */
-  const KNOWN_UNREGISTERED = [
-    // ADDED 2026-09-14, AND THE ADDITION IS THE ARM'S OWN EVIDENCE. This species appeared
-    // upstream a day after the seal landed and reded it, unprompted, on real drift — which is
-    // the difference between a pinned gap that is a comment and one that is a mechanism.
-    //
-    // PINNED RATHER THAN GIVEN A REGISTRY ROW, and that is a classification, not a waiver.
-    // Since `e837239` the card consults the SERVED menu (`useTaskKindStore`) rather than the
-    // interim table, so `safety_redraft` renders its declared verbs today with no table entry.
-    // Adding a row would feed the table M3.3 is deleting. What stays red-able here is the
-    // TABLE'S coverage, which is the retirement this arm measures.
-    "safety_redraft",
-    "hazard_link_review",
-    "risk_acceptance_concurrence_high",
-    "risk_acceptance_concurrence_serious",
-    "risk_acceptance_high",
-    "risk_acceptance_low",
-    "risk_acceptance_medium",
-    "risk_acceptance_serious",
-    // ADDED 2026-09-30 WITH THE PIN BUMP TO `3f27c7cb`, which merged lane/74-promotion
-    // (`f5e15a3b`): ADR-0041 §5's review is this species. Pinned for the same reason as
-    // `safety_redraft` — the card renders it from the SERVED menu, and a table row would feed
-    // what M3.3 deletes. The ingest status card finds it by payload.ingest_id (ingestWire.ts).
-    "document_promotion",
-    // ADDED 2026-10-03 WITH THE PIN BUMP TO `4c3b61a6`. Its archetype is APPROVAL_TASK and the
-    // card renders it from the SERVED menu; a table row would feed what M3.3 deletes. It is the
-    // steward's origin confirmation (`policy/workflows/origin_confirm.yaml`).
-    "origin_confirmation",
-    // ADDED 2026-10-12 WITH THE PIN BUMP TO `49aa5e28`. Filed once per accepted grouped review
-    // that carried row edits (the extractor was wrong); archetype TRIAGE_TASK, which
-    // TriageTaskCard draws from the SERVED menu (verbs acknowledged / dismissed). Pinned for the
-    // same reason as the rest: a table row would feed what M3.3 deletes.
-    "extraction_defect",
-  ];
-
-  it("no declared species is unaccounted for on the cortex side", () => {
-    const all = [...composed().keys()];
-    const unaccounted = all.filter((k) => !hasDisplayRow(k) && !KNOWN_UNREGISTERED.includes(k));
-    expect(unaccounted, "declared upstream, unknown to cortex, and not a pinned gap").toEqual([]);
-  });
-
-  it("and every pinned gap is still real — a stale pin hides the next one", () => {
-    // The control for the list above. A species that gained a REGISTRY row, or was withdrawn
-    // upstream, must drop out of the pin rather than sit there widening the hole.
-    const all = composed();
-    const stale = KNOWN_UNREGISTERED.filter((k) => !all.has(k) || hasDisplayRow(k));
-    expect(stale, "pinned as an unregistered gap but no longer one").toEqual([]);
   });
 });
 
@@ -566,9 +432,8 @@ describe("ORDER IS PRESERVED — proven where it can diverge, not where it canno
  *
  * ── WHY THE OLD SUBJECT COULD NOT SURVIVE THE CUTOVER ─────────────────────────────────────
  *
- * The arms above assert cortex's interim REGISTRY against the declarations. That table is what
- * M3.3 DELETES, so those arms die with it by construction — they measure the remaining
- * retirement distance, which is worth measuring right up to the deletion and worthless after.
+ * The old arms asserted cortex's interim REGISTRY against the declarations. That table is now
+ * RETIRED, so those arms are gone with it.
  * The property that has to hold AFTERWARDS is this one: whatever the mesh declares, the card
  * offers, in the declaration's order.
  *
@@ -620,13 +485,12 @@ describe.skipIf(!HAVE_PRODUCER)("THE POST-CUTOVER SUBJECT: declared verbs reach 
     }
   });
 
-  it("a species the INTERIM TABLE never knew still renders — the table is not consulted first", () => {
-    // `safety_redraft` is declared upstream and has no REGISTRY row. Before `e837239` this
+  it("a species with no cortex code still renders its verbs through the store", () => {
+    // `safety_redraft` is declared upstream and cortex holds no code for it. Before `e837239` this
     // rendered "unknown species here"; the whole point of the served menu is that it no longer
     // does. This is the assertion that would have caught the dead wire directly.
     const safety = composed().get("safety_redraft");
     expect(safety, "safety_redraft is gone upstream — repoint this to another unregistered species").toBeTruthy();
-    expect(hasDisplayRow("safety_redraft"), "it gained a REGISTRY row; this arm no longer proves anything").toBe(false);
 
     seedStore([safety!]);
     render(<ApprovalTaskCard task={payload("safety_redraft") as never} />);
@@ -691,5 +555,52 @@ describe("the seal RAN, or says so", () => {
     // Red-proofs the two above: a `HAVE_PRODUCER` that stopped tracking the resolver would let
     // the seal skip while these still passed.
     expect(HAVE_PRODUCER).toBe(PRODUCERS.length > 0);
+  });
+});
+
+describe.skipIf(!HAVE_PRODUCER)("display hints are the SERVED ones: every declared kind's badge/title reach the UI", () => {
+  afterEach(() => {
+    cleanup();
+    useTaskKindStore.setState({ status: "idle", byKind: {} });
+  });
+
+  /** Built from the composed declarations exactly as the STORE describe does. */
+  function composedByKind(): Record<string, TaskDeclaration> {
+    const byKind: Record<string, TaskDeclaration> = {};
+    for (const d of composed().values()) {
+      const read = readTaskDeclaration({
+        kind: d.kind, declared: true, archetype: d.archetype,
+        badge: d.badge, title: d.title,
+        accepts: d.accepts, reason_required: d.reasonRequired,
+      });
+      expect(read, `${d.kind}: the declaration reader refused a real declaration`).not.toBeNull();
+      byKind[d.kind] = read!;
+    }
+    return byKind;
+  }
+
+  it("taskKindDisplay returns the declared badge/title for EVERY declared kind", () => {
+    const byKind = composedByKind();
+    expect(Object.keys(byKind).length, "no declarations — this arm would assert nothing").toBeGreaterThan(0);
+    const drift: string[] = [];
+    for (const d of composed().values()) {
+      const ui = taskKindDisplay(d.kind, byKind);
+      if (ui.badge !== d.badge) drift.push(`${d.kind}.badge: ui "${ui.badge}" vs declared "${d.badge}"`);
+      if (ui.title !== d.title) drift.push(`${d.kind}.title: ui "${ui.title}" vs declared "${d.title}"`);
+    }
+    expect(drift, `served display hints did not reach the UI — ${PRODUCER_AT}`).toEqual([]);
+  });
+
+  it("pcn_disposition shows the PRODUCER's title in the DOM (the drift the old table pinned, closed)", () => {
+    const d = composed().get("pcn_disposition");
+    expect(d, "pcn_disposition is gone upstream — repoint this to another declared kind").toBeTruthy();
+    useTaskKindStore.setState({ status: "loaded", byKind: composedByKind() });
+    const { container } = render(
+      <WorkflowLens
+        taskRef={{ taskId: "t1", workflowId: null, kind: "pcn_disposition", task_state: "pending", audience: "", requestedBy: "", subjectRef: null } as never}
+      />,
+    );
+    expect(container.textContent).toContain(d!.title);
+    expect(container.textContent).not.toContain("Qualification task");
   });
 });

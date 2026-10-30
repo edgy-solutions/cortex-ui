@@ -5,6 +5,7 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
 import { taskKindLabel } from "@/lib/taskArtifact";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { useEvidenceStore } from "@/store/useEvidenceStore";
 import { computeStageLayout, type StageMode } from "@/lib/stageLayout";
 import {
@@ -104,6 +105,7 @@ function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) 
 }
 
 export function GlobalCanvasStage() {
+  const byKind = useTaskKindStore((s) => s.byKind);
   const artifacts = useCanvasStore((s) => s.artifacts);
   const currentArtifactId = useCanvasStore((s) => s.currentArtifactId);
   const setCurrentArtifact = useCanvasStore((s) => s.setCurrentArtifact);
@@ -912,7 +914,7 @@ export function GlobalCanvasStage() {
         <>
           <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-lg border border-neon-cyan/25 bg-slate-950/85 backdrop-blur-sm px-1 py-1 shadow-lg z-20">
             <TabChip
-              label={focusedTaskRef ? taskKindLabel(focusedTaskRef.kind) : "Answer"}
+              label={focusedTaskRef ? taskKindLabel(focusedTaskRef.kind, byKind) : "Answer"}
               active={focusTab === "answer"}
               onClick={() => setFocusTab("answer")}
             />

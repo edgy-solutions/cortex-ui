@@ -7,6 +7,7 @@ import { useStageStore } from "@/store/useStageStore";
 import { connectedComponents, indexSubjects, subjectChainEdges } from "@/lib/stageEdges";
 import { anchorDelta, layoutOffsets, mergedHeight, visibleRange, type AnchorChange } from "@/lib/virtualWindow";
 import { taskKindLabel } from "@/lib/taskArtifact";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { ingestComponentFrom, isIngestArtifact } from "@/lib/ingestArtifact";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { answerPagesHaveMore, loadOlderAnswers, runAnswerSearch } from "@/lib/answersPaging";
@@ -751,6 +752,7 @@ function IngestReason({ a }: { a: Artifact }) {
 }
 
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
+  const byKind = useTaskKindStore((s) => s.byKind);
   // null when nothing in the chain was measured — the row then shows no duration at all,
   // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
   // from an ask is two pieces of work, and reporting only the last leg understated it by the
@@ -834,7 +836,7 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
               taskPending ? "text-pink-300" : "text-slate-400"
             }`}
           >
-            {taskKindLabel(task.kind)}
+            {taskKindLabel(task.kind, byKind)}
             {taskPending ? " · pending" : task ? " · done" : ""}
           </span>
         )}

@@ -4,6 +4,7 @@ import { AskedSection } from "@/components/elicitation/AskedSection";
 import { useOpenedAnswerBody } from '../../lib/useOpenedAnswerBody';
 import { useCanvasStore, useCurrentArtifact, useCurrentRouting } from '../../store/useCanvasStore';
 import { useStageStore } from '@/store/useStageStore';
+import { useTaskKindStore } from '@/store/useTaskKindStore';
 import { AnswerBody } from './AnswerBody';
 import { useMeshConfig, DynamicIcon } from '@/lib/meshPersonaConfig';
 import { Layers, Route } from 'lucide-react';
@@ -42,6 +43,7 @@ import { useEvidenceStore } from '@/store/useEvidenceStore';
 export const CanvasPane = () => {
   const { personaConfig } = useMeshConfig();
   const artifact = useCurrentArtifact();
+  const byKind = useTaskKindStore((s) => s.byKind);
   const routing = useCurrentRouting();
   // `answerSummaries` flag: an opened stub reads its body here, once (never in the rail).
   const body = useOpenedAnswerBody(artifact);
@@ -127,7 +129,7 @@ export const CanvasPane = () => {
             }`}
           >
             <Layers className="w-4 h-4" />
-            {taskKindLabel(taskRef.kind)}
+            {taskKindLabel(taskRef.kind, byKind)}
           </button>
           <button
             onClick={() => setView("map")}

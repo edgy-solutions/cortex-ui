@@ -103,13 +103,8 @@ const comp = (a: Artifact): Record<string, unknown> =>
 const store = () => useCanvasStore.getState();
 const byId = (id: string) => store().artifacts.find((a) => a.id === id)!;
 
-/** The registry's declared rows, read from its source — a sixth kind cannot inherit "tested"
- *  by being forgotten here. */
-const REGISTRY_SRC = readFileSync(path.join(__dirname, "taskKindRegistry.ts"), "utf8");
-const DECLARED_KINDS = (() => {
-  const block = REGISTRY_SRC.match(/const REGISTRY:[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
-  return [...block.matchAll(/^ {2}([a-z_]+):\s*\{/gm)].map((m) => m[1]);
-})();
+/** The kinds the served menu above declares (the interim registry table is retired). */
+const DECLARED_KINDS = Object.keys(SERVED_ARCHETYPE);
 
 /** The task-status vocabulary, read from the store's own union. Terminal states are PER
  *  SPECIES (a triage task is acknowledged/redriven, never approved/rejected); only `pending`
@@ -125,7 +120,7 @@ beforeEach(() => {
 });
 
 describe("taskArtifact — the derived populations", () => {
-  it("both derivations actually read their source modules — positive control", () => {
+  it("both derivations actually read their sources — positive control", () => {
     // Every sweep below iterates these. A regex that matched nothing would make each of them
     // pass instantly over zero cases and report as coverage.
     expect(DECLARED_KINDS).toContain("grouped_review");
@@ -317,7 +312,7 @@ describe("taskToArtifact — the card species, keyed on ARCHETYPE not on the kin
     const a = taskToArtifact(task({ kind: "a_kind_nobody_registered" }));
 
     expect(comp(a).archetype).toBe("APPROVAL_TASK");
-    expect(taskKindLabel("a_kind_nobody_registered")).toBe("TASK");
+    expect(taskKindLabel("a_kind_nobody_registered", {})).toBe("TASK");
   });
 
   it("the APPROVAL_TASK body carries task_id = the LOGICAL id and task_state = the task's status", () => {

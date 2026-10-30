@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import type { TaskRef } from "@/api/types";
 import { taskKindTitle } from "@/lib/taskKindRegistry";
+import { useTaskKindStore } from "@/store/useTaskKindStore";
 
 /**
  * WORKFLOW lens — the provenance view of a TASK, the task-side peer of an
@@ -47,8 +48,9 @@ function Connector({ filled }: { filled: boolean }) {
 }
 
 export function WorkflowLens({ taskRef }: { taskRef: TaskRef }) {
+  const byKind = useTaskKindStore((s) => s.byKind);
   const pending = taskRef.task_state === "pending";
-  const actionLabel = taskKindTitle(taskRef.kind);
+  const actionLabel = taskKindTitle(taskRef.kind, byKind);
 
   const nodes: Array<{ label: string; state: NodeState }> = [
     { label: "Created", state: "done" },
