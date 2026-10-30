@@ -352,6 +352,7 @@ const NOT_TRANSPORT: Record<string, string> = {
   downloadBatchExport: "CORTEX-PROPOSED, packet 2026-10-28 review-export: a route the producer does not declare (src/lib/reviewExport.ts)",
   fileAccessProposal: "POST /access/proposals: CORTEX-PROPOSED (ADR-0062 section 7, Draft; docs/specs/access-request-cards.md), not in the BFF snapshot yet; the wire is spelled once in src/lib/accessProposal.ts and sealed by accessProposal.test.ts",
   fetchIllustrationContent: "GET {content_path}: producer-chosen path from an ILLUSTRATION payload, guarded by gatewayRelativePath; not a BFF op (consumed-routes.md, 'Not BFF routes')",
+  fetchCaseArtifact: "GET {output_artifact.uri}: the URI the case payload carries (GET /cases/{case_id}/action, a declared op reached untyped through the shared api instance, bearer attached), guarded by gatewayRelativePath",
 };
 
 // ── census: the population is read from client.ts ──────────────────────────────────────────
