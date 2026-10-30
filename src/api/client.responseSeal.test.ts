@@ -91,6 +91,7 @@ import {
   readIngestUploadId,
 } from "@/lib/ingestWire";
 import { readExtraction } from "@/lib/promotionReview";
+import { profileLabel } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
 // ── the snapshot, walked directly ──────────────────────────────────────────
@@ -300,6 +301,7 @@ const CALLS: Record<string, () => Promise<unknown>> = {
   retryIngest: () => client.retryIngest("i-1"),
   fetchIngestExtraction: () => client.fetchIngestExtraction("i-1"),
   correctIngestLeaf: () => client.correctIngestLeaf("i-1", "pcn"),
+  fetchIngestExportProfiles: () => client.fetchIngestExportProfiles(),
 };
 
 const settle = () => rtlAct(async () => { await new Promise((r) => setTimeout(r, 30)); });
@@ -379,6 +381,7 @@ const READERS: Record<string, Reader[]> = {
   ],
   fetchIngestExtraction: [function readExtractionOf(raw) { return readExtraction(raw); }],
   correctIngestLeaf: [function readIngestStatusRowOfLeaf(raw) { return readIngestStatusRow(raw); }],
+  fetchIngestExportProfiles: [function profileLabelsOf(ps) { return ps.map((p: any) => `${p.name}/${p.format}/${p.granularity}/${profileLabel(p)}`); }],
 };
 
 /** A typed read nobody reads field by field, with the reason. Keyed by client function, or by op when no
@@ -388,8 +391,6 @@ const NO_READER: Record<string, string> = {
   fetchIngestSource: "binary body (Blob): bytes, no fields",
   "GET /artifacts/{artifact_id}": "no client.ts function calls this op",
   "GET /ingest/retries": "no client.ts function calls this op",
-  "GET /ingest/export/profiles":
-    "no client.ts function calls this op through request(): fetchIngestExportProfiles reaches the path UNTYPED via `api`, written while it was CORTEX-PROPOSED (flag reviewExport, off). Declared at 10ac02fe (#154) as a bare ExportProfile[], the shape readExportProfiles reads; moving it onto request() is the follow-up",
   "GET /version": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/empty": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/title_leaf": "no client.ts function calls this op",
@@ -410,6 +411,7 @@ const READ_FLOOR: Record<string, number> = {
   retryIngest: 1,
   fetchIngestExtraction: 24,
   correctIngestLeaf: 3,
+  fetchIngestExportProfiles: 1,
 };
 
 // ── run everything once, so the test names can carry the counts ────────────

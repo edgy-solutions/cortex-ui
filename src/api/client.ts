@@ -12,7 +12,6 @@ import { readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import {
   EXPORT_BATCH_PATH,
-  EXPORT_PROFILES_PATH,
   exportOnePath,
   filenameFromDisposition,
   jsonRefusalBody,
@@ -1337,14 +1336,13 @@ export async function fetchCaseArtifact(path: string): Promise<unknown> {
 }
 
 /**
- * CORTEX-PROPOSED -- the review-export routes (packet 2026-10-28 review-export: invincible-agent
- * `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`).
- * The producer declares none of them, so, like `fetchIllustrationContent`, these call the shared `api`
- * instance directly. The paths are spelled once, in `src/lib/reviewExport.ts`. A refusal is a non-2xx
- * the caller reads with `refusalCode`.
+ * The review-export routes, declared at invincible-agent 10ac02fe (#154). The profiles list is a typed
+ * read (`request`, validated by `readExportProfiles`). The two file downloads stay on the shared `api`
+ * instance: their 200s are untyped bytes, read as a Blob. The paths are spelled once, in
+ * `src/lib/reviewExport.ts`. A refusal is a non-2xx the caller reads with `refusalCode`.
  */
 export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
-  const { data } = await api.get<unknown>(EXPORT_PROFILES_PATH);
+  const data = await request("GET /ingest/export/profiles", {});
   const profiles = readExportProfiles(data);
   if (profiles === null) throw new Error("malformed /ingest/export/profiles response");
   return profiles;

@@ -14,6 +14,7 @@ const saveBlob = vi.fn();
 vi.mock("@/lib/saveBlob", () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) }));
 
 import { BatchExportPanel } from "./BatchExportPanel";
+import { FIXTURE_154_PROFILES } from "@/lib/reviewExport";
 
 const served = [{ name: "alpha-x", format: "csv", granularity: "notice_part" }];
 const q = (c: HTMLElement, s: string) => c.querySelector(s) as HTMLElement | null;
@@ -107,5 +108,16 @@ describe("BatchExportPanel", () => {
     fireEvent.click(q(container, "[data-batch-download]")!);
     await waitFor(() => expect(q(container, "[data-export-failed]")).not.toBeNull());
     expect(q(container, "[data-export-refusal]")).toBeNull();
+  });
+
+  it("mock mode: exactly the two #154 labels, in server order, no profiles or entitlements fetch", async () => {
+    window.localStorage.setItem("cortex.reviewExportMock", "1");
+    const { container } = render(<BatchExportPanel />);
+    await shown(container);
+    const btns = [...container.querySelectorAll("[data-export-profile]")];
+    expect(btns.map((e) => e.getAttribute("data-export-profile"))).toEqual(["default-csv", "default-json"]);
+    expect(btns.map((e) => e.firstChild?.textContent)).toEqual(FIXTURE_154_PROFILES.map((p) => p.label));
+    expect(fetchIngestExportProfiles).not.toHaveBeenCalled();
+    expect(fetchEntitlements).not.toHaveBeenCalled();
   });
 });

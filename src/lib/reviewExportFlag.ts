@@ -5,7 +5,7 @@ export function isReviewExportEnabled(): boolean {
   return isFeatureEnabled("reviewExport");
 }
 
-/** Serves the PROPOSED routes and `groups` from the fixture; the status read is still made. */
+/** Serves the #154 routes (declared at invincible-agent 10ac02fe) and the proposed `groups` from the fixture; the status read is still made. */
 export function isReviewExportMockEnabled(): boolean {
   return isFeatureEnabled("reviewExportMock");
 }

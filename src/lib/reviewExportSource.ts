@@ -1,13 +1,13 @@
 /**
  * reviewExportSource -- the seam: the fixture when `reviewExportMock` is on, else the client.
- * (PROPOSED routes; see `reviewExport.ts`.) The status read is NOT here: it is a real route.
+ * (Routes declared at invincible-agent 10ac02fe (#154); see `reviewExport.ts`.) The status read is NOT here: it is a real route.
  */
 import { fetchIngestExportProfiles, downloadIngestExport, downloadBatchExport, fetchEntitlements } from "@/api/client";
 import { isReviewExportMockEnabled } from "./reviewExportFlag";
 import {
   AP_GROUP,
   PROPOSED_FIXTURE_GROUPS,
-  PROPOSED_FIXTURE_PROFILES,
+  FIXTURE_154_PROFILES,
   canExportBatch,
   fixtureExportBody,
   type ExportProfile,
@@ -16,7 +16,7 @@ import {
 export type ExportFile = { blob: Blob; filename: string | null };
 
 export async function loadExportProfiles(): Promise<ExportProfile[]> {
-  if (isReviewExportMockEnabled()) return PROPOSED_FIXTURE_PROFILES;
+  if (isReviewExportMockEnabled()) return FIXTURE_154_PROFILES;
   return fetchIngestExportProfiles();
 }
 

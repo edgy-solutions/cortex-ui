@@ -1,6 +1,6 @@
 /**
  * ReviewExportControl -- export on a COMPLETED review card (`stage === "promoted"` on the real
- * status row, read through `useDocument`: the one ingest poller, never a fetch of its own). Profiles come from the server's list (PROPOSED route; see
+ * status row, read through `useDocument`: the one ingest poller, never a fetch of its own). Profiles come from the server's list (declared at invincible-agent 10ac02fe (#154); see
  * `src/lib/reviewExport.ts`). Renders nothing unless the `reviewExport` flag is on, and nothing
  * (not even a marker) until the status read says promoted.
  */

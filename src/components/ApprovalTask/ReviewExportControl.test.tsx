@@ -15,6 +15,7 @@ const saveBlob = vi.fn();
 vi.mock("@/lib/saveBlob", () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) }));
 
 import { ReviewExportControl } from "./ReviewExportControl";
+import { FIXTURE_154_PROFILES } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import type { IngestStatusRow } from "@/lib/ingestWire";
 
@@ -127,10 +128,13 @@ describe("ReviewExportControl", () => {
     expect(container.textContent).toContain("No export profiles are configured.");
   });
 
-  it("mock mode: the fixture's three profiles, no profiles fetch", async () => {
+  it("mock mode: exactly the two #154 labels, in server order, no profiles fetch", async () => {
     window.localStorage.setItem("cortex.reviewExportMock", "1");
     const { container } = render(<ReviewExportControl ingestId={ID} />);
-    await waitFor(() => expect(names(container)).toEqual(["synthetic-rows-csv", "synthetic-notice-json", "synthetic-rows-json"]));
+    await waitFor(() => expect(names(container)).toEqual(["default-csv", "default-json"]));
+    const labels = [...container.querySelectorAll("[data-export-profile]")].map((e) => e.firstChild?.textContent);
+    expect(labels).toEqual(FIXTURE_154_PROFILES.map((p) => p.label));
+    expect(labels).toEqual(["Default CSV, one row per notice part", "Default JSON, one row per notice part, with provenance"]);
     expect(fetchIngestExportProfiles).not.toHaveBeenCalled();
   });
 });

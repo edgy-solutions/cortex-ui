@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   AP_GROUP,
-  PROPOSED_FIXTURE_PROFILES,
+  FIXTURE_154_PROFILES,
   canExportBatch,
   filenameFromDisposition,
   isExportStage,
@@ -12,8 +12,8 @@ import {
 
 describe("readExportProfiles", () => {
   it("accepts the fixture and keeps its order", () => {
-    const out = readExportProfiles(JSON.parse(JSON.stringify(PROPOSED_FIXTURE_PROFILES)));
-    expect(out?.map((p) => p.name)).toEqual(PROPOSED_FIXTURE_PROFILES.map((p) => p.name));
+    const out = readExportProfiles(JSON.parse(JSON.stringify(FIXTURE_154_PROFILES)));
+    expect(out?.map((p) => p.name)).toEqual(FIXTURE_154_PROFILES.map((p) => p.name));
   });
   it("returns null for a non-array", () => {
     expect(readExportProfiles({ profiles: [] })).toBeNull();
