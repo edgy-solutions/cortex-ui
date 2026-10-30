@@ -32,6 +32,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 
 import { useTaskKindStore } from "./useTaskKindStore";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "@/components/ApprovalTask/ApprovalTaskCard";
 
 /**
@@ -108,19 +109,23 @@ describe("the menu reaches the card", () => {
     expect(verbs()).toEqual(["accepted"]);
   });
 
-  it("falls back to the interim table while the menu is UNLOADED", () => {
+  it("fails CLOSED while the menu is UNLOADED: no verbs, 'no declaration served', not 'undeclared'", () => {
     // Not "undeclared". Reporting a species as unknown on the strength of a pending fetch is a
-    // claim about the deployment made from a race.
+    // claim about the deployment made from a race. Nor the old seed verbs: no declaration means no
+    // actions (architect 2026-10-30).
     render(<ApprovalTaskCard task={task("pcn_disposition")} />);
-    expect(verbs()).toEqual(["approved", "rejected"]);
+    expect(verbs()).toEqual([]);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
   });
 
-  it("falls back when the menu is UNREACHABLE, rather than declaring nothing", async () => {
+  it("fails CLOSED when the menu is UNREACHABLE: no verbs, 'no declaration served'", async () => {
     fetchTaskKinds.mockResolvedValue(null);
     await useTaskKindStore.getState().load();
     expect(useTaskKindStore.getState().status).toBe("unreachable");
     render(<ApprovalTaskCard task={task("pcn_disposition")} />);
-    expect(verbs()).toEqual(["approved", "rejected"]);
+    expect(verbs()).toEqual([]);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
   });
 
   it("an UNREACHABLE menu is not an EMPTY one", async () => {

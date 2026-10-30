@@ -1,8 +1,8 @@
 /**
  * The typed profiles read, through the REAL client and the real axios pipeline (adapter stubbed): a
- * stubbed adapter returning #154's body yields the two profiles; a body holding an element with
- * `granularity: "answer"` (#148's future shape, refused today) yields a throw, and the picker shows its
- * existing failure state.
+ * stubbed adapter returning #154's body yields the two profiles; an element with `granularity: "answer"`
+ * (#148's shape) passes VERBATIM, because granularity is config and not a cortex enum (architect 2026-10-30); a
+ * body with an EMPTY granularity still yields a throw, and the picker shows its existing failure state.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor, act } from "@testing-library/react";
@@ -36,7 +36,8 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
 
 const ID = "sha256:abc";
 const INITIAL = useIngestStatusStore.getState();
-const BAD = [...FIXTURE_154_PROFILES, { name: "per-answer", format: "csv", granularity: "answer", label: "x" }];
+const ANSWER = { name: "per-answer", format: "csv", granularity: "answer", label: "x" };
+const BAD = [...FIXTURE_154_PROFILES, { ...ANSWER, granularity: "" }];
 
 beforeEach(() => {
   urls.length = 0;
@@ -56,7 +57,12 @@ describe("fetchIngestExportProfiles (typed read)", () => {
     expect(urls).toEqual(["GET /ingest/export/profiles"]);
   });
 
-  it("a body with a granularity \"answer\" element is refused (null from the reader, a throw from the call)", async () => {
+  it("a granularity \"answer\" element passes verbatim, in server order", async () => {
+    reply.data = JSON.parse(JSON.stringify([...FIXTURE_154_PROFILES, ANSWER]));
+    expect(await fetchIngestExportProfiles()).toEqual([...FIXTURE_154_PROFILES, ANSWER]);
+  });
+
+  it("a body with an EMPTY granularity element is refused (null from the reader, a throw from the call)", async () => {
     reply.data = BAD;
     await expect(fetchIngestExportProfiles()).rejects.toThrow(/malformed \/ingest\/export\/profiles/);
   });
