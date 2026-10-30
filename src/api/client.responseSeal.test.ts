@@ -388,6 +388,8 @@ const NO_READER: Record<string, string> = {
   fetchIngestSource: "binary body (Blob): bytes, no fields",
   "GET /artifacts/{artifact_id}": "no client.ts function calls this op",
   "GET /ingest/retries": "no client.ts function calls this op",
+  "GET /ingest/export/profiles":
+    "no client.ts function calls this op through request(): fetchIngestExportProfiles reaches the path UNTYPED via `api`, written while it was CORTEX-PROPOSED (flag reviewExport, off). Declared at 10ac02fe (#154) as a bare ExportProfile[], the shape readExportProfiles reads; moving it onto request() is the follow-up",
   "GET /version": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/empty": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/title_leaf": "no client.ts function calls this op",
