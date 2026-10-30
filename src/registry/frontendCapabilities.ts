@@ -48,9 +48,10 @@ export interface FrontendCapability {
    * Layout hint — "full-width" for diagrams/topology, "grid-col-1" for cards, and "none" for
    * an answer that is ACTED ON rather than drawn. "none" is honest rather than a default: a
    * consumed answer occupies no space because it produces no card, and borrowing a card's
-   * layout would describe a placement that never happens.
+   * layout would describe a placement that never happens. "rows" is COMPETING_MEASURES: one row
+   * per estimating method, stacked (architect 2026-10-30: the value goes into the type, not past it).
    */
-  layout: "full-width" | "grid-col-1" | "none";
+  layout: "full-width" | "grid-col-1" | "none" | "rows";
   /** Field names this archetype expects to find in structured_data. */
   expected_fields: string[];
   /**
