@@ -3,12 +3,12 @@
  *
  * Packet: invincible-agent `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`.
  *
- * Routes 1-3 are declared at invincible-agent 10ac02fe (#154); route 4 (`groups`) is still cortex's
- * proposal and is NOT on the wire (see the GAP on `canExportBatch`). The wire names are spelled ONCE, here:
+ * Routes 1-3 are declared at invincible-agent 10ac02fe (#154); route 4 is NOT on the wire yet (see the GAP on
+ * `canExportBatch`). The wire names are spelled ONCE, here:
  *   1. `GET /ingest/export/profiles`                      -> bare array of ExportProfile
  *   2. `GET /ingest/{ingest_id}/export?profile=<name>`    -> file bytes + Content-Disposition
  *   3. `GET /ingest/export?profile=&from=&to=`            -> batch file, same headers
- *   4. PROPOSED `groups: string[]` on `GET /me/entitlements` -> batch control membership
+ *   4. RULED, not yet served: `capabilities` on `GET /me/entitlements` -> batch control (Lane 1 adds it)
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
  * `{name, format, granularity, label}`, granularity `notice_part | notice`. It was `scope: row | notice`
@@ -26,7 +26,7 @@
 export const exportOnePath = (ingestId: string): string => `/ingest/${encodeURIComponent(ingestId)}/export`;
 /** Route 3, declared at invincible-agent 10ac02fe (#154). */
 export const EXPORT_BATCH_PATH = "/ingest/export";
-/** PROPOSED: the `groups` entry that shows the batch control. */
+/** Mock-only stand-in, removed when `capabilities` lands (see the GAP on `canExportBatch`). */
 export const AP_GROUP = "alert-processors";
 
 export type ExportProfile = { name: string; format: "csv" | "json"; granularity: "notice_part" | "notice"; label?: string };
@@ -59,10 +59,12 @@ export function isExportStage(stage: unknown): boolean {
   return stage === "promoted";
 }
 
-// GAP: the producer gates the batch on capability `ingest:exportBatch` (gateway.py, 10ac02fe), and
-// `GET /me/entitlements` carries no capabilities: its declared keys are authz_id, cells, default,
-// droppable_kinds, email, source, user_id -- there is NO `groups` key. So this returns false for every
-// live caller and the batch control never shows outside the mock. Left as is: a ruling for the architect.
+// GAP (ruled, architect 2026-10-30): the signal is a `capabilities` list on `GET /me/entitlements`,
+// Topaz-derived, carrying `ingest:exportBatch` and `can_export:<profile>`. Lane 1 adds it; cortex reads it,
+// and this group check and `AP_GROUP` go. Until it is declared, the entitlements keys are authz_id, cells,
+// default, droppable_kinds, email, source, user_id (no `groups`, no `capabilities`), so this returns false
+// for every live caller and the batch control shows only in the mock. The capability name is not read here
+// until the generated `Entitlements` declares the list.
 export function canExportBatch(entitlements: unknown): boolean {
   if (!isRecord(entitlements)) return false;
   const g = entitlements.groups;

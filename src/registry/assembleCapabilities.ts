@@ -767,7 +767,7 @@ export function assembleDerivedCapabilities(): AssembledCapability[] {
     // say "nothing renders this", which is a claim, not a missing value.
     component: (b.contract as { component?: string }).component ?? "",
     consumer: (b.contract as { consumer?: string }).consumer,
-    layout: b.contract.layout as FrontendCapability["layout"],
+    layout: b.contract.layout,
     expected_fields: Object.keys(b.contract.fields),
     persona_fit: [...b.persona_fit],
     domain_fit: [...b.domain_fit],
