@@ -1,30 +1,27 @@
 /**
- * Task-kind presentation registry — the ONE ADDRESS for per-kind display hints.
+ * Task-kind presentation: archetype resolution plus the generic default for display hints.
  *
- * GENERIC-AT-BIRTH (all repos, not just engines): domain display is DATA, not
- * code. A task kind's badge label, descriptive title, and canvas archetype are
- * PRESENTATION POLICY about a kind registered in the mesh — the rendersAs / M3
- * horizon. This table is INTERIM SCAFFOLDING: it holds the hints hardcoded for
- * now so nothing re-scatters domain branches across six files, but the endstate
- * is that the task payload carries these hints (or the UI resolves them from a
- * served declaration) and this table is deleted.
+ * GENERIC-AT-BIRTH (all repos, not just engines): domain display is DATA, not code. A task kind's
+ * badge and title are the SERVED declaration's (`/task_kinds`, the producer's `renders_as`, held
+ * in `useTaskKindStore`). The interim hand-written badge/title table that used to live here is
+ * RETIRED (architect, relayed 2026-10-30): it even disagreed with the producer, so the served
+ * value is now the only one.
  *
- * The discipline until then:
- *   - A NEW task kind adds a ROW here, never a `kind === "..."` branch elsewhere.
- *   - Everything else keys on the ARCHETYPE (structural), never the kind string.
- *   - An UNDECLARED kind gets the honest default (TASK / APPROVAL_TASK) — the
- *     UI-COMPONENT-NOT-FOUND discipline applied to labels, not a silent guess.
- *     Whether a kind is declared is the served `/task_kinds`' answer (`useTaskAct`), not this
- *     table's (architect, 2026-10-30).
+ * What remains here:
+ *   - `resolveTaskArchetype` / `GENERIC_TASK_ARCHETYPE`: a served archetype name to a card.
+ *   - The honest default (TASK / Task) for a kind the menu does not serve, or does not serve YET:
+ *     the default shows until `/task_kinds` loads, then the components re-render.
  *
- * RETIRES AT M3.3 — **together with `_VERBS_BY_KIND`** in invincible-agent's
- * `src/iagent/human_tasks.py`. That is the SECOND hardcoded per-kind table (which
- * verbs each task species accepts), added by the triage-card fix, and the two must
- * retire in ONE change: a served `rendersAs` declaration that says how a task
- * RENDERS while a code table still decides what it can DO is the worse half
- * surviving. See invincible-agent
- * `docs/reference/m3-grouped-review-definition-design.md` §"TWO interim per-kind tables".
+ * A NEW task kind is a served declaration, never a row or a `kind === "..."` branch here.
+ * Whether a kind is declared is the served `/task_kinds`' answer (`useTaskAct`), not this file's.
+ *
+ * History: this table and `_VERBS_BY_KIND` in invincible-agent's `src/iagent/human_tasks.py` were
+ * the two interim per-kind tables slated to retire together (see invincible-agent
+ * `docs/reference/m3-grouped-review-definition-design.md` "TWO interim per-kind tables").
+ * Cortex's half has now retired; the producer's half is theirs.
  */
+
+import type { TaskDeclaration } from "@/lib/taskDeclaration";
 
 export interface TaskKindDisplay {
   /** Short chip label (timeline row, card header). */
@@ -46,27 +43,6 @@ export function resolveTaskArchetype(served: unknown): TaskCardArchetype {
   return served === "GROUPED_REVIEW" || served === "APPROVAL_TASK" || served === "TRIAGE_TASK" ? served : GENERIC_TASK_ARCHETYPE;
 }
 
-// The single hardcoded table of DISPLAY hints (badge + title). The ARCHETYPE column is gone: the served
-// `/task_kinds` declaration decides it. The badge/title STAY here as the fallback, because the server sends
-// none (or not always); a served badge/title, where present, is the endstate and would delete these rows. `access_request` / `workflow_ack` are generic task
-// kinds; `pcn_*` are domain values that leaked in with the first consumer — both
-// live here as DATA rows, awaiting served hints, not as code branches.
-const REGISTRY: Record<string, TaskKindDisplay> = {
-  grouped_review: { badge: "REVIEW", title: "Disposition review" },
-  pcn_disposition: { badge: "QUALIFY", title: "Qualification task" },
-  access_request: { badge: "ACCESS", title: "Access request" },
-  workflow_ack: { badge: "APPROVE", title: "Workflow approval" },
-  // A THIRD SPECIES, not an approval. "Approve"/"Reject" on *"this notice could not be
-  // prepared for review"* is not an awkward label — it records a decision the data cannot
-  // represent, and ADR-0034's decision records would archive that immutably as promotion
-  // evidence. Registered here BEFORE the card exists on purpose: an unregistered kind falls
-  // back to APPROVAL_TASK, which is exactly how the bug shipped.
-  extraction_refusal: { badge: "TRIAGE", title: "Unprocessable notice" },
-  // Spec 208: the producer declares it (policy/task_kinds/document_empty_confirm.yaml) as an
-  // APPROVAL_TASK; EmptyConfirmCard draws it. taskKindParity reds on a declared kind we omit.
-  document_empty_confirm: { badge: "EMPTY", title: "Confirm a document has no parts" },
-};
-
 // THE DEFAULT WAS HONEST ABOUT LABELS AND DISHONEST ABOUT AFFORDANCES. "TASK" as a badge says
 // nothing and is harmless; `APPROVAL_TASK` as an archetype says "this is a decision you accept
 // or refuse" and hands the user two buttons to prove it. A label that says nothing is fine; an
@@ -81,28 +57,24 @@ const REGISTRY: Record<string, TaskKindDisplay> = {
 // The behaviour now matches the claim, and `approvalTaskCard.test.tsx` is what keeps it true.
 const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task" };
 
-/** Does cortex hold an interim badge/title row for this kind? Answers ONLY that. It decides display, never
- *  affordances, and it is NOT a declaration (that is the served `/task_kinds`, 2026-10-30). */
-/**
- * `Object.hasOwn`, not `in`, and not a bare `REGISTRY[kind]`.
- *
- * `kind` is a PROJECTION FIELD — it arrives from data, not from a constant in this repo —
- * so a row carrying "constructor" or "toString" reaches these lookups. Both `in` and index
- * access walk `Object.prototype`, which made those strings report as registered kinds; the
- * `?? DEFAULT` below could not rescue it either, because a builtin is not nullish. The
- * result was a blank badge and a literal `undefined` in the HUD — the failure of a lookup
- * presented as a successful one.
- */
-export const hasDisplayRow = (kind: string): boolean =>
-  Object.hasOwn(REGISTRY, kind);
+type ServedKinds = Readonly<Record<string, TaskDeclaration>>;
 
-/** Resolve a kind's display hints — the honest default for an undeclared kind. */
-export function taskKindDisplay(kind: string): TaskKindDisplay {
-  // Ownership-checked for the same reason as above: `REGISTRY["toString"]` returns a
-  // function, which is not nullish, so `?? DEFAULT` never fires and the caller reads
-  // `.badge` off a builtin.
-  return Object.hasOwn(REGISTRY, kind) ? REGISTRY[kind] : DEFAULT;
+/** The served display hints for a kind: the /task_kinds declaration's badge/title when the menu serves a
+ *  non-empty one, else the honest generic default. `byKind` is the store's (useTaskKindStore). Badge and
+ *  title are taken independently. */
+export function taskKindDisplay(kind: string, byKind: ServedKinds): TaskKindDisplay {
+  // `kind` is a PROJECTION FIELD, it arrives from data, so a row carrying "constructor" or "toString"
+  // reaches this lookup; index access walks `Object.prototype`, and the old table read `.badge` off a
+  // builtin (a blank badge and a literal `undefined` in the HUD). What stops that NOW is the per-field
+  // `typeof ... === "string"` check below: a builtin has no string badge, so it takes DEFAULT. Removing
+  // `Object.hasOwn` alone is an equivalent mutant today (it survived, 2026-10-30); it stays so the lookup
+  // means "this kind's OWN declaration", and the prototype-key arms in the test hold the behaviour.
+  const d = Object.hasOwn(byKind, kind) ? byKind[kind] : undefined;
+  return {
+    badge: typeof d?.badge === "string" && d.badge !== "" ? d.badge : DEFAULT.badge,
+    title: typeof d?.title === "string" && d.title !== "" ? d.title : DEFAULT.title,
+  };
 }
 
-export const taskKindLabel = (kind: string): string => taskKindDisplay(kind).badge;
-export const taskKindTitle = (kind: string): string => taskKindDisplay(kind).title;
+export const taskKindLabel = (kind: string, byKind: ServedKinds): string => taskKindDisplay(kind, byKind).badge;
+export const taskKindTitle = (kind: string, byKind: ServedKinds): string => taskKindDisplay(kind, byKind).title;
