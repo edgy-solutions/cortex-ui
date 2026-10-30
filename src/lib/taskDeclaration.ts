@@ -191,3 +191,11 @@ export function verbLabel(verb: string): string {
   const s = verb.trim().replace(/_/g, " ");
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : verb;
 }
+
+/**
+ * The verbs the task card offers for a declaration, IN THE DECLARATION'S ORDER (never sorted).
+ * With no declaration, the two seed verbs. Shared by `useTaskAct` and the case card's options.
+ */
+export function offeredVerbs(decl: TaskDeclaration | null): string[] {
+  return decl ? decl.accepts : ["approved", "rejected"];
+}

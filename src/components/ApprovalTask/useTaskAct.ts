@@ -6,7 +6,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import { PROPOSED_MOVED_ERROR } from "@/lib/accessProposal";
 import { isRegisteredKind } from "@/lib/taskKindRegistry";
-import { readTaskDeclaration, verbLabel, audienceKindContradiction } from "@/lib/taskDeclaration";
+import { readTaskDeclaration, verbLabel, audienceKindContradiction, offeredVerbs } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
@@ -116,7 +116,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
    * With no declaration, the two seed verbs this card has always offered — correct for
    * `pcn_disposition`, which is the one declared species the interim table knows.
    */
-  const verbs = corrected ? corrected.allowed : decl ? decl.accepts : ["approved", "rejected"];
+  const verbs = corrected ? corrected.allowed : offeredVerbs(decl);
   const needsReason = (v: string) => (decl ? decl.reasonRequired.has(v) : false);
 
   // `reasonOverride`: a card that composes its reason at the press (the review card's reject code plus
