@@ -1,7 +1,8 @@
 /**
- * BatchExportPanel -- the AP-group batch export. Shown only with the `reviewExport` flag on AND
- * the PROPOSED `groups` field on /me/entitlements naming the AP group (see
- * `src/lib/reviewExport.ts`). A failed membership read means not shown.
+ * BatchExportPanel -- the batch export. Shown only with the `reviewExport` flag on AND the caller
+ * holding the export grant: RULED (2026-10-30) as the Topaz-derived `capabilities` list on
+ * /me/entitlements (`ingest:exportBatch`), not yet served -- see the GAP in
+ * `src/lib/reviewExport.ts`. A failed entitlements read means not shown.
  */
 import { useEffect, useState } from "react";
 import { isReviewExportEnabled } from "@/lib/reviewExportFlag";
