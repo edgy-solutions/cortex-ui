@@ -3,6 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
+import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
@@ -312,7 +313,9 @@ export function buildActBody(
   // document review card only. // PROPOSED (unratified): see src/lib/documentReview.ts
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only (spec 208).
-  page?: number
+  page?: number,
+  // PROPOSED, NOT DECLARED by the producer yet: the key is ABSENT unless a coverage is given.
+  reviewCoverage?: ReviewCoverageWire
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
@@ -324,6 +327,7 @@ export function buildActBody(
   if (sectionVerdicts && sectionVerdicts.length > 0) body.section_verdicts = sectionVerdicts; // PROPOSED (unratified)
   // `HumanTaskActRequest.page` is refused (422 page_not_for_decision) on anything but `has_parts`, and
   // `_StrictInt` refuses a non-integer: send it ONLY there, and only a whole page number >= 1.
+  if (reviewCoverage !== undefined) body.review_coverage = reviewCoverage;
   if (decision === "has_parts" && typeof page === "number" && Number.isInteger(page) && page >= 1) body.page = page;
   return body;
 }
@@ -343,9 +347,11 @@ export async function actOnHumanTask(
   // document review card only: the per-section verdicts, sent only when provided.
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only: the 1-based page the steward saw a part on.
-  page?: number
+  page?: number,
+  // document_promotion promote only: PROPOSED `review_coverage` (lane 01's ruling), sent only when provided.
+  reviewCoverage?: ReviewCoverageWire
 ): Promise<ActOnTaskResult> {
-  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page);
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage);
   return request("POST /human_tasks/{task_id}/act", {
     path: { task_id: taskId },
     body: body as BffOps["POST /human_tasks/{task_id}/act"]["body"],
