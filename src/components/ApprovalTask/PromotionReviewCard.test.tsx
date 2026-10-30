@@ -1656,3 +1656,92 @@ describe("no declaration served (fail closed, architect 2026-10-30)", () => {
     expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();
   });
 });
+
+// ── verb roles come from the served declaration, never from a verb's name ───────────────────
+describe("the card's verb roles are the declaration's, not names", () => {
+  const withVerbs = (accepts: string[], reason_required: string[]) => task({ declaration: { ...DECL, accepts, reason_required } });
+  const setFlag = (v: string | null) => {
+    (window as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = v === null ? undefined : { VITE_PROMOTION_ROW_EDITS: v };
+  };
+  afterEach(() => setFlag(null));
+  const verbBtn = (v: string) => document.querySelector(`[data-verb="${v}"]`) as HTMLButtonElement;
+  const unserved = () => document.querySelector("[data-promote-role-unserved]");
+  const lastCall = () => actOnHumanTask.mock.calls[actOnHumanTask.mock.calls.length - 1] as unknown[];
+
+  it("renamed verbs: the one plain verb carries the edits, the one reason verb opens the reject panel", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mount(withVerbs(["accept", "send_back"], ["send_back"]));
+    await waitFor(() => expect(verbBtn("accept").disabled).toBe(false));
+    expect(unserved()).toBeNull();
+    fireEvent.click(document.querySelector('[data-row-fix="BYV34-400"]')!);
+    fireEvent.change(document.querySelector('[data-fix-mpn="BYV34-400"]')!, { target: { value: "BYV34-4000" } });
+    expect(verbBtn("accept").getAttribute("data-row-edit-count")).toBe("1");
+    fireEvent.click(verbBtn("accept"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(lastCall().slice(0, 3)).toEqual(["t-promo", "accept", ""]);
+    expect(lastCall()[4]).toEqual({
+      deleted: [],
+      added: [],
+      corrected: [{ mpn: "BYV34-400", corrected_mpn: "BYV34-4000", evidence: "p.1" }],
+    });
+    cleanup();
+    actOnHumanTask.mockClear();
+    await mount(withVerbs(["accept", "send_back"], ["send_back"]));
+    fireEvent.click(verbBtn("send_back"));
+    fireEvent.click(document.querySelector("[data-reject-code] input") as HTMLElement);
+    fireEvent.click(document.querySelector("[data-reject-confirm]")!);
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(lastCall()[1]).toBe("send_back");
+    expect(typeof lastCall()[2]).toBe("string");
+    expect(lastCall()[2]).not.toBe("");
+  });
+
+  it("the layout fixes promote then reject: served order [send_back, accept] still draws accept first (no sort, none needed)", async () => {
+    await mount(withVerbs(["send_back", "accept"], ["send_back"]));
+    const order = [...document.querySelectorAll("[data-verb]")].map((e) => e.getAttribute("data-verb"));
+    expect(order).toEqual(["accept", "send_back"]);
+  });
+
+  it("two plain verbs: neither carries the edits, the gap is said, and promoted sends bare", async () => {
+    setFlag("true");
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    await mount(withVerbs(["promoted", "deferred", "rejected"], ["rejected"]));
+    await waitFor(() => expect(verbBtn("promoted").disabled).toBe(false));
+    expect(unserved()!.textContent).toBe("which verb carries the edits is not served");
+    expect(document.querySelector("[data-row-fix]")).toBeNull();
+    expect(document.querySelector("[data-row-add-form]")).toBeNull();
+    expect(verbBtn("promoted").getAttribute("data-promote-hold")).toBeNull();
+    expect(verbBtn("promoted").getAttribute("data-row-edit-count")).toBeNull();
+    expect(verbBtn("deferred")).not.toBeNull();
+    // The plain verbs keep SERVED order: a sort would draw deferred before promoted.
+    const order = Array.from(document.querySelectorAll("[data-verb]")).map((b) => b.getAttribute("data-verb"));
+    expect(order).toEqual(["rejected", "promoted", "deferred"]);
+    fireEvent.click(verbBtn("rejected"));
+    expect(document.querySelector("[data-reject-codes]")).not.toBeNull();
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+    fireEvent.click(verbBtn("promoted"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(lastCall().slice(0, 3)).toEqual(["t-promo", "promoted", ""]);
+    expect(lastCall()[3]).toBeUndefined();
+    expect(lastCall()[4]).toBeUndefined();
+  });
+
+  it("two reason-required verbs: no reject panel, r does nothing, both plain and gated on the note; promote role stays", async () => {
+    await mount(withVerbs(["promoted", "rejected", "escalated"], ["rejected", "escalated"]));
+    await waitFor(() => expect(verbBtn("promoted").disabled).toBe(false));
+    expect(unserved()).toBeNull();
+    key("r");
+    expect(document.querySelector("[data-reject-codes]")).toBeNull();
+    fireEvent.click(verbBtn("rejected"));
+    expect(document.querySelector("[data-reject-codes]")).toBeNull();
+    expect(actOnHumanTask).not.toHaveBeenCalled();
+    expect(verbBtn("rejected").disabled).toBe(true);
+    expect(verbBtn("escalated").disabled).toBe(true);
+    expect(verbBtn("rejected").hasAttribute("aria-expanded")).toBe(false);
+    expect(verbBtn("promoted").hasAttribute("data-promote-hold")).toBe(false);
+    fireEvent.change(document.querySelector("[data-review-note]")!, { target: { value: "because" } });
+    expect(verbBtn("rejected").disabled).toBe(false);
+    expect(verbBtn("escalated").disabled).toBe(false);
+  });
+});

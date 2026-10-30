@@ -108,7 +108,7 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   "no-source": "Promote is off: the source cannot be shown, and a steward cannot vet what they cannot see. Reject is still open.",
   // Unlike the holds above this one also turns Reject off: see `sentBack` in the card.
   "sent-back": "",
-  // Known from the payload alone; the server refuses promoted from the dropper (dropper_cannot_attest_origin).
+  // Known from the payload alone; the server refuses the promote verb from the dropper (dropper_cannot_attest_origin).
   dropper: "Promote is off: you dropped this document, and someone else must attest its origin. Reject is still open.",
   // Flag `promotionRuns` only; the text names the counts, so the card composes it (`uncheckedText`).
   unchecked: "",
@@ -384,8 +384,17 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     (a.refusal?.code === "stale_extraction" ? { leaf: null, cause: "stale", newTaskId: a.refusal.newTaskId ?? null } : null);
   const sentBack = hold !== null;
   const canAct = !blocked && !acting && !sentBack;
-  const promoteVerb = verbs.includes("promoted") ? "promoted" : null;
-  const rejectVerb = verbs.includes("rejected") ? "rejected" : null;
+  // ROLES FROM THE SERVED DECLARATION, NEVER FROM A VERB'S NAME (architect, relayed 2026-10-30; the same interim as
+  // DocumentReviewCard, #56). The reject panel composes a reason, so the REJECT role is the one reason-required verb;
+  // the verb that carries row/header edits and review_coverage takes no reason, so the PROMOTE role is the one verb
+  // that is not reason-required. Each role exists only when exactly ONE verb fits it: with two candidates nothing
+  // served says which carries the edits (the producer's gateway decides it by name today, gateway.py:1428-1438), so
+  // neither gets the role and both render as plain verbs -- fail closed, never a guess. Lane 1's `applies_when` on
+  // the verb declaration (0.4.73) replaces this when served.
+  const plainVerbs = verbs.filter((v) => !needsReason(v));
+  const reasonVerbs = verbs.filter((v) => needsReason(v));
+  const promoteVerb = plainVerbs.length === 1 ? plainVerbs[0] : null;
+  const rejectVerb = reasonVerbs.length === 1 ? reasonVerbs[0] : null;
   const otherVerbs = verbs.filter((v) => v !== promoteVerb && v !== rejectVerb);
   const viewerAuthzId = useViewerAuthzId();
   const dropperHeld = viewerIsDropper(task.payload, viewerAuthzId);
@@ -1268,6 +1277,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 </button>
               ))}
             </div>
+            {plainVerbs.length > 1 && (
+              <p className="text-[10px] font-mono text-slate-500" data-promote-role-unserved>
+                which verb carries the edits is not served
+              </p>
+            )}
             {promoteVerb &&
               (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper" || promoteHold === "unchecked") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
