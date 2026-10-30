@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
+import { NO_DECLARATION_SERVED, verbLabel } from "@/lib/taskDeclaration";
 
 const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
@@ -38,7 +38,7 @@ const DECL = {
   accepts: ["promoted", "rejected"],
   reason_required: ["rejected"],
 };
-const task = (payload: Record<string, unknown>): ApprovalTaskPayload => ({
+const task = (payload: Record<string, unknown>, declaration: Record<string, unknown> = DECL): ApprovalTaskPayload => ({
   task_id: "t-doc",
   kind: "document_promotion",
   task_state: "pending",
@@ -47,7 +47,7 @@ const task = (payload: Record<string, unknown>): ApprovalTaskPayload => ({
   audience: "document_promotion:SUSTAINMENT",
   requested_by: "svc:doc-tools",
   subject_ref: null,
-  declaration: DECL,
+  declaration,
   payload,
 });
 
@@ -63,7 +63,8 @@ const rows = () => [...document.querySelectorAll("[data-section-id]")] as HTMLEl
 const row = (id: string) => document.querySelector(`[data-section-id="${id}"]`) as HTMLElement;
 const accept = (id: string) => fireEvent.click(row(id).querySelector("[data-accept]")!);
 const flag = (id: string) => fireEvent.click(row(id).querySelector("[data-flag]")!);
-const submit = () => document.querySelector("[data-submit-decision]") as HTMLButtonElement;
+const verb = (v: string) => document.querySelector(`[data-submit-decision="${v}"]`) as HTMLButtonElement;
+const verbOrder = () => [...document.querySelectorAll("[data-submit-decision]")].map((b) => b.getAttribute("data-submit-decision"));
 const lastProps = () => paneProps.mock.calls.at(-1)![0] as { target: { page: number }; jumpKey: number; ingestId: string };
 const acceptAll = () => ["s1", "s2", "s3", "s4", "s5"].forEach(accept);
 
@@ -96,26 +97,30 @@ describe("DocumentReviewCard", () => {
     expect(lastProps().jumpKey).toBe(k0 + 1);
   });
 
-  it("keeps submit disabled until every section has a verdict, and counts them", () => {
+  it("keeps EVERY served verb disabled until every section has a verdict, and counts them", () => {
     render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
-    expect(submit().disabled).toBe(true);
+    expect(verb("promoted").disabled).toBe(true);
+    expect(verb("rejected").disabled).toBe(true);
     expect(document.querySelector("[data-review-counter]")!.textContent).toBe("0 of 5 sections reviewed · 0 flagged");
     ["s1", "s2", "s3", "s4"].forEach(accept);
-    expect(submit().disabled).toBe(true);
+    expect(verb("promoted").disabled).toBe(true);
+    expect(verb("rejected").disabled).toBe(true);
     expect(document.querySelector("[data-review-counter]")!.textContent).toBe("4 of 5 sections reviewed · 0 flagged");
     accept("s5");
-    expect(submit().disabled).toBe(false);
-    expect(submit().textContent).toBe("Promote document");
-    expect(submit().getAttribute("data-submit-decision")).toBe("promoted");
+    expect(verb("promoted").disabled).toBe(false);
+    expect(verb("promoted").textContent).toBe(verbLabel("promoted"));
   });
 
-  it("flips the label and the decision on a flag", () => {
+  it("enables the reason-required verb only with flags, and the other only without", () => {
     render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
+    expect(verb("promoted").disabled).toBe(false);
+    expect(verb("rejected").disabled).toBe(true);
     flag("s2");
     flag("s4");
-    expect(submit().textContent).toBe("Send back — 2 flagged");
-    expect(submit().getAttribute("data-submit-decision")).toBe("rejected");
+    expect(verb("rejected").disabled).toBe(false);
+    expect(verb("promoted").disabled).toBe(true);
+    expect(document.querySelector("[data-review-counter]")!.textContent).toBe("5 of 5 sections reviewed · 2 flagged");
     expect(row("s2").getAttribute("data-verdict")).toBe("flagged");
     expect(row("s1").getAttribute("data-verdict")).toBe("accepted");
   });
@@ -123,7 +128,7 @@ describe("DocumentReviewCard", () => {
   it("sends the hand-computed body for a promote", async () => {
     render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
-    fireEvent.click(submit());
+    fireEvent.click(verb("promoted"));
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
     expect(actOnHumanTask.mock.calls[0]).toEqual([
       "t-doc",
@@ -149,7 +154,7 @@ describe("DocumentReviewCard", () => {
     flag("s3");
     fireEvent.change(screen.getByLabelText("Note for Removal procedure"), { target: { value: "step 4 missing" } });
     flag("s5");
-    fireEvent.click(submit());
+    fireEvent.click(verb("rejected"));
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
     expect(actOnHumanTask.mock.calls[0]).toEqual([
       "t-doc",
@@ -174,7 +179,8 @@ describe("DocumentReviewCard", () => {
     expect(rows()).toHaveLength(4);
     ["s1", "s3", "s4", "s5"].forEach(accept);
     expect(document.querySelector("[data-review-counter]")!.textContent).toBe("4 of 4 sections reviewed · 0 flagged");
-    expect(submit().disabled).toBe(true);
+    expect(verb("promoted").disabled).toBe(true);
+    expect(verb("rejected").disabled).toBe(true);
     expect(document.querySelector("[data-dropped-sections]")!.textContent).toBe(
       "1 section(s) in this task were malformed and are not shown — the review cannot be submitted",
     );
@@ -184,8 +190,45 @@ describe("DocumentReviewCard", () => {
     actOnHumanTask.mockRejectedValue({ response: { status: 409, data: { detail: { error: "task_unresumable", message: "could not resume" } } } });
     render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
-    fireEvent.click(submit());
+    fireEvent.click(verb("promoted"));
     await waitFor(() => expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("could not resume"));
+  });
+});
+
+describe("the buttons are the served declaration", () => {
+  const decl = (accepts: string[], reason_required: string[]) => ({ ...DECL, accepts, reason_required });
+
+  it("renders the verbs in served order, never sorted", () => {
+    const { unmount } = render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["rejected", "promoted"], ["rejected"]))} />);
+    expect(verbOrder()).toEqual(["rejected", "promoted"]);
+    unmount();
+    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected"], ["rejected"]))} />);
+    expect(verbOrder()).toEqual(["promoted", "rejected"]);
+  });
+
+  it("draws a third served verb with no code change, and sends it with an empty reason", async () => {
+    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected", "deferred"], ["rejected"]))} />);
+    expect(verbOrder()).toEqual(["promoted", "rejected", "deferred"]);
+    expect(verb("deferred").textContent).toBe(verbLabel("deferred"));
+    acceptAll();
+    expect(verb("deferred").disabled).toBe(false);
+    fireEvent.click(verb("deferred"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(actOnHumanTask.mock.calls[0].slice(0, 3)).toEqual(["t-doc", "deferred", ""]);
+    expect(actOnHumanTask.mock.calls[0][7]).toEqual(["s1", "s2", "s3", "s4", "s5"].map((id) => ({ section_id: id, verdict: "accepted" })));
+  });
+
+  it("pairs by reason_required, not by name: a differently named reason-required verb", async () => {
+    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["accept", "send_back"], ["send_back"]))} />);
+    acceptAll();
+    expect(verb("send_back").disabled).toBe(true);
+    expect(verb("accept").disabled).toBe(false);
+    flag("s2");
+    expect(verb("send_back").disabled).toBe(false);
+    expect(verb("accept").disabled).toBe(true);
+    fireEvent.click(verb("send_back"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(actOnHumanTask.mock.calls[0].slice(0, 3)).toEqual(["t-doc", "send_back", "sections flagged: s2"]);
   });
 });
 

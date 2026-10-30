@@ -115,15 +115,15 @@ export function whyNotDocumentReview(task: { payload?: unknown } | null | undefi
 }
 
 /**
- * The act's decision and verdicts. `promoted` when every section is accepted, `rejected` when any is
- * flagged. A verdict for EVERY section, in the sections' order, never a subset: a missing one throws.
- * `note` only when non-empty.
+ * The act's verdicts. A verdict for EVERY section, in the sections' order, never a subset: a missing
+ * one throws. `note` only when non-empty. No decision is derived here: the verb is the served
+ * declaration's (config names the case), chosen by the card.
  */
 export function buildDocumentVerdicts(
   sections: readonly DocumentSection[],
   verdictsById: Readonly<Record<string, SectionVerdict | undefined>>,
   notesById: Readonly<Record<string, string | undefined>> = {},
-): { decision: "promoted" | "rejected"; section_verdicts: SectionVerdictWire[] } {
+): { section_verdicts: SectionVerdictWire[] } {
   const out: SectionVerdictWire[] = [];
   for (const s of sections) {
     const verdict = verdictsById[s.sectionId];
@@ -133,20 +133,23 @@ export function buildDocumentVerdicts(
     const note = (notesById[s.sectionId] ?? "").trim();
     out.push(note !== "" ? { section_id: s.sectionId, verdict, note } : { section_id: s.sectionId, verdict });
   }
-  return { decision: out.some((v) => v.verdict === "flagged") ? "rejected" : "promoted", section_verdicts: out };
+  return { section_verdicts: out };
 }
 
 /**
  * Submit through the existing act path. Keeps the verdicts' wire name out of the card.
- * A reject is a reason-required verb on the declaration (`document_promotion` takes `rejected` only
- * with a reason, and `useTaskAct.act` refuses to send it blank), so the reason names the flagged
- * sections: the per-section notes travel in the verdicts, this is the reason the verb itself needs.
+ * `decision` is a served verb, passed through untouched. When the declaration lists it in
+ * `reason_required` (`document_promotion` does for its rejecting verb, and `useTaskAct.act` refuses
+ * to send it blank), the reason names the flagged sections: the per-section notes travel in the
+ * verdicts, this is the reason the verb itself needs. Otherwise the reason is empty.
  */
 export function actOnDocumentReview(
   act: (decision: string, reason: string, rowEdits: undefined, headerEdits: undefined, extra: SectionVerdictWire[]) => Promise<void>,
+  decision: string,
   built: ReturnType<typeof buildDocumentVerdicts>,
+  reasonRequired: boolean,
 ): Promise<void> {
   const flagged = built.section_verdicts.filter((v) => v.verdict === "flagged").map((v) => v.section_id);
-  const reason = built.decision === "rejected" ? `sections flagged: ${flagged.join(", ")}` : "";
-  return act(built.decision, reason, undefined, undefined, built.section_verdicts);
+  const reason = reasonRequired ? `sections flagged: ${flagged.join(", ")}` : "";
+  return act(decision, reason, undefined, undefined, built.section_verdicts);
 }

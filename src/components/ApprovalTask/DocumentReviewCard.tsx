@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, XCircle, FileText } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
+import { verbLabel } from "@/lib/taskDeclaration";
 import {
   actOnDocumentReview,
   buildDocumentVerdicts,
@@ -39,8 +40,19 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
   const flagged = sections.filter((s) => verdicts[s.sectionId] === "flagged").length;
   const complete = reviewed === sections.length;
   const blocked = isActBlocked(a);
-  const canSubmit = complete && droppedSections === 0 && !acting && !blocked;
-  const submitDecision = flagged > 0 ? "rejected" : "promoted";
+  /*
+   * Buttons come from the served declaration (architect ruling, relayed 2026-10-30: "DocumentReviewCard
+   * buttons from its declaration"). One per `a.verbs` entry, in served order; no verb is named here.
+   * The pairing is mechanism, read from the served `reason_required`: the card's ONLY source of a
+   * reason is the flagged sections. A verb IN reason_required is enabled only with >= 1 flagged section
+   * (its reason is the flagged list; with no flags it would have none to send). A verb NOT in it is
+   * enabled only with NO flagged section (a flag is a stated objection, and a verb taking no reason
+   * would record a decision leaving it unaddressed). Both also need every section judged, no dropped
+   * sections, not acting, not blocked. If a producer ever needs a non-reason verb valid alongside
+   * flags, that must be a SERVED field, never a cortex branch.
+   */
+  const base = complete && droppedSections === 0 && !acting && !blocked;
+  const verbEnabled = (v: string) => base && (a.needsReason(v) ? flagged > 0 : flagged === 0);
 
   const select = (id: string) => {
     setSelectedId(id);
@@ -48,9 +60,9 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
   };
   const setVerdict = (id: string, v: SectionVerdict) => setVerdicts((m) => ({ ...m, [id]: v }));
 
-  const submit = () => {
-    if (!canSubmit) return;
-    void actOnDocumentReview(a.act, buildDocumentVerdicts(sections, verdicts, notes));
+  const submit = (v: string) => {
+    if (!verbEnabled(v)) return;
+    void actOnDocumentReview(a.act, v, buildDocumentVerdicts(sections, verdicts, notes), a.needsReason(v));
   };
 
   const headerRows: Array<[string, string | null]> = [
@@ -177,17 +189,22 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
                 {droppedSections} section(s) in this task were malformed and are not shown — the review cannot be submitted
               </p>
             )}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!canSubmit}
-              data-submit-decision={submitDecision}
-              className={`px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer ${
-                flagged > 0 ? "bg-neon-pink/10 border-neon-pink/50 text-neon-pink hover:bg-neon-pink/20" : "bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
-              }`}
-            >
-              {flagged > 0 ? `Send back — ${flagged} flagged` : "Promote document"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {a.verbs.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => submit(v)}
+                  disabled={!verbEnabled(v)}
+                  data-submit-decision={v}
+                  className={`px-3 py-2 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer ${
+                    a.needsReason(v) ? "bg-neon-pink/10 border-neon-pink/50 text-neon-pink hover:bg-neon-pink/20" : "bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20"
+                  }`}
+                >
+                  {verbLabel(v)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
