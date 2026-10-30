@@ -105,3 +105,12 @@ describe("a refused coverage is read on the card", () => {
     expect(result.current.done).toBeNull();
   });
 });
+
+describe("buildActBody leaves the key out entirely (JSON.stringify would hide an undefined-valued one)", () => {
+  it("absent without a coverage, present and identical with one", async () => {
+    const { buildActBody } = await import("@/api/client");
+    expect(Object.hasOwn(buildActBody("promoted", "c"), "review_coverage")).toBe(false);
+    expect(Object.hasOwn(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, undefined, undefined), "review_coverage")).toBe(false);
+    expect(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, undefined, COVERAGE).review_coverage).toBe(COVERAGE);
+  });
+});
