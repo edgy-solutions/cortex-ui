@@ -49,12 +49,11 @@ import { readGrantReviewTask } from "@/lib/accessProposal";
  * So the served declaration decides, in ITS order, and `taskDeclaration.ts` carries why the two
  * orders in that payload differ and why a MISSING declaration is not `declared: false`.
  *
- * ── THE TABLE REMAINS AS A FALLBACK, AND ONLY UNTIL THE READ PATH ROLLS ───────────────────
+ * ── THE TABLE IS NO LONGER A FALLBACK (architect, 2026-10-30) ─────────────────────────────
  *
- * The endpoint is built and not yet merged, so no row carries a declaration today. Dropping
- * `isRegisteredKind` now would take the buttons off `pcn_disposition` — a species that works —
- * for the length of a deploy window, which is a regression bought with no benefit. It goes when
- * a declaration is actually reaching this card.
+ * Declared-ness comes from the served menu or the row, never from cortex's `taskKindRegistry`
+ * (`hasDisplayRow` is display only). With no declaration the card fails closed ("no declaration
+ * served"), and calls the kind unknown only once the served menu has loaded without it.
  */
 export interface ApprovalTaskPayload {
   task_id: string;

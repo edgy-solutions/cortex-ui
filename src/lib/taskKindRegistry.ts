@@ -14,6 +14,8 @@
  *   - Everything else keys on the ARCHETYPE (structural), never the kind string.
  *   - An UNDECLARED kind gets the honest default (TASK / APPROVAL_TASK) — the
  *     UI-COMPONENT-NOT-FOUND discipline applied to labels, not a silent guess.
+ *     Whether a kind is declared is the served `/task_kinds`' answer (`useTaskAct`), not this
+ *     table's (architect, 2026-10-30).
  *
  * RETIRES AT M3.3 — **together with `_VERBS_BY_KIND`** in invincible-agent's
  * `src/iagent/human_tasks.py`. That is the SECOND hardcoded per-kind table (which
@@ -79,8 +81,8 @@ const REGISTRY: Record<string, TaskKindDisplay> = {
 // The behaviour now matches the claim, and `approvalTaskCard.test.tsx` is what keeps it true.
 const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task" };
 
-/** Is this kind explicitly declared, or is it riding the default? Consumers use this to
- *  degrade honestly rather than assert affordances they cannot justify. */
+/** Does cortex hold an interim badge/title row for this kind? Answers ONLY that. It decides display, never
+ *  affordances, and it is NOT a declaration (that is the served `/task_kinds`, 2026-10-30). */
 /**
  * `Object.hasOwn`, not `in`, and not a bare `REGISTRY[kind]`.
  *
@@ -91,7 +93,7 @@ const DEFAULT: TaskKindDisplay = { badge: "TASK", title: "Task" };
  * result was a blank badge and a literal `undefined` in the HUD — the failure of a lookup
  * presented as a successful one.
  */
-export const isRegisteredKind = (kind: string): boolean =>
+export const hasDisplayRow = (kind: string): boolean =>
   Object.hasOwn(REGISTRY, kind);
 
 /** Resolve a kind's display hints — the honest default for an undeclared kind. */

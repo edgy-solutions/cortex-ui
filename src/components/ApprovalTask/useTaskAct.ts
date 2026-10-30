@@ -5,7 +5,6 @@ import { actRefusal } from "@/lib/reviewRowEdits";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import { PROPOSED_MOVED_ERROR } from "@/lib/accessProposal";
-import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction, offeredVerbs } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
@@ -78,14 +77,16 @@ export function useTaskAct(task: ApprovalTaskPayload) {
    */
   const [corrected, setCorrected] = useState<{ allowed: string[]; message: string } | null>(null);
 
-  // THE SERVED DECLARATION IS THE AUTHORITY WHERE THERE IS ONE; the interim table where there
-  // is not. See the header for why both, and for how long.
-  // THE SERVED MENU, then the row, then the interim table. The row field is kept because the
-  // task listing also carries a declaration and a row-level one is the more specific claim; the
-  // store is what makes the path reachable at all, since nothing populates that field today.
+  // THE SERVED MENU, then the row; NO CORTEX TABLE (architect, 2026-10-30: "isRegisteredKind reads
+  // /task_kinds"). The row field is kept because the task listing also carries a declaration and a
+  // row-level one is the more specific claim; the store is what makes the path reachable at all.
   const fromKinds = useTaskKindStore((s) => s.declarationFor(task.kind));
   const decl = readTaskDeclaration(task.declaration) ?? fromKinds;
-  const declared = decl ? decl.declared : isRegisteredKind(task.kind);
+  const menuLoaded = useTaskKindStore((s) => s.status === "loaded");
+  // No declaration for this kind: it is UNDECLARED only once the served menu has loaded without it. Before that
+  // (idle/loading/unreachable) nothing is claimed about the species; the card still fails closed on `!decl`
+  // ("no declaration served"), it just does not call the kind unknown on an unread menu.
+  const declared = decl ? decl.declared : !menuLoaded;
 
   // THE SERVED MENU, keyed, for `audienceKindContradiction` below — it needs to ask about an
   // arbitrary PREFIX (e.g. `risk_acceptance_medium` out of `risk_acceptance_medium:SUSTAINMENT`),

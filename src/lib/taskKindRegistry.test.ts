@@ -26,7 +26,7 @@ import {
   taskKindDisplay,
   taskKindLabel,
   taskKindTitle,
-  isRegisteredKind,
+  hasDisplayRow,
   type TaskCardArchetype,
 } from "./taskKindRegistry";
 import { taskArchetype } from "./taskArtifact";
@@ -103,7 +103,7 @@ describe("taskKindDisplay — every declared kind resolves to a complete, distin
       expect(d.badge.length, kind).toBeGreaterThan(0);
       expect(d.title.length, kind).toBeGreaterThan(0);
       expect(DECLARED_ARCHETYPES, kind).toContain(EXPECTED_ARCHETYPE[kind]);
-      expect(isRegisteredKind(kind), kind).toBe(true);
+      expect(hasDisplayRow(kind), kind).toBe(true);
     }
   });
 
@@ -159,14 +159,14 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
       badge: DEFAULT_BADGE,
       title: DEFAULT_TITLE,
     });
-    expect(isRegisteredKind("a_kind_nobody_registered")).toBe(false);
+    expect(hasDisplayRow("a_kind_nobody_registered")).toBe(false);
   });
 
   it("an EMPTY kind takes the same default rather than an empty chip", () => {
     // A projection row with a blank kind is a real shape (an unmapped upstream field). A
     // zero-width badge renders as a floating gap nobody can explain.
     expect(taskKindDisplay("")).toEqual(taskKindDisplay("a_kind_nobody_registered"));
-    expect(isRegisteredKind("")).toBe(false);
+    expect(hasDisplayRow("")).toBe(false);
   });
 
   it("lookup is CASE-SENSITIVE and does NOT trim — a padded or shouted kind loses its row", () => {
@@ -175,7 +175,7 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     // approval card — visibly wrong only to someone who knows what the card should have been.
     for (const variant of ["GROUPED_REVIEW", "Grouped_Review", " grouped_review", "grouped_review "]) {
       expect(taskArchetype({ kind: variant, declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE)), variant).toBe("APPROVAL_TASK");
-      expect(isRegisteredKind(variant), variant).toBe(false);
+      expect(hasDisplayRow(variant), variant).toBe(false);
     }
     expect(taskArchetype({ kind: "grouped_review", declaration: undefined }, servedMenu(EXPECTED_ARCHETYPE))).toBe("GROUPED_REVIEW");
   });
@@ -194,7 +194,7 @@ describe("taskKindDisplay — the honest default for an undeclared kind", () => 
     // Reachability is the reason this was worth a line of code: `kind` is a PROJECTION FIELD.
     // It arrives from data, so nothing upstream in this repo constrains it to the declared set.
     for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
-      expect(isRegisteredKind(key), key).toBe(false);
+      expect(hasDisplayRow(key), key).toBe(false);
       expect(taskKindDisplay(key), key).toEqual({
         badge: DEFAULT_BADGE,
         title: DEFAULT_TITLE,
