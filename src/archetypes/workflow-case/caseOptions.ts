@@ -4,7 +4,7 @@ import type { CaseOption, WorkflowCasePayload } from "./contract";
 
 export type CaseOptions =
   | { source: "case"; options: CaseOption[] }
-  | { source: "task"; taskId: string; options: CaseOption[] }
+  | { source: "task"; taskId: string; options: CaseOption[]; undeclared?: true }
   | { source: "none" };
 
 /**
@@ -42,6 +42,9 @@ export function caseOptions(
       return { source: "task", taskId: task.taskId, options };
     }
     const decl = readTaskDeclaration(task.declaration) ?? declarationFor(task.kind);
+    // No payload options and no declaration: nothing is offered, and the card says so (architect 2026-10-30),
+    // which is not the same fact as a declaration that offers none.
+    if (!decl) return { source: "task", taskId: task.taskId, options: [], undeclared: true };
     return {
       source: "task",
       taskId: task.taskId,

@@ -28,7 +28,7 @@ export interface ReviewBatch {
   /** the grouped HumanTask id this batch resolves. */
   batch_id: string;
   notice_id: string;
-  notice_type: "PCN" | "PDN";
+  notice_type: string;
   /** the idempotency namespace — resolutions are keyed notice_fingerprint × mpn. */
   notice_fingerprint: string;
   /** the approver this batch was filtered for ("you"). */

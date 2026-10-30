@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const uploadIngest = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({ uploadIngest: (...a: unknown[]) => uploadIngest(...a) }));
 
-import { useIngestComposerStore, dropReady } from "./useIngestComposerStore";
+import { useIngestComposerStore, dropReady, offeredDropLeaves } from "./useIngestComposerStore";
 
 const http = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
 const pdf = () => new File(["%PDF-1.4\n"], "a.pdf");
@@ -157,5 +157,15 @@ describe("the drop-time kind question (architect 2026-10-23)", () => {
     S().setLeaf("pcn");
     S().clearDraft();
     expect(S().leaf).toBeNull();
+  });
+});
+
+describe("offeredDropLeaves (droppable_kinds, architect 2026-10-30)", () => {
+  it("null entitlements fail closed", () => expect(offeredDropLeaves(null)).toEqual([]));
+  it("keeps SERVED order, not enum order", () => expect(offeredDropLeaves({ droppable_kinds: ["pdn", "pcn"] })).toEqual(["pdn", "pcn"]));
+  it("drops non-enum, duplicate and non-string members", () => expect(offeredDropLeaves({ droppable_kinds: ["pcn", "document", "pcn", 3] })).toEqual(["pcn"]));
+  it("a missing key or a non-array is []", () => {
+    expect(offeredDropLeaves({})).toEqual([]);
+    expect(offeredDropLeaves({ droppable_kinds: "pcn" })).toEqual([]);
   });
 });

@@ -117,8 +117,8 @@ export interface Extraction {
   rows_without_evidence: number | null;
   rows: ReviewRow[];
   droppedRows: number;
-  /** PCN or PDN, when the extraction names it; anything else reads as null (a defaulted doc_type is not shown). */
-  leaf: "pcn" | "pdn" | null;
+  /** The served leaf, verbatim (config names the case; architect 2026-10-30): null only when absent, non-string or empty. */
+  leaf: string | null;
   /** Where the leaf came from: the drop, the title, or a person (same enum as the status row). */
   leaf_source: IngestLeafSource | null;
   /** The person who changed it; only with source "corrected", else null. */
@@ -284,7 +284,7 @@ export function readExtraction(body: unknown): Extraction | null {
     rows_without_evidence: count(body.rows_without_evidence),
     rows,
     droppedRows,
-    leaf: body.leaf === "pcn" || body.leaf === "pdn" ? body.leaf : null,
+    leaf: typeof body.leaf === "string" && body.leaf !== "" ? body.leaf : null,
     leaf_source: readLeafSource(body.leaf_source),
     corrected_by: readCorrectedBy(readLeafSource(body.leaf_source), body.corrected_by),
   };

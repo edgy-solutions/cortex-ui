@@ -99,7 +99,9 @@ describe("ApprovalTaskCard a11y: live regions", () => {
         message: "approved is not valid for this kind",
       }),
     );
-    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    // A declaration is served: with none the card fails closed and there is no verb to press (architect 2026-10-30).
+    const declaration = { kind: "workflow_ack", declared: true, accepts: ["approved", "rejected"], reason_required: [] };
+    render(<ApprovalTaskCard task={task("workflow_ack", { declaration })} />);
     fireEvent.click(document.querySelector('[data-verb="approved"]')!);
     const alert = await screen.findByRole("alert");
     expect(alert.hasAttribute("data-decision-corrected")).toBe(true);

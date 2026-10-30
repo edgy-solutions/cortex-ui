@@ -194,8 +194,12 @@ export function verbLabel(verb: string): string {
 
 /**
  * The verbs the task card offers for a declaration, IN THE DECLARATION'S ORDER (never sorted).
- * With no declaration, the two seed verbs. Shared by `useTaskAct` and the case card's options.
+ * With no declaration, NO verbs: fail closed (architect 2026-10-30: "no declaration means no actions;
+ * 'approved/rejected' as a default is exactly a hard-coded case"). Shared by `useTaskAct` and the case card's options.
  */
 export function offeredVerbs(decl: TaskDeclaration | null): string[] {
-  return decl ? decl.accepts : ["approved", "rejected"];
+  return decl ? decl.accepts : [];
 }
+
+/** What a card says where it would have drawn verbs and no declaration was served. ONE string, read by every card and test. */
+export const NO_DECLARATION_SERVED = "no declaration served";

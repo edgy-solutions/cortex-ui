@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 const actOnHumanTask = vi.fn();
 const fetchIngestStatus = vi.fn();
@@ -1644,5 +1645,14 @@ describe("the dropper cannot attest its own origin", () => {
     usePersonaStore.setState({ entitlements: { email: "alice@example.com" } as never });
     await mountPromotable();
     expect(hold()).toBeNull();
+  });
+});
+
+describe("no declaration served (fail closed, architect 2026-10-30)", () => {
+  it("draws no verb button and says so", () => {
+    render(<ApprovalTaskCard task={task({ declaration: undefined })} />);
+    expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();
   });
 });

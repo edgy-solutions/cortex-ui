@@ -24,8 +24,14 @@ describe("readExportProfiles", () => {
   it("returns null for format xml", () => {
     expect(readExportProfiles([{ name: "a", format: "xml", granularity: "notice_part" }])).toBeNull();
   });
-  it("returns null for granularity page", () => {
-    expect(readExportProfiles([{ name: "a", format: "csv", granularity: "page" }])).toBeNull();
+  it("reads any non-empty granularity verbatim (config names the case, architect 2026-10-30)", () => {
+    expect(readExportProfiles([{ name: "a", format: "csv", granularity: "page" }])).toEqual([{ name: "a", format: "csv", granularity: "page" }]);
+    expect(readExportProfiles([{ name: "a", format: "csv", granularity: "answer" }])).toEqual([{ name: "a", format: "csv", granularity: "answer" }]);
+  });
+  it("refuses the WHOLE body on an empty or non-string granularity", () => {
+    const ok = { name: "b", format: "csv", granularity: "notice" };
+    expect(readExportProfiles([ok, { name: "a", format: "csv", granularity: "" }])).toBeNull();
+    expect(readExportProfiles([ok, { name: "a", format: "csv", granularity: 3 }])).toBeNull();
   });
   it("returns null for the pre-rename key: scope row, no granularity", () => {
     expect(readExportProfiles([{ name: "a", format: "csv", scope: "row" }])).toBeNull();

@@ -48,6 +48,16 @@ describe("caseOptions", () => {
     const r = caseOptions(payload({}), [task({})], () => decl());
     expect(r.source === "task" && r.options.map((o) => o.id)).toEqual(VERBS);
   });
+  it("absent, no payload.options and no declaration: undeclared marker, no options (fail closed, architect 2026-10-30)", () => {
+    const r = caseOptions(payload({}), [task({})], none);
+    expect(r).toEqual({ source: "task", taskId: "wf-1:t", options: [], undeclared: true });
+  });
+  it("a declaration that offers none is NOT marked undeclared", () => {
+    const d = readTaskDeclaration({ kind: "k", declared: true, accepts: [], reason_required: [] })!;
+    const r = caseOptions(payload({}), [task({})], () => d);
+    expect(r.source === "task" && r.options).toEqual([]);
+    expect(r.source === "task" && r.undeclared).toBeUndefined();
+  });
   it("the latest instance wins over an earlier one", () => {
     const early = task({ id: "e", taskId: "wf-1:t", workflowId: "wf-1", payload: { options: [{ verb: "early" }] } });
     const late = task({ id: "l", taskId: "wf-2:t", workflowId: "wf-2", payload: { options: [{ verb: "late" }] } });

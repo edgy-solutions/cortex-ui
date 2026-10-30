@@ -11,7 +11,7 @@
  *   4. PROPOSED `groups: string[]` on `GET /me/entitlements` -> batch control membership
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
- * `{name, format, granularity, label}`, granularity `notice_part | notice`. It was `scope: row | notice`
+ * `{name, format, granularity, label}`, granularity read verbatim (any non-empty string; config names the case, architect 2026-10-30). It was `scope: row | notice`
  * in cortex's proposal; 7f §2 records `scope` as a three-way collision, so lane 01 renamed it.
  * Routes 1-3 and the profile keys are declared at invincible-agent 10ac02fe (#154). A refusal there is
  * FastAPI's `HTTPException(detail={error, ...})`,
@@ -29,7 +29,7 @@ export const EXPORT_BATCH_PATH = "/ingest/export";
 /** PROPOSED: the `groups` entry that shows the batch control. */
 export const AP_GROUP = "alert-processors";
 
-export type ExportProfile = { name: string; format: "csv" | "json"; granularity: "notice_part" | "notice"; label?: string };
+export type ExportProfile = { name: string; format: "csv" | "json"; granularity: string; label?: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -43,7 +43,7 @@ export function readExportProfiles(body: unknown): ExportProfile[] | null {
     if (!isRecord(e)) return null;
     if (typeof e.name !== "string" || e.name === "") return null;
     if (e.format !== "csv" && e.format !== "json") return null;
-    if (e.granularity !== "notice_part" && e.granularity !== "notice") return null;
+    if (typeof e.granularity !== "string" || e.granularity === "") return null;
     const p: ExportProfile = { name: e.name, format: e.format, granularity: e.granularity };
     if (typeof e.label === "string") p.label = e.label;
     out.push(p);

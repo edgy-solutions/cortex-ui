@@ -17,6 +17,7 @@ import {
   readIngestErrorMessage,
   readIngestRefusal,
   ingestKindNotYetAccepted,
+  INGEST_LEAVES,
   type IngestKind,
   type IngestLeaf,
   type IngestRefusal,
@@ -28,6 +29,20 @@ export type DropLeafChoice = IngestLeaf | "unsure";
 /** Only a PDF is asked its leaf; XML/S1000D kind is structural, cad is not yet accepted. */
 export function leafAsked(kind: IngestKind | null): boolean {
   return kind === "pdf";
+}
+
+/** The leaves a PDF drop may be asked: the caller's served `droppable_kinds` that the producer's leaf enum
+ *  declares (INGEST_LEAVES, generated), in SERVED order. Null entitlements -> []: fail closed. No literal here
+ *  (config names the case, architect 2026-10-30); `document` is not offered until the enum declares it (lane 01:
+ *  "do not add `document` to the picker before the architect rules"). */
+export function offeredDropLeaves(entitlements: { droppable_kinds?: unknown } | null): IngestLeaf[] {
+  const served = entitlements?.droppable_kinds;
+  if (!Array.isArray(served)) return [];
+  const out: IngestLeaf[] = [];
+  for (const k of served) {
+    if (typeof k === "string" && (INGEST_LEAVES as readonly string[]).includes(k) && !out.includes(k as IngestLeaf)) out.push(k as IngestLeaf);
+  }
+  return out;
 }
 
 /** THE ready rule for a pending drop — the store's submit and InputBar's button / Enter path share it. */
@@ -132,8 +147,8 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
       set((s) => ({ turns: s.turns.map((t) => (t.id === id ? { ...t, ...p } : t)) }));
     try {
       // content_kind stays the format. A PDF is asked its leaf at the drop (architect 2026-10-23,
-      // overriding 10-21): PCN/PDN travel as `leaf`; "Not sure" sends none and takes the title read.
-      const wireLeaf: IngestLeaf | null = kind === "pdf" && (leaf === "pcn" || leaf === "pdn") ? leaf : null;
+      // overriding 10-21): whatever leaf was chosen travels as `leaf` (no literal; architect 2026-10-30); "Not sure" sends none and takes the title read.
+      const wireLeaf: IngestLeaf | null = kind === "pdf" && leaf !== null && leaf !== "unsure" ? leaf : null;
       const raw = await uploadIngest(file, kind, onBehalfOf, kind, wireLeaf);
       const duplicate = readDuplicate(raw);
       if (duplicate) {

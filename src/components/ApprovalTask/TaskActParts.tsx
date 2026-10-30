@@ -1,6 +1,6 @@
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import type { TaskAct } from "./useTaskAct";
-import { verbLabel } from "@/lib/taskDeclaration";
+import { NO_DECLARATION_SERVED, verbLabel } from "@/lib/taskDeclaration";
 import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
 
 /**
@@ -9,9 +9,14 @@ import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
  * `ApprovalTaskCard` unchanged; the comments explain each state's precedence and honesty rule.
  */
 
+/** No declaration was served and no refusal has taught the card a corrected menu: nothing to offer (architect 2026-10-30). */
+function noDeclaration(a: TaskAct): boolean {
+  return !a.decl && !a.corrected;
+}
+
 /** True when the card must draw `TaskActBlocked` instead of its verbs. */
 export function isActBlocked(a: TaskAct): boolean {
-  return Boolean(a.contradiction) || (a.declared && Boolean(a.decl) && a.decl!.accepts.length === 0) || !a.declared || Boolean(a.done);
+  return Boolean(a.contradiction) || (a.declared && Boolean(a.decl) && a.decl!.accepts.length === 0) || !a.declared || Boolean(a.done) || noDeclaration(a);
 }
 
 /** The four states in which no verb is offered: contradiction, declared-no-verbs, undeclared, done. */
@@ -87,6 +92,11 @@ export function TaskActBlocked({ task, a }: { task: ApprovalTaskPayload; a: Task
             tasks accept, so no decision is offered. Acting on a guess would archive a record of
             a judgement this card cannot justify.
           </p>
+          {noDeclaration(a) && (
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-widest text-slate-500" data-no-declaration>
+              {NO_DECLARATION_SERVED}
+            </p>
+          )}
         </div>
       ) : done ? (
         /**
@@ -102,6 +112,11 @@ export function TaskActBlocked({ task, a }: { task: ApprovalTaskPayload; a: Task
         >
           {done.sentence ?? (done.resumed ? verbLabel(done.decision) : `Recorded: ${verbLabel(done.decision)} — workflow not resumed`)}
         </div>
+      ) : noDeclaration(a) ? (
+        /* FAIL CLOSED. Registered kind, but no declaration served: the old seed verbs were a hard-coded case. */
+        <p className="font-mono text-[10px] uppercase tracking-widest text-slate-500" data-no-declaration>
+          {NO_DECLARATION_SERVED}
+        </p>
       ) : null}
     </>
   );

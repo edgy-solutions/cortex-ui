@@ -39,7 +39,7 @@ export const LOCKED_STAGES: ReadonlySet<string> = new Set(["promoted", "rejected
 export interface LeafChipProps {
   ingestId: string;
   stage: string | null;
-  leaf: IngestLeaf | null;
+  leaf: string | null;
   leafSource: IngestLeafSource | null;
   correctedBy: string | null;
   candidates?: IngestLeafCandidate[];
@@ -49,7 +49,7 @@ export interface LeafChipProps {
 }
 
 /** The label for a leaf; exported so the wording lives in one place. */
-export function leafLabel(leaf: IngestLeaf | null, source: IngestLeafSource | null, correctedBy: string | null, stage: string | null): string {
+export function leafLabel(leaf: string | null, source: IngestLeafSource | null, correctedBy: string | null, stage: string | null): string {
   if (!leaf) {
     // "Not read yet" is for a run that is actually running; a read that gave up says so and asks.
     if (stage === "received" || stage === "extracting") return "? · not read yet";

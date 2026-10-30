@@ -102,13 +102,16 @@ describe("the extraction body", () => {
     expect(read({ notice_id: 42, attempt: 0, part_count: -1 })).toMatchObject({ notice_id: null, attempt: null, part_count: null });
   });
 
-  it("reads the leaf (pcn|pdn) and its source; anything else is null", () => {
+  it("reads any served leaf verbatim, and its source; null only when absent, non-string or empty", () => {
     expect(read({ leaf: "pcn", leaf_source: "declared" })).toMatchObject({ leaf: "pcn", leaf_source: "declared", corrected_by: null });
     expect(read({ leaf: "pdn", leaf_source: "title" })).toMatchObject({ leaf: "pdn", leaf_source: "title" });
     expect(read({ leaf: "pdn", leaf_source: "corrected", corrected_by: "ana" })).toMatchObject({ leaf_source: "corrected", corrected_by: "ana" });
     expect(read({ leaf: "pdn", leaf_source: "corrected", corrected_by: " " }).corrected_by).toBeNull();
     expect(read({ leaf: "pdn", leaf_source: "title", corrected_by: "ana" }).corrected_by).toBeNull();
-    expect(read({ leaf: "PCN", leaf_source: "guess" })).toMatchObject({ leaf: null, leaf_source: null });
+    expect(read({ leaf: "PCN", leaf_source: "guess" })).toMatchObject({ leaf: "PCN", leaf_source: null });
+    expect(read({ leaf: "widget", leaf_source: "declared" })).toMatchObject({ leaf: "widget", leaf_source: "declared" });
+    expect(read({ leaf: "" }).leaf).toBeNull();
+    expect(read({ leaf: 3 }).leaf).toBeNull();
     expect(read()).toMatchObject({ leaf: null, leaf_source: null });
   });
 

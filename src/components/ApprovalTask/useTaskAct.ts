@@ -113,8 +113,8 @@ export function useTaskAct(task: ApprovalTaskPayload) {
    * re-sorting reproduces the defect the SDK's ordering fix was cut to close and it arrives
    * looking like tidiness. A sort here would undo that one surface further out.
    *
-   * With no declaration, the two seed verbs this card has always offered — correct for
-   * `pcn_disposition`, which is the one declared species the interim table knows.
+   * With no declaration (and no corrected menu from a refusal), NO verbs: fail closed (architect
+   * 2026-10-30). The cards draw `NO_DECLARATION_SERVED` through `TaskActBlocked` instead.
    */
   const verbs = corrected ? corrected.allowed : offeredVerbs(decl);
   const needsReason = (v: string) => (decl ? decl.reasonRequired.has(v) : false);

@@ -12,6 +12,7 @@ import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { WORKFLOW_CASE_FIXTURES } from "./fixtures";
 import taskKindsCapture from "../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 afterEach(() => {
   cleanup();
@@ -193,12 +194,14 @@ describe("options source — the case's own key, else the pending task's, else t
     expect(container.textContent).not.toMatch(/no options/);
   });
 
-  it("the four case, menu loaded AFTER the card drew: the registry's four verbs replace the two seed verbs", () => {
+  it("the four case, menu loaded AFTER the card drew: the registry's four verbs replace 'no declaration served'", () => {
     // A row with no declaration of its own: the card falls back to the served menu, which loads on
     // boot and may land after the case panel has drawn.
     useHumanTaskStore.setState({ tasks: [pendingTask({ declaration: undefined })] });
     const { container } = render(<Card case={withoutOptions()} />);
-    expect(container.querySelectorAll("[data-option]")).toHaveLength(2);
+    // Fail closed (architect 2026-10-30): no seed verbs, the card says nothing is declared.
+    expect(container.querySelectorAll("[data-option]")).toHaveLength(0);
+    expect(container.querySelector("[data-no-declaration]")!.textContent).toBe(NO_DECLARATION_SERVED);
     act(() => {
       useTaskKindStore.setState({
         status: "loaded",

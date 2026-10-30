@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AUDIENCE_POOL_OF, audienceKindContradiction } from "./taskDeclaration";
+import { AUDIENCE_POOL_OF, audienceKindContradiction, offeredVerbs } from "./taskDeclaration";
 
 // Every prefix is a declared kind here, so the only thing that can return null is the rule under test.
 const allDeclared = () => true;
@@ -23,5 +23,11 @@ describe("audienceKindContradiction — a kind filed to another kind's steward p
   it("the table is exactly the one pair, and a prototype key is not an exemption", () => {
     expect(AUDIENCE_POOL_OF).toEqual({ document_empty_confirm: "document_promotion" });
     expect(audienceKindContradiction("document_promotion:X", "constructor", allDeclared)).not.toBeNull();
+  });
+});
+
+describe("offeredVerbs", () => {
+  it("no declaration, no verbs: fail closed (architect 2026-10-30)", () => {
+    expect(offeredVerbs(null)).toEqual([]);
   });
 });

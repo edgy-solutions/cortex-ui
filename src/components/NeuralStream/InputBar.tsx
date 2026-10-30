@@ -12,7 +12,8 @@ import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
 import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
-import { useIngestComposerStore, dropReady, leafAsked } from "@/store/useIngestComposerStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
+import { useIngestComposerStore, dropReady, leafAsked, offeredDropLeaves } from "@/store/useIngestComposerStore";
 import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -44,6 +45,7 @@ export function InputBar() {
   // INGEST turn (POST /ingest), not an /interview question. See useIngestComposerStore.
   const ingestEnabled = isIngestUiEnabled();
   const auth = useAuth();
+  const entitlements = usePersonaStore((s) => s.entitlements);
   // on_behalf_of must equal the caller's authz_id — read from /me/entitlements, NOT the OIDC email,
   // which equals it only while USER_ENTITLEMENT_CLAIM stays "email" (not at work). See dropIdentity.
   const onBehalfOf = useDropIdentity();
@@ -222,7 +224,7 @@ export function InputBar() {
                 </>
               )}
               {hasChip && leafAsked(chipKind) && (
-                <DropLeafRow value={chipLeaf} onChange={(c) => useIngestComposerStore.getState().setLeaf(c)} />
+                <DropLeafRow leaves={offeredDropLeaves(entitlements)} value={chipLeaf} onChange={(c) => useIngestComposerStore.getState().setLeaf(c)} />
               )}
             </div>
           )}

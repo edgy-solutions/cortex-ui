@@ -42,13 +42,23 @@ import { toast } from "sonner";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
-import { readTaskDeclaration } from "@/lib/taskDeclaration";
+import { readTaskDeclaration, NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
+import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { humanTaskFromRow } from "@/lib/seedHumanTasks";
 import { taskToArtifact } from "@/lib/taskArtifact";
 
+// A registered kind is handed the declaration the server would serve for it: with none, the card fails closed
+// (architect 2026-10-30), so a test that merely needs buttons must be given a declaration. Tests ABOUT
+// the absence override it with `declaration: undefined`.
+const declFor = (kind: string) =>
+  isRegisteredKind(kind)
+    ? { kind, declared: true, archetype: "APPROVAL_TASK", badge: "", title: "", accepts: ["approved", "rejected"], reason_required: [] as string[] }
+    : undefined;
+
 const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTaskPayload => ({
   task_id: "t1",
+  declaration: declFor(kind),
   kind,
   task_state: "pending",
   title: "Approve the thing",
@@ -326,11 +336,13 @@ describe("the two absences stay distinguishable", () => {
     expect(document.querySelector("[data-declared-no-verbs]")).toBeNull();
   });
 
-  it("a MISSING declaration falls back to the interim table, not to 'undeclared'", () => {
-    // The deploy window. No row carries a declaration until the read path rolls, and reading its
-    // absence as "declares nothing" would strip the buttons off every task that works today.
-    render(<ApprovalTaskCard task={task("pcn_disposition")} />);
-    expect(verbs()).toEqual(["approved", "rejected"]);
+  it("a MISSING declaration on a registered kind fails closed: no verbs, 'no declaration served', not 'undeclared'", () => {
+    // Architect 2026-10-30: no declaration means no actions; the old seed verbs were a hard-coded case.
+    render(<ApprovalTaskCard task={{ ...task("pcn_disposition"), declaration: undefined }} />);
+    expect(verbs()).toEqual([]);
+    expect(buttons()).toEqual([]);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
     expect(document.querySelector("[data-declared-no-verbs]")).toBeNull();
   });
 });

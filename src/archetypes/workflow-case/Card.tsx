@@ -1,3 +1,4 @@
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { fetchCaseArtifact } from "@/api/client";
@@ -346,6 +347,13 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
             data-options-absent
           >
             options not recorded for this case
+          </p>
+        ) : resolved.source === "task" && resolved.undeclared ? (
+          <p
+            className="font-mono text-[10px] uppercase tracking-widest text-slate-500"
+            data-no-declaration
+          >
+            {NO_DECLARATION_SERVED}
           </p>
         ) : (
           <p

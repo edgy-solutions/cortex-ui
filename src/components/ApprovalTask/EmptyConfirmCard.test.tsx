@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
@@ -218,5 +219,14 @@ describe("refusals are drawn inline, and never retried", () => {
     expect(toast.error).not.toHaveBeenCalled();
     // the card is still decidable
     expect(hasParts().disabled).toBe(false);
+  });
+});
+
+describe("no declaration served (fail closed, architect 2026-10-30)", () => {
+  it("draws no verb button and says so", () => {
+    render(<ApprovalTaskCard task={task({ declaration: undefined })} />);
+    expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();
   });
 });

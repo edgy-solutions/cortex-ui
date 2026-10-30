@@ -3,7 +3,8 @@
  * verb, the moved proposal, "access granted" only after the sync completes, and the flag-off fallthrough.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 const h = vi.hoisted(() => ({ on: true, email: "alice" as string | null }));
 const actOnHumanTask = vi.fn();
@@ -123,5 +124,14 @@ describe("GrantReviewCard", () => {
     expect(document.querySelector("[data-grant-review]")).toBeNull();
     expect(verbs()).toEqual(["approved", "rejected"]);
     expect(document.querySelector("[data-reason-input]")).not.toBeNull();
+  });
+});
+
+describe("no declaration served (fail closed, architect 2026-10-30)", () => {
+  it("draws no verb button and says so", () => {
+    render(<ApprovalTaskCard task={task({ declaration: undefined })} />);
+    expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();
   });
 });

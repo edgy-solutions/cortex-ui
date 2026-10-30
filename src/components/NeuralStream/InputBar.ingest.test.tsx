@@ -240,6 +240,10 @@ describe("the paperclip", () => {
 });
 
 describe("send", () => {
+  // The picker reads the caller's served droppable_kinds (architect 2026-10-30: config names the case); no seed, no leaves.
+  beforeEach(() => {
+    usePersonaStore.setState({ entitlements: { user_id: "u", email: "a@example.com", cells: [], default: null, source: "topaz", droppable_kinds: ["pcn", "pdn"] } as unknown as Entitlements });
+  });
   /** Drop a file and wait for the kind inference to settle (the chip shows a kind or a picker). */
   async function attach(r: ReturnType<typeof render>, file: File = pdf()) {
     act(() => {
@@ -275,6 +279,15 @@ describe("send", () => {
     chooseLeaf("unsure");
     expect(leafRow()!.getAttribute("data-ingest-leaf-selected")).toBe("unsure");
     expect(send.disabled).toBe(false);
+  });
+
+  it("with no entitlements served the row offers only Not sure and says so", async () => {
+    usePersonaStore.setState({ entitlements: null });
+    const r = render(<InputBar />);
+    await attach(r);
+    expect(document.querySelector('[data-ingest-leaf-option="pcn"]')).toBeNull();
+    expect(document.querySelector('[data-ingest-leaf-option="unsure"]')).not.toBeNull();
+    expect(document.querySelector("[data-ingest-leaf-none]")).not.toBeNull();
   });
 
   it("an xml drop does not ask: no leaf row, Send enabled", async () => {

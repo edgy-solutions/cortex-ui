@@ -104,6 +104,7 @@ describe("WORKFLOW_CASE fixtures discriminate", () => {
       "data-options-source",
       "data-options-from-task",
       "data-options-empty",
+      "data-no-declaration",
       "data-artifact-loading",
       "data-artifact-error",
       "data-artifact-record",

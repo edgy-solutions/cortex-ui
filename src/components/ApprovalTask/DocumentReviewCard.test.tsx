@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
@@ -200,5 +201,14 @@ describe("the dispatcher", () => {
     render(<ApprovalTaskCard task={task({ ...fixturePromotionPayload(sha), domain: "SUSTAINMENT" })} />);
     expect(document.querySelector("[data-promotion-review]")).not.toBeNull();
     expect(document.querySelector("[data-document-review]")).toBeNull();
+  });
+});
+
+describe("no declaration served (fail closed, architect 2026-10-30)", () => {
+  it("draws no verb button and says so", () => {
+    render(<ApprovalTaskCard task={{ ...task(fixtureDocumentReviewPayload()), declaration: undefined }} />);
+    expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+    expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
+    expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();
   });
 });
