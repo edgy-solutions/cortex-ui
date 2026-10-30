@@ -211,7 +211,16 @@ env:
   #   (every task_kinds dir) 4a5ff6b6..47502b35 is EMPTY (control: 113 files changed). Check 3:
   #   uv.lock iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive
   #   export of 47502b35 placed as the sibling.
-  PRODUCER_REF: 47502b3582111488a124fa9bca053a74df418ff0
+  # 2026-10-30 RE-PIN to 10ac02fe (platform master; the merge of
+  #   lane/01-review-coverage-on-the-promotion-record, PR #156). 47502b35 is its ancestor. It
+  #   declares review_coverage on HumanTaskActRequest (ReviewCoverage, CoverageGroup, CoverageShared,
+  #   all additionalProperties: false), which the review card now sends on promote. It also carries
+  #   #146, #152, #153, #154 and #155. The chart still reads 0.4.71 at this sha; lane 01 cuts 0.4.72
+  #   with this image. ⚠ NOT read off the pods (sandbox frozen). Check 2: task_kinds diff (every
+  #   task_kinds dir) 47502b35..10ac02fe is EMPTY (control: 48 files changed). Check 3: uv.lock
+  #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
+  #   10ac02fe placed as the sibling.
+  PRODUCER_REF: 10ac02feeb7e44cc52707731066b63f000df8aa3
 
 permissions:
   contents: read
