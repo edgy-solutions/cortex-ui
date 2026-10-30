@@ -72,7 +72,7 @@ import path from "node:path";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration, type TaskDeclaration } from "./taskDeclaration";
-import { taskKindDisplay, isRegisteredKind } from "./taskKindRegistry";
+import { taskKindDisplay, hasDisplayRow } from "./taskKindRegistry";
 import { taskArchetype } from "./taskArtifact";
 
 /**
@@ -350,7 +350,7 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
 
   it("no declared species is unaccounted for on the cortex side", () => {
     const all = [...composed().keys()];
-    const unaccounted = all.filter((k) => !isRegisteredKind(k) && !KNOWN_UNREGISTERED.includes(k));
+    const unaccounted = all.filter((k) => !hasDisplayRow(k) && !KNOWN_UNREGISTERED.includes(k));
     expect(unaccounted, "declared upstream, unknown to cortex, and not a pinned gap").toEqual([]);
   });
 
@@ -358,7 +358,7 @@ describe.skipIf(!HAVE_PRODUCER)("declarations -> REGISTRY: the gap is PINNED, no
     // The control for the list above. A species that gained a REGISTRY row, or was withdrawn
     // upstream, must drop out of the pin rather than sit there widening the hole.
     const all = composed();
-    const stale = KNOWN_UNREGISTERED.filter((k) => !all.has(k) || isRegisteredKind(k));
+    const stale = KNOWN_UNREGISTERED.filter((k) => !all.has(k) || hasDisplayRow(k));
     expect(stale, "pinned as an unregistered gap but no longer one").toEqual([]);
   });
 });
@@ -482,6 +482,8 @@ describe.skipIf(!HAVE_PRODUCER)("the RENDERED affordances equal the DECLARED ver
   });
 
   it("STATE 3 — no declaration at all renders unknown-species, NOT no-verbs", () => {
+    // Unknown species is claimed only off a LOADED menu lacking the kind (architect 2026-10-30).
+    useTaskKindStore.setState({ status: "loaded", byKind: {} });
     render(<ApprovalTaskCard task={payload("some_kind_nobody_declared") as never} />);
     expect(renderedVerbs()).toEqual([]);
     const refusal = document.querySelector("[data-undeclared-kind]");
@@ -497,6 +499,8 @@ describe.skipIf(!HAVE_PRODUCER)("the RENDERED affordances equal the DECLARED ver
   it("the three states are mutually exclusive — no card shows two of them", () => {
     // Red-proofs the three above. Markers that could co-occur would let a card satisfy two
     // states at once and each assertion would still pass in isolation.
+    // Unknown species is claimed only off a LOADED menu lacking the kind (architect 2026-10-30).
+    useTaskKindStore.setState({ status: "loaded", byKind: {} });
     const cases: Array<[string, unknown]> = [
       ["verbs", { ...payload("pcn_disposition"), declaration: { kind: "pcn_disposition", declared: true, archetype: "APPROVAL_TASK", badge: "DISPOSE", title: "PCN disposition", accepts: ["approved", "rejected"], reason_required: [] } }],
       ["no-verbs", { ...payload("x"), declaration: { kind: "x", declared: true, archetype: "APPROVAL_TASK", badge: "X", title: "X", accepts: [], reason_required: [] } }],
@@ -622,7 +626,7 @@ describe.skipIf(!HAVE_PRODUCER)("THE POST-CUTOVER SUBJECT: declared verbs reach 
     // does. This is the assertion that would have caught the dead wire directly.
     const safety = composed().get("safety_redraft");
     expect(safety, "safety_redraft is gone upstream — repoint this to another unregistered species").toBeTruthy();
-    expect(isRegisteredKind("safety_redraft"), "it gained a REGISTRY row; this arm no longer proves anything").toBe(false);
+    expect(hasDisplayRow("safety_redraft"), "it gained a REGISTRY row; this arm no longer proves anything").toBe(false);
 
     seedStore([safety!]);
     render(<ApprovalTaskCard task={payload("safety_redraft") as never} />);
@@ -630,13 +634,15 @@ describe.skipIf(!HAVE_PRODUCER)("THE POST-CUTOVER SUBJECT: declared verbs reach 
     expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
   });
 
-  it("an UNREACHABLE menu falls back and refuses — it does not claim the species is undeclared", () => {
+  it("an UNREACHABLE menu refuses without verbs — it does not claim the species is undeclared", () => {
     // `unreachable` is not `empty`. A failed fetch must not render "nothing has declared this
     // species", which is a claim about the deployment made from a broken request.
     useTaskKindStore.setState({ status: "unreachable", byKind: {} });
     render(<ApprovalTaskCard task={payload("safety_redraft") as never} />);
     expect(renderedVerbs()).toEqual([]);
-    expect(document.querySelector("[data-undeclared-kind]")).not.toBeNull();
+    // 2026-10-30: fails closed ("no declaration served") but makes NO claim about the species.
+    expect(document.querySelector("[data-no-declaration]")).not.toBeNull();
+    expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
   });
 });
 

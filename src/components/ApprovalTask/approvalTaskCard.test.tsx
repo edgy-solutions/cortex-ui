@@ -43,16 +43,17 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { readTaskDeclaration, NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
-import { isRegisteredKind } from "@/lib/taskKindRegistry";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { humanTaskFromRow } from "@/lib/seedHumanTasks";
 import { taskToArtifact } from "@/lib/taskArtifact";
 
-// A registered kind is handed the declaration the server would serve for it: with none, the card fails closed
+// The kinds these tests treat as served-declared (their own list, NOT cortex's display table: 2026-10-30 the
+// card no longer reads that table). A declared kind is handed the declaration the server would serve for it: with none, the card fails closed
 // (architect 2026-10-30), so a test that merely needs buttons must be given a declaration. Tests ABOUT
 // the absence override it with `declaration: undefined`.
+const SERVED_KINDS = new Set(["grouped_review", "pcn_disposition", "access_request", "workflow_ack", "extraction_refusal", "document_empty_confirm"]);
 const declFor = (kind: string) =>
-  isRegisteredKind(kind)
+  SERVED_KINDS.has(kind)
     ? { kind, declared: true, archetype: "APPROVAL_TASK", badge: "", title: "", accepts: ["approved", "rejected"], reason_required: [] as string[] }
     : undefined;
 
@@ -111,6 +112,10 @@ describe("a DECLARED kind keeps its verbs", () => {
 });
 
 describe("an UNDECLARED kind gets none", () => {
+  // UNDECLARED is claimed only off a LOADED menu that lacks the kind (architect 2026-10-30), so seed one.
+  beforeEach(() => useTaskKindStore.setState({ status: "loaded", byKind: {} }));
+  afterEach(() => useTaskKindStore.setState({ status: "idle", byKind: {} }));
+
   it("renders no Approve and no Reject", () => {
     render(<ApprovalTaskCard task={task("some_kind_nobody_declared")} />);
     expect(buttons()).toEqual([]);
@@ -162,6 +167,10 @@ describe("an UNDECLARED kind gets none", () => {
 });
 
 describe("the default-deny survives a hostile kind string", () => {
+  // UNDECLARED is claimed only off a LOADED menu that lacks the kind (architect 2026-10-30), so seed one.
+  beforeEach(() => useTaskKindStore.setState({ status: "loaded", byKind: {} }));
+  afterEach(() => useTaskKindStore.setState({ status: "idle", byKind: {} }));
+
   it("a prototype key is NOT a declared kind", () => {
     // `kind` is a PROJECTION FIELD — it arrives from data. `REGISTRY["constructor"]` walks
     // Object.prototype and returns a function, which once made builtins report as registered
@@ -179,6 +188,37 @@ describe("the default-deny survives a hostile kind string", () => {
     render(<ApprovalTaskCard task={task("")} />);
     expect(buttons()).toEqual([]);
   });
+});
+
+/**
+ * WHERE "unknown species" COMES FROM (architect 2026-10-30, "isRegisteredKind reads /task_kinds"): the served
+ * menu, only once LOADED. Cortex's display table (`workflow_ack` has a row, `a_kind_nobody_declared` has none)
+ * must change nothing in either direction.
+ */
+describe("undeclared is the served menu's verdict, not cortex's table", () => {
+  afterEach(() => useTaskKindStore.setState({ status: "idle", byKind: {} }));
+  const bare = (kind: string) => ({ ...task(kind), declaration: undefined });
+
+  for (const kind of ["workflow_ack", "a_kind_nobody_declared"]) {
+    it(`LOADED menu lacking ${kind}: undeclared, no declaration served, no verbs`, () => {
+      useTaskKindStore.setState({ status: "loaded", byKind: {} });
+      render(<ApprovalTaskCard task={bare(kind)} />);
+      expect(document.querySelector("[data-undeclared-kind]")).not.toBeNull();
+      expect(document.querySelector("[data-no-declaration]")).not.toBeNull();
+      expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+      expect(buttons()).toEqual([]);
+    });
+
+    for (const status of ["idle", "loading", "unreachable"] as const) {
+      it(`${status} menu, ${kind}: no claim of unknown species, still fails closed`, () => {
+        useTaskKindStore.setState({ status, byKind: {} });
+        render(<ApprovalTaskCard task={bare(kind)} />);
+        expect(document.querySelector("[data-undeclared-kind]")).toBeNull();
+        expect(document.querySelector("[data-no-declaration]")).not.toBeNull();
+        expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
+      });
+    }
+  }
 });
 
 /**

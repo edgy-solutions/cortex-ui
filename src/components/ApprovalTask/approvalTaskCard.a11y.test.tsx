@@ -109,6 +109,8 @@ describe("ApprovalTaskCard a11y: live regions", () => {
   });
 
   it("an undeclared kind is reachable by role alert", () => {
+    // Undeclared is claimed only off a LOADED menu lacking the kind (architect 2026-10-30).
+    useTaskKindStore.setState({ status: "loaded", byKind: {} });
     render(<ApprovalTaskCard task={task("no_such_kind_anywhere")} />);
     const alert = screen.getByRole("alert");
     expect(alert.hasAttribute("data-undeclared-kind")).toBe(true);
