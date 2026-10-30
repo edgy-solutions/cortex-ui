@@ -37,3 +37,21 @@ describe("the document review proposal is contained", () => {
     expect(spelled, "both homes still spell them (a rename would leave this seal guarding nothing)").toEqual(ALLOWED);
   });
 });
+
+/** Source text with line and block comments removed (enough for these two files). */
+const stripComments = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
+const VERB_LITERAL = /(["'`])(promoted|rejected)\1/;
+
+describe("no verb name is spelled in the document review code (config names the case)", () => {
+  it("CONTROL: the matcher catches master's DocumentReviewCard snippet, and ignores comments", () => {
+    const master = '  const submitDecision = flagged > 0 ? "rejected" : "promoted"; // verb\n  /* block */ const x = 1;';
+    expect(VERB_LITERAL.test(stripComments(master))).toBe(true);
+    expect(VERB_LITERAL.test(stripComments('// "promoted"\n/* "rejected" */\nconst y = 2;'))).toBe(false);
+  });
+
+  it.each(["components/ApprovalTask/DocumentReviewCard.tsx", "lib/documentReview.ts"])("%s spells neither verb as a literal", (rel) => {
+    const text = stripComments(readFileSync(join(SRC, rel), "utf8"));
+    expect(text.length, "the file was read").toBeGreaterThan(500);
+    expect(VERB_LITERAL.exec(text)?.[0] ?? null).toBeNull();
+  });
+});

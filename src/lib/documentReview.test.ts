@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildActBody } from "@/api/client";
-import { buildDocumentVerdicts, readDocumentReviewTask, whyNotDocumentReview, type DocumentSection } from "./documentReview";
+import { actOnDocumentReview, buildDocumentVerdicts, readDocumentReviewTask, whyNotDocumentReview, type DocumentSection } from "./documentReview";
 import {
   FIXTURE_DOCUMENT_INGEST_ID,
   fixtureDocumentReviewDuplicate,
@@ -95,20 +95,17 @@ const S = (id: string): DocumentSection => ({ sectionId: id, title: id, page: 1,
 const SECS = [S("a"), S("b"), S("c")];
 
 describe("buildDocumentVerdicts", () => {
-  it("promotes when every section is accepted", () => {
+  it("returns the verdicts only, with no decision key", () => {
     const r = buildDocumentVerdicts(SECS, { a: "accepted", b: "accepted", c: "accepted" });
     expect(r).toEqual({
-      decision: "promoted",
       section_verdicts: [
         { section_id: "a", verdict: "accepted" },
         { section_id: "b", verdict: "accepted" },
         { section_id: "c", verdict: "accepted" },
       ],
     });
-  });
-
-  it("rejects when any section is flagged", () => {
-    expect(buildDocumentVerdicts(SECS, { a: "accepted", b: "flagged", c: "accepted" }).decision).toBe("rejected");
+    expect("decision" in r).toBe(false);
+    expect(Object.keys(buildDocumentVerdicts(SECS, { a: "accepted", b: "flagged", c: "accepted" }))).toEqual(["section_verdicts"]);
   });
 
   it("sends a note only when non-empty after trimming", () => {
@@ -137,5 +134,19 @@ describe("buildActBody with section verdicts", () => {
     expect(buildActBody("promoted", "", undefined, undefined, undefined, undefined, v)).toEqual({ decision: "promoted", comment: "", section_verdicts: v });
     expect(buildActBody("promoted", "c")).toEqual({ decision: "promoted", comment: "c" });
     expect("section_verdicts" in buildActBody("promoted", "", undefined, undefined, undefined, undefined, [])).toBe(false);
+  });
+});
+
+describe("actOnDocumentReview", () => {
+  const built = buildDocumentVerdicts(SECS, { a: "flagged", b: "accepted", c: "flagged" });
+  it("passes the given decision through and names the flagged sections when a reason is required", async () => {
+    const act = vi.fn().mockResolvedValue(undefined);
+    await actOnDocumentReview(act, "any_verb", built, true);
+    expect(act).toHaveBeenCalledWith("any_verb", "sections flagged: a, c", undefined, undefined, built.section_verdicts);
+  });
+  it("sends an empty reason when none is required, even with sections flagged", async () => {
+    const act = vi.fn().mockResolvedValue(undefined);
+    await actOnDocumentReview(act, "any_verb", built, false);
+    expect(act).toHaveBeenCalledWith("any_verb", "", undefined, undefined, built.section_verdicts);
   });
 });
