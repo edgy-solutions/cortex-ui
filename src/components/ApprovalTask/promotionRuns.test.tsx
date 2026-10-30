@@ -433,6 +433,49 @@ describe("record preview", () => {
   });
 });
 
+describe("the record would be refused: a row with no mpn is not drawn", () => {
+  const withDropped = () => {
+    const b = body();
+    b.rows.push({ row_index: b.rows.length, part_index: 0, mpn: null, field: "replacement_mpn", extracted_value: "X", obtained_via: "text_layer_cell", evidence_ref: ref(2, boxOf(0)), match_confidence: 1, needs_review: false, review_reason: null, source_snippet: "" });
+    return b;
+  };
+
+  it("flag on: Promote stays disabled after every check is looked at and the shared fact confirmed, and the hold is rows_not_drawn", async () => {
+    fetchIngestExtraction.mockReset().mockImplementation(async () => withDropped());
+    await mountRuns();
+    fireEvent.click(q("[data-run]")!);
+    for (let n = 0; n < 12; n++) key("J");
+    fireEvent.click(unitEl("p0")!);
+    fireEvent.click(q("[data-shared-confirm]")!);
+    expect(progress().left).toBe(0);
+    await waitFor(() => expect(q('[data-coverage-problem="rows_not_drawn"]')).not.toBeNull());
+    expect(promoteBtn().disabled).toBe(true);
+    expect(q("[data-coverage-problem]")!.textContent).toContain("would be refused");
+    expect(q("[data-coverage-problem]")!.textContent).toContain("1 row had no mpn");
+  });
+
+  it("control: the same walk without the dropped row lifts the hold and shows no coverage problem", async () => {
+    await mountRuns();
+    fireEvent.click(q("[data-run]")!);
+    for (let n = 0; n < 12; n++) key("J");
+    fireEvent.click(unitEl("p0")!);
+    fireEvent.click(q("[data-shared-confirm]")!);
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    expect(q("[data-coverage-problem]")).toBeNull();
+  });
+
+  it("flag off: the same extraction leaves Promote as on master, and no coverage problem is drawn", async () => {
+    setCfg(null);
+    fetchIngestExtraction.mockReset().mockImplementation(async () => withDropped());
+    render(<AuthContext.Provider value={asOwner(OWNER)}><ApprovalTaskCard task={task()} /></AuthContext.Provider>);
+    await waitFor(() => expect(document.querySelectorAll("[data-review-row]")).toHaveLength(13));
+    await waitFor(() => expect(q("[data-pdf-slot-drawn]")).not.toBeNull());
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    expect(q("[data-coverage-problem]")).toBeNull();
+    expect(promoteBtn().getAttribute("data-promote-hold")).toBeNull();
+  });
+});
+
 describe("the callout beside the outlined cell", () => {
   it("shows the extracted pair, sits 4px under the outline's left edge, and ▼ advances to the next part", async () => {
     await mountRuns();
