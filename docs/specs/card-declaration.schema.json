@@ -36,7 +36,7 @@
     "layout": {
       "description": "Where the card sits. Census: full-width 25, grid-col-1 2, none 1, rows 1. `none` goes with `consumer`.",
       "enum": ["full-width", "grid-col-1", "none", "rows"],
-      "x-cortex-finding": "RESOLVED (architect 2026-10-30: `rows` goes into cortex's type). At 0fd6d6d, `rows` (COMPETING_MEASURES_CONTRACT) was outside cortex's FrontendCapability.layout type and reached the wire through an `as` cast in assembleDerivedCapabilities. The type now lists \"rows\" and the cast is gone, so tsc refuses a contract whose layout is outside this enum. The producer still declares layout as an untyped string."
+      "x-cortex-finding": "RESOLVED (architect 2026-10-30: `rows` goes into cortex's type). At 0fd6d6d, `rows` (COMPETING_MEASURES_CONTRACT) was outside cortex's FrontendCapability.layout type and reached the wire through an `as` cast in assembleDerivedCapabilities. The type now lists \"rows\" and the cast is gone, so tsc refuses a contract whose layout is outside this enum. The producer still declares layout as an untyped string (`string | null` at 41230a7e, the 0.4.73 cut)."
     },
     "recomputes": {
       "description": "ADR-0042 Ruling 9's discriminant: whether re-evaluating the question would return a different answer as plan state moves. A contract field, never a refusal reason. Present on 20 of 29 (true 10, false 10). ABSENT on 9, and absent is not stated to mean false.",
@@ -157,7 +157,7 @@
         "consumer": {
           "type": "string",
           "minLength": 1,
-          "x-cortex-finding": "Cortex sends `consumer` on 1 of 49 rows, but the producer's FrontendCapability (at 10ac02fe) declares no `consumer` property and sets no additionalProperties, so the receiver does not keep it as a declared field. Its only declared trace on the wire is inside the open `contract` object."
+          "x-cortex-finding": "Cortex sends `consumer` on 1 of 49 rows, but the producer's FrontendCapability (at 10ac02fe, and still at 41230a7e, the 0.4.73 cut) declares no `consumer` property and sets no additionalProperties, so the receiver does not keep it as a declared field. Its only declared trace on the wire is inside the open `contract` object."
         },
         "layout": { "enum": ["full-width", "grid-col-1", "none", "rows"] },
         "expected_fields": { "type": "array", "minItems": 1, "items": { "type": "string" } },
