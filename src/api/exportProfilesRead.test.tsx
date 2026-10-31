@@ -62,6 +62,19 @@ describe("fetchIngestExportProfiles (typed read)", () => {
     expect(await fetchIngestExportProfiles()).toEqual([...FIXTURE_154_PROFILES, ANSWER]);
   });
 
+  it("a format cortex has never seen passes verbatim through the real fetch, and the picker offers it", async () => {
+    const XLSX = { name: "per-part-xlsx", format: "xlsx", granularity: "notice_part", label: "Excel" };
+    reply.data = JSON.parse(JSON.stringify([...FIXTURE_154_PROFILES, XLSX]));
+    expect(await fetchIngestExportProfiles()).toEqual([...FIXTURE_154_PROFILES, XLSX]);
+    act(() =>
+      useIngestStatusStore.setState({ rows: { [ID]: { ingest_id: ID, stage: "promoted" } as unknown as IngestStatusRow }, track: vi.fn() }),
+    );
+    const { container } = render(<ReviewExportControl ingestId={ID} />);
+    await waitFor(() => expect(container.querySelector('[data-export-profile="per-part-xlsx"]')).not.toBeNull());
+    expect(container.querySelector('[data-export-profile="per-part-xlsx"]')?.textContent).toContain("xlsx");
+    expect(container.querySelectorAll("[data-export-profile]").length).toBe(3);
+  });
+
   it("a body with an EMPTY granularity element is refused (null from the reader, a throw from the call)", async () => {
     reply.data = BAD;
     await expect(fetchIngestExportProfiles()).rejects.toThrow(/malformed \/ingest\/export\/profiles/);

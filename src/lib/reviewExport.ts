@@ -11,7 +11,7 @@
  *   4. RULED, not yet served: `capabilities` on `GET /me/entitlements` -> batch control (Lane 1 adds it)
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
- * `{name, format, granularity, label}`, granularity read verbatim (any non-empty string; config names the case, architect 2026-10-30). It was `scope: row | notice`
+ * `{name, format, granularity, label}`, format and granularity read verbatim (any non-empty string; config names the case, architect 2026-10-30). It was `scope: row | notice`
  * in cortex's proposal; 7f §2 records `scope` as a three-way collision, so lane 01 renamed it.
  * Routes 1-3 and the profile keys are declared at invincible-agent 10ac02fe (#154). A refusal there is
  * FastAPI's `HTTPException(detail={error, ...})`,
@@ -29,7 +29,10 @@ export const EXPORT_BATCH_PATH = "/ingest/export";
 /** Mock-only stand-in, removed when `capabilities` lands (see the GAP on `canExportBatch`). */
 export const AP_GROUP = "alert-processors";
 
-export type ExportProfile = { name: string; format: "csv" | "json"; granularity: string; label?: string };
+/** `format` and `granularity` are read verbatim, any non-empty string: the producer's `FORMATS` / `GRANULARITIES`
+ *  decide what is served, and cortex only shows them and uses `format` as a filename-extension fallback. A closed
+ *  union here would blank the WHOLE picker the day the producer adds a value (config names the case, architect 2026-10-30). */
+export type ExportProfile = { name: string; format: string; granularity: string; label?: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -42,7 +45,7 @@ export function readExportProfiles(body: unknown): ExportProfile[] | null {
   for (const e of body) {
     if (!isRecord(e)) return null;
     if (typeof e.name !== "string" || e.name === "") return null;
-    if (e.format !== "csv" && e.format !== "json") return null;
+    if (typeof e.format !== "string" || e.format === "") return null;
     if (typeof e.granularity !== "string" || e.granularity === "") return null;
     const p: ExportProfile = { name: e.name, format: e.format, granularity: e.granularity };
     if (typeof e.label === "string") p.label = e.label;
