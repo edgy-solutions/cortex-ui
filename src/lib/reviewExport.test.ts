@@ -21,8 +21,11 @@ describe("readExportProfiles", () => {
   it("returns null when one entry has no name", () => {
     expect(readExportProfiles([{ name: "a", format: "csv", granularity: "notice_part" }, { format: "csv", granularity: "notice_part" }])).toBeNull();
   });
-  it("returns null for format xml", () => {
-    expect(readExportProfiles([{ name: "a", format: "xml", granularity: "notice_part" }])).toBeNull();
+  it("reads any non-empty format verbatim; an empty or non-string one refuses the body (config names the case)", () => {
+    expect(readExportProfiles([{ name: "a", format: "xlsx", granularity: "notice_part" }])).toEqual([{ name: "a", format: "xlsx", granularity: "notice_part" }]);
+    expect(readExportProfiles([{ name: "a", format: "", granularity: "notice_part" }])).toBeNull();
+    expect(readExportProfiles([{ name: "a", format: 3, granularity: "notice_part" }])).toBeNull();
+    expect(readExportProfiles([{ name: "a", granularity: "notice_part" }])).toBeNull();
   });
   it("reads any non-empty granularity verbatim (config names the case, architect 2026-10-30)", () => {
     expect(readExportProfiles([{ name: "a", format: "csv", granularity: "page" }])).toEqual([{ name: "a", format: "csv", granularity: "page" }]);
