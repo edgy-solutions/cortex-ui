@@ -81,7 +81,7 @@ These ride the planned 0.4.73 commit (`review_coverage` item form + `review_task
 
 ## Open items (cortex)
 
-- #57, #58 and #59 are open for review.
+- #57 and #58 were merged by the user (18:39Z). #59 is open for review.
 - On the 0.4.73 roll:
   - the `review_coverage` item form and `review_task_kind`;
   - read `/review-shapes`;
@@ -93,4 +93,13 @@ These ride the planned 0.4.73 commit (`review_coverage` item form + `review_task
 
 ## Image
 
-Nothing merged overnight. **Pin to `421fbbe` (`sha256:e3992d05b5930e459ccf515bba75d0939d200e4c4c560d6db5514b30a1a993d3`), the last built sha on master.** This report and the schema-doc line are a sessions/docs-only push, which builds no image. #59 has no image until it merges.
+#57 and #58 merged while this beat ran, and each push built an image. Read by anonymous GHCR manifest HEAD on the bare full sha (token length 76):
+
+| push HEAD | merge | run | digest |
+|---|---|---|---|
+| `679887a` | #57 | Build Containers: success | `sha256:e3e46730c12ba02ba5af2ba1fc8899470626080ff205f4de873ae02b7db5e15f` |
+| `5cc4241` | #58 | Build Containers: success | `sha256:2eb4e51dfe14b5c869d86a26aa72da70540dffefcb338902c7c18627972b2e97` **← the last built sha on master** |
+
+A made-up full sha returns 404, as the negative control. Nothing is rolled: the sandbox is frozen.
+
+**Pin to `5cc4241`**, not to this report's sha. This report and the schema-doc line are a sessions/docs-only push, which builds no image. #59 has no image until it merges.
