@@ -157,8 +157,8 @@ function mulberry32(seed: number): () => number {
 }
 
 /** The unit indices of a run to look at: ends always, interior members drawn by the run's own seeded stream. */
-function sampleRun(members: number[], seed: string, runId: string, samplesPerRun: number): number[] {
-  if (members.length <= SAMPLE_ALL_UP_TO) return [...members];
+function sampleRun(members: number[], seed: string, runId: string, samplesPerRun: number, sampleAllUpTo: number): number[] {
+  if (members.length <= sampleAllUpTo) return [...members];
   const rand = mulberry32(hashString(seed + runId));
   const interior = members.slice(1, -1);
   // Partial Fisher-Yates: the first k slots are a uniform draw without replacement.
@@ -170,13 +170,28 @@ function sampleRun(members: number[], seed: string, runId: string, samplesPerRun
   return [members[0], members[members.length - 1], ...interior.slice(0, k)];
 }
 
-export function buildReviewPlan(
-  rows: ReviewRow[],
-  seed: string,
-  opts: { minRun?: number; samplesPerRun?: number } = {},
-): ReviewPlan {
+/**
+ * What the served review-shape row tells the plan (`planOptsFromRow` in reviewShapes.ts). Every field falls back to the
+ * mechanism default above when absent: no row known (mock without shapes, shapes failed) plans with the defaults.
+ */
+export interface PlanOpts {
+  minRun?: number;
+  samplesPerRun?: number;
+  sampleAllUpTo?: number;
+  minShared?: number;
+  /** Fold consecutive like parts into runs. Default true; false when the row does not list RUN_RULE. */
+  runs?: boolean;
+  /** Collect shared facts. Default true; false when the row does not list SHARED_RULE. */
+  shared?: boolean;
+}
+
+export function buildReviewPlan(rows: ReviewRow[], seed: string, opts: PlanOpts = {}): ReviewPlan {
   const minRun = opts.minRun ?? MIN_RUN;
   const samplesPerRun = opts.samplesPerRun ?? SAMPLES_PER_RUN;
+  const sampleAllUpTo = opts.sampleAllUpTo ?? SAMPLE_ALL_UP_TO;
+  const minShared = opts.minShared ?? MIN_SHARED;
+  const runsOn = opts.runs ?? true;
+  const sharedOn = opts.shared ?? true;
 
   // Units, in first-appearance order.
   const units: ReviewUnit[] = [];
@@ -216,7 +231,7 @@ export function buildReviewPlan(
   for (let i = 0; i < units.length; ) {
     let j = i + 1;
     while (j < units.length && keyOf(units[j]) === keyOf(units[i])) j++;
-    if (j - i >= minRun) {
+    if (runsOn && j - i >= minRun) {
       const members = Array.from({ length: j - i }, (_, k) => i + k);
       const reps = members.map((m) => units[m].replacement);
       const run: Run = {
@@ -240,22 +255,24 @@ export function buildReviewPlan(
   }
 
   const sampled = new Set<number>();
-  for (const run of runs) for (const m of sampleRun(run.units, seed, run.id, samplesPerRun)) sampled.add(m);
+  for (const run of runs) for (const m of sampleRun(run.units, seed, run.id, samplesPerRun, sampleAllUpTo)) sampled.add(m);
   const checks = new Set<number>(sampled);
   units.forEach((u, i) => {
-    if (u.flags.length > 0) checks.add(i);
+    // With runs off no unit is folded into anything, so each stands alone and is its own check.
+    if (!runsOn || u.flags.length > 0) checks.add(i);
   });
 
   // Shared facts: one crop cited by many rows of inherited quality (a date stated once in prose).
   const groups = new Map<string, number[]>();
   rows.forEach((r, i) => {
+    if (!sharedOn) return;
     if (r.evidence.state !== "ok" || r.evidence.ref.bbox === null || evidenceQuality(r.obtained_via) !== "inherited") return;
     const key = `${r.evidence.ref.page}:${r.evidence.ref.bbox.join(",")}`;
     groups.set(key, [...(groups.get(key) ?? []), i]);
   });
   const sharedFacts: SharedFact[] = [];
   for (const [key, idx] of groups) {
-    if (idx.length < MIN_SHARED) continue;
+    if (idx.length < minShared) continue;
     const fields = new Set(idx.map((i) => rows[i].field));
     const first = rows[idx[0]];
     sharedFacts.push({

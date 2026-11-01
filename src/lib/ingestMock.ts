@@ -42,6 +42,7 @@ import {
 } from "./ingestWire";
 import type { IngestSource } from "@/api/client";
 import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
+import { REVIEW_SHAPES_FIXTURE } from "./reviewShapesFixture";
 import {
   scaleFixtureExtractionBody,
   scaleFixturePdfBytes,
@@ -288,6 +289,11 @@ function ingestNotFound(): Promise<never> {
 export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
   if (!STORE.has(ingestId)) return ingestNotFound();
   return Promise.resolve((isScaleDrop(ingestId) ? scaleFixtureExtractionBody : fixtureExtractionBody)(ingestId));
+}
+
+/** `GET /review-shapes`'s mock: the platform seed rows, as served at 41230a7e. */
+export function fetchReviewShapes(): Promise<unknown> {
+  return Promise.resolve(REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })));
 }
 
 /**

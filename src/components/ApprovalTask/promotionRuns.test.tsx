@@ -24,8 +24,10 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 const fetchIngestSource = vi.fn();
 const fetchIngestExtraction = vi.fn();
+const fetchReviewShapes = vi.fn();
 vi.mock("@/lib/ingestTransport", () => ({
   correctIngestLeaf: vi.fn(),
+  fetchReviewShapes: (...a: unknown[]) => fetchReviewShapes(...a),
   fetchIngestSource: (...a: unknown[]) => fetchIngestSource(...a),
   fetchIngestExtraction: (...a: unknown[]) => fetchIngestExtraction(...a),
 }));
@@ -42,6 +44,8 @@ import { buildActBody, actOnHumanTask as actOnHumanTaskReal } from "@/api/client
 import { scaleFixtureExtractionBody } from "@/lib/promotionReviewScaleFixture";
 import { readExtraction } from "@/lib/promotionReview";
 import { buildReviewPlan, shapeOf } from "@/lib/reviewRuns";
+import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
+import { resetReviewShapesCache } from "./useReviewShapes";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
 
@@ -92,6 +96,8 @@ function body() {
     ingest_id: SHA,
     notice_id: "PCN-RUNS-0010",
     content_kind: "pdf",
+    review_shape: "notice",
+    item_kind: "part",
     attempt: 1,
     notice: { mfr: "Example Discretes Ltd", mfr_parent: null, notice_date: "2026-09-30" },
     part_count: PAIRS.length,
@@ -142,6 +148,8 @@ beforeEach(() => {
     contentType: "application/pdf",
   });
   fetchIngestExtraction.mockReset().mockImplementation(async () => body());
+  resetReviewShapesCache();
+  fetchReviewShapes.mockReset().mockImplementation(async () => REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })));
   renderPage.mockReset().mockImplementation(async (_n: number, _c: HTMLCanvasElement, w: number) => ({ width: w, height: (w * 792) / 612 }));
   openPdf.mockReset().mockResolvedValue({ numPages: 2, renderPage, destroy: vi.fn() });
   useTaskKindStore.setState({ status: "idle", byKind: {} });
@@ -452,11 +460,14 @@ describe("promote sends the coverage record (scale fixture)", () => {
     const line = await walkAndPromote();
     const sent = promotedBody();
     expect(sent.decision).toBe("promoted");
-    const rc = sent.review_coverage as { looked_at: number[]; groups: { parts: number[] }[]; sampled: number[]; rules_version: string };
+    const rc = sent.review_coverage as { looked_at: string[]; groups: { items: string[] }[]; sampled: string[]; review_shape: string; item_kind: string; rules_version: string };
     expect(rc, "review_coverage missing from the promote body").toBeDefined();
-    const fixtureParts = new Set((scaleFixtureExtractionBody(SHA).rows as { part_index: number }[]).map((r) => r.part_index));
-    const union = new Set([...rc.looked_at, ...rc.groups.flatMap((g) => g.parts)]);
-    expect([...union].sort((x, y) => x - y)).toEqual([...fixtureParts].sort((x, y) => x - y));
+    const fixtureParts = new Set((scaleFixtureExtractionBody(SHA).rows as { part_index: number }[]).map((r) => String(r.part_index)));
+    const union = new Set([...rc.looked_at, ...rc.groups.flatMap((g) => g.items)]);
+    expect([...union].sort((x, y) => Number(x) - Number(y))).toEqual([...fixtureParts].sort((x, y) => Number(x) - Number(y)));
+    const served = REVIEW_SHAPES_FIXTURE.find((r) => r.review_shape === "notice")!;
+    expect(rc).toMatchObject({ review_shape: served.review_shape, item_kind: served.item_kind, rules_version: served.rules_version });
+    expect(rc).not.toHaveProperty("parts");
     expect(rc.looked_at.length).toBeGreaterThan(0);
     expect(line.text).toContain(`Looked at ${rc.looked_at.length} of ${fixtureParts.size} parts`);
     expect(rc.groups.length).toBeGreaterThan(0);
@@ -474,6 +485,81 @@ describe("promote sends the coverage record (scale fixture)", () => {
     fireEvent.click(promoteBtn());
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
     expect(Object.hasOwn(promotedBody(), "review_coverage")).toBe(false);
+  });
+});
+
+describe("no registry row for the extraction: no coverage is sent, and Promote is not held for it", () => {
+  /** Mount on the 10-part synthetic notice, press every check, promote. The body is read from the call. */
+  const promoteWith = async (opts: { extraction?: (b: Record<string, unknown>) => Record<string, unknown>; shapes?: () => Promise<unknown> }) => {
+    actOnHumanTask.mockResolvedValue({ workflow_resumed: true });
+    if (opts.extraction) fetchIngestExtraction.mockImplementation(async () => opts.extraction!(body()));
+    if (opts.shapes) fetchReviewShapes.mockImplementation(opts.shapes);
+    await mountRuns();
+    await waitFor(() => expect(q("[data-coverage-unsent]")).not.toBeNull());
+    const unsent = q("[data-coverage-unsent]")!.textContent!;
+    const plan = buildReviewPlan(readExtraction(body())!.rows, `${SHA}:1`);
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("J");
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("K");
+    for (const el of document.querySelectorAll<HTMLElement>("[data-shared-confirm]")) fireEvent.click(el);
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    fireEvent.click(promoteBtn());
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    return { unsent, sent: promotedBody() };
+  };
+
+  it("control: with a matching row the unsent line is absent and the record preview is drawn", async () => {
+    await mountRuns();
+    expect(q("[data-coverage-unsent]")).toBeNull();
+    expect(q("[data-record-coverage]")).not.toBeNull();
+  });
+
+  it("extraction review_shape null: no review_coverage key, the line names review_shape", async () => {
+    const { unsent, sent } = await promoteWith({ extraction: (b) => ({ ...b, review_shape: null }) });
+    expect(Object.hasOwn(sent, "review_coverage")).toBe(false);
+    expect(sent.decision).toBe("promoted");
+    expect(unsent).toContain("Coverage is not sent:");
+    expect(unsent).toContain("review_shape");
+  });
+
+  it("extraction item_kind null: no review_coverage key, the line names item_kind", async () => {
+    const { unsent, sent } = await promoteWith({ extraction: (b) => ({ ...b, item_kind: null }) });
+    expect(Object.hasOwn(sent, "review_coverage")).toBe(false);
+    expect(unsent).toContain("item_kind");
+  });
+
+  it("the shapes fetch rejects: no key sent, the line names the failure (status included)", async () => {
+    const { unsent, sent } = await promoteWith({ shapes: () => Promise.reject(Object.assign(new Error("boom"), { response: { status: 503 } })) });
+    expect(Object.hasOwn(sent, "review_coverage")).toBe(false);
+    expect(unsent).toContain("could not be loaded (503)");
+  });
+
+  it("a served row says item_kind section where the extraction says part: no key sent, the line names both", async () => {
+    const { unsent, sent } = await promoteWith({
+      shapes: async () => REVIEW_SHAPES_FIXTURE.map((r) => (r.review_shape === "notice" ? { ...r, item_kind: "section" } : r)),
+    });
+    expect(Object.hasOwn(sent, "review_coverage")).toBe(false);
+    expect(unsent).toContain('"part"');
+    expect(unsent).toContain('"section"');
+  });
+
+  it("while the shapes are loading the unsent line is not shown", async () => {
+    fetchReviewShapes.mockImplementation(() => new Promise(() => {}));
+    render(<AuthContext.Provider value={asOwner(OWNER)}><ApprovalTaskCard task={task()} /></AuthContext.Provider>);
+    await waitFor(() => expect(q("[data-review-progress]")).not.toBeNull());
+    expect(q("[data-coverage-unsent]")).toBeNull();
+  });
+
+  it("while the shapes are loading Promote is held, even with every check looked at, and says why", async () => {
+    fetchReviewShapes.mockImplementation(() => new Promise(() => {}));
+    render(<AuthContext.Provider value={asOwner(OWNER)}><ApprovalTaskCard task={task()} /></AuthContext.Provider>);
+    await waitFor(() => expect(q("[data-review-progress]")).not.toBeNull());
+    const plan = buildReviewPlan(readExtraction(body())!.rows, `${SHA}:1`);
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("J");
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) key("K");
+    for (const el of document.querySelectorAll<HTMLElement>("[data-shared-confirm]")) fireEvent.click(el);
+    expect(progress().left).toBe(0);
+    expect(q("[data-coverage-loading]")).not.toBeNull();
+    expect(promoteBtn().disabled).toBe(true);
   });
 });
 

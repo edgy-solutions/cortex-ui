@@ -224,6 +224,8 @@ export function scaleFixtureExtractionBody(ingestId: string): Record<string, unk
     ingest_id: ingestId,
     notice_id: SCALE_FIXTURE_NOTICE_ID,
     content_kind: "pdf",
+    review_shape: "notice",
+    item_kind: "part",
     attempt: 1,
     notice: { mfr: "Example Discretes Ltd", mfr_parent: null, notice_date: "2026-09-30" },
     part_count: SCALE_FIXTURE_PART_COUNT,

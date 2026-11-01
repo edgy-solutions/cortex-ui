@@ -14,6 +14,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   correctIngestLeaf: vi.fn(),
   fetchIngestSource: vi.fn(() => new Promise(() => {})),
   fetchIngestExtraction: vi.fn(() => new Promise(() => {})),
+  fetchReviewShapes: vi.fn(() => new Promise(() => {})),
 }));
 const paneProps = vi.fn();
 vi.mock("./PdfEvidencePane", () => ({

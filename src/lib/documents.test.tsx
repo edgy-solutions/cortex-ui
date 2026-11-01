@@ -18,6 +18,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
   fetchIngestMine: () => Promise.resolve({ items: [], next: null }),
   fetchIngestExtraction: () => never(),
+  fetchReviewShapes: () => never(),
   fetchIngestSource: () => never(),
   correctIngestLeaf: vi.fn(),
 }));

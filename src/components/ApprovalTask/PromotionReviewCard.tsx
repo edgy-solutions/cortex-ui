@@ -32,7 +32,9 @@ import { ReviewExportControl } from "./ReviewExportControl";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
 import { isFeatureEnabled } from "@/lib/featureFlags";
-import { buildReviewCoverage, coverageProblem } from "@/lib/reviewCoverage";
+import { buildReviewCoverage, coverageProblem, coverageRowProblem } from "@/lib/reviewCoverage";
+import { pickShapeRow, planOptsFromRow } from "@/lib/reviewShapes";
+import { useReviewShapes } from "./useReviewShapes";
 import { buildReviewPlan, groupEnd, hitTest, nextCheck, nextUnit, placeOf, randomInGroup, RUN_RULE, SHARED_RULE } from "@/lib/reviewRuns";
 import { AuthContext } from "react-oidc-context";
 import { runIdByUnit, useReviewCoverage, type RestoredDrafts } from "./useReviewCoverage";
@@ -324,9 +326,18 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const runsOn = isFeatureEnabled("promotionRuns");
   // The seed is the document and attempt, never the clock: a resumed review walks the same sampled checks.
   const seed = `${ingestId}:${review.attempt ?? ""}`;
+  // The review-shape row names the rules and their params (config); the mechanisms are this card's. No row known
+  // (loading, failed, unmatched) plans with the mechanism defaults and sends no coverage.
+  const shapes = useReviewShapes();
+  const pick =
+    shapes.phase === "ready"
+      ? pickShapeRow(shapes.rows, ex?.reviewShape ?? null, ex?.itemKind ?? null)
+      : { row: null, why: shapes.phase === "failed" ? shapes.why : "the review shapes are still loading." };
+  const shapeRow = pick.row;
+  const planOpts = useMemo(() => planOptsFromRow(shapeRow), [shapeRow]);
   const plan = useMemo(
-    () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, seed) : null),
-    [runsOn, rows, seed],
+    () => (runsOn && rows.length > 0 ? buildReviewPlan(rows, seed, planOpts) : null),
+    [runsOn, rows, seed, planOpts],
   );
   // Read the auth context WITHOUT useAuth (which throws outside a provider). No sub, no owner: coverage is then not persisted (a no-auth dev build has no identity to key it by).
   const sub = useContext(AuthContext)?.user?.profile?.sub ?? null;
@@ -356,8 +367,15 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const selUnit = plan ? (plan.unitOfRow[sel] ?? 0) : -1;
   const planLooked = plan ? plan.units.filter((u) => cov.looked.has(u.id)).length : 0;
   // The one record of what was sampled vs looked at, built from the plan. Shown, and sent on promote under the flag.
-  const record = plan ? buildReviewCoverage(plan, cov.looked, cov.confirmed, seed) : null;
-  const coverageBad = plan && record ? coverageProblem(record, plan, ex?.droppedRows ?? 0) : null;
+  // With no registry row for this extraction there is no record: Promote then sends no `review_coverage` and is not held for it.
+  const record = plan && shapeRow ? buildReviewCoverage(plan, cov.looked, cov.confirmed, seed, shapeRow, planOpts) : null;
+  const coverageBad =
+    plan && record && shapeRow
+      ? (coverageRowProblem(record, shapeRow) ?? coverageProblem(record, plan, ex?.droppedRows ?? 0))
+      : null;
+  const coverageUnsent = plan && !shapeRow && shapes.phase !== "loading" ? (pick as { why: string }).why : null;
+  // Until the shapes answer, a press would send no coverage that a moment later would have been sent: Promote waits.
+  const shapesLoading = runsOn && plan !== null && shapes.phase === "loading";
   const coverageParts = plan ? new Set(plan.units.flatMap((u) => (u.partIndex === null ? [] : [u.partIndex]))).size : 0;
   const checksLeft = plan ? [...plan.checks].filter((u) => !cov.looked.has(plan.units[u].id)).length : 0;
   // A fact whose rows all state ONE value is confirmed once; one whose rows disagree cannot be, and says so.
@@ -465,7 +483,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editsActive, draft, rows, headerDraft, ex]);
-  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0 && coverageBad === null;
+  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0 && coverageBad === null && !shapesLoading;
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
@@ -1200,7 +1218,17 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 Press p again, or Enter, to promote. Esc cancels.
               </p>
             )}
-            {runsOn && plan && (
+            {shapesLoading && (
+              <p className="text-[10px] font-mono text-slate-500" data-coverage-loading>
+                Promote waits for the review shapes, which say what coverage to send.
+              </p>
+            )}
+            {runsOn && coverageUnsent !== null && (
+              <p className="text-[10px] font-mono text-slate-500" data-coverage-unsent>
+                Coverage is not sent: {coverageUnsent}
+              </p>
+            )}
+            {runsOn && plan && record && (
               <div className="rounded border border-white/5 px-2 py-1 text-[10px] font-mono text-slate-500" data-record-preview>
                 <p data-record-sent>
                   sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
@@ -1208,11 +1236,11 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
                 <p
                   data-record-coverage
                   data-record-coverage-parts={coverageParts}
-                  data-record-coverage-sampled={record!.sampled.length}
+                  data-record-coverage-sampled={record.sampled.length}
                 >
-                  recorded with the promotion: Looked at {record!.looked_at.length} of {coverageParts} parts,
-                  of which {record!.sampled.length} were sampled; {record!.groups.reduce((n, c) => n + c.parts.length, 0)} covered by{" "}
-                  {record!.groups.length} {record!.groups.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record!.shared.filter((x) => x.confirmed).length} shared facts confirmed once
+                  recorded with the promotion: Looked at {record.looked_at.length} of {coverageParts} parts,
+                  of which {record.sampled.length} were sampled; {record.groups.reduce((n, c) => n + c.items.length, 0)} covered by{" "}
+                  {record.groups.length} {record.groups.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>
               </div>
             )}

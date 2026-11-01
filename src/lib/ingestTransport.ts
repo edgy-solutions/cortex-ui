@@ -17,6 +17,7 @@ import {
   retryIngest as realRetryIngest,
   fetchIngestSource as realFetchIngestSource,
   fetchIngestExtraction as realFetchIngestExtraction,
+  fetchReviewShapes as realFetchReviewShapes,
 } from "@/api/client";
 import type { IngestSource } from "@/api/client";
 import type { IngestLeaf } from "./ingestWire";
@@ -28,6 +29,7 @@ import {
   mockRetryIngest,
   fetchIngestSource as mockFetchIngestSource,
   fetchIngestExtraction as mockFetchIngestExtraction,
+  fetchReviewShapes as mockFetchReviewShapes,
 } from "./ingestMock";
 import { isIngestMockEnabled } from "./ingestFlag";
 
@@ -65,6 +67,11 @@ export function retryIngest(ingestId: string): Promise<unknown> {
 /** `GET /ingest/{id}/extraction` — see `src/api/client.ts`'s `fetchIngestExtraction`. */
 export function fetchIngestExtraction(ingestId: string): Promise<unknown> {
   return isIngestMockEnabled() ? mockFetchIngestExtraction(ingestId) : realFetchIngestExtraction(ingestId);
+}
+
+/** `GET /review-shapes` — see `src/api/client.ts`'s `fetchReviewShapes`. */
+export function fetchReviewShapes(): Promise<unknown> {
+  return isIngestMockEnabled() ? mockFetchReviewShapes() : realFetchReviewShapes();
 }
 
 /** `GET /ingest/{id}/source` — see `src/api/client.ts`'s `fetchIngestSource`. */
