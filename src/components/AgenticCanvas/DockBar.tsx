@@ -9,7 +9,8 @@ import { useTemplateStore } from "@/store/useTemplateStore";
 import { needsBinding, partitionTemplates, refuseTemplateForCreate } from "@/lib/templateCatalog";
 import { RefusalWithAsk } from "@/components/elicitation/RefusalWithAsk";
 import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
-import { useTemplateSeed } from "./useTemplateSeed";
+import { useTemplateSeed, type TemplateSeedDeps } from "./useTemplateSeed";
+import { seedDone, type SeedProgress } from "@/lib/seedProgress";
 
 /**
  * DockBar — the canvas dock (ADR-0028 canvas-dock model, Stage 3). Pinned below
@@ -68,7 +69,36 @@ const USES: { value: CanvasUse | ""; label: string }[] = [
   })),
 ];
 
-export function DockBar() {
+/** One row per panel index, each in the state the progress events put it in; pending until told. */
+function SeedPanelRows({ progress, only }: { progress: SeedProgress; only?: "refused" }) {
+  const rows = Array.from({ length: progress.total }, (_, i) => ({
+    i,
+    state: progress.panels[i] ?? "pending",
+  })).filter((r) => (only ? r.state === only : true));
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {rows.map((r) => (
+        <span
+          key={r.i}
+          data-seed-panel={r.i}
+          data-state={r.state}
+          className={`rounded border px-1.5 py-0.5 text-[9px] font-mono ${
+            r.state === "seeded"
+              ? "border-neon-cyan/50 text-neon-cyan"
+              : r.state === "refused"
+              ? "border-slate-500/60 text-slate-300"
+              : "border-slate-700/60 text-slate-600"
+          }`}
+        >
+          {r.i + 1}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** `seedDeps` passes straight to `useTemplateSeed`; nothing in production sets it. */
+export function DockBar({ seedDeps }: { seedDeps?: TemplateSeedDeps } = {}) {
   const view = useStageStore((s) => s.view);
   const canvases = useStageStore((s) => s.canvases);
   const setView = useStageStore((s) => s.setView);
@@ -97,6 +127,7 @@ export function DockBar() {
    */
   const { offerable } =
     catalog.status === "ready" ? partitionTemplates(catalog.templates) : { offerable: [] };
+  const selectedRow = offerable.find((t) => t.templateId === newTemplate);
   const loadTemplates = useTemplateStore((s) => s.load);
   const closeForm = () => {
     setNewName("");
@@ -105,7 +136,10 @@ export function DockBar() {
     setCreateBlocked(null);
     setCreating(false);
   };
-  const seed = useTemplateSeed(closeForm);
+  const seed = useTemplateSeed(closeForm, seedDeps);
+  // ONE SEED PER DIALOG. From the program pick until the dialog closes, nothing that could shape a
+  // second board is on screen: running, or finished partial with its board already made.
+  const seeding = seed.busy || seed.outcome !== null;
   // Fetched when the creation form OPENS, not on mount: the menu is only needed by someone
   // about to choose from it, and the store makes the call once per session regardless.
   useEffect(() => {
@@ -147,7 +181,8 @@ export function DockBar() {
         ? catalog.templates.find((t) => t.templateId === newTemplate.trim())
         : undefined;
     if (seedRow && needsBinding(seedRow)) {
-      if (seed.busy) return;
+      // A finished partial seed also stops here: the board exists, and a second Create would mint another.
+      if (seed.busy || seed.outcome) return;
       setCreateBlocked(null);
       void seed.start(seedRow.templateId, newName || seedRow.title || seedRow.templateId);
       return;
@@ -263,6 +298,7 @@ export function DockBar() {
           <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">
             New canvas
           </div>
+          {!seeding && (
           <input
             autoFocus
             value={newName}
@@ -274,6 +310,9 @@ export function DockBar() {
             placeholder={`Canvas ${canvases.length + 1}`}
             className="w-full bg-slate-900/70 border border-slate-700/60 rounded-md px-2 py-1.5 text-[12px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-neon-cyan/40 mb-2"
           />
+          )}
+          {!seeding && (
+          <>
           <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 mb-1">
             Use (optional)
           </div>
@@ -292,6 +331,8 @@ export function DockBar() {
               </button>
             ))}
           </div>
+          </>
+          )}
           {/*
             THE RATIFIED TEMPLATE MENU, and every state of it says what it is.
 
@@ -301,6 +342,8 @@ export function DockBar() {
             directory both arrive as "no rows", and rendering either as an empty menu tells a
             reader no boards exist — a claim nobody made, from a failed request.
           */}
+          {!seeding && (
+          <>
           <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 mb-1">
             Template (optional)
           </div>
@@ -385,17 +428,44 @@ export function DockBar() {
                 ))}
               </div>
             )}
+            {/* THE COUNT, VISIBLE. The same number the tooltip carries, drawn as a line so the
+                reader can set it against the panels the finished board renders. */}
+            {selectedRow && (
+              <div className="mt-1 text-[9px] font-mono text-slate-500" data-template-panels>
+                {selectedRow.panels} panels
+              </div>
+            )}
           </div>
+          </>
+          )}
           {/* The create that did not happen, and why. Not a toast: it sits beside the button
               that refused, so the reader is looking at it when they reach for that button again. */}
-          {seed.refusal && (
+          {seed.refusal && !seed.busy && (
             <div className="mb-2" data-seed-refusal>
               <RefusalWithAsk refusal={seed.refusal} onPick={seed.pick} busy={seed.busy} />
             </div>
           )}
           {seed.busy && (
-            <div className="mb-2 text-[9px] font-mono text-slate-500" data-seed-pending>
-              seeding the board, this can take a few minutes…
+            <div className="mb-2 text-[9px] font-mono text-slate-500">
+              {/* NEVER A k IT WAS NOT TOLD. The live route answers once, at the end, so without
+                  per-panel events this says only how many panels were asked for. */}
+              {seed.progress ? (
+                <div data-seed-progress="counted">
+                  {seedDone(seed.progress)} of {seed.progress.total} panels
+                  <SeedPanelRows progress={seed.progress} />
+                </div>
+              ) : (
+                <div data-seed-progress="indeterminate">
+                  Seeding {selectedRow?.panels ?? ""} panels…
+                </div>
+              )}
+              <div>seeding the board, this can take a few minutes…</div>
+            </div>
+          )}
+          {!seed.busy && seed.outcome && (
+            <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-seed-partial>
+              {seed.outcome.seeded} of {seed.outcome.total} panels seeded
+              {seed.progress && <SeedPanelRows progress={seed.progress} only="refused" />}
             </div>
           )}
           {seed.failed && seed.policy && (
@@ -413,25 +483,39 @@ export function DockBar() {
               {createBlocked}
             </div>
           )}
+          {seed.outcome && !seed.busy ? (
+            <button
+              onClick={() => {
+                seed.reset();
+                closeForm();
+              }}
+              className="w-full rounded-md border border-slate-700/60 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Close
+            </button>
+          ) : (
           <div className="flex items-center gap-2">
             <button
               onClick={submitCreate}
               disabled={seed.busy}
-              className="flex-1 flex items-center justify-center gap-1 rounded-md bg-neon-cyan/15 border border-neon-cyan/40 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/25 transition-colors"
+              data-create-seeding={seed.busy ? "" : undefined}
+              className="flex-1 flex items-center justify-center gap-1 rounded-md bg-neon-cyan/15 border border-neon-cyan/40 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/25 transition-colors disabled:opacity-60"
             >
               <Check className="w-3 h-3" />
-              Create
+              {seed.busy ? "Seeding…" : "Create"}
             </button>
             <button
+              disabled={seed.busy}
               onClick={() => {
                 seed.reset();
                 setCreating(false);
               }}
-              className="rounded-md border border-slate-700/60 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+              className="rounded-md border border-slate-700/60 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40"
             >
               Cancel
             </button>
           </div>
+          )}
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ import { StageDot } from "./StageDot";
 import { fetchLineageEdges } from "@/api/client";
 import { STAGE_CARD, cardSize } from "@/lib/stageConstants";
 import { PlanningChrome } from "./PlanningChrome";
+import { mountsPlanningChrome, PLANNING_CHROME_INSET } from "./planningChromeMount";
 import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
@@ -72,11 +73,25 @@ export function worldFitCam(
   world: { w: number; h: number },
   vp: { w: number; h: number },
   isGlobal: boolean,
+  topInset = 0,
 ): { tx: number; ty: number; s: number } {
   // The global overview keeps a generous margin — it is a wall of many cards and the dock
   // overlaps its lower edge. A CUSTOM canvas is a laid-out board built to the pane on purpose,
   // so the same margin is just unused width.
   const fill = isGlobal ? 0.9 : 0.97;
+  // STRIP CLEARANCE. The planning strip is drawn over the top of the pane, so with a 6px top
+  // margin it covered panel 0's title band and the funding grid's own h3 read as the board's
+  // header. A positive `topInset` fits the board into what is left and never lets `ty` rise
+  // above it. At 0 the result is exactly what it was.
+  if (topInset > 0) {
+    const avail = vp.h - topInset;
+    const s2 = Math.min(Math.min(vp.w / world.w, avail / world.h) * fill, 1);
+    return {
+      tx: (vp.w - world.w * s2) / 2,
+      ty: topInset + Math.max(0, (avail - world.h * s2) / 2 - 6),
+      s: s2,
+    };
+  }
   const s = Math.min(Math.min(vp.w / world.w, vp.h / world.h) * fill, 1);
   return {
     tx: (vp.w - world.w * s) / 2,
@@ -85,7 +100,7 @@ export function worldFitCam(
   };
 }
 
-function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) {
+export function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) {
   if (!items.length) return { w: 1500, h: 950 };
   let mx = 0;
   let my = 0;
@@ -336,9 +351,12 @@ export function GlobalCanvasStage() {
     // overlaps its lower edge. A CUSTOM canvas is a laid-out board that was built to the pane
     // on purpose, so the same margin is just unused width: three insets compounded (this one,
     // the world pad, and the template margin) left a seeded board at 78% of its pane.
-    return worldFitCam(world, { w: vw, h: vh }, isGlobal);
+    const chromeInset = mountsPlanningChrome(isGlobal, activeCanvas?.use, focusId, fullPane)
+      ? PLANNING_CHROME_INSET
+      : 0;
+    return worldFitCam(world, { w: vw, h: vh }, isGlobal, chromeInset);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h]);
+  }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h, fullPane, activeCanvas?.use]);
 
   // The focused card's task marker (if any) — drives per-kind tab labels: the
   // three tabs are citizen-agnostic lenses (content / provenance / focus), so a
@@ -966,7 +984,7 @@ export function GlobalCanvasStage() {
       {/* portfolio_planning use: the session strip. Chrome mounts on the SURFACE around the
           canvas — never as a canvas item, which must be an SPO-tagged answer (ADR-0028 §2).
           Same type-dispatch shape as the relationship control below. */}
-      {!isGlobal && activeCanvas?.use === "portfolio_planning" && !focusId && !fullPane && (
+      {mountsPlanningChrome(isGlobal, activeCanvas?.use, focusId, fullPane) && (
         <PlanningChrome />
       )}
 

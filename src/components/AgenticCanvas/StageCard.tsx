@@ -341,6 +341,7 @@ export function StageCard({
               onDragComplete?.();
             }
           }}
+          data-stage-band
           className={`flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 flex-shrink-0 ${
             custom ? "cursor-grab active:cursor-grabbing select-none" : ""
           }`}
@@ -628,6 +629,7 @@ export function StageCard({
               onDragComplete?.();
             }
           }}
+          data-stage-band
           className={`flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 flex-shrink-0 ${
             custom ? "cursor-grab active:cursor-grabbing select-none" : ""
           }`}

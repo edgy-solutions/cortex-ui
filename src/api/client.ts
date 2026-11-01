@@ -639,7 +639,7 @@ export async function streamInterviewResponse(
  * The seed is sequential server-side and takes minutes; the caller owns the pending state.
  */
 export type TemplateSeedResult =
-  | { ok: true; artifactIds: string[] }
+  | { ok: true; artifactIds: string[]; seeded: number; total: number }
   | { ok: false; conflict: AskBearingRefusal }
   | { ok: false; error: unknown; policy?: PolicyRefusal };
 
@@ -655,9 +655,14 @@ export async function requestTemplateCanvasSeed(
   try {
     const data = await request("POST /canvas/seed", { body });
     const raw = Array.isArray(data?.artifact_ids) ? data.artifact_ids : [];
+    const artifactIds = raw.filter((v): v is string => typeof v === "string" && v.length > 0);
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+    // seeded/total are read verbatim from the response; an absent one falls back to the id count.
     return {
       ok: true,
-      artifactIds: raw.filter((v): v is string => typeof v === "string" && v.length > 0),
+      artifactIds,
+      seeded: num(data?.seeded) ?? artifactIds.length,
+      total: num(data?.total) ?? artifactIds.length,
     };
   } catch (err) {
     const conflict = readSeedConflict(err);
