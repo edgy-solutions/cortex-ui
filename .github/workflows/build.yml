@@ -220,7 +220,17 @@ env:
   #   task_kinds dir) 47502b35..10ac02fe is EMPTY (control: 48 files changed). Check 3: uv.lock
   #   iagent-mesh 7e513c36 (v0.9.10) at both. Gate: the full suite against a git-archive export of
   #   10ac02fe placed as the sibling.
-  PRODUCER_REF: 10ac02feeb7e44cc52707731066b63f000df8aa3
+  # 2026-10-31 RE-PIN to 41230a7e (tag invincible-agent-0.4.73). 10ac02fe is its ancestor. It
+  #   declares review_coverage's ITEM form (ItemReviewCoverage, ItemCoverageGroup, ItemCoverageShared,
+  #   ingest-v1 1.5.0), GET /review-shapes (ReviewShapeRow) and Extraction.review_shape/.item_kind,
+  #   which the review card now reads and sends; the parts form is still accepted here and is deleted
+  #   in 0.4.74 (lane 01, 10-31 packet). The OpenAPI diff 10ac02fe..41230a7e is additive only.
+  #   ⚠ NOT read off the pods (sandbox frozen). Check 2: task_kinds diff (every task_kinds dir)
+  #   10ac02fe..41230a7e is EMPTY (control: 133 files changed). Check 3: uv.lock iagent-mesh MOVED,
+  #   v0.9.10 -> v0.9.12; meshSdkParity reads its own SDK checkout (sdk_ref below), not this pin, so
+  #   it is unaffected here; the snapshot's sdk_ref lags (v0.9.8) and is a separate re-extract. Gate:
+  #   the full suite against a git-archive export of 41230a7e placed as the sibling.
+  PRODUCER_REF: 41230a7ef0b3976d19c54d665aabd6d1ee2dfd87
 
 permissions:
   contents: read

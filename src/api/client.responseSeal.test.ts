@@ -91,6 +91,7 @@ import {
   readIngestUploadId,
 } from "@/lib/ingestWire";
 import { readExtraction } from "@/lib/promotionReview";
+import { readReviewShapes } from "@/lib/reviewShapes";
 import { profileLabel } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
@@ -300,6 +301,7 @@ const CALLS: Record<string, () => Promise<unknown>> = {
   fetchIngestMine: () => client.fetchIngestMine(20),
   retryIngest: () => client.retryIngest("i-1"),
   fetchIngestExtraction: () => client.fetchIngestExtraction("i-1"),
+  fetchReviewShapes: () => client.fetchReviewShapes(),
   correctIngestLeaf: () => client.correctIngestLeaf("i-1", "pcn"),
   fetchIngestExportProfiles: () => client.fetchIngestExportProfiles(),
 };
@@ -380,6 +382,7 @@ const READERS: Record<string, Reader[]> = {
     async function ingestStatusStoreRetry() { await useIngestStatusStore.getState().retry("i-1"); },
   ],
   fetchIngestExtraction: [function readExtractionOf(raw) { return readExtraction(raw); }],
+  fetchReviewShapes: [function readReviewShapesOf(raw) { return readReviewShapes(raw); }],
   correctIngestLeaf: [function readIngestStatusRowOfLeaf(raw) { return readIngestStatusRow(raw); }],
   fetchIngestExportProfiles: [function profileLabelsOf(ps) { return ps.map((p: any) => `${p.name}/${p.format}/${p.granularity}/${profileLabel(p)}`); }],
 };
@@ -410,6 +413,7 @@ const READ_FLOOR: Record<string, number> = {
   fetchIngestMine: 6,
   retryIngest: 1,
   fetchIngestExtraction: 24,
+  fetchReviewShapes: 4,
   correctIngestLeaf: 3,
   fetchIngestExportProfiles: 1,
 };

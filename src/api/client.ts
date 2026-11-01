@@ -3,7 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
-import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
+import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
 import type { Disposition } from "@/lib/dispositions";
 import type { ReviewBatch } from "@/components/GroupedReview/types";
 import type { ProvenanceItem } from "@/components/Evidence/EvidenceCard";
@@ -313,8 +313,8 @@ export function buildActBody(
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only (spec 208).
   page?: number,
-  // document_promotion promote: `review_coverage` (declared at producer pin 10ac02fe); the key is ABSENT unless given.
-  reviewCoverage?: ReviewCoverageWire
+  // document_promotion promote: `review_coverage` (declared at producer pin 41230a7e, item form); the key is ABSENT unless given.
+  reviewCoverage?: ItemReviewCoverageWire
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { decision, comment };
   if (overrides && Object.keys(overrides).length > 0) body.overrides = overrides;
@@ -347,8 +347,8 @@ export async function actOnHumanTask(
   sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only: the 1-based page the steward saw a part on.
   page?: number,
-  // document_promotion promote only: `review_coverage` (declared at producer pin 10ac02fe), sent only when provided.
-  reviewCoverage?: ReviewCoverageWire
+  // document_promotion promote only: `review_coverage` (declared at producer pin 41230a7e, item form), sent only when provided.
+  reviewCoverage?: ItemReviewCoverageWire
 ): Promise<ActOnTaskResult> {
   const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage);
   return request("POST /human_tasks/{task_id}/act", {
@@ -1239,6 +1239,16 @@ export async function retryIngest(ingestId: string): Promise<IngestRetryResult> 
 export type IngestExtraction = Resp<"GET /ingest/{ingest_id}/extraction">;
 export async function fetchIngestExtraction(ingestId: string): Promise<IngestExtraction> {
   return request("GET /ingest/{ingest_id}/extraction", { path: { ingest_id: ingestId } });
+}
+
+/**
+ * `GET /review-shapes` (declared at invincible-agent 41230a7e / 0.4.73): the review-shape registry, one row per
+ * card (`review_shape`, `item_kind`, `rules_version`, the rules the shape applies and their params). The review card
+ * builds its plan and its `review_coverage` from the row; returned RAW, `readReviewShapes` reads it.
+ */
+export type ReviewShapes = Resp<"GET /review-shapes">;
+export async function fetchReviewShapes(): Promise<ReviewShapes> {
+  return request("GET /review-shapes", {});
 }
 
 /**

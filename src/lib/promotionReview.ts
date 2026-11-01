@@ -123,6 +123,9 @@ export interface Extraction {
   leaf_source: IngestLeafSource | null;
   /** The person who changed it; only with source "corrected", else null. */
   corrected_by: string | null;
+  /** The served review shape and the kind of item its coverage ids name (0.4.73); null when absent, non-string or empty. */
+  reviewShape: string | null;
+  itemKind: string | null;
 }
 
 /**
@@ -287,6 +290,8 @@ export function readExtraction(body: unknown): Extraction | null {
     leaf: typeof body.leaf === "string" && body.leaf !== "" ? body.leaf : null,
     leaf_source: readLeafSource(body.leaf_source),
     corrected_by: readCorrectedBy(readLeafSource(body.leaf_source), body.corrected_by),
+    reviewShape: typeof body.review_shape === "string" && body.review_shape !== "" ? body.review_shape : null,
+    itemKind: typeof body.item_kind === "string" && body.item_kind !== "" ? body.item_kind : null,
   };
 }
 

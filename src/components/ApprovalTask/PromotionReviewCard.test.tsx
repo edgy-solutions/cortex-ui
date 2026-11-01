@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
+import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
 
 const actOnHumanTask = vi.fn();
 const fetchIngestStatus = vi.fn();
@@ -32,6 +33,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   correctIngestLeaf: (...a: unknown[]) => correctIngestLeaf(...a),
   fetchIngestSource: (...a: unknown[]) => fetchIngestSource(...a),
   fetchIngestExtraction: (...a: unknown[]) => fetchIngestExtraction(...a),
+  fetchReviewShapes: async () => REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })),
 }));
 const renderPage = vi.fn();
 const destroy = vi.fn();

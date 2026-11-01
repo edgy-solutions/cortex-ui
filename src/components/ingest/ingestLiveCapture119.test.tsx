@@ -38,6 +38,7 @@ vi.mock("@/lib/ingestTransport", () => ({
   // both of these. They answer as they did on the rev this was captured on: not served (plain 404).
   fetchIngestExtraction: () => Promise.reject({ response: { status: 404, data: { detail: "Not Found" } } }),
   fetchIngestSource: () => Promise.reject({ response: { status: 404, data: { detail: "Not Found" } } }),
+  fetchReviewShapes: () => Promise.reject({ response: { status: 404, data: { detail: "Not Found" } } }),
 }));
 
 const actOnHumanTask = vi.fn();

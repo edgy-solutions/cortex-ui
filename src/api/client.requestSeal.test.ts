@@ -332,6 +332,7 @@ const CALLS: Record<string, Case[]> = {
   retryIngest: [{ name: "plain", op: "POST /ingest/{ingest_id}/retry", run: () => (client as any).retryIngest("i1") }],
   fetchIngestExportProfiles: [{ name: "plain", op: "GET /ingest/export/profiles", run: () => (client as any).fetchIngestExportProfiles() }],
   fetchIngestExtraction: [{ name: "plain", op: "GET /ingest/{ingest_id}/extraction", run: () => (client as any).fetchIngestExtraction("i1") }],
+  fetchReviewShapes: [{ name: "plain", op: "GET /review-shapes", run: () => (client as any).fetchReviewShapes() }],
   fetchIngestSource: [{ name: "plain", op: "GET /ingest/{ingest_id}/source", run: () => (client as any).fetchIngestSource("i1") }],
   fetchCaseResponse: [{ name: "raw fetch seam", op: "GET /cases/{case_id}", run: () => (client as any).fetchCaseResponse("c/1") }],
   correctIngestLeaf: [{ name: "plain", op: "POST /ingest/{ingest_id}/leaf", run: () => (client as any).correctIngestLeaf("i1", "pdn") }],

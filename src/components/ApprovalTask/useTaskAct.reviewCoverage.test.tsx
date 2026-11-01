@@ -38,7 +38,7 @@ vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() 
 
 import { useTaskAct } from "./useTaskAct";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
-import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
+import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
 
 const task: ApprovalTaskPayload = {
   task_id: "t-cov",
@@ -50,12 +50,14 @@ const task: ApprovalTaskPayload = {
   requested_by: "svc:doc-tools",
   subject_ref: null,
 };
-const COVERAGE: ReviewCoverageWire = {
-  rules_version: "cortex.reviewRuns.v1",
-  looked_at: [0, 2],
-  sampled: [2],
+const COVERAGE: ItemReviewCoverageWire = {
+  review_shape: "notice",
+  item_kind: "part",
+  rules_version: "notice.v1",
+  looked_at: ["0", "2"],
+  sampled: ["2"],
   flagged: [],
-  groups: [{ rule: "same_shape_run", key: "FK9→FK9", parts: [1] }],
+  groups: [{ rule: "same_shape_run", key: "FK9→FK9", items: ["1"] }],
   shared: [],
   sample: { seed: "s", per_run: 2, sample_all_up_to: 4, min_run: 3 },
 };

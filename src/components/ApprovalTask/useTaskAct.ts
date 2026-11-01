@@ -7,7 +7,7 @@ import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import { PROPOSED_MOVED_ERROR } from "@/lib/accessProposal";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction, offeredVerbs } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
-import type { ReviewCoverageWire } from "@/lib/reviewCoverage";
+import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 
 /**
@@ -122,7 +122,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
 
   // `reasonOverride`: a card that composes its reason at the press (the review card's reject code plus
   // note) passes it here, so it is not left waiting a render for `setReason` to land.
-  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[], sectionVerdicts?: unknown[], page?: number, reviewCoverage?: ReviewCoverageWire) => {
+  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[], sectionVerdicts?: unknown[], page?: number, reviewCoverage?: ItemReviewCoverageWire) => {
     const said = (reasonOverride ?? reason).trim();
     // A REASON-REQUIRED VERB IS NOT SUBMITTED WITHOUT ONE. Dismissing a reported hazard with no
     // stated rationale is the erasure this domain cares about most; the gate refuses it, and a
