@@ -15,7 +15,9 @@
  * smaller than the room it has — enlarging the cards shows the same board worse, not more of it.
  */
 import { describe, it, expect } from "vitest";
-import { worldFitCam } from "./GlobalCanvasStage";
+import { customWorld, worldFitCam } from "./GlobalCanvasStage";
+import { PLANNING_CHROME_INSET, mountsPlanningChrome } from "./planningChromeMount";
+import { programFinanceTemplate } from "@/lib/stageConstants";
 
 /** The pane a maximised window gives a custom canvas, roughly. */
 const WIDE = { w: 2600, h: 1400 };
@@ -68,5 +70,39 @@ describe("the world fit never magnifies", () => {
     // keeps more air; a custom board was laid out to the pane on purpose and does not need it.
     const big = { w: 8000, h: 5000 };
     expect(worldFitCam(big, WIDE, true).s).toBeLessThan(worldFitCam(big, WIDE, false).s);
+  });
+});
+
+/**
+ * THE STRIP MUST NOT COVER PANEL 0'S TITLE BAND.
+ *
+ * The planning strip is drawn over the top of the pane. A tall board centres with ty of about 6px,
+ * so the first panel's band sat under the strip and the funding grid's own h3 read as the board's
+ * header. The inset is the repair; the near side (inset 0) proves the arm can discriminate.
+ */
+describe("the planning strip clearance", () => {
+  const VPF = { w: 1600, h: 900 };
+  const world = customWorld(programFinanceTemplate(VPF));
+
+  it("with the strip's inset, the board starts at or below it", () => {
+    expect(worldFitCam(world, VPF, false, PLANNING_CHROME_INSET).ty).toBeGreaterThanOrEqual(
+      PLANNING_CHROME_INSET,
+    );
+  });
+
+  it("near side: without the inset the same board starts under the strip", () => {
+    expect(worldFitCam(world, VPF, false).ty).toBeLessThan(PLANNING_CHROME_INSET);
+  });
+
+  it("an inset of 0 is exactly the old camera", () => {
+    expect(worldFitCam(world, VPF, false, 0)).toEqual(worldFitCam(world, VPF, false));
+  });
+
+  it("the strip mounts on a custom portfolio_planning board only", () => {
+    expect(mountsPlanningChrome(false, "portfolio_planning", null, false)).toBe(true);
+    expect(mountsPlanningChrome(true, "portfolio_planning", null, false)).toBe(false);
+    expect(mountsPlanningChrome(false, "relationship", null, false)).toBe(false);
+    expect(mountsPlanningChrome(false, "portfolio_planning", "a", false)).toBe(false);
+    expect(mountsPlanningChrome(false, "portfolio_planning", null, true)).toBe(false);
   });
 });

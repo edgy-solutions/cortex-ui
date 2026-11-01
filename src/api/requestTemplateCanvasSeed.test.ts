@@ -60,7 +60,7 @@ describe("requestTemplateCanvasSeed", () => {
     // BY HAND: the slot name and the picked value are spelled out, no helper builds the body.
     const second = await requestTemplateCanvasSeed("program_finance", { program: "NP-MERIDIAN" });
     expect(body(1)).toEqual({ template_id: "program_finance", bindings: { program: "NP-MERIDIAN" } });
-    expect(second).toEqual({ ok: true, artifactIds: ["a1", "a2", "a3"] });
+    expect(second).toEqual({ ok: true, artifactIds: ["a1", "a2", "a3"], seeded: 3, total: 3 });
   });
 
   it("sends the cell when there is one, and nothing else", async () => {
@@ -92,8 +92,24 @@ describe("requestTemplateCanvasSeed", () => {
     expect("conflict" in r).toBe(false);
   });
 
+  it("reads seeded and total verbatim when the response carries them", async () => {
+    serve.push({ status: 200, data: { artifact_ids: ["a1", "a2"], seeded: 2, total: 6 } });
+    expect(await requestTemplateCanvasSeed("t")).toEqual({
+      ok: true,
+      artifactIds: ["a1", "a2"],
+      seeded: 2,
+      total: 6,
+    });
+  });
+
+  it("seeded and total pass through even when they disagree with the id count", async () => {
+    serve.push({ status: 200, data: { artifact_ids: ["a1", "a2", "a3", "a4"], seeded: 5, total: 6 } });
+    const r = await requestTemplateCanvasSeed("t");
+    expect(r).toEqual({ ok: true, artifactIds: ["a1", "a2", "a3", "a4"], seeded: 5, total: 6 });
+  });
+
   it("drops non-string artifact ids", async () => {
     serve.push({ status: 200, data: { artifact_ids: ["a1", "", 3, null, "a2"] } });
-    expect(await requestTemplateCanvasSeed("t")).toEqual({ ok: true, artifactIds: ["a1", "a2"] });
+    expect(await requestTemplateCanvasSeed("t")).toEqual({ ok: true, artifactIds: ["a1", "a2"], seeded: 2, total: 2 });
   });
 });
