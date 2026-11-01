@@ -430,14 +430,21 @@ describe("the type gates CHROME, and the chrome is not a card", () => {
     path.join(__dirname, "../components/AgenticCanvas/PlanningChrome.tsx"),
     "utf8",
   );
+  // The mount condition moved here so the camera's strip inset is computed from the same call.
+  const mount = readFileSync(
+    path.join(__dirname, "../components/AgenticCanvas/planningChromeMount.ts"),
+    "utf8",
+  );
 
   it("the sources are being read — positive control", () => {
     expect(stage).toContain("export function GlobalCanvasStage");
     expect(chrome).toContain("export function PlanningChrome");
+    expect(mount).toContain("export const mountsPlanningChrome");
   });
 
   it("mounts only for its own type, following the relationship precedent", () => {
-    expect(stage).toMatch(/activeCanvas\?\.use === "portfolio_planning"/);
+    expect(stage).toMatch(/mountsPlanningChrome\(isGlobal, activeCanvas\?\.use, focusId, fullPane\) && \(\s*<PlanningChrome \/>/);
+    expect(mount).toMatch(/use === "portfolio_planning"/);
     expect(stage).toMatch(/activeCanvas\?\.use === "relationship"/);
   });
 
