@@ -621,7 +621,6 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
       rowCount > 0 ? buildRowEdits(draft) : undefined,
       headerCount > 0 ? buildHeaderEdits(headerDraft, extractedHeader) : undefined,
       undefined,
-      undefined,
       // Held above while `coverageBad` is non-null, so a record that is sent has passed `coverageProblem`.
       runsOn && record ? record : undefined,
     );

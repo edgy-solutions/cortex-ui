@@ -276,7 +276,7 @@ describe("the record is the declared schema, both directions (every schema is ad
     expect(S.ItemCoverageGroup.properties.items).toMatchObject({ items: { type: "string" } });
     expect(S.ItemCoverageShared.properties.items).toMatchObject({ items: { type: "string" } });
     expect(checkedRec.rules_version.length).toBeGreaterThan(0);
-    Object.values(checkedRec.sample).forEach((v) => expect(["string", "number", "boolean"]).toContain(typeof v));
+    Object.values(checkedRec.sample ?? {}).forEach((v) => expect(["string", "number", "boolean"]).toContain(typeof v));
   });
 });
 
@@ -317,20 +317,20 @@ describe("planOptsFromRow: the row's params change the plan, and the record stat
     runsOf(p).forEach((run) => expect(run.units.length).toBeGreaterThanOrEqual(25));
     expect(runsOf(plan).some((run) => run.units.length < 25)).toBe(true); // control: the default plan does hold shorter runs
     expect(p.segments).not.toEqual(plan.segments);
-    expect(r.sample.min_run).toBe(25);
+    expect(r.sample?.min_run).toBe(25);
     expect(runsOf(p).length).toBeLessThan(runsOf(plan).length);
   });
 
   it("per_run 1: fewer sampled than the default plan, sample.per_run is 1", () => {
     const { p, r } = build(withRule(RUN_RULE, { per_run: 1 }));
     expect(p.sampled.size).toBeLessThan(plan.sampled.size);
-    expect(r.sample.per_run).toBe(1);
+    expect(r.sample?.per_run).toBe(1);
   });
 
   it("sample_all_up_to 100: every run (the largest is 40) is sampled whole, so the sample is larger than the default plan's", () => {
     const { p, r } = build(withRule(RUN_RULE, { sample_all_up_to: 100 }));
     expect(p.sampled.size).toBeGreaterThan(plan.sampled.size);
-    expect(r.sample.sample_all_up_to).toBe(100);
+    expect(r.sample?.sample_all_up_to).toBe(100);
   });
 
   it("min_shared above the fact's row count: no shared fact, where the default plan has them", () => {

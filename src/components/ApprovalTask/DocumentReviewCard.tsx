@@ -4,11 +4,15 @@ import { formatRequestedBy } from "@/lib/requestedBy";
 import { verbLabel } from "@/lib/taskDeclaration";
 import {
   actOnDocumentReview,
-  buildDocumentVerdicts,
+  buildSectionCoverage,
+  documentCoverageVerb,
+  flaggedSectionsReason,
+  SECTION_ITEM_KIND,
   type DocumentReviewTask,
   type DocumentSection,
   type SectionVerdict,
 } from "@/lib/documentReview";
+import type { ShapeRow } from "@/lib/reviewShapes";
 import type { EvidenceRef } from "@/lib/promotionReview";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
@@ -17,15 +21,21 @@ import { PdfEvidencePane } from "./PdfEvidencePane";
 
 /**
  * The document review card: section list left, the page right, Accept/Flag per section, one submit.
- * Drawn only for a task `readDocumentReviewTask` accepts. The shape is PROPOSED (see
- * `documentReview.ts`); this file spells none of the wire names, it imports the reader's types.
+ * Drawn only for a task `readDocumentReviewTask` accepts AND whose `review_shape` the served registry
+ * (`GET /review-shapes`) lists; `ApprovalTaskCard` gates that and passes the `row`. The section list is
+ * PROPOSED (see `documentReview.ts`); this file spells none of the wire names, it imports the reader's types.
+ *
+ * The review is sent as item-form coverage on the ONE verb that takes no reason (the server refuses
+ * `review_coverage` on any other verb), `item_kind` and `rules_version` from the row. The flagged sections
+ * and their notes travel in the reason of a reason-required verb. If coverage cannot go (the row's kind is not
+ * the one this card produces ids for, or no single verb carries it) the card says so and still acts.
  */
 
 const NOT_STATED = "not stated";
 const pagesText = (s: DocumentSection) => (s.pageEnd !== null ? `pp. ${s.page}–${s.pageEnd}` : `p. ${s.page}`);
 const pageTarget = (page: number): EvidenceRef => ({ page, bbox: null, page_dims: { width: 1, height: 1 }, units: null });
 
-export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload; review: DocumentReviewTask }) {
+export function DocumentReviewCard({ task, review, row }: { task: ApprovalTaskPayload; review: DocumentReviewTask; row: ShapeRow }) {
   const a = useTaskAct(task);
   const { acting } = a;
   const { sections, header, droppedSections } = review;
@@ -40,6 +50,13 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
   const flagged = sections.filter((s) => verdicts[s.sectionId] === "flagged").length;
   const complete = reviewed === sections.length;
   const blocked = isActBlocked(a);
+  const coverageVerb = documentCoverageVerb(a.verbs, a.needsReason);
+  const kindOk = row.item_kind === SECTION_ITEM_KIND;
+  const unsentWhy = !kindOk
+    ? `this card produces ids for item_kind "${SECTION_ITEM_KIND}", not "${row.item_kind}".`
+    : coverageVerb === null
+      ? `${a.verbs.filter((x) => !a.needsReason(x)).length} verbs take no reason; coverage needs exactly one, and nothing served says which.`
+      : null;
   /*
    * Buttons come from the served declaration (architect ruling, relayed 2026-10-30: "DocumentReviewCard
    * buttons from its declaration"). One per `a.verbs` entry, in served order; no verb is named here.
@@ -62,7 +79,10 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
 
   const submit = (v: string) => {
     if (!verbEnabled(v)) return;
-    void actOnDocumentReview(a.act, v, buildDocumentVerdicts(sections, verdicts, notes), a.needsReason(v));
+    void actOnDocumentReview(a.act, v, {
+      reason: a.needsReason(v) ? flaggedSectionsReason(sections, verdicts, notes) : "",
+      coverage: v === coverageVerb && kindOk ? buildSectionCoverage(sections, verdicts, row) : undefined,
+    });
   };
 
   const headerRows: Array<[string, string | null]> = [
@@ -182,8 +202,13 @@ export function DocumentReviewCard({ task, review }: { task: ApprovalTaskPayload
           <div className="flex flex-col gap-2" data-review-actions>
             <TaskActNotices a={a} />
             <p className="text-[11px] font-mono text-slate-400" data-review-counter>
-              {reviewed} of {sections.length} sections reviewed · {flagged} flagged
+              {reviewed} of {sections.length} {row.item_kind}s reviewed · {flagged} flagged
             </p>
+            {unsentWhy !== null && (
+              <p className="text-[11px] font-mono text-slate-400" data-coverage-unsent>
+                Coverage is not sent: {unsentWhy}
+              </p>
+            )}
             {droppedSections > 0 && (
               <p className="text-[11px] text-amber-400/90" data-dropped-sections>
                 {droppedSections} section(s) in this task were malformed and are not shown — the review cannot be submitted

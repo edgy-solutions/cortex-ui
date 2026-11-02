@@ -7,7 +7,10 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { NO_DECLARATION_SERVED, verbLabel } from "@/lib/taskDeclaration";
 
 const actOnHumanTask = vi.fn();
-vi.mock("@/api/client", () => ({ actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a) }));
+vi.mock("@/api/client", async () => ({
+  ...(await vi.importActual<typeof import("@/api/client")>("@/api/client")),
+  actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 vi.mock("@/lib/ingestTransport", () => ({
@@ -25,6 +28,11 @@ vi.mock("./PdfEvidencePane", () => ({
 }));
 
 import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
+import { DocumentReviewCard } from "./DocumentReviewCard";
+import { buildActBody } from "@/api/client";
+import { readDocumentReviewTask } from "@/lib/documentReview";
+import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
+import type { ShapeRow } from "@/lib/reviewShapes";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { fixtureDocumentReviewMalformed, fixtureDocumentReviewPayload, FIXTURE_DOCUMENT_INGEST_ID } from "@/lib/documentReviewFixture";
@@ -60,6 +68,20 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+const ROW = REVIEW_SHAPES_FIXTURE.find((r) => r.review_shape === "document") as ShapeRow;
+/** The card under test: the reader's output and the served row, as the gate would pass them. */
+function Card({ task: t, row: shapeRow = ROW }: { task: ApprovalTaskPayload; row?: ShapeRow }) {
+  return <DocumentReviewCard task={t} review={readDocumentReviewTask(t)!} row={shapeRow} />;
+}
+/** The /act body the call put on the wire: actOnHumanTask's positional args through the real buildActBody. */
+const sentBody = () => {
+  const [, decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, coverage] = actOnHumanTask.mock.calls[0] as Parameters<
+    typeof import("@/api/client").actOnHumanTask
+  >;
+  return buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, coverage);
+};
+const unsent = () => document.querySelector("[data-coverage-unsent]")?.textContent ?? null;
+
 const rows = () => [...document.querySelectorAll("[data-section-id]")] as HTMLElement[];
 const row = (id: string) => document.querySelector(`[data-section-id="${id}"]`) as HTMLElement;
 const accept = (id: string) => fireEvent.click(row(id).querySelector("[data-accept]")!);
@@ -71,7 +93,7 @@ const acceptAll = () => ["s1", "s2", "s3", "s4", "s5"].forEach(accept);
 
 describe("DocumentReviewCard", () => {
   it("renders a row per section, the header, and reads a null field as not stated", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     expect(rows().map((r) => r.getAttribute("data-section-id"))).toEqual(["s1", "s2", "s3", "s4", "s5"]);
     expect(row("s3").textContent).toContain("pp. 3–4");
     expect(row("s1").textContent).toContain("p. 1");
@@ -80,7 +102,7 @@ describe("DocumentReviewCard", () => {
   });
 
   it("clicking a row moves the pane target page and marks that row selected", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     expect(lastProps().target.page).toBe(1);
     expect(lastProps().ingestId).toBe(FIXTURE_DOCUMENT_INGEST_ID);
     fireEvent.click(row("s4"));
@@ -92,14 +114,14 @@ describe("DocumentReviewCard", () => {
   });
 
   it("bumps jumpKey on every click, including the row already selected", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     const k0 = lastProps().jumpKey;
     fireEvent.click(row("s1"));
     expect(lastProps().jumpKey).toBe(k0 + 1);
   });
 
   it("keeps EVERY served verb disabled until every section has a verdict, and counts them", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     expect(verb("promoted").disabled).toBe(true);
     expect(verb("rejected").disabled).toBe(true);
     expect(document.querySelector("[data-review-counter]")!.textContent).toBe("0 of 5 sections reviewed · 0 flagged");
@@ -113,7 +135,7 @@ describe("DocumentReviewCard", () => {
   });
 
   it("enables the reason-required verb only with flags, and the other only without", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
     expect(verb("promoted").disabled).toBe(false);
     expect(verb("rejected").disabled).toBe(true);
@@ -126,57 +148,45 @@ describe("DocumentReviewCard", () => {
     expect(row("s1").getAttribute("data-verdict")).toBe("accepted");
   });
 
-  it("sends the hand-computed body for a promote", async () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+  it("a plain verb with nothing flagged sends item-form coverage, and no section_verdicts", async () => {
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
     fireEvent.click(verb("promoted"));
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
-    expect(actOnHumanTask.mock.calls[0]).toEqual([
-      "t-doc",
-      "promoted",
-      "",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [
-        { section_id: "s1", verdict: "accepted" },
-        { section_id: "s2", verdict: "accepted" },
-        { section_id: "s3", verdict: "accepted" },
-        { section_id: "s4", verdict: "accepted" },
-        { section_id: "s5", verdict: "accepted" },
-      ],
-    ]);
+    expect(actOnHumanTask.mock.calls[0].slice(0, 3)).toEqual(["t-doc", "promoted", ""]);
+    const body = sentBody();
+    expect("section_verdicts" in body).toBe(false);
+    expect(body.review_coverage).toEqual({
+      review_shape: "document",
+      item_kind: "section",
+      rules_version: "document.v1",
+      looked_at: ["s1", "s2", "s3", "s4", "s5"],
+      sampled: [],
+      flagged: [],
+      groups: [],
+      shared: [],
+      sample: null,
+    });
+    expect(unsent()).toBeNull();
   });
 
-  it("sends a verdict for EVERY section on a reject, a note only where typed, and a reason", async () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+  it("a reason verb with flags sends NO review_coverage; the reason carries each flagged id and its note", async () => {
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
     flag("s3");
     fireEvent.change(screen.getByLabelText("Note for Removal procedure"), { target: { value: "step 4 missing" } });
     flag("s5");
     fireEvent.click(verb("rejected"));
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
-    expect(actOnHumanTask.mock.calls[0]).toEqual([
-      "t-doc",
-      "rejected",
-      "sections flagged: s3, s5",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [
-        { section_id: "s1", verdict: "accepted" },
-        { section_id: "s2", verdict: "accepted" },
-        { section_id: "s3", verdict: "flagged", note: "step 4 missing" },
-        { section_id: "s4", verdict: "accepted" },
-        { section_id: "s5", verdict: "flagged" },
-      ],
-    ]);
+    const body = sentBody();
+    expect(Object.hasOwn(body, "review_coverage")).toBe(false);
+    expect("section_verdicts" in body).toBe(false);
+    expect(body.decision).toBe("rejected");
+    expect(body.comment).toBe("sections flagged: s3 — step 4 missing; s5");
   });
 
   it("blocks the submit when sections were dropped, and says so", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewMalformed())} />);
+    render(<Card task={task(fixtureDocumentReviewMalformed())} />);
     expect(rows()).toHaveLength(4);
     ["s1", "s3", "s4", "s5"].forEach(accept);
     expect(document.querySelector("[data-review-counter]")!.textContent).toBe("4 of 4 sections reviewed · 0 flagged");
@@ -189,7 +199,7 @@ describe("DocumentReviewCard", () => {
 
   it("draws a refusal with a message inline", async () => {
     actOnHumanTask.mockRejectedValue({ response: { status: 409, data: { detail: { error: "task_unresumable", message: "could not resume" } } } });
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
+    render(<Card task={task(fixtureDocumentReviewPayload())} />);
     acceptAll();
     fireEvent.click(verb("promoted"));
     await waitFor(() => expect(document.querySelector("[data-act-refusal]")!.textContent).toContain("could not resume"));
@@ -200,27 +210,41 @@ describe("the buttons are the served declaration", () => {
   const decl = (accepts: string[], reason_required: string[]) => ({ ...DECL, accepts, reason_required });
 
   it("renders the verbs in served order, never sorted", () => {
-    const { unmount } = render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["rejected", "promoted"], ["rejected"]))} />);
+    const { unmount } = render(<Card task={task(fixtureDocumentReviewPayload(), decl(["rejected", "promoted"], ["rejected"]))} />);
     expect(verbOrder()).toEqual(["rejected", "promoted"]);
     unmount();
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected"], ["rejected"]))} />);
+    render(<Card task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected"], ["rejected"]))} />);
     expect(verbOrder()).toEqual(["promoted", "rejected"]);
   });
 
-  it("draws a third served verb with no code change, and sends it with an empty reason", async () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected", "deferred"], ["rejected"]))} />);
+  it("two verbs taking no reason: no review_coverage, the unsent line shows, the verb still acts", async () => {
+    render(<Card task={task(fixtureDocumentReviewPayload(), decl(["promoted", "rejected", "deferred"], ["rejected"]))} />);
     expect(verbOrder()).toEqual(["promoted", "rejected", "deferred"]);
     expect(verb("deferred").textContent).toBe(verbLabel("deferred"));
+    expect(unsent()).toBe("Coverage is not sent: 2 verbs take no reason; coverage needs exactly one, and nothing served says which.");
     acceptAll();
     expect(verb("deferred").disabled).toBe(false);
     fireEvent.click(verb("deferred"));
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
     expect(actOnHumanTask.mock.calls[0].slice(0, 3)).toEqual(["t-doc", "deferred", ""]);
-    expect(actOnHumanTask.mock.calls[0][7]).toEqual(["s1", "s2", "s3", "s4", "s5"].map((id) => ({ section_id: id, verdict: "accepted" })));
+    const body = sentBody();
+    expect(Object.hasOwn(body, "review_coverage")).toBe(false);
+    expect("section_verdicts" in body).toBe(false);
+  });
+
+  it("a row whose item_kind is not section: the counter uses the row's noun, no coverage, the line names the kind", async () => {
+    render(<Card task={task(fixtureDocumentReviewPayload())} row={{ ...ROW, item_kind: "chapter" }} />);
+    expect(document.querySelector("[data-review-counter]")!.textContent).toBe("0 of 5 chapters reviewed · 0 flagged");
+    expect(unsent()).toContain('not "chapter"');
+    expect(unsent()).toContain('item_kind "section"');
+    acceptAll();
+    fireEvent.click(verb("promoted"));
+    await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
+    expect(Object.hasOwn(sentBody(), "review_coverage")).toBe(false);
   });
 
   it("pairs by reason_required, not by name: a differently named reason-required verb", async () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload(), decl(["accept", "send_back"], ["send_back"]))} />);
+    render(<Card task={task(fixtureDocumentReviewPayload(), decl(["accept", "send_back"], ["send_back"]))} />);
     acceptAll();
     expect(verb("send_back").disabled).toBe(true);
     expect(verb("accept").disabled).toBe(false);
@@ -234,12 +258,6 @@ describe("the buttons are the served declaration", () => {
 });
 
 describe("the dispatcher", () => {
-  it("draws the document card for a document task", () => {
-    render(<ApprovalTaskCard task={task(fixtureDocumentReviewPayload())} />);
-    expect(document.querySelector("[data-document-review]")).not.toBeNull();
-    expect(document.querySelector("[data-promotion-review]")).toBeNull();
-  });
-
   it("still draws the promotion card for a promotion task", () => {
     const sha = `sha256:${"5b15f205".padEnd(64, "a")}`;
     render(<ApprovalTaskCard task={task({ ...fixturePromotionPayload(sha), domain: "SUSTAINMENT" })} />);
@@ -250,7 +268,7 @@ describe("the dispatcher", () => {
 
 describe("no declaration served (fail closed, architect 2026-10-30)", () => {
   it("draws no verb button and says so", () => {
-    render(<ApprovalTaskCard task={{ ...task(fixtureDocumentReviewPayload()), declaration: undefined }} />);
+    render(<Card task={{ ...task(fixtureDocumentReviewPayload()), declaration: undefined }} />);
     expect(document.querySelectorAll("[data-verb]")).toHaveLength(0);
     expect(document.querySelector("[data-no-declaration]")?.textContent).toBe(NO_DECLARATION_SERVED);
     expect(screen.queryByRole("button", { name: /^(approved|rejected|promoted)$/i })).toBeNull();

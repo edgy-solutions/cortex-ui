@@ -50,7 +50,8 @@ export interface ItemReviewCoverageWire {
   groups: { rule: string; key: string; items: string[] }[];
   /** `items`: the distinct ids of the units holding the fact's rows, plan order. */
   shared: { rule: string; page: number; bbox: number[]; items: string[]; confirmed: boolean }[];
-  sample: { seed: string; per_run: number; sample_all_up_to: number; min_run: number };
+  /** A card that samples nothing (the document card) sends null. */
+  sample: { seed: string; per_run: number; sample_all_up_to: number; min_run: number } | null;
 }
 
 // Compile-time tie, no runtime cost: tsc fails if the wire type stops being assignable to the generated one.

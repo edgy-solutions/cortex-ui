@@ -35,6 +35,13 @@ const actOnHumanTask = vi.fn();
 vi.mock("@/api/client", () => ({
   actOnHumanTask: (...a: unknown[]) => actOnHumanTask(...a),
 }));
+const fetchReviewShapes = vi.fn();
+vi.mock("@/lib/ingestTransport", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/ingestTransport")>("@/lib/ingestTransport")),
+  fetchReviewShapes: (...a: unknown[]) => fetchReviewShapes(...a),
+  fetchIngestSource: vi.fn(() => new Promise(() => {})),
+  fetchIngestExtraction: vi.fn(() => new Promise(() => {})),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/useTaskArtifactSync", () => ({ markTaskResolvedByTaskId: vi.fn() }));
 
@@ -46,6 +53,10 @@ import { readTaskDeclaration, NO_DECLARATION_SERVED } from "@/lib/taskDeclaratio
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { humanTaskFromRow } from "@/lib/seedHumanTasks";
 import { taskToArtifact } from "@/lib/taskArtifact";
+import { resetReviewShapesCache } from "./useReviewShapes";
+import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
+import { fixtureDocumentReviewPayload } from "@/lib/documentReviewFixture";
+import { fixturePromotionPayload } from "@/lib/promotionReviewFixture";
 
 // The kinds these tests treat as served-declared (their own list, NOT cortex's display table: 2026-10-30 the
 // card no longer reads that table). A declared kind is handed the declaration the server would serve for it: with none, the card fails closed
@@ -72,6 +83,8 @@ const task = (kind: string, over: Partial<ApprovalTaskPayload> = {}): ApprovalTa
 
 beforeEach(() => {
   actOnHumanTask.mockReset();
+  fetchReviewShapes.mockReset();
+  resetReviewShapesCache();
   vi.mocked(toast.error).mockReset();
   vi.mocked(markTaskResolvedByTaskId).mockReset();
 });
@@ -1307,5 +1320,74 @@ describe("a policy refusal on /act (the declared envelope)", () => {
     press();
     await waitFor(() => expect(document.querySelector("[data-act-refusal]")?.textContent).toContain("Say more."));
     expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+  });
+});
+
+describe("the document card is chosen from the served review-shape list", () => {
+  const DOC_DECL = {
+    kind: "document_promotion",
+    declared: true,
+    archetype: "APPROVAL_TASK",
+    badge: "",
+    title: "",
+    accepts: ["promoted", "rejected"],
+    reason_required: ["rejected"],
+  };
+  const docTask = (payload: Record<string, unknown> = fixtureDocumentReviewPayload()) =>
+    task("document_promotion", { declaration: DOC_DECL, payload, title: "Review the work instruction" });
+  const q = (sel: string) => document.querySelector(sel);
+  const served = (rows: unknown[]) => fetchReviewShapes.mockResolvedValue(rows);
+
+  it("a served document row draws the section card", async () => {
+    served(REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })));
+    render(<ApprovalTaskCard task={docTask()} />);
+    await waitFor(() => expect(q("[data-document-review]")).not.toBeNull());
+    expect(q("[data-document-card-refused]")).toBeNull();
+    expect(q("[data-document-card-loading]")).toBeNull();
+  });
+
+  it("while the fetch is pending: the loading line, no card, no acting button", () => {
+    fetchReviewShapes.mockReturnValue(new Promise(() => {}));
+    render(<ApprovalTaskCard task={docTask()} />);
+    expect(q("[data-document-card-loading]")!.textContent).toBe("Waiting for the review shapes, which say whether this card applies.");
+    expect(q("[data-document-review]")).toBeNull();
+    expect(document.querySelectorAll("button")).toHaveLength(0);
+    expect(q("[data-verb]")).toBeNull();
+    expect(q("[data-submit-decision]")).toBeNull();
+  });
+
+  it("a list without document: the refusal names it and the generic card draws", async () => {
+    served(REVIEW_SHAPES_FIXTURE.filter((r) => r.review_shape !== "document").map((r) => ({ ...r })));
+    render(<ApprovalTaskCard task={docTask()} />);
+    await waitFor(() => expect(q("[data-document-card-refused]")).not.toBeNull());
+    expect(q("[data-document-card-refused]")!.textContent).toContain('"document"');
+    expect(q("[data-document-review]")).toBeNull();
+    expect(q("[data-verb]")).not.toBeNull();
+  });
+
+  it("a failed fetch: the refusal carries the why and the generic card draws", async () => {
+    fetchReviewShapes.mockRejectedValue({ response: { status: 503 } });
+    render(<ApprovalTaskCard task={docTask()} />);
+    await waitFor(() => expect(q("[data-document-card-refused]")).not.toBeNull());
+    expect(q("[data-document-card-refused]")!.textContent).toBe("The section review card is not drawn: The review shapes could not be loaded (503).");
+    expect(q("[data-document-review]")).toBeNull();
+    expect(q("[data-verb]")).not.toBeNull();
+  });
+
+  it("a document payload that also names ingest_id, with no row, falls to the promotion card", async () => {
+    served([]);
+    const sha = `sha256:${"5b15f205".padEnd(64, "a")}`;
+    const payload = { ...fixturePromotionPayload(sha), ...fixtureDocumentReviewPayload(), domain: "SUSTAINMENT" };
+    render(<ApprovalTaskCard task={docTask(payload)} />);
+    await waitFor(() => expect(q("[data-document-card-refused]")).not.toBeNull());
+    expect(q("[data-promotion-review]")).not.toBeNull();
+    expect(q("[data-document-review]")).toBeNull();
+  });
+
+  it("a non-document task never fetches the review shapes", () => {
+    // A mock returning a promise, so a stray fetch reaches the assertion below instead of throwing on `.then` at render.
+    fetchReviewShapes.mockReturnValue(new Promise(() => {}));
+    render(<ApprovalTaskCard task={task("workflow_ack")} />);
+    expect(fetchReviewShapes).not.toHaveBeenCalled();
   });
 });
