@@ -309,8 +309,6 @@ export function buildActBody(
   rowEdits?: RowEdits,
   reasonCode?: GroupedRejectCode,
   headerEdits?: HeaderEdit[],
-  // document review card only. // PROPOSED (unratified): see src/lib/documentReview.ts
-  sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only (spec 208).
   page?: number,
   // document_promotion promote: `review_coverage` (declared at producer pin 41230a7e, item form); the key is ABSENT unless given.
@@ -323,7 +321,6 @@ export function buildActBody(
   }
   if (decision === "rejected" && reasonCode) body.reason_code = reasonCode;
   if (decision === "promoted" && headerEdits && headerEdits.length > 0) body.header_edits = headerEdits;
-  if (sectionVerdicts && sectionVerdicts.length > 0) body.section_verdicts = sectionVerdicts; // PROPOSED (unratified)
   // `HumanTaskActRequest.page` is refused (422 page_not_for_decision) on anything but `has_parts`, and
   // `_StrictInt` refuses a non-integer: send it ONLY there, and only a whole page number >= 1.
   if (reviewCoverage !== undefined) body.review_coverage = reviewCoverage;
@@ -343,14 +340,12 @@ export async function actOnHumanTask(
   reasonCode?: GroupedRejectCode,
   // document_promotion promote only: steward corrections of mfr / notice_id / notice_date.
   headerEdits?: HeaderEdit[],
-  // document review card only: the per-section verdicts, sent only when provided.
-  sectionVerdicts?: unknown[],
   // document_empty_confirm has_parts only: the 1-based page the steward saw a part on.
   page?: number,
   // document_promotion promote only: `review_coverage` (declared at producer pin 41230a7e, item form), sent only when provided.
   reviewCoverage?: ItemReviewCoverageWire
 ): Promise<ActOnTaskResult> {
-  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage);
+  const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, reviewCoverage);
   return request("POST /human_tasks/{task_id}/act", {
     path: { task_id: taskId },
     body: body as BffOps["POST /human_tasks/{task_id}/act"]["body"],

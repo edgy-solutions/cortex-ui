@@ -172,7 +172,7 @@ describe("what is posted, and what is claimed", () => {
     setPage("3");
     fireEvent.click(hasParts());
     await waitFor(() => expect(actOnHumanTask).toHaveBeenCalledTimes(1));
-    expect(actOnHumanTask.mock.calls[0]).toEqual([task().task_id, "has_parts", "", undefined, undefined, undefined, undefined, undefined, 3]);
+    expect(actOnHumanTask.mock.calls[0]).toEqual([task().task_id, "has_parts", "", undefined, undefined, undefined, undefined, 3]);
     const sentence = "Sent back for re-extraction with the text fallback (attempt 2) — filed as extraction_defect:x";
     await waitFor(() => expect(document.querySelector("[data-act-outcome]")?.textContent).toBe(sentence));
     expect(document.querySelector("[data-act-outcome]")?.textContent).not.toContain("workflow not resumed");

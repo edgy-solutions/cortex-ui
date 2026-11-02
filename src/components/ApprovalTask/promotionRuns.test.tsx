@@ -433,8 +433,8 @@ describe("record preview", () => {
 
 /** The /act body the card's promote call would put on the wire: actOnHumanTask's positional args through the real buildActBody. */
 const promotedBody = () => {
-  const [, decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage] = actOnHumanTask.mock.calls[0] as Parameters<typeof actOnHumanTaskReal>;
-  return JSON.parse(JSON.stringify(buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, sectionVerdicts, page, reviewCoverage))) as Record<string, unknown>;
+  const [, decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, reviewCoverage] = actOnHumanTask.mock.calls[0] as Parameters<typeof actOnHumanTaskReal>;
+  return JSON.parse(JSON.stringify(buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, reviewCoverage))) as Record<string, unknown>;
 };
 
 describe("promote sends the coverage record (scale fixture)", () => {

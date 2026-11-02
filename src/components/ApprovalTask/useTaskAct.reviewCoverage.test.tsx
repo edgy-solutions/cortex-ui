@@ -74,7 +74,7 @@ describe("act carries review_coverage only when given one", () => {
     const { result } = renderHook(() => useTaskAct(task));
     const rowEdits = { deleted: [{ mpn: "A", reason: "r" }], added: [], corrected: [] };
     await act(async () => {
-      await result.current.act("promoted", "ok", rowEdits, undefined, undefined, undefined, COVERAGE);
+      await result.current.act("promoted", "ok", rowEdits, undefined, undefined, COVERAGE);
     });
     expect(seen).toHaveLength(1);
     expect(sentBody().review_coverage).toEqual(COVERAGE);
@@ -89,7 +89,7 @@ describe("act carries review_coverage only when given one", () => {
     expect(seen).toHaveLength(1);
     expect(Object.hasOwn(sentBody(), "review_coverage")).toBe(false);
     await act(async () => {
-      await result.current.act("promoted", "ok", undefined, undefined, undefined, undefined, undefined);
+      await result.current.act("promoted", "ok", undefined, undefined, undefined, undefined);
     });
     expect(Object.hasOwn(sentBody(), "review_coverage")).toBe(false);
   });
@@ -101,7 +101,7 @@ describe("a refused coverage is read on the card", () => {
     fail.data = { detail: { error: "review_coverage_invalid", check: "uncovered", message: "part 7 was neither opened nor grouped" } };
     const { result } = renderHook(() => useTaskAct(task));
     await act(async () => {
-      await result.current.act("promoted", "ok", undefined, undefined, undefined, undefined, COVERAGE);
+      await result.current.act("promoted", "ok", undefined, undefined, undefined, COVERAGE);
     });
     expect(result.current.refusal).toEqual({ message: "part 7 was neither opened nor grouped", code: "review_coverage_invalid" });
     expect(result.current.done).toBeNull();
@@ -112,7 +112,7 @@ describe("buildActBody leaves the key out entirely (JSON.stringify would hide an
   it("absent without a coverage, present and identical with one", async () => {
     const { buildActBody } = await import("@/api/client");
     expect(Object.hasOwn(buildActBody("promoted", "c"), "review_coverage")).toBe(false);
-    expect(Object.hasOwn(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, undefined, undefined), "review_coverage")).toBe(false);
-    expect(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, undefined, COVERAGE).review_coverage).toBe(COVERAGE);
+    expect(Object.hasOwn(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, undefined), "review_coverage")).toBe(false);
+    expect(buildActBody("promoted", "c", undefined, undefined, undefined, undefined, undefined, COVERAGE).review_coverage).toBe(COVERAGE);
   });
 });

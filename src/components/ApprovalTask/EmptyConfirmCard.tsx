@@ -144,7 +144,7 @@ export function EmptyConfirmCard({ task, empty }: { task: ApprovalTaskPayload; e
                     />
                     <button
                       type="button"
-                      onClick={() => act(v, undefined, undefined, undefined, undefined, page)}
+                      onClick={() => act(v, undefined, undefined, undefined, page)}
                       disabled={acting || !pageOk || empty.addMissedPart}
                       data-verb={v}
                       title={empty.addMissedPart ? ADD_MISSED_PART_NOT_BUILT_MESSAGE : undefined}

@@ -122,7 +122,7 @@ export function useTaskAct(task: ApprovalTaskPayload) {
 
   // `reasonOverride`: a card that composes its reason at the press (the review card's reject code plus
   // note) passes it here, so it is not left waiting a render for `setReason` to land.
-  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[], sectionVerdicts?: unknown[], page?: number, reviewCoverage?: ItemReviewCoverageWire) => {
+  const act = async (decision: string, reasonOverride?: string, rowEdits?: RowEdits, headerEdits?: HeaderEdit[], page?: number, reviewCoverage?: ItemReviewCoverageWire) => {
     const said = (reasonOverride ?? reason).trim();
     // A REASON-REQUIRED VERB IS NOT SUBMITTED WITHOUT ONE. Dismissing a reported hazard with no
     // stated rationale is the erasure this domain cares about most; the gate refuses it, and a
@@ -137,11 +137,9 @@ export function useTaskAct(task: ApprovalTaskPayload) {
       // No edits: the call is the three-argument one it always was.
       const res =
         reviewCoverage
-          ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits, undefined, headerEdits, undefined, undefined, reviewCoverage)
-          : sectionVerdicts
-          ? await actOnHumanTask(task.task_id, decision, said, undefined, undefined, undefined, undefined, sectionVerdicts)
+          ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits, undefined, headerEdits, undefined, reviewCoverage)
           : page !== undefined
-          ? await actOnHumanTask(task.task_id, decision, said, undefined, undefined, undefined, undefined, undefined, page)
+          ? await actOnHumanTask(task.task_id, decision, said, undefined, undefined, undefined, undefined, page)
           : headerEdits
           ? await actOnHumanTask(task.task_id, decision, said, undefined, rowEdits, undefined, headerEdits)
           : rowEdits

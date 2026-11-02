@@ -7,7 +7,8 @@ import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PromotionReviewCard } from "./PromotionReviewCard";
 import { DocumentReviewCard } from "./DocumentReviewCard";
-import { readDocumentReviewTask } from "@/lib/documentReview";
+import { DOCUMENT_REVIEW_SHAPE, readDocumentReviewTask, type DocumentReviewTask } from "@/lib/documentReview";
+import { useReviewShapes } from "./useReviewShapes";
 import { EmptyConfirmCard } from "./EmptyConfirmCard";
 import { readEmptyConfirmTask } from "@/lib/emptyConfirm";
 import { GrantReviewCard } from "@/components/access/GrantReviewCard";
@@ -154,10 +155,45 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   const grant = readGrantReviewTask(task);
   if (grant) return <GrantReviewCard task={task} review={grant} />;
 
-  // A review_shape "document" task draws the section review card (PROPOSED shape; see documentReview.ts).
+  // A review_shape "document" task draws the section review card (PROPOSED shape; see documentReview.ts),
+  // but only once the served review-shape list says the shape exists (architect ruling, 2026-10-31).
   const documentReview = readDocumentReviewTask(task);
-  if (documentReview) return <DocumentReviewCard task={task} review={documentReview} />;
+  if (documentReview) return <DocumentReviewGate task={task} review={documentReview} />;
 
+  return <NonDocumentTaskCard task={task} />;
+}
+
+/**
+ * The card choice reads the served review-shape list. Mounted only for a task that claims the shape, so
+ * the fetch happens only then. While the list loads there are NO actions: the card that applies is unknown.
+ */
+function DocumentReviewGate({ task, review }: { task: ApprovalTaskPayload; review: DocumentReviewTask }) {
+  const shapes = useReviewShapes();
+  if (shapes.phase === "loading") {
+    return (
+      <div className="glass-panel p-6 my-4 border-cyan-500/20">
+        <h3 className="text-lg font-bold text-white tracking-tight leading-none mb-2">{task.title}</h3>
+        <p className="text-[11px] font-mono text-slate-400" data-document-card-loading>
+          Waiting for the review shapes, which say whether this card applies.
+        </p>
+      </div>
+    );
+  }
+  const row = shapes.phase === "ready" ? shapes.rows.find((r) => r.review_shape === DOCUMENT_REVIEW_SHAPE) : undefined;
+  if (row) return <DocumentReviewCard task={task} review={review} row={row} />;
+  const why = shapes.phase === "failed" ? shapes.why : `no review shape "${DOCUMENT_REVIEW_SHAPE}" is served by GET /review-shapes.`;
+  return (
+    <>
+      <p className="text-[11px] font-mono text-amber-400/90" data-document-card-refused>
+        The section review card is not drawn: {why}
+      </p>
+      <NonDocumentTaskCard task={task} />
+    </>
+  );
+}
+
+/** The cards for every task that is not (or not served as) a document review. */
+function NonDocumentTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // A `document_empty_confirm` task whose payload claims the empty shape draws its own card (spec 208).
   // It and the document card key on different review_shape values ("empty", "document"), so the
   // order of the two checks does not matter.

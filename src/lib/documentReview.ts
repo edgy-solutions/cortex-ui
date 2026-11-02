@@ -2,15 +2,21 @@
  * THE DOCUMENT REVIEW TASK (review_shape "document"), READ. A section list left, the page right,
  * Accept/Flag per section. Nothing here draws; `DocumentReviewCard` does.
  *
- * ⛔ PROPOSED, NOT RATIFIED. No producer declares a section list or a per-section verdict today:
- * `document_promotion.yaml` accepts `[promoted, rejected]` and the act takes one `decision`. Every
- * name marked PROPOSED below is Cortex's own proposal, and THIS FILE (plus `buildActBody` in
- * `src/api/client.ts`, which carries the verdicts) is the ONLY place that spells them, so
- * ratification is a one-file edit. `documentReviewContainment.test.ts` seals that.
+ * ⛔ PROPOSED, NOT RATIFIED (the section list). No producer serves a section list yet: it stays PROPOSED
+ * until invincible-agent 0.4.75 serves it and a seal reads it (Lane 1, 2026-10-31). The names marked PROPOSED
+ * below (the payload keys "sections" and "header") are Cortex's own, and THIS FILE is the ONLY place that
+ * spells them, so ratification is a one-file edit. `documentReviewContainment.test.ts` seals that.
+ *
+ * The per-section verdict list is RETIRED (the gateway reads none of it). A review is sent as ITEM-FORM
+ * coverage (`review_coverage`, see `reviewCoverage.ts`) with `item_kind` from the served registry row, and
+ * the per-section note folds into the reason.
  *
  * Modelled on `emptyConfirm.ts` (PR #30): a reader keyed on `review_shape`, null when the payload
  * does not claim the shape, so the task falls through to the card that can honestly draw it.
  */
+
+import type { ItemReviewCoverageWire } from "./reviewCoverage";
+import type { ShapeRow } from "./reviewShapes";
 
 export interface DocumentHeader {
   title: string | null;
@@ -36,14 +42,13 @@ export interface DocumentReviewTask {
   droppedSections: number;
 }
 
-export type SectionVerdict = "accepted" | "flagged";
+/** The registry row's review_shape this reader claims (it is the served key, not a case). */
+export const DOCUMENT_REVIEW_SHAPE = "document";
 
-/** The wire shape of one verdict. // PROPOSED (unratified): section_verdicts */
-export interface SectionVerdictWire {
-  section_id: string;
-  verdict: SectionVerdict;
-  note?: string;
-}
+/** The item kind this card produces ids for (a section's id), a mechanism like `PLAN_ITEM_KIND`. */
+export const SECTION_ITEM_KIND = "section";
+
+export type SectionVerdict = "accepted" | "flagged";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -63,7 +68,7 @@ interface Parsed {
 function parse(task: { payload?: unknown } | null | undefined): Parsed {
   const payload = task?.payload;
   if (!isObj(payload)) return { task: null, why: "the payload is not an object" };
-  if (payload.review_shape !== "document") return { task: null, why: 'review_shape is not "document"' };
+  if (payload.review_shape !== DOCUMENT_REVIEW_SHAPE) return { task: null, why: `review_shape is not "${DOCUMENT_REVIEW_SHAPE}"` };
   const ingestId = nonBlank(payload.ingest_id);
   if (ingestId === null) return { task: null, why: "ingest_id is missing" };
   // PROPOSED (unratified): the payload key "sections"
@@ -114,42 +119,83 @@ export function whyNotDocumentReview(task: { payload?: unknown } | null | undefi
   return parse(task).why;
 }
 
+type Verdicts = Readonly<Record<string, SectionVerdict | undefined>>;
+
 /**
- * The act's verdicts. A verdict for EVERY section, in the sections' order, never a subset: a missing
- * one throws. `note` only when non-empty. No decision is derived here: the verb is the served
- * declaration's (config names the case), chosen by the card.
+ * The item-form coverage of a document review. A verdict for EVERY section, never a subset: a missing one
+ * throws. The steward looked at every section to judge it, so `looked_at` is all ids in section order;
+ * `flagged` is the flagged ids in section order. An id is the section_id, verbatim, as a string. This card
+ * samples nothing and groups nothing, so those are empty and `sample` is null. The server checks that
+ * `looked_at` equals the item universe and that `item_kind` and `rules_version` equal the row's.
  */
-export function buildDocumentVerdicts(
+export function buildSectionCoverage(
   sections: readonly DocumentSection[],
-  verdictsById: Readonly<Record<string, SectionVerdict | undefined>>,
-  notesById: Readonly<Record<string, string | undefined>> = {},
-): { section_verdicts: SectionVerdictWire[] } {
-  const out: SectionVerdictWire[] = [];
+  verdictsById: Verdicts,
+  row: ShapeRow,
+): ItemReviewCoverageWire {
+  const looked: string[] = [];
+  const flagged: string[] = [];
   for (const s of sections) {
     const verdict = verdictsById[s.sectionId];
     if (verdict !== "accepted" && verdict !== "flagged") {
-      throw new Error(`section_verdicts incomplete: no verdict for ${s.sectionId}`);
+      throw new Error(`section coverage incomplete: no verdict for ${s.sectionId}`);
     }
-    const note = (notesById[s.sectionId] ?? "").trim();
-    out.push(note !== "" ? { section_id: s.sectionId, verdict, note } : { section_id: s.sectionId, verdict });
+    looked.push(s.sectionId);
+    if (verdict === "flagged") flagged.push(s.sectionId);
   }
-  return { section_verdicts: out };
+  return {
+    review_shape: row.review_shape,
+    item_kind: row.item_kind,
+    rules_version: row.rules_version,
+    looked_at: looked,
+    sampled: [],
+    flagged,
+    groups: [],
+    shared: [],
+    sample: null,
+  };
+}
+
+/** The reason a reason-required verb carries: the flagged ids in section order, each with its non-blank note. */
+export function flaggedSectionsReason(
+  sections: readonly DocumentSection[],
+  verdictsById: Verdicts,
+  notesById: Readonly<Record<string, string | undefined>> = {},
+): string {
+  const parts: string[] = [];
+  for (const s of sections) {
+    if (verdictsById[s.sectionId] !== "flagged") continue;
+    const note = (notesById[s.sectionId] ?? "").trim();
+    parts.push(note !== "" ? `${s.sectionId} — ${note}` : s.sectionId);
+  }
+  return `sections flagged: ${parts.join("; ")}`;
 }
 
 /**
- * Submit through the existing act path. Keeps the verdicts' wire name out of the card.
- * `decision` is a served verb, passed through untouched. When the declaration lists it in
- * `reason_required` (`document_promotion` does for its rejecting verb, and `useTaskAct.act` refuses
- * to send it blank), the reason names the flagged sections: the per-section notes travel in the
- * verdicts, this is the reason the verb itself needs. Otherwise the reason is empty.
+ * The verb that carries coverage: the one that takes no reason, else null. Interim role rule, as in
+ * `PromotionReviewCard`: the producer's gateway decides it by verb name today and nothing served says which, so
+ * with two (or no) candidates no verb gets the role and coverage is not sent -- fail closed, never a guess.
+ */
+export function documentCoverageVerb(verbs: readonly string[], needsReason: (v: string) => boolean): string | null {
+  const plain = verbs.filter((v) => !needsReason(v));
+  return plain.length === 1 ? plain[0] : null;
+}
+
+/**
+ * Submit through the existing act path. `decision` is a served verb, passed through untouched; the reason
+ * and the coverage (or none) are the card's to compose. The coverage is the act's sixth argument.
  */
 export function actOnDocumentReview(
-  act: (decision: string, reason: string, rowEdits: undefined, headerEdits: undefined, extra: SectionVerdictWire[]) => Promise<void>,
+  act: (
+    decision: string,
+    reason: string,
+    rowEdits: undefined,
+    headerEdits: undefined,
+    page: undefined,
+    coverage: ItemReviewCoverageWire | undefined,
+  ) => Promise<void>,
   decision: string,
-  built: ReturnType<typeof buildDocumentVerdicts>,
-  reasonRequired: boolean,
+  { reason, coverage }: { reason: string; coverage: ItemReviewCoverageWire | undefined },
 ): Promise<void> {
-  const flagged = built.section_verdicts.filter((v) => v.verdict === "flagged").map((v) => v.section_id);
-  const reason = reasonRequired ? `sections flagged: ${flagged.join(", ")}` : "";
-  return act(decision, reason, undefined, undefined, built.section_verdicts);
+  return act(decision, reason, undefined, undefined, undefined, coverage);
 }
