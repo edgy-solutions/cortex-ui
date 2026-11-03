@@ -230,7 +230,15 @@ env:
   #   v0.9.10 -> v0.9.12; meshSdkParity reads its own SDK checkout (sdk_ref below), not this pin, so
   #   it is unaffected here; the snapshot's sdk_ref lags (v0.9.8) and is a separate re-extract. Gate:
   #   the full suite against a git-archive export of 41230a7e placed as the sibling.
-  PRODUCER_REF: 41230a7ef0b3976d19c54d665aabd6d1ee2dfd87
+  # 2026-11-02 RE-PIN to aac9900b (tag invincible-agent-0.4.75). 41230a7e is its ancestor. It carries
+  #   #185: `selection_basis: "declared_render"`, with `declared_shape`/`declared_unfit` on
+  #   presentation_provenance, which presentationProvenance.ts reads and its producer seal reads here.
+  #   The OpenAPI snapshots change (EvidenceRef/TitleEvidenceRef narrow, descriptions move); the
+  #   generated types narrow `note` from `string | null` to `string`. NOT read off the pods (sandbox frozen). Check 2:
+  #   task_kinds and review_shapes diff 41230a7e..aac9900b is EMPTY (control: 331 files changed). Check
+  #   3: uv.lock iagent-mesh v0.9.12 at both. Gate: the full suite against a git-archive export of
+  #   aac9900b placed as the sibling.
+  PRODUCER_REF: aac9900b6f9573dad9c8532da54fd7058ad2c967
 
 permissions:
   contents: read
