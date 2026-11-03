@@ -31,6 +31,9 @@ export function readSeedPanelEvent(v: unknown): SeedPanelEvent | null {
 export type SeedProgress = { total: number; panels: Record<number, "seeded" | "refused"> };
 
 export function foldSeedPanel(p: SeedProgress | null, e: SeedPanelEvent): SeedProgress {
+  // THE FIRST TOTAL STANDS. A later event naming a different total is not a second fixture size;
+  // taking the latest drew "6 of 5" against a list already laid out for six.
+  if (p && e.total !== p.total) return p;
   const panels = { ...(p?.panels ?? {}) };
   // An index already recorded keeps its first word: a repeat is not a second panel.
   if (!(e.panel_index in panels)) panels[e.panel_index] = e.outcome === "artifact" ? "seeded" : "refused";
@@ -38,6 +41,10 @@ export function foldSeedPanel(p: SeedProgress | null, e: SeedPanelEvent): SeedPr
 }
 
 export const seedDone = (p: SeedProgress): number => Object.keys(p.panels).length;
+
+/** How many of the recorded panels were refused. */
+export const seedRefused = (p: SeedProgress): number =>
+  Object.values(p.panels).filter((s) => s === "refused").length;
 
 const panelEvents = (refused: number[]): SeedPanelEvent[] =>
   [0, 1, 2, 3, 4, 5].map((i) =>

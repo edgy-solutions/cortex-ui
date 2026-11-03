@@ -345,3 +345,112 @@ describe("the count line is read from the row, not assumed", () => {
     expect(n).toBe(declared);
   });
 });
+
+describe("k of n, walked through the fixture", () => {
+  /** A runner that emits `events` one at a time, each behind its own gate, then waits for `fin`. */
+  const gated = (events: SeedPanelEvent[]) => {
+    const gates = events.map(() => deferred<void>());
+    const fin = deferred<Ok>();
+    const runner: SeedRunner = async (_t, _b, _c, onPanel) => {
+      for (let i = 0; i < events.length; i++) {
+        await gates[i].promise;
+        onPanel(events[i]);
+      }
+      return fin.promise;
+    };
+    const step = (i: number) => act(async () => gates[i].resolve());
+    return { runner, step, fin };
+  };
+  const state = (s: string) => document.querySelectorAll(`[data-seed-panel][data-state="${s}"]`).length;
+  const text = () => q("[data-seed-progress]")!.textContent!;
+
+  it("every event of the all-seeded fixture moves k by exactly one, and nothing is refused", async () => {
+    const { runner, step, fin } = gated(PROPOSED_SEED_PROGRESS_FIXTURE);
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    for (let i = 0; i < PROPOSED_SEED_PROGRESS_FIXTURE.length; i++) {
+      await step(i);
+      expect(text()).toContain(`${i + 1} of 6 panels`);
+      expect(state("seeded")).toBe(i + 1);
+      expect(state("pending")).toBe(5 - i);
+      expect(state("refused")).toBe(0);
+      expect(document.body.textContent).not.toMatch(/refused/);
+    }
+    await act(async () => fin.resolve(okResult(IDS)));
+  });
+
+  it("every event of the partial fixture: 3 of 6 panels · 1 refused, then 6 of 6 panels · 2 refused, then the dialog says 4 of 6 seeded", async () => {
+    const { runner, step, fin } = gated(PROPOSED_SEED_PROGRESS_PARTIAL);
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    for (let i = 0; i < 3; i++) await step(i);
+    expect(text()).toContain("3 of 6 panels · 1 refused");
+    for (let i = 3; i < 6; i++) await step(i);
+    expect(text()).toContain("6 of 6 panels · 2 refused");
+    await act(async () => fin.resolve(okResult(IDS.filter((_, i) => i !== 2 && i !== 4))));
+    await waitFor(() => expect(q("[data-seed-partial]")).not.toBeNull());
+    expect(q("[data-seed-partial]")!.textContent).toContain("4 of 6 panels seeded");
+  });
+
+  it("out of order (5, 0, 3): 3 of 6, those three rows seeded, the others pending", async () => {
+    const order = [5, 0, 3].map((i) => PROPOSED_SEED_PROGRESS_FIXTURE[i]);
+    const { runner, step, fin } = gated(order);
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    for (let i = 0; i < 3; i++) await step(i);
+    expect(text()).toContain("3 of 6 panels");
+    for (const i of [0, 3, 5]) expect(q(`[data-seed-panel="${i}"]`)!.getAttribute("data-state")).toBe("seeded");
+    for (const i of [1, 2, 4]) expect(q(`[data-seed-panel="${i}"]`)!.getAttribute("data-state")).toBe("pending");
+    await act(async () => fin.resolve(okResult(IDS)));
+  });
+
+  it("a drifting total is ignored: still 3 of 6, and no 'of 5' anywhere", async () => {
+    const events = [
+      ...PROPOSED_SEED_PROGRESS_FIXTURE.slice(0, 3),
+      { panel_index: 3, total: 5, outcome: "artifact", artifact_id: "fx-drift" } as SeedPanelEvent,
+    ];
+    const { runner, step, fin } = gated(events);
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    for (let i = 0; i < 4; i++) await step(i);
+    expect(text()).toContain("3 of 6 panels");
+    expect(document.body.textContent).not.toMatch(/of 5\b/);
+    expect(q('[data-seed-panel="3"]')!.getAttribute("data-state")).toBe("pending");
+    await act(async () => fin.resolve(okResult(IDS)));
+  });
+
+  it("a repeat of index 0 does not move k", async () => {
+    const events = [PROPOSED_SEED_PROGRESS_FIXTURE[0], PROPOSED_SEED_PROGRESS_FIXTURE[0]];
+    const { runner, step, fin } = gated(events);
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    await step(0);
+    expect(text()).toContain("1 of 6 panels");
+    await step(1);
+    expect(text()).toContain("1 of 6 panels");
+    expect(state("seeded")).toBe(1);
+    await act(async () => fin.resolve(okResult(IDS)));
+  });
+
+  it("a re-send after a 409 ask starts a new count: the first total stands within one run, not across two", async () => {
+    const conflict = readSeedConflict({ response: { status: 409, data: { detail: SEED_409_ASK } } })!;
+    const fin = deferred<Ok>();
+    const runner = vi
+      .fn<SeedRunner>()
+      .mockImplementationOnce(async (_t, _b, _c, onPanel) => {
+        onPanel(PROPOSED_SEED_PROGRESS_FIXTURE[0]);
+        return { ok: false, conflict };
+      })
+      .mockImplementationOnce(async (_t, _b, _c, onPanel) => {
+        onPanel({ ...PROPOSED_SEED_PROGRESS_FIXTURE[0], total: 5 });
+        return fin.promise;
+      });
+    openAndPick(runner);
+    fireEvent.click(createBtn());
+    await waitFor(() => expect(q("[data-refusal-choice] [data-ask-option]")).not.toBeNull());
+    fireEvent.click(q("[data-refusal-choice] [data-ask-option]")!);
+    await waitFor(() => expect(text()).toContain("1 of 5 panels"));
+    expect(document.body.textContent).not.toContain("of 6 panels");
+    await act(async () => fin.resolve(okResult(IDS)));
+  });
+});

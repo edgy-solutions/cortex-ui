@@ -10,7 +10,7 @@ import { needsBinding, partitionTemplates, refuseTemplateForCreate } from "@/lib
 import { RefusalWithAsk } from "@/components/elicitation/RefusalWithAsk";
 import { PolicyRefusalNotice } from "@/components/access/PolicyRefusalNotice";
 import { useTemplateSeed, type TemplateSeedDeps } from "./useTemplateSeed";
-import { seedDone, type SeedProgress } from "@/lib/seedProgress";
+import { seedDone, seedRefused, type SeedProgress } from "@/lib/seedProgress";
 
 /**
  * DockBar — the canvas dock (ADR-0028 canvas-dock model, Stage 3). Pinned below
@@ -452,6 +452,7 @@ export function DockBar({ seedDeps }: { seedDeps?: TemplateSeedDeps } = {}) {
               {seed.progress ? (
                 <div data-seed-progress="counted">
                   {seedDone(seed.progress)} of {seed.progress.total} panels
+                  {seedRefused(seed.progress) > 0 && ` · ${seedRefused(seed.progress)} refused`}
                   <SeedPanelRows progress={seed.progress} />
                 </div>
               ) : (

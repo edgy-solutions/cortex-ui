@@ -5,6 +5,7 @@ import {
   foldSeedPanel,
   readSeedPanelEvent,
   seedDone,
+  seedRefused,
 } from "./seedProgress";
 
 const ok = { panel_index: 0, total: 6, outcome: "artifact" };
@@ -46,5 +47,24 @@ describe("foldSeedPanel", () => {
     expect(p.total).toBe(6);
     expect(p.panels[2]).toBe("refused");
     expect(seedDone(p)).toBe(6);
+  });
+});
+
+describe("the first total stands", () => {
+  it("an event naming a different total returns the progress unchanged", () => {
+    const p = [0, 1, 2].map((i) => PROPOSED_SEED_PROGRESS_FIXTURE[i]).reduce(foldSeedPanel, null as never);
+    const drift = foldSeedPanel(p, { panel_index: 3, total: 5, outcome: "artifact" });
+    expect(drift).toBe(p);
+    expect(drift.total).toBe(6);
+    expect(seedDone(drift)).toBe(3);
+  });
+});
+
+describe("seedRefused", () => {
+  it("counts the refused panels and none of the seeded", () => {
+    const partial = PROPOSED_SEED_PROGRESS_PARTIAL.reduce(foldSeedPanel, null as never);
+    expect(seedRefused(partial)).toBe(2);
+    const all = PROPOSED_SEED_PROGRESS_FIXTURE.reduce(foldSeedPanel, null as never);
+    expect(seedRefused(all)).toBe(0);
   });
 });
