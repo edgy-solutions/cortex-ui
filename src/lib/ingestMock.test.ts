@@ -6,11 +6,17 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { uploadIngest, fetchIngestStatus, __resetIngestMock } from "./ingestMock";
-import { readIngestUploadId, readIngestStatusRow, ingestPollingDone } from "./ingestWire";
+import { useHumanTaskStore } from "@/store/useHumanTaskStore";
+import { claimsDocumentReview, readDocumentReviewTask, whyNotDocumentReview } from "./documentReview";
+import { readIngestUploadId, readIngestStatusRow, ingestPollingDone, promotionIngestId } from "./ingestWire";
+import { FIXTURE_DOCUMENT_INGEST_ID } from "./documentReviewFixture";
 
 const file = (name: string) => new File(["%PDF-1.7"], name, { type: "application/pdf" });
 
-beforeEach(() => __resetIngestMock());
+beforeEach(() => {
+  __resetIngestMock();
+  useHumanTaskStore.setState({ tasks: [] } as never);
+});
 
 describe("ingestMock responses are accepted by the ingestWire readers", () => {
   it("a new arrival: the upload id reads, and EVERY row the mock walks through reads, to review, where it parks for a human (a pcn-named file: an unnamed one parks at awaiting_kind, see ingestMockLeaf.test.ts)", async () => {
@@ -51,5 +57,39 @@ describe("ingestMock responses are accepted by the ingestWire readers", () => {
     const second = readIngestStatusRow(await fetchIngestStatus(id!));
     expect(second, "readIngestStatusRow refused the mock's duplicate row on a second fetch").not.toBeNull();
     expect(second!.stage, "a duplicate row must not advance on a second fetch").toBe(first!.stage);
+  });
+});
+
+describe("a drop whose file name says sections seeds the section-list document review", () => {
+  const park = async (name: string) => {
+    const id = readIngestUploadId(await uploadIngest(file(name), "pdf", "alice@example.com", "pdf"))!;
+    for (let i = 0; i < 20; i++) {
+      const row = readIngestStatusRow(await fetchIngestStatus(id))!;
+      if (row.stage === "review") break;
+    }
+    return useHumanTaskStore.getState().tasks.find((t) => t.subjectRef === id)!;
+  };
+
+  it("the seeded task claims the shape, the reader reads it, and dropped_by is kept", async () => {
+    const task = await park("pcn-sections.pdf");
+    expect(task, "no task was seeded at review").toBeTruthy();
+    expect(claimsDocumentReview(task)).toBe(true);
+    const read = readDocumentReviewTask(task);
+    expect(read, whyNotDocumentReview(task) ?? "").not.toBeNull();
+    expect(read!.sections).toHaveLength(5);
+    // The row's own id, not the fixture's: the card's PDF pane and extraction fetch with this one.
+    const row = readIngestStatusRow(await fetchIngestStatus(task.subjectRef!))!;
+    expect(read!.ingestId).toBe(promotionIngestId(row));
+    expect(read!.ingestId).not.toBe(FIXTURE_DOCUMENT_INGEST_ID);
+    expect(task.summary).toContain("5 sections");
+    expect(task.title).toBe(read!.header.title);
+    expect((task.payload as { dropped_by?: unknown }).dropped_by).toEqual({ authz_id: "mock-caller", on_behalf_of: null });
+  });
+
+  it("a plain drop still does not claim the shape", async () => {
+    const task = await park("pcn-spec.pdf");
+    expect(task).toBeTruthy();
+    expect(claimsDocumentReview(task)).toBe(false);
+    expect(readDocumentReviewTask(task)).toBeNull();
   });
 });

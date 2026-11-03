@@ -114,6 +114,12 @@ export function readDocumentReviewTask(task: { payload?: unknown } | null | unde
   return parse(task).task;
 }
 
+/** True when the payload is an object that claims the document shape, whether or not it can be read. */
+export function claimsDocumentReview(task: { payload?: unknown } | null | undefined): boolean {
+  const payload = task?.payload;
+  return isObj(payload) && payload.review_shape === DOCUMENT_REVIEW_SHAPE;
+}
+
 /** Why a task is not a document review; null when it is one. For tests and for diagnosis. */
 export function whyNotDocumentReview(task: { payload?: unknown } | null | undefined): string | null {
   return parse(task).why;

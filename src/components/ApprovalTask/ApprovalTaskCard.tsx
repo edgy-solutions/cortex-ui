@@ -7,7 +7,13 @@ import { useTaskAct } from "./useTaskAct";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PromotionReviewCard } from "./PromotionReviewCard";
 import { DocumentReviewCard } from "./DocumentReviewCard";
-import { DOCUMENT_REVIEW_SHAPE, readDocumentReviewTask, type DocumentReviewTask } from "@/lib/documentReview";
+import {
+  DOCUMENT_REVIEW_SHAPE,
+  claimsDocumentReview,
+  readDocumentReviewTask,
+  whyNotDocumentReview,
+  type DocumentReviewTask,
+} from "@/lib/documentReview";
 import { useReviewShapes } from "./useReviewShapes";
 import { EmptyConfirmCard } from "./EmptyConfirmCard";
 import { readEmptyConfirmTask } from "@/lib/emptyConfirm";
@@ -159,6 +165,15 @@ export function ApprovalTaskCard({ task }: { task: ApprovalTaskPayload }) {
   // but only once the served review-shape list says the shape exists (architect ruling, 2026-10-31).
   const documentReview = readDocumentReviewTask(task);
   if (documentReview) return <DocumentReviewGate task={task} review={documentReview} />;
+  // A payload that CLAIMS the shape and cannot be read says so; one that does not claim it stays silent.
+  if (claimsDocumentReview(task)) {
+    return (
+      <>
+        <DocumentCardRefused why={`${whyNotDocumentReview(task) ?? "the payload could not be read"}.`} />
+        <NonDocumentTaskCard task={task} />
+      </>
+    );
+  }
 
   return <NonDocumentTaskCard task={task} />;
 }
@@ -184,11 +199,18 @@ function DocumentReviewGate({ task, review }: { task: ApprovalTaskPayload; revie
   const why = shapes.phase === "failed" ? shapes.why : `no review shape "${DOCUMENT_REVIEW_SHAPE}" is served by GET /review-shapes.`;
   return (
     <>
-      <p className="text-[11px] font-mono text-amber-400/90" data-document-card-refused>
-        The section review card is not drawn: {why}
-      </p>
+      <DocumentCardRefused why={why} />
       <NonDocumentTaskCard task={task} />
     </>
+  );
+}
+
+/** The one line that says the section review card was not drawn, and why. */
+function DocumentCardRefused({ why }: { why: string }) {
+  return (
+    <p className="text-[11px] font-mono text-amber-400/90" data-document-card-refused>
+      The section review card is not drawn: {why}
+    </p>
   );
 }
 

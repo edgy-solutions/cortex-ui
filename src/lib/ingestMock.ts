@@ -20,6 +20,10 @@
  *                               fixture notice's rows and the PDF they were extracted from
  *                               (`promotionReviewFixture.ts`). Every drop gets the same notice,
  *                               so the review card can be walked before 193 rolls.
+ *   a filename containing the word sections → the seeded task is the section-list document review instead
+ *                               (`fixtureDocumentReviewPayload`, review_shape "document", `ingest_id` the
+ *                               row's own), so the section review card can be walked under the `ingestMock`
+ *                               flag. Title and summary come from the fixture's header and section count.
  *   act (promoted/rejected)  → NOT intercepted here. `actOnHumanTask` (the real, already-served
  *                               route) resolves the mock task the same way it resolves a real one;
  *                               this module only seeds the task, never answers the act.
@@ -42,6 +46,7 @@ import {
 } from "./ingestWire";
 import type { IngestSource } from "@/api/client";
 import { fixtureExtractionBody, fixturePdfBytes, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "./promotionReviewFixture";
+import { fixtureDocumentReviewPayload } from "./documentReviewFixture";
 import { REVIEW_SHAPES_FIXTURE } from "./reviewShapesFixture";
 import {
   scaleFixtureExtractionBody,
@@ -253,7 +258,33 @@ function isScaleDrop(ingestId: string): boolean {
   return /scale/i.test(FILE_NAMES.get(ingestId) ?? "");
 }
 
+/** A drop whose file name says /sections/i gets the section-list document review (the section review card); it wins over /scale/i. */
+function isSectionsDrop(ingestId: string): boolean {
+  return /sections/i.test(FILE_NAMES.get(ingestId) ?? "");
+}
+
+function seedSectionsReviewTask(row: MockRow): void {
+  const payload = fixtureDocumentReviewPayload({ ingest_id: promotionIngestId(row) });
+  const header = payload.header as { title: string };
+  const task: HumanTask = {
+    id: `mock-task-${row.ingest_id}`,
+    taskId: `mock-task-${row.ingest_id}`,
+    workflowId: null,
+    audience: "promotion:DATA_ENGINEERING",
+    kind: "document_promotion",
+    status: "pending",
+    title: header.title,
+    summary: `${(payload.sections as unknown[]).length} sections to review.`,
+    requestedBy: "mock-caller",
+    subjectRef: row.ingest_id,
+    payload: { ...payload, dropped_by: { authz_id: "mock-caller", on_behalf_of: null } },
+    createdAt: Date.now(),
+  };
+  useHumanTaskStore.getState().upsertTask(task);
+}
+
 function seedReviewTask(row: MockRow): void {
+  if (isSectionsDrop(row.ingest_id)) return seedSectionsReviewTask(row);
   const scale = isScaleDrop(row.ingest_id);
   const noticeId = scale ? SCALE_FIXTURE_NOTICE_ID : FIXTURE_NOTICE_ID;
   const task: HumanTask = {
