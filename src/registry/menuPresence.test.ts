@@ -133,3 +133,20 @@ describe("the server proving it DOES hold our menu", () => {
     }
   });
 });
+
+describe("a declared_render answer is read by its source, not its basis", () => {
+  it("default-menu with selection_basis declared_render reads as no menu", () => {
+    expect(
+      serverHasNoMenuForUs(
+        { presentation_source: "default-menu", selection_basis: "declared_render", frontend_id: OURS },
+        OURS,
+      ),
+    ).toBe(true);
+  });
+
+  it("registered with selection_basis declared_render does not", () => {
+    const raw = { presentation_source: "registered", selection_basis: "declared_render", frontend_id: OURS };
+    expect(serverHasNoMenuForUs(raw, OURS)).toBe(false);
+    expect(serverHasOurMenu(raw, OURS)).toBe(true);
+  });
+});

@@ -13,7 +13,7 @@ import {
   readExclusionSplit,
   type RouteSeverity,
 } from "@/lib/routing";
-import { readPresentation } from "@/lib/presentationProvenance";
+import { readPresentation, DECLARED_RENDER_BASIS } from "@/lib/presentationProvenance";
 import { askParentOf } from "@/lib/askFold";
 import { readAskOf, readPick } from "@/lib/askedPick";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -469,7 +469,11 @@ function Chosen({ p }: { p: import("@/lib/presentationProvenance").PresentationP
           p.declared ? "text-slate-600" : "text-amber-500/70"
         }`}
       >
-        {p.declared ? "card chosen (declared)" : "card chosen (NOT declared for this type)"}
+        {p.basis === DECLARED_RENDER_BASIS
+          ? "card chosen (declared by the answer)"
+          : p.declared
+            ? "card chosen (declared)"
+            : "card chosen (NOT declared for this type)"}
       </div>
       {/* THE PRODUCER'S OWN STRING, verbatim. A lookup table of bases would render the next one
           anyone writes as an unknown token — the silent-fall-through defect wearing a switch. */}
@@ -483,6 +487,15 @@ function Chosen({ p }: { p: import("@/lib/presentationProvenance").PresentationP
           </span>
         )}
       </div>
+      {/* The answer named a shape and the selector drew another card: say which, and why. */}
+      {p.declaredShape && p.basis !== DECLARED_RENDER_BASIS && (
+        <div
+          className="text-[10px] font-mono leading-snug text-amber-500/80"
+          data-presentation-declared-unfit={p.declaredShape}
+        >
+          {p.declaredShape} was declared and not drawn: {p.declaredUnfit ?? "the selector gave no reason"}
+        </div>
+      )}
       {/* WHICH CARDS COULD NOT, and what each one missed. Same shape as the eligibility trace,
           one layer over: a refusal nobody records is a choice that looks unanimous. */}
       {p.refusals.map((r, i) => (

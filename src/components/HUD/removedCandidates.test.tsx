@@ -168,6 +168,40 @@ describe("which CARD was chosen, and whether anyone declared it", () => {
     expect(r.textContent).toContain("rows lack `period`");
   });
 
+  it("a declared_render is declared BY THE ANSWER, not amber", () => {
+    withPresentation({ presentation_source: "registered", selection_basis: "declared_render", declared_shape: "MULTI_SERIES" });
+    render(<DecisionPathDiagram />);
+    const el = document.querySelector("[data-presentation-basis]")!;
+    expect(el.hasAttribute("data-presentation-declared")).toBe(true);
+    expect(el.textContent).toContain("declared by the answer");
+    expect(el.textContent).not.toContain("NOT declared");
+    expect(document.querySelector("[data-presentation-declared-unfit]")).toBeNull();
+  });
+
+  it("a fall-through names the declared shape and the verbatim reason", () => {
+    withPresentation({
+      presentation_source: "registered",
+      selection_basis: "payload-only (output_uri matched no capability)",
+      declared_shape: "MULTI_SERIES",
+      declared_unfit: "series rows lack `period`",
+    });
+    render(<DecisionPathDiagram />);
+    const el = document.querySelector("[data-presentation-basis]")!;
+    expect(el.hasAttribute("data-presentation-declared")).toBe(false);
+    const u = document.querySelector("[data-presentation-declared-unfit='MULTI_SERIES']")!;
+    expect(u.textContent).toContain("MULTI_SERIES was declared and not drawn: series rows lack `period`");
+  });
+
+  it("a fall-through with no reason says the selector gave none", () => {
+    withPresentation({
+      selection_basis: "payload-only (output_uri matched no capability)",
+      declared_shape: "MULTI_SERIES",
+    });
+    render(<DecisionPathDiagram />);
+    const u = document.querySelector("[data-presentation-declared-unfit]")!;
+    expect(u.textContent).toContain("the selector gave no reason");
+  });
+
   it("draws NOTHING when the selector's account never arrived", () => {
     // The case that runs today: the provenance is computed per answer and handed to a log
     // call, so it reaches a pod's stdout rather than the artifact.

@@ -22,25 +22,34 @@
  * records that incident in `assembleCapabilities.ts`, with the line that matters:
  * "`selection_basis` was the only field that said so."
  *
- * ── ONE KNOWN-GOOD VALUE, NOT AN ENUM OF FAILURES ─────────────────────────────────────────
+ * ── TWO KNOWN-GOOD VALUES, NOT AN ENUM OF FAILURES ────────────────────────────────────────
  *
- * Exactly one basis means "the caller declared this archetype for this type". Everything else —
+ * Exactly two bases mean "this archetype was declared": `output_uri+payload` (the caller named it
+ * for the type) and `declared_render` (the answer's own `render.shape` named it). Until the
+ * second was added, a declared TCPI was drawn amber as "NOT declared for this type". Everything else —
  * a widening today, a basis nobody has written yet tomorrow — is NOT that, and is treated as
  * worth a reader's attention. The strings themselves are rendered verbatim, because a lookup
  * table of failure modes would render the next basis as an unknown token, which is the
  * silent-fall-through defect wearing a switch statement.
  */
 
-/** The one basis that means the caller named this archetype for this output type. */
+/** The basis that means the caller named this archetype for this output type. */
 export const DECLARED_BASIS = "output_uri+payload";
+
+/** The answer's own `render.shape` chose this card, and it was on the caller's menu. */
+export const DECLARED_RENDER_BASIS = "declared_render";
 
 export interface PresentationProvenance {
   /** `registered` | `default-menu` | `unrenderable` — the producer's word, verbatim. */
   source: string;
   /** How the archetype was reached. See `DECLARED_BASIS`. */
   basis: string;
-  /** True only for the basis that means the caller declared this archetype for this type. */
+  /** True only for the two bases that mean this archetype was declared. */
   declared: boolean;
+  /** The shape the answer declared when the selector fell through to another card, verbatim. */
+  declaredShape: string | null;
+  /** Why the declared shape was not drawn, verbatim. */
+  declaredUnfit: string | null;
   /** How many capabilities were in the running, and how many the payload actually satisfied. */
   considered: number | null;
   satisfied: number | null;
@@ -86,7 +95,9 @@ export function readPresentation(raw: unknown): PresentationProvenance | null {
   return {
     source: str(raw.presentation_source),
     basis,
-    declared: basis === DECLARED_BASIS,
+    declared: basis === DECLARED_BASIS || basis === DECLARED_RENDER_BASIS,
+    declaredShape: str(raw.declared_shape) || null,
+    declaredUnfit: str(raw.declared_unfit) || null,
     considered: num(raw.candidates_considered),
     satisfied: num(raw.candidates_satisfied),
     refusals,

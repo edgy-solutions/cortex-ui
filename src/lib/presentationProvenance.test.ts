@@ -14,7 +14,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { readPresentation, DECLARED_BASIS } from "./presentationProvenance";
+import { readPresentation, DECLARED_BASIS, DECLARED_RENDER_BASIS } from "./presentationProvenance";
 
 const prov = (over: Record<string, unknown> = {}) => ({
   presentation_source: "registered",
@@ -146,5 +146,44 @@ describe("the key the producer actually writes", () => {
     for (const field of ["selection_basis", "presentation_source", "candidates_satisfied", "refusals"]) {
       expect(src, `${field} is not built by the selector`).toContain(`"${field}"`);
     }
+  });
+});
+
+describe("a declared render is declared, and a declared-but-undrawn shape is carried", () => {
+  it("declared_render is declared", () => {
+    expect(DECLARED_RENDER_BASIS).toBe("declared_render");
+    const p = readPresentation(prov({ selection_basis: DECLARED_RENDER_BASIS }))!;
+    expect(p.declared).toBe(true);
+    expect(p.basis).toBe("declared_render");
+  });
+
+  it("reads declared_shape and declared_unfit verbatim", () => {
+    const p = readPresentation(
+      prov({
+        selection_basis: "payload-only (output_uri matched no capability)",
+        declared_shape: "MULTI_SERIES",
+        declared_unfit: "series rows lack `period`",
+      }),
+    )!;
+    expect(p.declaredShape).toBe("MULTI_SERIES");
+    expect(p.declaredUnfit).toBe("series rows lack `period`");
+    expect(p.declared).toBe(false);
+  });
+
+  it("absent declared fields are null", () => {
+    const p = readPresentation(prov())!;
+    expect(p.declaredShape).toBeNull();
+    expect(p.declaredUnfit).toBeNull();
+  });
+
+  it("a blank declared_unfit is null", () => {
+    const p = readPresentation(prov({ declared_shape: "MULTI_SERIES", declared_unfit: "   " }))!;
+    expect(p.declaredShape).toBe("MULTI_SERIES");
+    expect(p.declaredUnfit).toBeNull();
+  });
+
+  it("an unknown basis carrying declared_shape is still not declared", () => {
+    const p = readPresentation(prov({ selection_basis: "shape-vote (something new)", declared_shape: "MULTI_SERIES" }))!;
+    expect(p.declared).toBe(false);
   });
 });
