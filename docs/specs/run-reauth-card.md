@@ -1,6 +1,8 @@
 # Paused-run sign-in card
 
-**Status:** SPEC. The architect, 2026-11-03: "a run in `awaiting_reauth` surfaces one card from the served state (run id, which call paused, what the person must do, a Sign in action that goes to Keycloak and resumes the run on return). Nothing in the card names a workflow or domain; the text comes from the served pause record. Feature-flagged."
+**Status:** HELD by Chris, 2026-11-03. Not built, and nothing below is asked of Lane 1 yet. #229 is ruled to unblock through the Keycloak exchange. Reopen this page if the exchange is configured and a pause can still reach a person; what it says about #229 was read from the source, not run.
+
+**The dispatch this was written for:** the architect, 2026-11-03: "a run in `awaiting_reauth` surfaces one card from the served state (run id, which call paused, what the person must do, a Sign in action that goes to Keycloak and resumes the run on return). Nothing in the card names a workflow or domain; the text comes from the served pause record. Feature-flagged."
 
 **Source:** draft invincible-agent#229 at `4b49b946`, and Lane 1's packet of 2026-11-03.
 
