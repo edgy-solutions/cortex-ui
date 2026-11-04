@@ -1,10 +1,10 @@
 # Paused-run sign-in card
 
-**Status:** NAMES AGREED, NOT BUILT. Chris, 2026-11-03: "build behind a flag only if Lane 1 confirms the state is served". Lane 1 accepted the names and says nothing is served yet. Here "served" means the fields exist at a sha Lane 1 names, not that they are deployed, because #229 can't roll before the card. What this page says about #229 was read from the source, not run.
+**Status:** HELD by Chris, 2026-11-04: "card held (my ruling last night; Lane 1's 'build on fixtures' is not mine). No card code." The hold was set on 2026-11-03: it becomes a dispatch "when the exchange is configured and a pause can still reach a person". The names are agreed, and Lane 1 has built them on an open PR. Neither of those reopens the card. What this page says about #229 was read from the source, not run.
 
 **The contract:** the architect, 2026-11-03: "a run in `awaiting_reauth` surfaces one card from the served state (run id, which call paused, what the person must do, a Sign in action that goes to Keycloak and resumes the run on return). Nothing in the card names a workflow or domain; the text comes from the served pause record. Feature-flagged."
 
-**Source:** invincible-agent#229, merged at `7cbc2a53`, and Lane 1's packets of 2026-11-03. That merge has `run_id` and `reason` only.
+**Source:** invincible-agent#229, merged at `7cbc2a53`, and Lane 1's packets of 2026-11-03. That merge has `run_id` and `reason` only. The agreed fields exist at `fc50fc30` on open PR #249, which is not on master and not in a chart.
 
 **Owners:** cortex-ui draws the card. Lane 1 serves the pause record. Names marked AGREED were accepted by Lane 1 on 2026-11-03 and aren't built yet. Neither side renames them alone.
 
@@ -40,7 +40,8 @@ There is one card per `run_id`, mounted above the answers beside `AccessDeniedCa
 | `failed` | Any other door answer or a network error | The status line, **Try again** |
 
 - `paused_call` and `instruction` come only from the record. Cortex's own text is the generic control and status wording above, and it names no workflow, kind or domain.
-- A record missing `paused_call` or `instruction` still draws the run id and **Sign in**, plus an amber line naming the missing fields. A run must not lose its way out over a missing label.
+- A record missing `paused_call` or `instruction`, or carrying `""` for either, still draws the run id and **Sign in**, plus an amber line naming those fields. A run must not lose its way out over a missing label. At #249 the empty string is real: a run stashed with an expired token (`reason: token_expired_at_stash`) has no call to name.
+- At #249 `paused_call` reads like "The 'fill_slots' call made on your behalf", built from the leg label, and `instruction` is one fixed line. Cortex draws them as served. A friendlier name is a row per leg on Lane 1's side.
 - A record with no `run_id` draws an amber refusal and no action, because there is nothing to address.
 - `stream_end` or a `pipeline_error` removes the card for that run. The existing error line reports the failure.
 
@@ -66,7 +67,7 @@ These keep the rest of the app from defeating the card. All three apply only wit
 ## Rollout
 
 - **Pin order:** #229 rolls only with this card or a configured exchange. The flag goes on for the release carrying #229 and the agreed names.
-- **The build starts** when Lane 1 names the sha carrying the agreed fields. A producer-seal arm then reads them from the gateway at that sha.
+- **The build starts** only on a dispatch from Chris. A producer-seal arm then reads the fields from the gateway at the pin.
 - **Not proved before a roll:** the real Keycloak popup round trip and the live wire.
 
 ## Lane 1's answers, 2026-11-03 (from reading the code, not from running it)
