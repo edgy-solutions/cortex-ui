@@ -75,18 +75,24 @@ function SeedPanelRows({ progress, only }: { progress: SeedProgress; only?: "ref
     i,
     state: progress.panels[i] ?? "pending",
   })).filter((r) => (only ? r.state === only : true));
+  // No word over no chips: events that named no refusal must not read as "refused: nothing".
+  if (only && rows.length === 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      {only && <span data-seed-panels-label>Refused:</span>}
       {rows.map((r) => (
         <span
           key={r.i}
+          role="img"
+          aria-label={`Panel ${r.i + 1}: ${r.state}`}
+          title={`Panel ${r.i + 1}: ${r.state}`}
           data-seed-panel={r.i}
           data-state={r.state}
           className={`rounded border px-1.5 py-0.5 text-[9px] font-mono ${
             r.state === "seeded"
               ? "border-neon-cyan/50 text-neon-cyan"
               : r.state === "refused"
-              ? "border-slate-500/60 text-slate-300"
+              ? "border-slate-500/60 text-slate-300 line-through"
               : "border-slate-700/60 text-slate-600"
           }`}
         >
@@ -451,12 +457,14 @@ export function DockBar({ seedDeps }: { seedDeps?: TemplateSeedDeps } = {}) {
                   per-panel events this says only how many panels were asked for. */}
               {seed.progress ? (
                 <div data-seed-progress="counted">
-                  {seedDone(seed.progress)} of {seed.progress.total} panels
-                  {seedRefused(seed.progress) > 0 && ` · ${seedRefused(seed.progress)} refused`}
+                  <span role="status">
+                    {seedDone(seed.progress)} of {seed.progress.total} panels
+                    {seedRefused(seed.progress) > 0 && ` · ${seedRefused(seed.progress)} refused`}
+                  </span>
                   <SeedPanelRows progress={seed.progress} />
                 </div>
               ) : (
-                <div data-seed-progress="indeterminate">
+                <div data-seed-progress="indeterminate" role="status">
                   Seeding {selectedRow?.panels ?? ""} panels…
                 </div>
               )}
@@ -464,7 +472,7 @@ export function DockBar({ seedDeps }: { seedDeps?: TemplateSeedDeps } = {}) {
             </div>
           )}
           {!seed.busy && seed.outcome && (
-            <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-seed-partial>
+            <div className="mb-2 text-[9px] font-mono text-amber-500/90" data-seed-partial role="status">
               {seed.outcome.seeded} of {seed.outcome.total} panels seeded
               {seed.progress && <SeedPanelRows progress={seed.progress} only="refused" />}
             </div>

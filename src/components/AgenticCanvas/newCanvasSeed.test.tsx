@@ -454,3 +454,67 @@ describe("k of n, walked through the fixture", () => {
     await act(async () => fin.resolve(okResult(IDS)));
   });
 });
+
+describe("what the dialog says beyond the colour", () => {
+  const SEEDED_FOUR = IDS.filter((_, i) => i !== 2 && i !== 4);
+
+  it("a partial seed says the chips are refused panels, and each chip says which and what", async () => {
+    openAndPick(async (_t, _b, _c, onPanel) => {
+      PROPOSED_SEED_PROGRESS_PARTIAL.forEach(onPanel);
+      return okResult(SEEDED_FOUR);
+    });
+    fireEvent.click(createBtn());
+    await waitFor(() => expect(q("[data-seed-partial]")).not.toBeNull());
+    expect(q("[data-seed-partial]")!.getAttribute("role")).toBe("status");
+    expect(q("[data-seed-panels-label]")!.textContent).toBe("Refused:");
+    const chips = Array.from(document.querySelectorAll("[data-seed-partial] [data-seed-panel]"));
+    expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual(["Panel 3: refused", "Panel 5: refused"]);
+    expect(chips.map((c) => c.getAttribute("title"))).toEqual(["Panel 3: refused", "Panel 5: refused"]);
+    expect(chips.map((c) => c.textContent)).toEqual(["3", "5"]);
+  });
+
+  it("while it runs, only a refused chip is struck, and the status names the count without the chips", async () => {
+    const fin = deferred<Ok>();
+    openAndPick(async (_t, _b, _c, onPanel) => {
+      PROPOSED_SEED_PROGRESS_PARTIAL.slice(0, 3).forEach(onPanel);
+      return fin.promise;
+    });
+    fireEvent.click(createBtn());
+    await waitFor(() => expect(q('[data-seed-panel="2"]')).not.toBeNull());
+    expect(q("[data-seed-progress] [role=status]")!.textContent).toBe("3 of 6 panels · 1 refused");
+    const struck = (i: number) => q(`[data-seed-panel="${i}"]`)!.className.split(/\s+/).includes("line-through");
+    expect([0, 1, 2, 3].map(struck)).toEqual([false, false, true, false]);
+    expect(q('[data-seed-panel="0"]')!.getAttribute("aria-label")).toBe("Panel 1: seeded");
+    expect(q('[data-seed-panel="3"]')!.getAttribute("aria-label")).toBe("Panel 4: pending");
+    // The word belongs to the outcome list only; every chip here already says its state.
+    expect(q("[data-seed-panels-label]")).toBeNull();
+    await act(async () => fin.resolve(okResult(SEEDED_FOUR)));
+  });
+
+  it("events that named no refusal draw no 'Refused:' over nothing, though the seed was partial", async () => {
+    openAndPick(async (_t, _b, _c, onPanel) => {
+      PROPOSED_SEED_PROGRESS_FIXTURE.slice(0, 4).forEach(onPanel);
+      return okResult(IDS.slice(0, 4));
+    });
+    fireEvent.click(createBtn());
+    await waitFor(() => expect(q("[data-seed-partial]")).not.toBeNull());
+    expect(q("[data-seed-partial]")!.textContent).toBe("4 of 6 panels seeded");
+    expect(q("[data-seed-panels-label]")).toBeNull();
+  });
+
+  it("the live path was never told which panels refused, so it names none", async () => {
+    openAndPick(async () => okResult(SEEDED_FOUR));
+    fireEvent.click(createBtn());
+    await waitFor(() => expect(q("[data-seed-partial]")).not.toBeNull());
+    expect(q("[data-seed-partial]")!.textContent).toBe("4 of 6 panels seeded");
+    expect(q("[data-seed-panel]")).toBeNull();
+  });
+
+  it("the indeterminate line is a status too", async () => {
+    const d = deferred<Ok>();
+    openAndPick(() => d.promise);
+    fireEvent.click(createBtn());
+    expect(q('[data-seed-progress="indeterminate"]')!.getAttribute("role")).toBe("status");
+    await act(async () => d.resolve(okResult(IDS)));
+  });
+});
