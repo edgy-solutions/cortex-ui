@@ -6,7 +6,8 @@
  * rows, and NOT the row's `render` block. `reference` is the row's `render.target` (the producer
  * copies it with `reference=dict(rnd["target"])`), so it is `{value, label}`. `verdict` is
  * `declared_verdict`'s mechanical line. `subject_concept` is the projector's unconditional key and
- * no reader of this card claims it; every captured MULTI_SERIES has it null. The producer seal
+ * no reader of this card claims it; every captured MULTI_SERIES has it null. Ruled 2026-11-03: the
+ * projector will omit it when null, so these two keys go at the re-pin that crosses that. The seal
  * (`src/lib/presentationProvenance.producerSeal.test.ts`) compares `series`, `reference` and
  * `value_label` here to the yaml rows themselves.
  *

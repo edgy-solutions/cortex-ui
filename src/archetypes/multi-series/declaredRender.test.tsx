@@ -23,7 +23,9 @@ describe("a declared TCPI and a declared VAC draw through the interpreter", () =
     expect(c.querySelector("[data-verdict]")!.textContent).toBe(DECLARED_TCPI_COMPONENT.verdict);
     expect(c.textContent).toContain("3 periods");
     // NOT a declared-render defect: every projected package card carries this row, and the parity
-    // baselines record it. Any second key here is a wire key this card has no reader for.
+    // baselines record it. Any second key here is a wire key this card has no reader for. Ruled
+    // 2026-11-03: the producer omits a null, cortex excuses nothing, so this goes to [] at that
+    // re-pin. `subjectConceptOmitted.test.tsx` proves the omission draws clean.
     const raw = [...c.querySelectorAll("[data-raw-field]")].map((f) => f.getAttribute("data-raw-field"));
     expect(raw).toEqual(["subject_concept"]);
     expect(c.querySelector("[data-no-render-registered]")).toBeNull();

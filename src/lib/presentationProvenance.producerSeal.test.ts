@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DECLARED_BASIS, DECLARED_RENDER_BASIS } from "./presentationProvenance";
 import { DECLARED_TCPI_COMPONENT, DECLARED_VAC_COMPONENT } from "@/archetypes/multi-series/fixtures/declaredRender";
+import { PROJECTED_ARCHETYPES } from "@/archetypes/projectedPopulation.testkit";
 
 /** The widening basis: a cortex-side classification (not declared), pinned here by name. */
 const WIDENED = "payload-only (output_uri matched no capability)";
@@ -111,8 +112,26 @@ describe.skipIf(ROOT === null)("a declared measure's wire, from the producer's o
     expect(start, AT).toBeGreaterThan(at);
     expect(end, AT).toBeGreaterThan(start);
     const body = src.slice(start, end);
-    expect(body, `${AT}: the fixture's subject_concept and its one raw row are from this line`).toContain('"subject_concept": subject_concept');
+    // Ruled 2026-11-03: the projector omits this key when null, and cortex excuses nothing. These
+    // two lines red at the re-pin that crosses that change, which is the expected way for them to
+    // go. The line form and the count are both needed: a conditional spread still contains the
+    // plain text, and a pop after the literal leaves the literal as it was.
+    const omitted = `${AT}: if the projector now omits a null subject_concept (ruled 2026-11-03), drop it from the declaredRender fixtures, make that test's raw list [], and replace this assertion`;
+    expect(body, omitted).toMatch(/^\s*"subject_concept": subject_concept,\s*$/m);
+    const nextDef = src.slice(at + 1).search(/\n(async )?def /);
+    expect(nextDef, AT).toBeGreaterThan(0);
+    expect(src.slice(at, at + 1 + nextDef).match(/"subject_concept"/g)?.length, omitted).toBe(1);
     expect(body, `${AT}: render now reaches a component; declaredRender.test.tsx prints it raw`).not.toContain('"render"');
+  });
+
+  it("the projected archetypes are the ones subjectConceptOmitted.test.tsx walks", () => {
+    const src = read(PRESENTATION);
+    const start = src.indexOf("_PROJECTED_ARCHETYPES: Dict[str, tuple] = {");
+    expect(start, `${AT}: the _PROJECTED_ARCHETYPES anchor moved`).toBeGreaterThan(0);
+    const end = src.indexOf("\n}\n", start);
+    expect(end, AT).toBeGreaterThan(start);
+    const keys = [...src.slice(start, end).matchAll(/^ {4}"([A-Z_]+)":/gm)].map((m) => m[1]);
+    expect(keys.sort(), `${AT}: an archetype changed; walk it in subjectConceptOmitted.test.tsx`).toEqual([...PROJECTED_ARCHETYPES].sort());
   });
 
   it("the row's target reaches the flat `reference` key through measure_verbs only", () => {
