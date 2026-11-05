@@ -48,3 +48,23 @@ This commit is sessions-only and builds no image. The last image is still `87d91
 **Open:** how a sink is marked is the architect's fork: (a) a served `render.sink_label`, or (b) a `sink` edge field. Cortex replied that it can build to either, and won't match a literal label. The reply also asks, as optional, for the root's value as data, so the closure check covers the root. That reply is `2026-11-04-packet-to-fin-cc-architect-lane-01-from-cortex-seven-answers-read-either-a-or-b-works-for-the-sink.md`, placed and uncommitted.
 
 **Gate:** still not met. #255 isn't merged, and `ev_fixture` isn't materialized. No code.
+
+## Ruled, 2026-11-04 evening (the architect, via Chris)
+
+- **Sink:** marked by `node_kind: other` on the edge, with `render.other_label` for display. Never the literal.
+- **Root:** fin adds the root's value and sign as data, as a root edge whose `source` is null.
+- **Bypass band:** a drawing choice, not a field in the table.
+- **Sign:** {positive, negative, zero}. A zero edge draws no band and is listed on its parent's hover.
+- **The build still starts when #255's table is served.**
+
+**fin's #255 at `0eb7b534` (on `fin/variance-decomposition`, not merged)** already has `node_kind` (`other`/`item`) and `render.other_label`. Three ruled items aren't there yet:
+
+1. A root edge.
+2. Zero edges. The module drops a zero child.
+3. A three-valued sign. Today it's the integers `1`/`-1`.
+
+Cortex asked fin how sign will be spelled (`0` beside `1`/`-1`, or strings), because the reader's closed list depends on it. That's in `invincible-agent/sessions/2026-11-04-packet-to-fin-cc-architect-lane-01-from-cortex-the-ruling-is-read-three-of-its-items-are-not-at-0eb7b534.md`, placed and uncommitted.
+
+**Cortex takes no position on** fin's EAC questions (`per_path: once`, `{minus: [eac, bac]}`). They change no field the card reads. The sign maps to the two theme tokens, and the card draws no good or bad from it.
+
+**Gate:** still not met. No code.
