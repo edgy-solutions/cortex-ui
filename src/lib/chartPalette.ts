@@ -123,3 +123,9 @@ export const GANTT_THEME_VARS: Record<string, string> = {
   "--wx-timescale-font-color": MUTED,
   "--wx-table-select-background": "rgba(45,212,191,0.10)",
 };
+
+/** A DIRECTION, never good or bad: a signed amount above zero. The accent teal; not `OVER`, which means breach. */
+export const SIGN_POSITIVE = ACCENT;
+
+/** A DIRECTION, never good or bad: a signed amount below zero. A violet, deliberately neither a success green nor `OVER`'s red. */
+export const SIGN_NEGATIVE = "#a78bfa";

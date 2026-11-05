@@ -31,6 +31,7 @@ import {
   Image,
   FileUp,
   Shapes,
+  Split,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -170,6 +171,9 @@ export function glyphFor(t: AnswerArchetype): {
     case "MODEL_EXPLANATION":
       // Network is taken (an earlier case); Shapes reads as "the kinds of thing the model holds".
       return { Icon: Shapes, color: "text-neon-purple/80" };
+    case "FLOW_DECOMPOSITION":
+      // A total splitting into parts, left to right; Workflow is taken by VARIANCE_TREE.
+      return { Icon: Split, color: "text-neon-blue/80" };
     default:
       return { Icon: HelpCircle, color: "text-slate-500" };
   }

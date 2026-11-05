@@ -86,6 +86,8 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
   ILLUSTRATION: true,
   // States what the ratified model says about a subject — a claim, not a request (ADR-0057).
   MODEL_EXPLANATION: true,
+  // States how a total divides — a claim, not a request.
+  FLOW_DECOMPOSITION: true,
 
   // ── REQUESTS. These ask the reader for something and claim nothing. ──
   /** The menu. Withholding this strands the reader mid-elicitation — see the header. */

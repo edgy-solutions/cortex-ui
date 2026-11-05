@@ -78,6 +78,9 @@ export type AnswerArchetype =
   // cortex-proposed (src/archetypes/model-explanation/contract.ts) — what the ratified model says
   // about a class or property (ADR-0057). Dispatch, glyph and label land in one change, as above.
   | "MODEL_EXPLANATION"
+  // cortex-proposed (src/archetypes/flow-decomposition/contract.ts) — a total flowing into its
+  // parts, level by level. Dispatch, glyph and label land in one change, as above.
+  | "FLOW_DECOMPOSITION"
   // A DROP, as a turn on the rail (src/lib/ingestArtifact.ts). Client-made, never an answer.
   | "INGEST"
   | "UNKNOWN";
@@ -119,6 +122,7 @@ export const DISPLAY_ARCHETYPES = [
   "WORKFLOW_CASE",
   "ILLUSTRATION",
   "MODEL_EXPLANATION",
+  "FLOW_DECOMPOSITION",
   "INGEST",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
@@ -271,6 +275,10 @@ export function archetypeLabel(t: AnswerArchetype): string {
       return "Illustration";
     case "MODEL_EXPLANATION":
       return "Model";
+    case "FLOW_DECOMPOSITION":
+      // NOT "Decomposition" — VARIANCE_TREE owns that word, and two rows with one header hide
+      // the difference between a nested list and a flow.
+      return "Flow";
     case "INGEST":
       return "Ingest";
     default:

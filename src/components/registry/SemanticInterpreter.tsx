@@ -628,6 +628,22 @@ const renderComponent = (
       );
     }
 
+    case "FLOW_DECOMPOSITION": {
+      // cortex-proposed (see flow-decomposition/contract.ts). No flag: it is inert until the
+      // producer serves the archetype. Same data-driven dispatch as VARIANCE_TREE.
+      const pkg = archetypePackage("FLOW_DECOMPOSITION");
+      if (!pkg) break;
+      const FlowDecomposition = pkg.Card;
+      return (
+        <FlowDecomposition
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
+        />
+      );
+    }
+
     case "CONTRIBUTION_RANKING": {
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -804,7 +820,9 @@ const isFullWidth = (archetype: string) =>
   // same reasoning as the two above.
   archetype === "ILLUSTRATION" ||
   // MODEL_EXPLANATION declares "full-width" (contract.ts) — a question table wants the row.
-  archetype === "MODEL_EXPLANATION";
+  archetype === "MODEL_EXPLANATION" ||
+  // FLOW_DECOMPOSITION declares "full-width" (contract.ts) — a Sankey wants the row.
+  archetype === "FLOW_DECOMPOSITION";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();
