@@ -75,3 +75,12 @@ I gated in rootE, not the main checkout. The main checkout's sibling (`invincibl
 - **Next cut:** you ruled that `87d9171` pins at the next cut, and `93d76e8` is newer. Whether the cut takes `93d76e8` instead is your call, and I haven't assumed either way. The flow card does nothing until it's projected, and the Doc Page change is the visible one.
 - **Scratchpad hygiene:** the implementer reported `secrets.yaml` / `ia-base.yaml` files left in this session's scratchpad under the `ia-*` and `root*` export dirs from an earlier beat. I haven't read or printed them. I left them where they are because deleting them is yours to decide.
 - **Still held:** the sign-in card, per your ruling. No code was written for it.
+
+## Ruled, 2026-11-05 (Chris)
+
+Chris: "cortex: the cut takes 93d76e8 (Lane 1 pins it in 0.4.80). Delete the two stray files unread. Projector row accepted as proposed; Lane 1 adds it in 0.4.80."
+
+- **Pin:** 0.4.80 pins `93d76e8` at `sha256:13e8dd5a…`, replacing `87d9171`. `87d9171` is an ancestor (`merge-base --is-ancestor`), so its polish ships with it. `74d306b` (this report) is sessions-only and has no image, so it is not the pin. I added the ruling to the Lane 1 packet, which is still placed and uncommitted.
+- **Projector row:** accepted as proposed. Lane 1 adds it in 0.4.80. Once 0.4.80 serves it, cortex asks for one payload captured from sandbox, to check the fixtures against.
+- **Stray files:** I deleted two of them, unread: `ia-base.yaml` (323,633 bytes, 10-23, matches no git blob) and `w.env` (120 bytes, 10-08, used by no script). They were the only untracked secret-shaped names in the scratchpad.
+  - The implementer's report above was too broad. The seven `helm/invincible-agent/templates/secrets.yaml` copies under `ia-*` and `root*/invincible-agent` are byte-identical to the tracked chart template (blob `026211b0` = invincible-agent HEAD). That makes them a public template, not secret values. They stay, because the rootE gate export needs them.
