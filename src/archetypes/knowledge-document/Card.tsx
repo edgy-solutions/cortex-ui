@@ -64,16 +64,21 @@ const MarkdownDocumentBody = ({
   subject,
   audience,
   citedSeals,
+  properties,
 }: {
   content: string;
+  /** Front matter split off the page (`splitFrontMatter`), drawn as body text before the markdown. */
+  properties?: string;
   subject?: string;
   /** engine-docs `audience_hint`: DISPLAY ROUTING, NOT AUTHZ. Shown, never used to hide. */
   audience?: string;
   /** engine-docs `cited_seals`, in the page's own order. */
   citedSeals?: string[];
 }) => {
-  const wordCount = content
-    ? content.split(/\s+/).filter((w) => w.length > 0).length
+  // The page as served: front matter is drawn differently, not dropped, so it still counts.
+  const counted = properties !== undefined ? `${properties}\n${content}` : content;
+  const wordCount = counted
+    ? counted.split(/\s+/).filter((w) => w.length > 0).length
     : 0;
 
   return (
@@ -101,6 +106,11 @@ const MarkdownDocumentBody = ({
 
       {/* Markdown body — each HTML element mapped to a styled component */}
       <div className="text-sm leading-relaxed">
+        {properties !== undefined && (
+          <div data-doc-properties className="text-slate-200 leading-relaxed my-3 whitespace-pre-wrap">
+            {properties}
+          </div>
+        )}
         <Markdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -297,6 +307,7 @@ export const MarkdownRenderer = (props: any) => {
             subject={p.title ?? view.subject}
             audience={p.audience}
             citedSeals={p.citedSeals}
+            properties={p.properties}
           />
         ))}
       </div>
