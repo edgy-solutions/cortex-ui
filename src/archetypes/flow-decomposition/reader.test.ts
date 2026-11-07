@@ -1,7 +1,7 @@
 /** The reader: one arm per refusal reason (asserting the REASON), and the non-refusing notes. */
 import { describe, expect, it } from "vitest";
 import { FLOW_DECOMPOSITION_REFUSAL_REASONS, readFlowTable } from "./contract";
-import { FLOW_DECOMPOSITION_FIXTURES, PLAIN_RENDER, broken, find, plain } from "./fixtures";
+import { FLOW_DECOMPOSITION_FIXTURES, PLAIN_RENDER, broken, find, plain, plainRows } from "./fixtures";
 
 const byName = (prefix: string) => {
   const f = FLOW_DECOMPOSITION_FIXTURES.find((x) => x.name.startsWith(prefix));
@@ -60,6 +60,14 @@ describe("notes do not refuse", () => {
     expect(r.ok && r.notes.map((n) => n.kind)).toEqual(["other_label_missing"]);
     const withLabel = readFlowTable(plain(broken(() => {}), { render: PLAIN_RENDER }));
     expect(withLabel.ok && withLabel.notes).toEqual([]);
+  });
+
+  it("shape_mismatch names the declared shape; the served shape raises nothing", () => {
+    const r = readFlowTable(byName("shape_mismatch"));
+    expect(r.ok && r.notes.map((n) => n.kind)).toEqual(["shape_mismatch"]);
+    expect(r.ok && r.notes[0].text).toContain('"MULTI_SERIES"');
+    const absent = readFlowTable(plain(plainRows(), { render: { other_label: "All other" } }));
+    expect(absent.ok && absent.notes).toEqual([]);
   });
 
   it("zero_subtree counts zero nodes that have items beneath them", () => {

@@ -117,7 +117,9 @@ export const GOOD_TREE: Spec = spec("Program", "1199.80", [
   spec("Group C", "0.30", [spec("Item C1", "0.30", [spec("Part C1a", "0.10"), spec("Part C1b", "0.20")])]),
 ]);
 
-export const GOOD_RENDER = { unit: "USD", other_label: "All other", shape: "ignored by the card" };
+/** `render` as engine-fin serves it: the row's block plus `other_label`. The top-level
+ *  `value_label` beside it is the engine's echo of `render.value_label`. */
+export const GOOD_RENDER = { shape: "FLOW_DECOMPOSITION", value_label: "Net amount", unit: "USD", other_label: "All other" };
 
 export const PLAIN_TREE: Spec = spec("Total", "50.00", [
   spec("Branch 1", "60.00", [
@@ -127,7 +129,7 @@ export const PLAIN_TREE: Spec = spec("Total", "50.00", [
   ]),
   spec("Branch 2", "-10.00", [spec("Leaf 2a", "-10.00")]),
 ]);
-export const PLAIN_RENDER = { other_label: "All other" };
+export const PLAIN_RENDER = { shape: "FLOW_DECOMPOSITION", value_label: "Quantity", other_label: "All other" };
 export const plainRows = (): Edge[] => edgesOf(PLAIN_TREE);
 export const plain = (rows: Edge[], over: Record<string, unknown> = {}): Record<string, unknown> => ({
   rows,
@@ -201,6 +203,11 @@ export const FLOW_DECOMPOSITION_FIXTURES: FlowFixture[] = [
   {
     name: "other_label_missing — a sink and no render.other_label",
     payload: plain(plainRows(), { render: {} }),
+    declares: [...DRAWN, "data-flow-sink", "data-flow-note"],
+  },
+  {
+    name: "shape_mismatch — render.shape names another archetype",
+    payload: plain(plainRows(), { render: { ...PLAIN_RENDER, shape: "MULTI_SERIES" } }),
     declares: [...DRAWN, "data-flow-sink", "data-flow-note"],
   },
   {

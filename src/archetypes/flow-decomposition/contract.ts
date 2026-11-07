@@ -20,9 +20,19 @@
  *
  * Each refusal below is a rule the producer already guarantees, so a table that breaks one is
  * a defect in transit and drawing it would present a wrong flow as a right one. A refusal names
- * its reason and the edge. Three FINDINGS do not refuse — the table still draws — and are told
+ * its reason and the edge. Four FINDINGS do not refuse — the table still draws — and are told
  * beside it: closure (the signed children of a node do not sum to the node), a sink with no
- * `render.other_label`, and zero nodes that have items beneath them (not drawn).
+ * `render.other_label`, zero nodes that have items beneath them (not drawn), and a `render.shape`
+ * that is not this archetype.
+ *
+ * ── THE RENDER BLOCK, AS SERVED ─────────────────────────────────────────────────────────────
+ *
+ * engine-fin serves `render` as the row's block plus `other_label`: `{shape, value_label, unit?,
+ * other_label}` (`finance_agent/main.py`, the dataset envelope). The label is `render.value_label`;
+ * the envelope's top-level `value_label` is the engine's `render.value_label` falling back to the
+ * row's name, so it is read only when `render` has none. A `shape` that names another archetype is
+ * told beside the chart: the selection picked this card for a table declared as something else.
+ * Every other key of `render` is ignored.
  *
  * ── A SINK IS RECOGNISED BY `node_kind`, NEVER BY ITS LABEL ─────────────────────────────────
  *
@@ -70,7 +80,7 @@ export const FLOW_REFUSAL_WORDS: Record<FlowRefusalReason, string> = {
   zero_with_value: "an edge's sign and its value disagree about zero",
 };
 
-export const FLOW_NOTE_KINDS = ["closure", "closure_unchecked", "other_label_missing", "zero_subtree"] as const;
+export const FLOW_NOTE_KINDS = ["closure", "closure_unchecked", "other_label_missing", "zero_subtree", "shape_mismatch"] as const;
 export type FlowNoteKind = (typeof FLOW_NOTE_KINDS)[number];
 
 export const FLOW_DECOMPOSITION_ENVELOPE_FIELDS = ["value_label", "render", "verdict"] as const;
@@ -84,8 +94,9 @@ export const FLOW_DECOMPOSITION_CONTRACT = {
   fields: {
     /** The edge table. Edge: source, target, value, value_exact, sign, level, node_kind. */
     rows: { encoding: "array", parsesTo: "array-of-objects", required: true },
+    /** Read only when `render.value_label` is absent (the engine's own fallback, the row's name). */
     value_label: { type: "string", required: false },
-    /** The card reads ONLY `render.unit` and `render.other_label`; every other key is ignored. */
+    /** The card reads `shape`, `value_label`, `unit` and `other_label`; every other key is ignored. */
     render: { type: "object", required: false },
     verdict: { type: "string", required: false },
   },
@@ -313,10 +324,17 @@ export function readFlowTable(comp: any): FlowRead {
   if (zeroWithItems > 0) {
     notes.push({ kind: "zero_subtree", text: `${zeroWithItems} items at zero have items beneath them that aren't drawn` });
   }
+  if (typeof render.shape === "string" && render.shape !== FLOW_DECOMPOSITION_CONTRACT.archetype) {
+    notes.push({
+      kind: "shape_mismatch",
+      text: `render.shape is ${JSON.stringify(render.shape)}: this table was declared as another shape and is drawn as a flow`,
+    });
+  }
 
+  const label = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
   return {
     ok: true,
-    valueLabel: typeof comp?.value_label === "string" && comp.value_label !== "" ? comp.value_label : undefined,
+    valueLabel: label(render.value_label) ?? label(comp?.value_label),
     unit,
     otherLabel,
     verdict: typeof comp?.verdict === "string" ? comp.verdict : undefined,

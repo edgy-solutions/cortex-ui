@@ -3,10 +3,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { FlowDecomposition } from "./Card";
+import { FLOW_NOTE_KINDS } from "./contract";
 import { archetypePackage } from "../registry";
 import { readDeclaredAbsences } from "../defineArchetype";
 import { SIGN_NEGATIVE, SIGN_POSITIVE } from "@/lib/chartPalette";
-import { FLOW_DECOMPOSITION_ABSENCES, FLOW_DECOMPOSITION_FIXTURES, LOOKALIKE_TREE, edgesOf, plain } from "./fixtures";
+import { FLOW_DECOMPOSITION_ABSENCES, FLOW_DECOMPOSITION_FIXTURES, LOOKALIKE_TREE, edgesOf, plain, plainRows } from "./fixtures";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 
 afterEach(cleanup);
@@ -56,13 +57,23 @@ describe("refusal and notes", () => {
   });
 
   it("each note kind renders its own line", () => {
-    for (const kind of ["closure", "closure_unchecked", "other_label_missing", "zero_subtree"]) {
+    for (const kind of FLOW_NOTE_KINDS) {
       const f = FLOW_DECOMPOSITION_FIXTURES.find((x) => x.name.startsWith(kind))!;
       const { container } = draw(f.payload);
       expect(q(container, "[data-flow-note]").map((n) => n.getAttribute("data-flow-note")), kind).toEqual([kind]);
       expect(container.querySelector("[data-flow-node]"), `${kind} still draws`).not.toBeNull();
       cleanup();
     }
+  });
+});
+
+describe("the header reads render.value_label", () => {
+  const h3 = (payload: Record<string, unknown>) => draw(payload).container.querySelector("h3")?.textContent;
+  it("render's label and unit, not the top-level echo", () => {
+    expect(h3({ ...GOOD.payload, value_label: "row name" })).toBe("Net amount (USD)");
+  });
+  it("the top-level value_label only when render has none", () => {
+    expect(h3(plain(plainRows(), { value_label: "row name", render: { other_label: "All other" } }))).toBe("row name");
   });
 });
 

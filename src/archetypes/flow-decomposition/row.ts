@@ -5,8 +5,9 @@
  * built: there is no `_PROJECTED_ARCHETYPES["FLOW_DECOMPOSITION"]`. So, like `MODEL_EXPLANATION_ROW`,
  * this is NOT in `projectedTupleParity.test.ts` or `projectedPopulation.testkit.ts` (both compare
  * against the producer's source), and `passthrough` is what this card READS off the served
- * envelope, to be reconciled with the tuple when it lands. The card reads `render.unit` and
- * `render.other_label` only and ignores every other key of `render`.
+ * envelope, to be reconciled with the tuple when it lands. Of `render` (served as the row's block
+ * plus `other_label`) the card reads `shape`, `value_label`, `unit` and `other_label`, and
+ * ignores every other key; the top-level `value_label` is read only when `render` has none.
  */
 export const FLOW_DECOMPOSITION_ROW = {
   archetype: "FLOW_DECOMPOSITION",
