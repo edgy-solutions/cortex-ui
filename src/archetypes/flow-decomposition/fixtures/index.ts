@@ -21,6 +21,7 @@ export const FLOW_DECOMPOSITION_ABSENCES = [
   "data-flow-note",
   "data-flow-verdict",
   "data-flow-empty",
+  "data-flow-provenance",
 ] as const;
 
 export type FlowDecompositionAbsence = (typeof FLOW_DECOMPOSITION_ABSENCES)[number];
@@ -129,6 +130,7 @@ export const PLAIN_TREE: Spec = spec("Total", "50.00", [
   ]),
   spec("Branch 2", "-10.00", [spec("Leaf 2a", "-10.00")]),
 ]);
+export const GOOD_PROVENANCE = "SYNTHETIC DATA: invented figures, not a program. Source: urn:fixture:flow-decomposition";
 export const PLAIN_RENDER = { shape: "FLOW_DECOMPOSITION", value_label: "Quantity", other_label: "All other" };
 export const plainRows = (): Edge[] => edgesOf(PLAIN_TREE);
 export const plain = (rows: Edge[], over: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -171,8 +173,9 @@ export const FLOW_DECOMPOSITION_FIXTURES: FlowFixture[] = [
       value_label: "Net amount",
       render: GOOD_RENDER,
       verdict: "Synthetic fixture: one program, three groups.",
+      data_provenance: GOOD_PROVENANCE,
     },
-    declares: [...DRAWN, "data-flow-sink", "data-flow-passthrough", "data-flow-verdict", "data-flow-note"],
+    declares: [...DRAWN, "data-flow-sink", "data-flow-passthrough", "data-flow-verdict", "data-flow-note", "data-flow-provenance"],
   },
   {
     name: "plain — small, no unit, no verdict, a sink at the deepest level",

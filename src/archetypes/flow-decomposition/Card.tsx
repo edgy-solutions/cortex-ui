@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Sankey, Tooltip } from "recharts";
 import { StructuredFields } from "@/archetypes/StructuredFields";
 import { SIGN_NEGATIVE, SIGN_POSITIVE } from "@/lib/chartPalette";
-import { FLOW_REFUSAL_WORDS, readFlowTable, type FlowSign, type FlowTable } from "./contract";
+import { FLOW_REFUSAL_WORDS, readFlowTable, readProvenance, type FlowSign, type FlowTable } from "./contract";
 import { buildFlowGraph, hoverFor, signedText, type DrawnNode, type FlowGraph } from "./model";
 
 /**
@@ -53,9 +53,19 @@ function chartHeight(graph: FlowGraph): number {
   return Math.min(720, Math.max(280, tallest * 44));
 }
 
+function Provenance({ text }: { text: string | undefined }) {
+  if (text === undefined) return null;
+  return (
+    <p data-flow-provenance className="rounded border border-sky-400/30 bg-sky-500/10 px-2 py-1 font-mono text-[10px] text-sky-200">
+      {text}
+    </p>
+  );
+}
+
 function Refusal({ reason, detail, fields }: { reason: keyof typeof FLOW_REFUSAL_WORDS; detail: string; fields: Record<string, unknown> }) {
   return (
     <div className="glass-panel p-4 my-4 border-amber-500/20 flex flex-col gap-3">
+      <Provenance text={readProvenance(fields)} />
       <div data-flow-refusal={reason} className="flex flex-col gap-1">
         <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">nothing to draw — {FLOW_REFUSAL_WORDS[reason]}</p>
         <p className="font-mono text-[10px] text-amber-400/80">{detail}</p>
@@ -166,6 +176,7 @@ export function FlowDecomposition(props: Record<string, unknown>) {
 
   return (
     <div data-archetype="FLOW_DECOMPOSITION" className="glass-panel p-4 my-4 flex flex-col gap-2">
+      <Provenance text={table.provenance} />
       {header !== "" && <h3 className="font-semibold text-slate-100">{header}</h3>}
       {table.verdict !== undefined && (
         <p data-flow-verdict className="text-xs text-slate-300">

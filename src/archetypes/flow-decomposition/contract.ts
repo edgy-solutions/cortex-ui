@@ -34,6 +34,13 @@
  * told beside the chart: the selection picked this card for a table declared as something else.
  * Every other key of `render` is ignored.
  *
+ * ── THE PROVENANCE BANNER ───────────────────────────────────────────────────────────────────
+ *
+ * `data_provenance` is engine-fin's banner and the source URN in one string
+ * (`asset_inputs.dataset_provenance`): what stops a synthetic asset reading as real. Ruled
+ * 2026-11-07, it rides every served table and the card shows it, verbatim, above the chart and
+ * above a refusal (whose raw fields still carry figures). A blank string draws no banner.
+ *
  * ── A SINK IS RECOGNISED BY `node_kind`, NEVER BY ITS LABEL ─────────────────────────────────
  *
  * `node_kind: "other"` marks the "All other" collapse. A real item can be called anything, a sink
@@ -83,7 +90,7 @@ export const FLOW_REFUSAL_WORDS: Record<FlowRefusalReason, string> = {
 export const FLOW_NOTE_KINDS = ["closure", "closure_unchecked", "other_label_missing", "zero_subtree", "shape_mismatch"] as const;
 export type FlowNoteKind = (typeof FLOW_NOTE_KINDS)[number];
 
-export const FLOW_DECOMPOSITION_ENVELOPE_FIELDS = ["value_label", "render", "verdict"] as const;
+export const FLOW_DECOMPOSITION_ENVELOPE_FIELDS = ["value_label", "render", "verdict", "data_provenance"] as const;
 
 export const FLOW_DECOMPOSITION_CONTRACT = {
   archetype: "FLOW_DECOMPOSITION",
@@ -99,6 +106,8 @@ export const FLOW_DECOMPOSITION_CONTRACT = {
     /** The card reads `shape`, `value_label`, `unit` and `other_label`; every other key is ignored. */
     render: { type: "object", required: false },
     verdict: { type: "string", required: false },
+    /** fin's banner plus the source URN, drawn verbatim. */
+    data_provenance: { type: "string", required: false },
   },
   refusalReasons: FLOW_DECOMPOSITION_REFUSAL_REASONS,
 } as const;
@@ -131,11 +140,16 @@ export interface FlowTable {
   unit: string | undefined;
   otherLabel: string | undefined;
   verdict: string | undefined;
+  provenance: string | undefined;
   /** Keyed by `FlowNode.key`, in the order the edges arrived (root first). */
   nodes: Map<string, FlowNode>;
   rootKey: string;
   notes: FlowNote[];
 }
+
+/** The banner, when one is served and not blank. Read by the refusal too, which has no table. */
+export const readProvenance = (comp: Record<string, unknown> | undefined): string | undefined =>
+  typeof comp?.data_provenance === "string" && comp.data_provenance.trim() !== "" ? comp.data_provenance : undefined;
 
 export type FlowRead = FlowTable | { ok: false; refusal: FlowRefusalReason; detail: string };
 
@@ -338,6 +352,7 @@ export function readFlowTable(comp: any): FlowRead {
     unit,
     otherLabel,
     verdict: typeof comp?.verdict === "string" ? comp.verdict : undefined,
+    provenance: readProvenance(comp),
     nodes,
     rootKey: keyOf(root.target),
     notes,

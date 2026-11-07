@@ -7,7 +7,7 @@ import { FLOW_NOTE_KINDS } from "./contract";
 import { archetypePackage } from "../registry";
 import { readDeclaredAbsences } from "../defineArchetype";
 import { SIGN_NEGATIVE, SIGN_POSITIVE } from "@/lib/chartPalette";
-import { FLOW_DECOMPOSITION_ABSENCES, FLOW_DECOMPOSITION_FIXTURES, LOOKALIKE_TREE, edgesOf, plain, plainRows } from "./fixtures";
+import { FLOW_DECOMPOSITION_ABSENCES, FLOW_DECOMPOSITION_FIXTURES, GOOD_PROVENANCE, LOOKALIKE_TREE, edgesOf, plain, plainRows } from "./fixtures";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 
 afterEach(cleanup);
@@ -64,6 +64,26 @@ describe("refusal and notes", () => {
       expect(container.querySelector("[data-flow-node]"), `${kind} still draws`).not.toBeNull();
       cleanup();
     }
+  });
+});
+
+describe("the provenance banner", () => {
+  const banner = (c: HTMLElement) => c.querySelector("[data-flow-provenance]")?.textContent;
+  it("is drawn verbatim, before the chart", () => {
+    const { container } = draw(GOOD.payload);
+    expect(banner(container)).toBe(GOOD_PROVENANCE);
+    const el = container.querySelector("[data-flow-provenance]")!;
+    const svg = container.querySelector("svg")!;
+    expect(el.compareDocumentPosition(svg) & Node.DOCUMENT_POSITION_FOLLOWING, "banner precedes the chart").toBeTruthy();
+  });
+  it("a blank string draws none", () => {
+    expect(banner(draw(plain(plainRows(), { data_provenance: "  " })).container)).toBeUndefined();
+  });
+  it("a refusal still shows it, because its raw fields carry figures", () => {
+    const f = FLOW_DECOMPOSITION_FIXTURES.find((x) => x.name.startsWith("sink_has_children"))!;
+    const { container } = draw({ ...f.payload, data_provenance: GOOD_PROVENANCE });
+    expect(container.querySelector("[data-flow-refusal]")).not.toBeNull();
+    expect(banner(container)).toBe(GOOD_PROVENANCE);
   });
 });
 
