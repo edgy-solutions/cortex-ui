@@ -1,14 +1,14 @@
 /**
- * reviewExport -- export on the completed review card, and the AP-group batch export.
+ * reviewExport -- export on the completed review card, and the batch export.
  *
  * Packet: invincible-agent `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`.
  *
- * Routes 1-3 are declared at invincible-agent 10ac02fe (#154); route 4 is NOT on the wire yet (see the GAP on
- * `canExportBatch`). The wire names are spelled ONCE, here:
+ * Routes 1-3 are declared at invincible-agent 10ac02fe (#154); field 4 at c3b51ed7 (#290, ingest-v1 1.7.0).
+ * The wire names are spelled ONCE, here:
  *   1. `GET /ingest/export/profiles`                      -> bare array of ExportProfile
  *   2. `GET /ingest/{ingest_id}/export?profile=<name>`    -> file bytes + Content-Disposition
  *   3. `GET /ingest/export?profile=&from=&to=`            -> batch file, same headers
- *   4. RULED, not yet served: `capabilities` on `GET /me/entitlements` -> batch control (Lane 1 adds it)
+ *   4. `capabilities` on `GET /me/entitlements`           -> batch control, on `EXPORT_BATCH_CAPABILITY`
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
  * `{name, format, granularity, label}`, format and granularity read verbatim (any non-empty string; config names the case, architect 2026-10-30). It was `scope: row | notice`
@@ -26,8 +26,9 @@
 export const exportOnePath = (ingestId: string): string => `/ingest/${encodeURIComponent(ingestId)}/export`;
 /** Route 3, declared at invincible-agent 10ac02fe (#154). */
 export const EXPORT_BATCH_PATH = "/ingest/export";
-/** Mock-only stand-in, removed when `capabilities` lands (see the GAP on `canExportBatch`). */
-export const AP_GROUP = "alert-processors";
+/** The capability the batch control is shown on. It is the key route 3's door is gated on (`can_invoke`), so the
+ *  control shows exactly when the door would admit. Capability, never group (architect 2026-11-07). */
+export const EXPORT_BATCH_CAPABILITY = "ingest:exportBatch";
 
 /** `format` and `granularity` are read verbatim, any non-empty string: the producer's `FORMATS` / `GRANULARITIES`
  *  decide what is served, and cortex only shows them and uses `format` as a filename-extension fallback. A closed
@@ -62,16 +63,12 @@ export function isExportStage(stage: unknown): boolean {
   return stage === "promoted";
 }
 
-// GAP (ruled, architect 2026-10-30): the signal is a `capabilities` list on `GET /me/entitlements`,
-// Topaz-derived, carrying `ingest:exportBatch` and `can_export:<profile>`. Lane 1 adds it; cortex reads it,
-// and this group check and `AP_GROUP` go. Until it is declared, the entitlements keys are authz_id, cells,
-// default, droppable_kinds, email, source, user_id (no `groups`, no `capabilities`), so this returns false
-// for every live caller and the batch control shows only in the mock. The capability name is not read here
-// until the generated `Entitlements` declares the list.
+/** The served `capabilities` list (every key the caller holds `can_invoke` on) carries the batch key. A body without
+ *  the list -- a BFF older than #290 -- is false: the control hides rather than offering a door that refuses. */
 export function canExportBatch(entitlements: unknown): boolean {
   if (!isRecord(entitlements)) return false;
-  const g = entitlements.groups;
-  return Array.isArray(g) && g.includes(AP_GROUP);
+  const c = entitlements.capabilities;
+  return Array.isArray(c) && c.includes(EXPORT_BATCH_CAPABILITY);
 }
 
 function stripPath(name: string): string | null {
@@ -141,7 +138,8 @@ export const FIXTURE_154_COLUMNS: Record<string, string[]> = {
     "notice_date_ambiguous", "ltb_date_ambiguous", "no_parts",
   ],
 };
-export const PROPOSED_FIXTURE_GROUPS: string[] = [AP_GROUP];
+/** The `GET /me/entitlements` body `reviewExportMock` stands in: the fields `canExportBatch` reads, as served. */
+export const FIXTURE_ENTITLEMENTS = { capabilities: [EXPORT_BATCH_CAPABILITY] };
 
 /** One SYNTHETIC row for `columns`: every cell is plainly marked, none is a real notice's. */
 function syntheticRow(columns: string[], key: string): Record<string, string> {

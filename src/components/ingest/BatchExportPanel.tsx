@@ -1,8 +1,8 @@
 /**
  * BatchExportPanel -- the batch export. Shown only with the `reviewExport` flag on AND the caller
- * holding the export grant: RULED (2026-10-30) as the Topaz-derived `capabilities` list on
- * /me/entitlements (`ingest:exportBatch`), not yet served -- see the GAP in
- * `src/lib/reviewExport.ts`. A failed entitlements read means not shown.
+ * holding the export capability: the Topaz-derived `capabilities` list on /me/entitlements carries
+ * `EXPORT_BATCH_CAPABILITY` (served since invincible-agent c3b51ed7, #290; see `canExportBatch` in
+ * `src/lib/reviewExport.ts`). A failed entitlements read means not shown.
  */
 import { useEffect, useState } from "react";
 import { isReviewExportEnabled } from "@/lib/reviewExportFlag";

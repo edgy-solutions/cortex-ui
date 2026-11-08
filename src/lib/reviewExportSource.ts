@@ -5,8 +5,7 @@
 import { fetchIngestExportProfiles, downloadIngestExport, downloadBatchExport, fetchEntitlements } from "@/api/client";
 import { isReviewExportMockEnabled } from "./reviewExportFlag";
 import {
-  AP_GROUP,
-  PROPOSED_FIXTURE_GROUPS,
+  FIXTURE_ENTITLEMENTS,
   FIXTURE_154_PROFILES,
   canExportBatch,
   fixtureExportBody,
@@ -31,6 +30,5 @@ export async function exportBatch(profile: ExportProfile, from: string, to: stri
 }
 
 export async function loadCanExportBatch(): Promise<boolean> {
-  if (isReviewExportMockEnabled()) return PROPOSED_FIXTURE_GROUPS.includes(AP_GROUP);
-  return canExportBatch(await fetchEntitlements());
+  return canExportBatch(isReviewExportMockEnabled() ? FIXTURE_ENTITLEMENTS : await fetchEntitlements());
 }

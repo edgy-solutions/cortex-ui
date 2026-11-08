@@ -238,7 +238,15 @@ env:
   #   task_kinds and review_shapes diff 41230a7e..aac9900b is EMPTY (control: 331 files changed). Check
   #   3: uv.lock iagent-mesh v0.9.12 at both. Gate: the full suite against a git-archive export of
   #   aac9900b placed as the sibling.
-  PRODUCER_REF: aac9900b6f9573dad9c8532da54fd7058ad2c967
+  # 2026-11-08 RE-PIN to c3b51ed7 (platform master; the merge of #290, named by lane 01 for the
+  #   canExportBatch switch; in tag invincible-agent-0.4.82). aac9900b is its ancestor. It declares
+  #   `capabilities: string[]` on GET /me/entitlements (ingest-v1 1.7.0 and the BFF), which
+  #   reviewExport.ts now reads; ReviewShapeRow's item_kind/rules/rules_version become optional or
+  #   nullable. NOT read off the pods. Check 2: task_kinds and review_shapes diff aac9900b..c3b51ed7 is
+  #   NOT empty: the sample overlay adds safety_finding_review.yaml, and review_shapes/README.md
+  #   changes (control: 381 files changed). Check 3: uv.lock iagent-mesh MOVED, rev v0.9.12 -> v0.9.13.
+  #   Gate: the full suite against a git-archive export of c3b51ed7 placed as the sibling.
+  PRODUCER_REF: c3b51ed7ab921b045158af94bbd5bd1b593d8b03
 
 permissions:
   contents: read

@@ -1880,6 +1880,13 @@
             ],
             "title": "Authz Id"
           },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
           "cells": {
             "items": {
               "$ref": "#/components/schemas/Cell"
@@ -1945,7 +1952,8 @@
           "cells",
           "default",
           "source",
-          "droppable_kinds"
+          "droppable_kinds",
+          "capabilities"
         ],
         "title": "Entitlements",
         "type": "object"
@@ -4154,6 +4162,10 @@
             "title": "Artifact Id",
             "type": "string"
           },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
           "dropped_by": {
             "$ref": "#/components/schemas/_OriginWriteDroppedBy"
           },
@@ -4173,7 +4185,8 @@
           "dropped_by",
           "origin",
           "evidence",
-          "approval_chain"
+          "approval_chain",
+          "case_id"
         ],
         "title": "OriginWriteRequest",
         "type": "object"
@@ -4415,6 +4428,10 @@
       },
       "RedeemIdentityBody": {
         "properties": {
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
           "claimed_launcher": {
             "anyOf": [
               {
@@ -4426,18 +4443,25 @@
             ],
             "title": "Claimed Launcher"
           },
+          "leg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leg"
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
-          },
-          "slot": {
-            "default": 0,
-            "title": "Slot",
-            "type": "integer"
           }
         },
         "required": [
-          "run_id"
+          "run_id",
+          "call_id"
         ],
         "title": "RedeemIdentityBody",
         "type": "object"
@@ -4826,8 +4850,15 @@
         "description": "One ``policy/review_shapes/<shape>.yaml`` registry row, as served by ``GET /review-shapes``\n(Lane 1's wire answer, §4) — the registry ``ReviewCoverage.review_shape``/``.item_kind`` are\nvalidated against, server-side. This SDK types the row so a client that reads the served\nregistry has a shape to deserialize into; it does not serve, cache, or validate against the\nregistry itself — same split every registry-adjacent type in this SDK draws between declaring\na shape and arbitrating on it.",
         "properties": {
           "item_kind": {
-            "title": "Item Kind",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Kind"
           },
           "params": {
             "additionalProperties": true,
@@ -4839,21 +4870,33 @@
             "type": "string"
           },
           "rules": {
-            "items": {
-              "$ref": "#/components/schemas/ReviewShapeRule"
-            },
-            "title": "Rules",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReviewShapeRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
           },
           "rules_version": {
-            "title": "Rules Version",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules Version"
           }
         },
         "required": [
-          "review_shape",
-          "item_kind",
-          "rules_version"
+          "review_shape"
         ],
         "title": "ReviewShapeRow",
         "type": "object"
@@ -6315,7 +6358,7 @@
     },
     "/cases/{case_id}": {
       "get": {
-        "description": "GET /cases/{case_id} -- project the case runner's state (WorkflowRunner, ADR-0039) as\ncortex's `WorkflowCasePayload` (cortex-ui `src/archetypes/workflow-case/contract.ts`).\n\nEXISTENCE-ORACLE SAFE: a case that does not exist and a case the caller is not entitled to\nread (see `case_projection.can_view_case`) answer IDENTICALLY -- 404 `{\"detail\": \"case not\nfound\"}` -- same discipline as `GET /ingest/{id}/status`. The runner being unreachable is a\nDIFFERENT fact (not an authz question) and answers 503 `{\"error\": \"runner_unavailable\"}`.\n\nThe pure projection and the entitlement gate live in `case_projection`; this route only\nfetches runner/DB state and calls them.\n\nA DELEGATE IS NOT A SUBMITTER (ruled 2026-10-16): any caller acting under a delegate client\n(a key of `_delegate_principals()`, e.g. svc:openddil) reads the artifacts it seeded\n(GET /artifacts/{id}), never the whole case. Refused 403 BEFORE the fetch, so the answer is\nidentical whether or not the case exists (no existence oracle). R-089: the delegate map\nis asserted by configuration this pass.",
+        "description": "GET /cases/{case_id} -- project the case runner's state (WorkflowRunner, ADR-0039) as\ncortex's `WorkflowCasePayload` (cortex-ui `src/archetypes/workflow-case/contract.ts`).\n\nEXISTENCE-ORACLE SAFE: a case that does not exist and a case the caller is not entitled to\nread (see `case_projection.can_view_case`) answer IDENTICALLY -- 404 `{\"detail\": \"case not\nfound\"}` -- same discipline as `GET /ingest/{id}/status`. The runner being unreachable is a\nDIFFERENT fact (not an authz question) and answers 503 `{\"error\": \"runner_unavailable\"}`.\n\nThe pure projection and the entitlement gate live in `case_projection`; this route only\nfetches runner/DB state and calls them.\n\nA DELEGATE IS NOT A SUBMITTER (ruled 2026-10-16): a caller acting under a delegate client\n(a key of `_delegate_principals()`, e.g. svc:openddil) reads the artifacts it seeded\n(GET /artifacts/{id}), never the whole case. The MCP door (`_mcp_door()`, on this route's\ndecorator) enforces the ruling: every service caller is refused 403 `service_token_refused`\nBEFORE the fetch, and a GET has no body `on_behalf_of`, so the door's delegate exemption\ncannot apply. The answer is the door's, identical whether or not the case exists (no\nexistence oracle). R-089: the delegate map is asserted by configuration this pass.",
         "operationId": "get_case_cases__case_id__get",
         "parameters": [
           {
@@ -7204,7 +7247,7 @@
     },
     "/ingest/events": {
       "post": {
-        "description": "POST /ingest/events (section C, ingest/origin seam) — the JSON door for an event-branch\ncontent kind. An event never arrives as a file: it is a JSON `IngestRequest` payload,\nvalidated against the kind's declared trigger before anything is seeded.\n\n`content_kind` MUST be registered AND `branch == \"event\"` — a document-branch or\nunregistered kind is refused here with a named reason (the multipart `/ingest` door is\ntheirs; this one refuses a file for the same reason in reverse, see that route's own door\ncheck). The kind's registration carries NO schema field of its own (`iagent_mesh.ingest.\nContentKindRegistration` has `passes`/`outputs`, which name OntologyClass kinds for a\ndocument's extraction, not a payload shape) -- so the validatable shape THIS repo actually\nhas is the kind's own trigger's `requires:` (`policy/triggers/<seeds_workflow>.yaml`, the\nsame list `case_routing.Trigger.requires` loads), checked dotted-path by dotted-path against\n`payload` plus the facts this route adds itself (`dropped_by.authz_id`). A payload missing\nany required path is refused 422, naming which.\n\nTHE RESPONSE CONTRACT IS 200 WITH `workflow.case_id` (ruled 2026-10-05). The seam spec said\n202; the door has always answered 200, the first producer is coded against 200, and the\nruling keeps it, so 202 is not an open question. `case_id` is the key the case runner\nholds the case under (the trigger's key, i.e. the producer's own identity field), and the\ndoor only answers 200 once the runner's own intake check has accepted the payload.",
+        "description": "POST /ingest/events (section C, ingest/origin seam) — the JSON door for an event-branch\ncontent kind. An event never arrives as a file: it is a JSON `IngestRequest` payload,\nvalidated against the kind's declared trigger before anything is seeded.\n\n`content_kind` MUST be registered AND `branch == \"event\"` — a document-branch or\nunregistered kind is refused here with a named reason (the multipart `/ingest` door is\ntheirs; this one refuses a file for the same reason in reverse, see that route's own door\ncheck). The kind's registration carries NO schema field of its own (`iagent_mesh.ingest.\nContentKindRegistration` has `passes`/`outputs`, which name OntologyClass kinds for a\ndocument's extraction, not a payload shape) -- so the validatable shape THIS repo actually\nhas is the kind's own trigger's `requires:` (`policy/triggers/<seeds_workflow>.yaml`, the\nsame list `case_routing.Trigger.requires` loads), checked dotted-path by dotted-path against\n`payload` plus the facts this route adds itself (`dropped_by.authz_id`). A payload missing\nany required path is refused 422, naming which.\n\nTHE RESPONSE CONTRACT IS 200 WITH `workflow.case_id` (ruled 2026-10-05). The seam spec said\n202; the door has always answered 200, the first producer is coded against 200, and the\nruling keeps it, so 202 is not an open question. `case_id` is the key the case runner\nholds the case under (the trigger's key, i.e. the producer's own identity field), and the\ndoor only answers 200 once the runner's own intake check has accepted the payload.\n\nAN OCCURRENCE ATTACHES TO ITS OPEN EPISODE (architect, 2026-11-06). An episode is the\ntrigger's declared `episode` fields; an occurrence is one event opening it, `case_id` =\n`event_id`. A first arrival of a trigger that declares one asks `CaseEpisode/attach`: a case\nholding the episode takes the occurrence (recorded, no new case, answer `attached: true` with\nthe holder's `case_id`); with none open a new case opens and names the last closed one as its\n`predecessor`. The same occurrence twice (same event_id, same bytes) is answered, not\nrevised; the same event_id with different bytes is a revision. A delegate attaches only to a\ncase it seeded: otherwise 403 `not_the_seeding_delegate`, and nothing is recorded.",
         "operationId": "ingest_event_ingest_events_post",
         "requestBody": {
           "content": {
@@ -8369,7 +8412,7 @@
     },
     "/internal/human_tasks/register": {
       "post": {
-        "description": "Register a task and materialize one queue row per Topaz-authorized actor.\nINTERNAL seam — Slice 1b restricts callers to the workflow/service identity;\nat the foundation checkpoint it is exercised directly to prove the identity\nbridge. Returns the resolved recipient set (the Topaz decision).",
+        "description": "Register a task and materialize one queue row per Topaz-authorized actor.\nINTERNAL seam — Slice 1b restricts callers to the workflow/service identity;\nat the foundation checkpoint it is exercised directly to prove the identity\nbridge. Returns the resolved recipient set (the Topaz decision).\n\nR-089, ruled 2026-11-04: register is called by a service for a person, so the caller is bound\nto `requested_by` by the same rule as the five case-runner routes, in this order: (1) a caller\nthat IS `requested_by` is admitted (a person naming themselves, or a service naming itself);\n(2) a caller listed for `human_tasks.register` on a `door: bff` row of\n`policy/gateway_delegates.yaml` may name any person; (3) otherwise\n`_admit_on_behalf_of` decides: a declared delegate naming a principal declared for it is\nadmitted, anyone else is 403 `not_a_delegate` or `principal_not_declared_for_delegate`.\n`requested_by` is passed through as sent.",
         "operationId": "register_human_task_internal_human_tasks_register_post",
         "requestBody": {
           "content": {
@@ -8411,7 +8454,7 @@
     },
     "/internal/identity/redeem": {
       "post": {
-        "description": "Hand the supervisor the caller's own token, once, for one run.\n\nReturns 200 with the token on the single legitimate redemption. Every other outcome is\na refusal with a NAMED cause, because \"it didn't work\" is the answer that cost this\nproject a day of diagnosis more than once.",
+        "description": "Hand the supervisor the caller's own token, for ONE outbound call of one run.\n\nReturns 200 with the token on a legitimate redemption. Every other outcome is a refusal\nwith a NAMED cause, because \"it didn't work\" is the answer that cost this project a day\nof diagnosis more than once.",
         "operationId": "redeem_caller_identity_internal_identity_redeem_post",
         "requestBody": {
           "content": {
@@ -8599,7 +8642,7 @@
     },
     "/me/entitlements": {
       "get": {
-        "description": "Return the current user's (persona, domain) entitlement matrix.\n\n`authz_id` is the key every route that takes `on_behalf_of` compares against: a self-drop\nechoes it. `email` is display only; at work-deploy it is not the authz_id, and sending it\nas `on_behalf_of` is refused `not_a_delegate` (2026-10-21).",
+        "description": "Return the current user's (persona, domain) entitlement matrix.\n\n`authz_id` is the key every route that takes `on_behalf_of` compares against: a self-drop\nechoes it. `email` is display only; at work-deploy it is not the authz_id, and sending it\nas `on_behalf_of` is refused `not_a_delegate` (2026-10-21). `capabilities` is every directory\ncapability key the caller holds `can_invoke` on, sorted; an unreadable directory is 503.",
         "operationId": "get_me_entitlements_me_entitlements_get",
         "responses": {
           "200": {
@@ -8668,6 +8711,28 @@
           "ingest-v1",
           "mcp"
         ]
+      }
+    },
+    "/me/paused-runs": {
+      "get": {
+        "description": "The caller's own runs paused as ``awaiting_reauth``, as ``{\"paused\": [record, ...]}``\nwith ``record = {run_id, paused_call, instruction, reason}``; the same record the\n``run_awaiting_reauth`` event carries. Ownership is the door's: the run's stashed subject\nmust equal the caller. A service token is refused 403, as at the door. Nothing paused is\na normal 200 with an empty list.\n\nThe vault is in-process memory in this pod: a cortex-bff restart (or another replica)\nempties this list. There is no storage behind it, by design.",
+        "operationId": "my_paused_runs_me_paused_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Paused Runs"
       }
     },
     "/mesh/config": {
@@ -8821,6 +8886,49 @@
         "tags": [
           "mcp"
         ]
+      }
+    },
+    "/orchestrate/{run_id}/reauth": {
+      "post": {
+        "description": "The door that resumes a run paused as ``awaiting_reauth``.\n\nThe person presents their OWN fresh token, verified exactly as ``/orchestrate`` verifies\nit (``get_current_user``), and it replaces the one the run holds. No body. The answer is\nthe state and never the token.\n\nNO EXISTENCE ORACLE: an absent run and a run that is another person's answer with the\nsame 404, because ``VAULT.replace`` refuses on both through one comparison. A service\ntoken is refused 403: a service is never granted a person's identity.",
+        "operationId": "reauth_run_orchestrate__run_id__reauth_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Reauth Run"
       }
     },
     "/plan/baseline/op": {

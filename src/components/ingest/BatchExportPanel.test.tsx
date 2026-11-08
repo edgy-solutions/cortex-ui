@@ -21,7 +21,7 @@ const q = (c: HTMLElement, s: string) => c.querySelector(s) as HTMLElement | nul
 
 beforeEach(() => {
   window.localStorage.setItem("cortex.reviewExport", "1");
-  fetchEntitlements.mockResolvedValue({ groups: ["alert-processors"] });
+  fetchEntitlements.mockResolvedValue({ capabilities: ["ingest:exportBatch"] });
   fetchIngestExportProfiles.mockResolvedValue(served);
 });
 afterEach(() => {

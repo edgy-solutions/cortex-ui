@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  AP_GROUP,
+  EXPORT_BATCH_CAPABILITY,
+  FIXTURE_ENTITLEMENTS,
   FIXTURE_154_PROFILES,
   canExportBatch,
   filenameFromDisposition,
@@ -60,11 +61,19 @@ describe("isExportStage", () => {
 });
 
 describe("canExportBatch", () => {
-  it("true with the group", () => expect(canExportBatch({ groups: [AP_GROUP] })).toBe(true));
-  it("false with groups absent", () => expect(canExportBatch({ cells: [] })).toBe(false));
-  it("false with a string, not an array", () => expect(canExportBatch({ groups: "alert-processors" })).toBe(false));
-  it("false with a near-miss name", () => expect(canExportBatch({ groups: ["alert-processors-x"] })).toBe(false));
-  it("false with another group present", () => expect(canExportBatch({ groups: ["other"] })).toBe(false));
+  const KEY = EXPORT_BATCH_CAPABILITY;
+  it("true with the capability among others", () =>
+    expect(canExportBatch({ capabilities: ["can_drop:pcn", KEY, "can_export:default-csv"] })).toBe(true));
+  it("false with capabilities absent (a BFF older than #290)", () => expect(canExportBatch({ cells: [] })).toBe(false));
+  it("false with an empty list", () => expect(canExportBatch({ capabilities: [] })).toBe(false));
+  it("false with a string, not an array", () => expect(canExportBatch({ capabilities: KEY })).toBe(false));
+  it("false with a near-miss key", () => expect(canExportBatch({ capabilities: [`${KEY}X`, KEY.toLowerCase()] })).toBe(false));
+  it("false with only a per-profile export capability", () =>
+    expect(canExportBatch({ capabilities: ["can_export:default-csv"] })).toBe(false));
+  it("a group no longer opens it: capability, never group", () =>
+    expect(canExportBatch({ groups: ["alert-processors"], capabilities: [] })).toBe(false));
+  it("the mock's entitlements body opens it through the same reader", () =>
+    expect(canExportBatch(FIXTURE_ENTITLEMENTS)).toBe(true));
 });
 
 describe("filenameFromDisposition", () => {
