@@ -1,5 +1,6 @@
 /**
- * WORKFLOW_CASE — cortex-proposed; no producer route serves this yet.
+ * WORKFLOW_CASE — cortex-proposed, now SERVED: `GET /cases/{id}` (invincible-agent #283,
+ * `src/iagent/case_projection.py`) projects this shape. The history below is kept as written.
  *
  * Nothing at `invincible-agent` origin/master (verified at 65462a42) answers a workflow
  * definition, an instance's live state, its history, its options, or a released artifact over
@@ -85,17 +86,35 @@ export interface CaseApproval {
 
 export interface CaseArtifact {
   uri: string;
+  /** The action record's id (invincible-agent #283): what the link names when the record has no label. */
+  artifact_id?: string | null;
+  /** The record's OWN label; null when it has none (no text is invented, on either side). */
   label?: string | null;
   /** null/absent on the envelope's `output_artifact` means not released. */
   released_at: string;
 }
 
+/** The declaration the options' task was registered under (#283); null for a row written before it was stamped. */
+export interface CaseOptionsDeclaration {
+  definition_id: string | null;
+  version: string | number | null;
+}
+
 export interface WorkflowCasePayload {
   subject_ref: string;
+  /** The case's own state (#283): one of a closed list the producer owns, drawn verbatim. Absent from a BFF older than #283. */
+  stage?: string;
+  /** The source system's episode id (or the platform's derived key), opaque. */
+  episode_id?: string | null;
+  episode_id_source?: string | null;
+  /** The closed case this one follows on its episode. */
+  predecessor?: string | null;
   /** Order = chain order. */
   instances: CaseInstance[];
   history?: CaseHistoryEntry[];
   options?: CaseOption[];
+  /** Present exactly when `options` is. */
+  options_declaration?: CaseOptionsDeclaration | null;
   /** Order = chain order. */
   approvals?: CaseApproval[];
   /** null/absent = not released. */

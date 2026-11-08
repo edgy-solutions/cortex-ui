@@ -101,7 +101,15 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const options = resolved.source === "none" ? [] : resolved.options;
   const approvals = payload.approvals ?? [];
   const artifact = payload.output_artifact;
+  // #283 serves `output_artifact` null until the release and never serves an undated one, so on the
+  // served shape this is "non-null"; the `released_at` half keeps fixture 6's prepared-not-released absence.
   const released = !!artifact && !!artifact.uri && !!artifact.released_at;
+  // The declaration the options ran under: its id and version, as served; null (a row written before
+  // the runner stamped it) is said, absent (a BFF older than #283) is silent.
+  const declaration = payload.options_declaration;
+  const declarationText = declaration
+    ? [declaration.definition_id, declaration.version].filter((x) => x != null).join(" · ")
+    : "";
 
   // Selection: row 0 on mount (the card standard: the first row).
   const [sel, setSel] = useState(0);
@@ -145,6 +153,12 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
       {/* TOP LINE — names the subject and the stage of the latest instance. */}
       <p className="font-mono text-[11px] text-slate-300" data-case-topline>
         <span data-topline="subject">{payload.subject_ref}</span>
+        {payload.stage && (
+          <>
+            <span className="text-slate-600"> · </span>
+            <span data-topline="case-stage">{payload.stage}</span>
+          </>
+        )}
         {last && (
           <>
             <span className="text-slate-600"> · </span>
@@ -308,6 +322,16 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
       {/* OPTIONS — each with its label and its data in key order, and the artifact link if
           the option carries one. */}
       <div className="flex flex-col gap-2" data-options data-options-source={resolved.source}>
+        {resolved.source === "case" && declarationText && (
+          <p className="font-mono text-[10px] text-slate-500" data-options-declaration>
+            {declarationText}
+          </p>
+        )}
+        {resolved.source === "case" && declaration !== undefined && !declarationText && (
+          <p className="font-mono text-[10px] uppercase tracking-widest text-slate-500" data-options-declaration-absent>
+            declaration not recorded
+          </p>
+        )}
         {resolved.source === "task" && options.length > 0 && (
           <p className="font-mono text-[10px] text-slate-500" data-options-from-task>
             from the pending task
@@ -421,11 +445,12 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
       </div>
 
       {/* ARTIFACT — shown only when the producer attached one (both `uri` and `released_at`
-          present). A released case may carry no artifact (a release that emits an
+          present), named by the record's own label, else its `artifact_id` — never an invented text.
+          A released case may carry no artifact (a release that emits an
           ActionRecord carries none), so the card states the ABSENCE of an artifact, not the case's state. */}
       <div data-artifact-section>
         {released && artifact ? (
-          <CaseArtifact uri={artifact.uri} label={artifact.label ?? artifact.uri} />
+          <CaseArtifact uri={artifact.uri} label={artifact.label ?? artifact.artifact_id ?? artifact.uri} />
         ) : (
           <p
             className="font-mono text-[10px] uppercase tracking-widest text-slate-500"

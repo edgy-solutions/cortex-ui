@@ -111,8 +111,8 @@ describe("options — every data key the fixture carries is drawn, with its valu
   });
 });
 
-describe("the artifact is shown iff released — both halves of the condition", () => {
-  it("fixture 3: uri AND released_at present — shown, never the absence", () => {
+describe("the artifact is shown iff served (#283: null until released)", () => {
+  it("fixture 3: an artifact with a uri — shown, never the absence", () => {
     const { container } = render(<Card case={FIXTURE_3.payload} />);
     expect(container.querySelector("[data-artifact]")).not.toBeNull();
     expect(container.querySelector("[data-artifact-absent]")).toBeNull();

@@ -32,6 +32,7 @@ export const WORKFLOW_CASE_ABSENCES = [
   "data-reason-absent",
   "data-case-topline-stage-absent",
   "data-case-pane-step-absent",
+  "data-options-declaration-absent",
 ] as const;
 
 export type WorkflowCaseAbsence = (typeof WORKFLOW_CASE_ABSENCES)[number];
@@ -325,6 +326,7 @@ const FIXTURE_3_PAYLOAD: WorkflowCasePayload = {
       decided_at: "2026-09-05T16:31:00Z",
     },
   ],
+  options_declaration: { definition_id: "demo-declaration", version: 1 },
   output_artifact: {
     uri: "https://example.invalid/artifacts/decision.pdf",
     label: "Decision record",
@@ -342,6 +344,8 @@ const FIXTURE_4_PAYLOAD: WorkflowCasePayload = {
     { at: "2026-09-10T09:00:00Z", workflow_id: FIXTURE_4_INSTANCE.workflow_id, event: "opened", stage: "drafted" },
   ],
   options: [{ id: "A", label: "Option A", data: { cost: 900 } }],
+  // A task row written before the runner stamped its declaration (#283 serves null for it).
+  options_declaration: null,
   approvals: [
     {
       workflow_id: FIXTURE_4_INSTANCE.workflow_id,
@@ -585,7 +589,7 @@ export const WORKFLOW_CASE_FIXTURES: WorkflowCaseFixture[] = [
   {
     name: "decided with no reason",
     payload: FIXTURE_4_PAYLOAD,
-    declares: ["data-reason-absent", "data-case-pane-step-absent"],
+    declares: ["data-reason-absent", "data-case-pane-step-absent", "data-options-declaration-absent"],
   },
   {
     name: "stage not in the definition",

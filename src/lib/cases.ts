@@ -46,6 +46,7 @@ const isOptStr = (v: unknown) => v === undefined || v === null || isStr(v);
 function firstProblem(raw: unknown): string | null {
   if (!isRecord(raw)) return "body is not an object";
   if (!isNonEmptyStr(raw.subject_ref)) return "subject_ref is not a non-empty string";
+  if (raw.stage !== undefined && !isNonEmptyStr(raw.stage)) return "stage is not a non-empty string";
   if (!Array.isArray(raw.instances)) return "instances is not an array";
   for (const [i, inst] of raw.instances.entries()) {
     const at = `instances[${i}]`;
@@ -92,8 +93,14 @@ function firstProblem(raw: unknown): string | null {
       if (a.status !== "pending" && a.status !== "decided") return `approvals[${i}].status is not pending|decided`;
     }
   }
-  if (raw.output_artifact !== undefined && raw.output_artifact !== null && !isRecord(raw.output_artifact)) {
-    return "output_artifact is neither an object nor null";
+  if (raw.options_declaration !== undefined && raw.options_declaration !== null && !isRecord(raw.options_declaration)) {
+    return "options_declaration is neither an object nor null";
+  }
+  const art = raw.output_artifact;
+  if (art !== undefined && art !== null) {
+    if (!isRecord(art)) return "output_artifact is neither an object nor null";
+    if (!isNonEmptyStr(art.uri)) return "output_artifact.uri is not a non-empty string";
+    if (!isOptStr(art.artifact_id) || !isOptStr(art.label)) return "output_artifact.artifact_id/label is neither a string nor null";
   }
   return null;
 }
