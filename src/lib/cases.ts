@@ -47,6 +47,7 @@ function firstProblem(raw: unknown): string | null {
   if (!isRecord(raw)) return "body is not an object";
   if (!isNonEmptyStr(raw.subject_ref)) return "subject_ref is not a non-empty string";
   if (raw.stage !== undefined && !isNonEmptyStr(raw.stage)) return "stage is not a non-empty string";
+  if (raw.intake !== undefined && !isNonEmptyStr(raw.intake)) return "intake is not a non-empty string";
   if (!Array.isArray(raw.instances)) return "instances is not an array";
   for (const [i, inst] of raw.instances.entries()) {
     const at = `instances[${i}]`;

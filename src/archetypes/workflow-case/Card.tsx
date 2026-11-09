@@ -133,6 +133,15 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const lastStageKnown =
     !!last && lastStage !== null && last.definition.domain_stages.includes(lastStage);
 
+  // THE OPENING ROW (#321): the case's own first transition, attributed to the case id, recorded before
+  // any instance opens. Found by position and by id, never by its word; labelled only when `intake` is served.
+  const firstInstanceRow = history.findIndex((e) => instances.some((inst) => inst.workflow_id === e.workflow_id));
+  // A row naming an instance sits at or after `firstInstanceRow`, so position alone excludes it.
+  const openingIdx = history.findIndex(
+    (e, i) => e.workflow_id === payload.subject_ref && (firstInstanceRow === -1 || i < firstInstanceRow),
+  );
+  const intakeAt = payload.intake ? openingIdx : -1;
+
   const selEntry: CaseHistoryEntry | undefined = history[sel];
   const selInstance = selEntry
     ? instances.find((inst) => inst.workflow_id === selEntry.workflow_id)
@@ -259,7 +268,9 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
                     i === sel ? "bg-cyan-500/10 text-slate-200" : "text-slate-500"
                   }`}
                 >
-                  <span className="text-slate-400">{entry.at}</span> {entry.event}
+                  <span className="text-slate-400">{entry.at}</span>{" "}
+                  {i === intakeAt && <span data-case-row-intake>{payload.intake} · </span>}
+                  {entry.event}
                   {entry.stage ? ` · ${entry.stage}` : ""}
                   {entry.actor ? ` · ${entry.actor}` : ""}
                 </li>
@@ -279,6 +290,10 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
                   <p data-case-pane-step={selStep.id}>
                     {selStep.title ?? selStep.id} · {selStep.kind}
                     {selStep.audience ? ` · ${selStep.audience}` : ""}
+                  </p>
+                ) : sel === intakeAt ? (
+                  <p className="text-slate-200" data-case-pane-intake>
+                    {payload.intake}
                   </p>
                 ) : (
                   <p

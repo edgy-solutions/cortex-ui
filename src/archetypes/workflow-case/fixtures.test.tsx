@@ -51,7 +51,7 @@ function renderedAttributes(file: string): string[] {
 /** The forbidden-vocabulary guard: this card, its contract, its row, and its index must never
  *  name a verb, stage, step, role, domain, or kind by spelling — see `Card.tsx`'s own header.
  *  Fixtures MAY carry these words; they transcribe real producer facts. */
-const FORBIDDEN = /maintenance|safety|hazard|risk|accept|concur/i;
+const FORBIDDEN = /maintenance|safety|hazard|risk|accept|concur|received|reported/i;
 const SOURCE_FILES = ["Card.tsx", "contract.ts", "row.ts", "index.ts"];
 
 type CardProps = React.ComponentProps<typeof WorkflowCase>;
@@ -121,6 +121,8 @@ describe("WORKFLOW_CASE fixtures discriminate", () => {
       "data-case-pane",
       "data-case-pane-row",
       "data-case-pane-step",
+      "data-case-pane-intake",
+      "data-case-row-intake",
       "data-case-pane-approval",
       "data-case-topline",
       "data-topline",

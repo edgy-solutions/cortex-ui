@@ -1,5 +1,5 @@
 import React from "react";
-import type { InstancesByPropertyPayload, IbpColumn } from "./types";
+import type { InstancesByPropertyPayload, IbpColumn, IbpCell } from "./types";
 
 /**
  * INSTANCES_BY_PROPERTY renderer — GENERIC by construction.
@@ -26,21 +26,42 @@ function localName(value: string): string {
 
 const EMPTY_CELL = "—";
 
+/** A missing key, `null`, or "": not stated. A served 0 is a value, never absent. */
+const absent = (cell: IbpCell | undefined): cell is null | undefined | "" =>
+  cell === undefined || cell === null || cell === "";
+
 export const InstancesByPropertyView: React.FC<{
   payload: InstancesByPropertyPayload;
   /** Optional: a tab click asks the host to re-query for that filter value.
    *  Omitted in the mock/standalone render — tabs are then display-only. */
   onSelectFilter?: (value: string) => void;
 }> = ({ payload, onSelectFilter }) => {
-  const { title, columns, rows, target, row_identity, state_vocabulary } = payload;
+  const { title, columns, rows, target, row_identity, state_vocabulary, group_by } = payload;
   const identityKey = row_identity?.key;
   const activeFilter = target?.filter_value;
 
-  const renderCell = (col: IbpColumn, row: Record<string, string>) => {
-    const raw = row[col.key];
-    if (raw === undefined || raw === null || raw === "") {
-      return <span className="text-slate-600">{EMPTY_CELL}</span>;
+  // GROUPING — by whichever column the producer's `group_by` names, in first-appearance order.
+  const groupCol = group_by ? columns.find((c) => c.key === group_by) : undefined;
+  const groups: { value: IbpCell | undefined; rows: Record<string, IbpCell>[] }[] = [];
+  if (groupCol) {
+    for (const row of rows) {
+      const value = absent(row[groupCol.key]) ? undefined : row[groupCol.key];
+      const g = groups.find((x) => x.value === value);
+      if (g) g.rows.push(row);
+      else groups.push({ value, rows: [row] });
     }
+  }
+
+  const renderCell = (col: IbpColumn, row: Record<string, IbpCell>) => {
+    const cell = row[col.key];
+    if (absent(cell)) {
+      return (
+        <span className="text-slate-600" data-ibp-cell-absent title="not stated">
+          {EMPTY_CELL}
+        </span>
+      );
+    }
+    const raw = String(cell);
     // Row-identity column with an IRI + local-name display: show the short form,
     // keep the full IRI as the title (identity stays the IRI).
     if (col.key === identityKey && row_identity?.iri && row_identity?.display_from_local_name) {
@@ -52,6 +73,20 @@ export const InstancesByPropertyView: React.FC<{
     }
     return <span className="font-mono text-sm text-slate-300">{raw}</span>;
   };
+
+  const drawRow = (row: Record<string, IbpCell>, i: number) => (
+    <tr
+      key={(identityKey && !absent(row[identityKey]) && String(row[identityKey])) || i}
+      data-ibp-row=""
+      className="hover:bg-cyan-500/[0.04] transition-colors"
+    >
+      {columns.map((col) => (
+        <td key={col.key} className="px-3 py-3 align-top">
+          {renderCell(col, row)}
+        </td>
+      ))}
+    </tr>
+  );
 
   return (
     <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
@@ -96,6 +131,12 @@ export const InstancesByPropertyView: React.FC<{
         </div>
       )}
 
+      {group_by && !groupCol && (
+        <p className="mb-2 font-mono text-[10px] text-amber-400/80" data-ibp-group-by-undeclared>
+          grouping by {group_by}: names no column, drawn ungrouped
+        </p>
+      )}
+
       {/* Table — headers from columns[], cells from rows[col.key]. */}
       {rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-12">
@@ -122,18 +163,25 @@ export const InstancesByPropertyView: React.FC<{
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {rows.map((row, i) => (
-                <tr
-                  key={(identityKey && row[identityKey]) || i}
-                  className="hover:bg-cyan-500/[0.04] transition-colors"
-                >
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-3 py-3 align-top">
-                      {renderCell(col, row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {groupCol
+                ? groups.map((g, gi) => (
+                    <React.Fragment key={`g${gi}`}>
+                      <tr
+                        data-ibp-group={g.value === undefined ? "" : String(g.value)}
+                        {...(g.value === undefined ? { "data-ibp-group-absent": "" } : {})}
+                        className="bg-white/[0.03]"
+                      >
+                        <td
+                          colSpan={columns.length}
+                          className="px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-cyan-300/80"
+                        >
+                          {groupCol.label}: {g.value === undefined ? EMPTY_CELL : String(g.value)} · {g.rows.length}
+                        </td>
+                      </tr>
+                      {g.rows.map((row, i) => drawRow(row, i))}
+                    </React.Fragment>
+                  ))
+                : rows.map((row, i) => drawRow(row, i))}
             </tbody>
           </table>
         </div>

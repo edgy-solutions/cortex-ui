@@ -109,6 +109,13 @@ export interface WorkflowCasePayload {
   episode_id_source?: string | null;
   /** The closed case this one follows on its episode. */
   predecessor?: string | null;
+  /**
+   * The label of the case's OPENING row (#321): the word the trigger the case opened on declares,
+   * stamped at open, drawn verbatim. The KEY IS OMITTED when the trigger declares none, or for a case
+   * opened before the stamp; never null or "". It labels the history row the case records for itself
+   * before its first instance opens: the first row whose `workflow_id` is `subject_ref`.
+   */
+  intake?: string;
   /** Order = chain order. */
   instances: CaseInstance[];
   history?: CaseHistoryEntry[];

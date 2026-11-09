@@ -37,6 +37,10 @@ export interface IbpTarget {
   filter_value?: string;
 }
 
+/** One cell as the wire carries it: a typed value. `null` (or a missing key) is ABSENT, which is
+ *  not 0 and not "": the widget draws it as absent and draws a served 0 as 0. */
+export type IbpCell = string | number | null;
+
 export interface InstancesByPropertyPayload {
   archetype: "INSTANCES_BY_PROPERTY";
   title: string;
@@ -46,7 +50,11 @@ export interface InstancesByPropertyPayload {
   /** The filter property's value set — rendered as tabs; the active one is
    *  target.filter_value. Enumerated by the feeder; ontology-derived later. */
   state_vocabulary?: string[];
+  /** The column key the rows group by, declared by the producer (an envelope field, so the
+   *  projector carries it only because the archetype's passthrough names it). Absent = one
+   *  ungrouped table. A key naming no column is drawn ungrouped AND said; never guessed. */
+  group_by?: string;
   /** The data. Keys match columns[].key. Always data (from /instances tomorrow,
-   *  the hand-assembled feeder today). Values are strings/IRIs. */
-  rows: Record<string, string>[];
+   *  the hand-assembled feeder today). Values are strings/IRIs, numbers, or null (absent). */
+  rows: Record<string, IbpCell>[];
 }
