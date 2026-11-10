@@ -58,12 +58,12 @@ describe("a selection over a question copies the question alone", () => {
 
   it("every label sharing the rail's question line is unselectable", () => {
     // The worst row: label, question, separator, timestamp and duration on one line, so a
-    // selection over it copied "Q · <question> · 14:32 · 2.1s".
+    // selection over it copied "Q · <question> · 14:32 · 2.1s" (now "… · 14:32 · work 2.1s · artifacts 1").
     const row = RAIL.slice(RAIL.indexOf("{captured && a.question_text && ("));
     expect(row).toMatch(/text-slate-600 select-none">Q · <\/span>/);
     expect(row).toMatch(/text-slate-700 select-none"> · <\/span>/);
     expect(row).toMatch(/select-none">\{formatTime\(a\.created_at\)\}/);
-    expect(row).toMatch(/select-none"> · \{took\}/);
+    expect(row).toMatch(/select-none">\s*\{" · "\}\s*<AnswerFooter /);
   });
 
   it("no `Q · ` label anywhere remains selectable", () => {

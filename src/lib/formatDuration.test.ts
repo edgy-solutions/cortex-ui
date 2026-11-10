@@ -170,10 +170,9 @@ describe("the panel never manufactures a duration", () => {
       path.join(__dirname, "../components/NeuralStream/AnswersPanel.tsx"),
       "utf8",
     );
-    // Positive control: the panel does render a duration, so this cannot pass on a file that
-    // simply stopped showing one.
-    expect(panel).toMatch(/const took = /);
-    expect(panel.split("const took = ").length - 1).toBe(2);
+    // Positive control: both rows do render a duration, so this cannot pass on a file that
+    // simply stopped showing one. (11-10: the rows build labelled footer numbers from the walk.)
+    expect(panel.split("answerFooter(answerElapsed(").length - 1).toBe(2);
     // It delegates the decision instead of making it.
     expect(panel).not.toContain("formatDuration(");
     expect(panel).not.toMatch(/a\.duration_ms/);
