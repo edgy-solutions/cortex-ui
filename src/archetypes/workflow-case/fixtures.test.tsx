@@ -52,7 +52,7 @@ function renderedAttributes(file: string): string[] {
  *  name a verb, stage, step, role, domain, or kind by spelling — see `Card.tsx`'s own header.
  *  Fixtures MAY carry these words; they transcribe real producer facts. */
 const FORBIDDEN = /maintenance|safety|hazard|risk|accept|concur|received|reported/i;
-const SOURCE_FILES = ["Card.tsx", "contract.ts", "row.ts", "index.ts"];
+const SOURCE_FILES = ["Card.tsx", "OptionValue.tsx", "contract.ts", "row.ts", "index.ts"];
 
 type CardProps = React.ComponentProps<typeof WorkflowCase>;
 
@@ -110,6 +110,8 @@ describe("WORKFLOW_CASE fixtures discriminate", () => {
       "data-artifact-error",
       "data-artifact-record",
       "data-option",
+      // One per key of an option's data; what it holds is OptionValue's to draw (Card.optionData.test.tsx).
+      "data-option-field",
       "data-approvals",
       "data-approval",
       "data-approval-awaiting",

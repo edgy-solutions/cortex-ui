@@ -2,6 +2,25 @@ import type { HumanTask } from "@/store/useHumanTaskStore";
 import { offeredVerbs, readTaskDeclaration, verbLabel, type TaskDeclaration } from "@/lib/taskDeclaration";
 import type { CaseOption, WorkflowCasePayload } from "./contract";
 
+/** A task registered by instance `wf`: every `human_await` registers `{workflow_id}:{step_id}` and stamps
+ *  `workflow_id` on the row, and the producer's `project_approvals` matches its rows the same way. */
+export const isInstanceTask = (t: HumanTask, wf: string): boolean =>
+  t.workflowId === wf && t.taskId.startsWith(`${wf}:`);
+
+/**
+ * The viewer's own pending tasks on this case, in chain order. The task store holds only this viewer's
+ * rows (the BFF injects `recipient_id`), so a pending row there IS "held". The case read is not the
+ * source: it never serves `approvals[].task` (`case_projection.project_approvals`: "omitted per the
+ * roll spec"), and a landing keyed on it never opened a task on the walk (0.4.85).
+ */
+export function heldTasks(payload: WorkflowCasePayload, tasks: HumanTask[]): HumanTask[] {
+  const out: HumanTask[] = [];
+  for (const inst of payload.instances ?? []) {
+    for (const t of tasks) if (t.status === "pending" && isInstanceTask(t, inst.workflow_id)) out.push(t);
+  }
+  return out;
+}
+
 export type CaseOptions =
   | { source: "case"; options: CaseOption[] }
   | { source: "task"; taskId: string; options: CaseOption[]; undeclared?: true }
@@ -23,7 +42,7 @@ export function caseOptions(
   const instances = payload.instances ?? [];
   for (let i = instances.length - 1; i >= 0; i--) {
     const wf = instances[i].workflow_id;
-    const task = pending.find((t) => t.workflowId === wf && t.taskId.startsWith(`${wf}:`));
+    const task = pending.find((t) => isInstanceTask(t, wf));
     if (!task) continue;
     const raw = task.payload?.options;
     if (Array.isArray(raw)) {

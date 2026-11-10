@@ -66,7 +66,8 @@ export interface CaseHistoryEntry {
 export interface CaseOption {
   id: string;
   label: string;
-  data: Record<string, string | number | boolean | null>;
+  /** Whatever the workflow wrote on the option, whole: scalars, lists and nested objects (`OptionValue` draws each). */
+  data: Record<string, unknown>;
   /** The artifact the data came from. */
   artifact_uri?: string | null;
 }

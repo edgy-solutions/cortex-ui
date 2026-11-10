@@ -7,6 +7,7 @@ import { selectPendingTasks, useHumanTaskStore } from "@/store/useHumanTaskStore
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { useShallow } from "zustand/react/shallow";
 import { caseOptions } from "./caseOptions";
+import { OptionValue } from "./OptionValue";
 import type {
   CaseApproval,
   CaseDefinition,
@@ -363,9 +364,11 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
                 <p className="font-mono text-[11px] text-slate-200">{option.label}</p>
                 <dl className="flex flex-col gap-0.5">
                   {Object.keys(option.data).map((key) => (
-                    <div key={key} className="flex gap-2 font-mono text-[10px] text-slate-500">
+                    <div key={key} className="flex gap-2 font-mono text-[10px] text-slate-500" data-option-field={key}>
                       <dt>{key}</dt>
-                      <dd className="text-slate-300">{String(option.data[key])}</dd>
+                      <dd className="min-w-0 text-slate-300">
+                        <OptionValue value={option.data[key]} />
+                      </dd>
                     </div>
                   ))}
                 </dl>

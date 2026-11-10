@@ -7,6 +7,7 @@ import { useStageStore } from "@/store/useStageStore";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
+import { heldTasks } from "@/archetypes/workflow-case/caseOptions";
 
 /**
  * Landing for the two deep links (`/case/{id}`, `/ask?q=`). Mounted once, inside the
@@ -53,13 +54,9 @@ function CaseLanding({ caseId, onClose }: { caseId: string; onClose: () => void 
     };
   }, [caseId]);
 
-  // `approval.task` is present only when the approval is pending AND this viewer can act on it.
-  const held = result?.ok
-    ? (result.payload.approvals ?? []).filter((a) => a.status === "pending" && a.task)
-    : [];
-  const heldTaskId = held.length === 1 ? held[0].task!.task_id : null;
-  const storeTask =
-    heldTaskId === null ? undefined : tasks.find((t) => t.taskId === heldTaskId && t.status === "pending");
+  // The viewer's own pending task on this case opens; none, or more than one to choose between, is the panel.
+  const held = result?.ok ? heldTasks(result.payload, tasks) : [];
+  const storeTask = held.length === 1 ? held[0] : undefined;
 
   const opened = useRef(false);
   useEffect(() => {

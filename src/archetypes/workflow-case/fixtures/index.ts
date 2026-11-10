@@ -448,10 +448,11 @@ const MAINT_TRIGGER = {
 
 /**
  * OPTIONS — the render template's four option literals, each resolved against `MAINT_TRIGGER`.
- * `data` carries only the SCALAR fields `CaseOption.data` can hold (`readiness`, `takes_offline`,
- * `task`, and `interval` where the template has one) — never `parts`/`spares`/`task_refs`/
- * `battle_condition`/`nearest_spare`, which are objects or arrays the producer's own walk
- * citations populate at run time, not scalars this fixture could invent a citation for.
+ * `data` carries only the template's SCALAR fields (`readiness`, `takes_offline`, `task`, and
+ * `interval` where the template has one) — never `parts`/`spares`/`task_refs`/`battle_condition`/
+ * `nearest_spare`, which are objects or arrays the producer's own walk citations populate at run
+ * time, not values this fixture could invent a citation for. `CaseOption.data` does carry them on
+ * the wire (0.4.85): `Card.optionData.test.tsx` draws them from the transcribed SDK shapes.
  */
 const MAINT_OPTIONS: CaseOption[] = [
   {
