@@ -255,7 +255,15 @@ env:
   #   diff (all seven dirs, three of them test fixtures) c3b51ed7..de1873c2 is EMPTY (control: 165 files changed). Check 3: uv.lock
   #   iagent-mesh MOVED, v0.9.13 -> v0.9.15. Gate: the full suite against a git-archive export of
   #   de1873c2 placed as the sibling.
-  PRODUCER_REF: de1873c23faa45f098db6cfdab2beec0aa2f64ce
+  # 2026-11-10 RE-PIN to 4f2dac35 (platform master; the merge of #325, ingest 1.9.1, named by Chris
+  #   for the 0.4.84 candidate; 0.4.83 keeps cortex db45763). de1873c2 is its ancestor. The act route
+  #   refuses on the served `attestation.excluded` instead of recomputing it from dropped_by, so the
+  #   dropper hold's producer seal now asserts the route reads that field (the it.fails tripwire
+  #   became an ordinary arm). The OpenAPI declares `TaskPayload.attestation: Attestation`. NOT read
+  #   off the pods. Check 2: task_kinds and review_shapes diff de1873c2..4f2dac35 is EMPTY (control:
+  #   7 files changed). Check 3: uv.lock unchanged, iagent-mesh stays v0.9.15. Gate: the full suite
+  #   against a git-archive export of 4f2dac35 placed as the sibling.
+  PRODUCER_REF: 4f2dac35fa108c6904e7762b2b9dc644e14be40d
 
 permissions:
   contents: read

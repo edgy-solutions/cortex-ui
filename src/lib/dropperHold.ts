@@ -1,11 +1,14 @@
 import { usePersonaStore } from "@/store/usePersonaStore";
+import type { Attestation } from "@/api/generated/ingestV1";
 
 /**
- * The served attestation block (ingest 1.9.0, invincible-agent #324): `payload.attestation`, stamped
- * at filing by `promotion.attestation_block`. The card does not work out who may promote; the server
- * names them in `excluded`. No `mode` is read here: a mode this card does not know cannot open a hold.
+ * The served attestation block: `payload.attestation`, stamped at filing by
+ * `promotion.attestation_block` (ingest 1.9.0, #324) and declared as `TaskPayload.attestation` from
+ * 1.9.1 (#325). The card does not work out who may promote; the server names them in `excluded`, and
+ * its act route refuses on that same list. No `mode` is read here: a mode this card does not know
+ * cannot open a hold.
  */
-export type PromotionAttestation = { mode: string; excluded: string[] };
+export type PromotionAttestation = Attestation;
 
 /** The payload key the producer stamps, and the list in it the card reads. The producer seal checks both spellings. */
 export const ATTESTATION_FIELD = "attestation";

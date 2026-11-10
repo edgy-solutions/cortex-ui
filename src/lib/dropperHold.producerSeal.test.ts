@@ -1,18 +1,20 @@
 /**
- * THE PRODUCER SEAL for the dropper hold (ingest 1.9.0, invincible-agent #324). The card holds Promote
+ * THE PRODUCER SEAL for the dropper hold (ingest 1.9.1, invincible-agent #325). The card holds Promote
  * when the viewer is in `payload[ATTESTATION_FIELD][ATTESTATION_EXCLUDED]`. That is honest only while
- * the card's hold and the act route's 403 are the same condition. Checked here against the producer:
+ * the card's hold and the act route's 403 read the same field. Checked here:
  *
+ *   0. the wire DECLARES it: the ingest-v1 snapshot's `TaskPayload` carries `ATTESTATION_FIELD` as an
+ *      `Attestation` whose `ATTESTATION_EXCLUDED` is a required list of strings (no producer needed);
  *   1. filing stamps `payload[ATTESTATION_FIELD]` from `promotion.attestation_block`;
  *   2. that block's list is `ATTESTATION_EXCLUDED`, and under `second_party` it is exactly
  *      `_excluded_attesters(payload)`, else empty;
- *   3. the act route refuses PROMOTED when the block's mode is `second_party` and `acted_by` is in
- *      `_excluded_attesters(payload)`, with a code cortex reads as a structural 403 (the server's text).
+ *   3. the act route binds the served `ATTESTATION_EXCLUDED` and refuses PROMOTED when the block's mode
+ *      is `second_party` and `acted_by` is in THAT list. Nothing recomputed from `dropped_by` (the
+ *      `self_attested` record) appears in the refusal's condition;
+ *   4. the refusal is a 403 whose code cortex reads as structural (the server's text).
  *
- * 2 and 3 are the same set at filing time, so the hold and the refusal agree. They are NOT the same
- * FIELD. At de1873c2 the route reads the block's `mode` and recomputes the set from `dropped_by`; it does
- * not read `excluded`. The last arm is an `it.fails` tripwire for that: it goes red the day the route
- * reads `excluded`, and should then become an ordinary arm.
+ * Until #325 the route recomputed the set from `dropped_by`; an `it.fails` tripwire stood here for
+ * that, and arm 3 is what it became.
  *
  * Producer lookup follows `reviewExportCapability.producerSeal.test.ts`. RUN WITH `npm run test`.
  */
@@ -63,6 +65,17 @@ function routeSection(src: string): string {
 /** Python comments stripped, so an anchor cannot match a comment instead of code. */
 const code = (s: string) => s.replace(/#.*$/gm, "");
 
+/** The name the route binds the served list to: `<name> = block.get("excluded")` or `block["excluded"]`. */
+function servedListName(sec: string): string | null {
+  return new RegExp(`^\\s*(\\w+)\\s*=\\s*block(?:\\.get\\(|\\[)"${ATTESTATION_EXCLUDED}"`, "m").exec(sec)?.[1] ?? null;
+}
+
+/** The `if` whose condition tests `acted_by in …` and raises a PromotionRefused: its condition, code and status. */
+function actorRefusal(sec: string): { cond: string; code: string; status: string } | null {
+  const m = /^\s*if ([^\n]*\bacted_by in [^\n]*):\s*raise PromotionRefused\(\s*"([a-z_]+)"[\s\S]*?status=(\d+)\)/m.exec(sec);
+  return m ? { cond: m[1]!, code: m[2]!, status: m[3]! } : null;
+}
+
 describe("the parsers, unit-tested on fixtures", () => {
   it("defBody stops at the next top-level statement", () => {
     const py = "def a(x):\n    return 1\n\n\ndef b():\n    pass\n";
@@ -76,9 +89,41 @@ describe("the parsers, unit-tested on fixtures", () => {
   it("code() strips a comment, not the code before it", () => {
     expect(code('a = 1  # block["excluded"]')).toBe("a = 1  ");
   });
+  it("servedListName reads either spelling and only an assignment from the block", () => {
+    expect(servedListName(`    ex = block.get("${ATTESTATION_EXCLUDED}") if x else None`)).toBe("ex");
+    expect(servedListName(`    ex = block["${ATTESTATION_EXCLUDED}"]`)).toBe("ex");
+    expect(servedListName(`    ex = other.get("${ATTESTATION_EXCLUDED}")`)).toBeNull();
+  });
+  it("actorRefusal takes the acted_by condition, not a refusal on another condition", () => {
+    const py = [
+      '    if not ok:',
+      '        raise PromotionRefused("attestation_undeclarable", "m", status=503)',
+      '    self_attested = acted_by in _excluded_attesters(payload)',
+      '    if mode == X and acted_by in ex:',
+      '        raise PromotionRefused(',
+      '            "dropper_cannot_attest_origin",',
+      '            "m", status=403)',
+    ].join("\n");
+    expect(actorRefusal(py)).toEqual({ cond: "mode == X and acted_by in ex", code: "dropper_cannot_attest_origin", status: "403" });
+    expect(actorRefusal(py.split("\n").slice(0, 3).join("\n"))).toBeNull();
+  });
 });
 
-describe.skipIf(ROOT === null)("the card's hold and the route's 403 are one condition", () => {
+describe("the wire declares what the card reads (ingest-v1 snapshot)", () => {
+  const v1 = JSON.parse(readFileSync(path.join(__dirname, "../api/openapi/ingest-v1.openapi.json"), "utf8"));
+  const schemas = v1.components.schemas;
+  it(`TaskPayload.${ATTESTATION_FIELD} is an Attestation, and HumanTask.payload is a TaskPayload`, () => {
+    expect(schemas.TaskPayload?.properties?.[ATTESTATION_FIELD]?.$ref).toBe("#/components/schemas/Attestation");
+    expect(JSON.stringify(schemas.HumanTask?.properties?.payload)).toContain('"#/components/schemas/TaskPayload"');
+  });
+  it(`Attestation.${ATTESTATION_EXCLUDED} is a required list of strings`, () => {
+    const a = schemas.Attestation;
+    expect(a?.properties?.[ATTESTATION_EXCLUDED]).toMatchObject({ type: "array", items: { type: "string" } });
+    expect(a?.required).toContain(ATTESTATION_EXCLUDED);
+  });
+});
+
+describe.skipIf(ROOT === null)("the card's hold and the route's 403 read one field", () => {
   it("filing stamps payload[ATTESTATION_FIELD] from attestation_block", () => {
     const gw = code(read(GATEWAY));
     expect(gw, `${AT}: gateway.py does not stamp payload["${ATTESTATION_FIELD}"] = promotion.attestation_block(...)`).toMatch(
@@ -94,33 +139,29 @@ describe.skipIf(ROOT === null)("the card's hold and the route's 403 are one cond
     );
   });
 
-  it("the route refuses PROMOTED under the block's second_party mode when acted_by is in _excluded_attesters", () => {
+  it("the route binds the served excluded list", () => {
     const sec = code(routeSection(read(PROMOTION)));
     expect(sec, `${AT}: the act route's attestation section was not found`).not.toBe("");
+    expect(servedListName(sec), `${AT}: the route does not read block["${ATTESTATION_EXCLUDED}"]`).not.toBeNull();
+  });
+
+  it("the route refuses under the block's second_party mode when acted_by is in that served list, and nothing recomputed decides", () => {
+    const sec = code(routeSection(read(PROMOTION)));
     expect(sec, `${AT}: the route does not take its mode from the served block`).toMatch(/mode = block\["mode"\]/);
-    expect(sec, `${AT}: the route's excluded set is not _excluded_attesters(payload)`).toMatch(
-      /self_attested = acted_by in _excluded_attesters\(payload\)/,
+    const list = servedListName(sec);
+    const r = actorRefusal(sec);
+    expect(r, `${AT}: no PromotionRefused under an acted_by condition`).not.toBeNull();
+    expect(r!.cond, `${AT}: the refusal is not under second_party`).toMatch(/\bmode == ATTESTATION_SECOND_PARTY\b/);
+    expect(r!.cond, `${AT}: the refusal does not test acted_by against the served list "${list}"`).toMatch(
+      new RegExp(`\\bacted_by in ${list}\\b(?!\\()`),
     );
-    expect(sec, `${AT}: the route's refusal is not second_party AND self_attested`).toMatch(
-      /if mode == ATTESTATION_SECOND_PARTY and self_attested:/,
-    );
+    expect(r!.cond, `${AT}: a set recomputed from dropped_by decides the refusal`).not.toMatch(/_excluded_attesters|self_attested/);
   });
 
   it("the route's 403 code is one cortex draws with the server's text", () => {
-    const sec = code(routeSection(read(PROMOTION)));
-    const m = /if mode == ATTESTATION_SECOND_PARTY and self_attested:\s*raise PromotionRefused\(\s*"([a-z_]+)"[\s\S]*?status=(\d+)\)/.exec(sec);
-    expect(m, `${AT}: no PromotionRefused under the second_party branch`).not.toBeNull();
-    expect(m![2], `${AT}: the refusal is not a 403`).toBe("403");
-    expect(StructuralRefusalDetail_error as readonly string[], `${AT}: "${m![1]}" is not a StructuralRefusalDetail code`).toContain(m![1]);
-  });
-
-  it("the route section the tripwire reads exists (so the tripwire cannot pass on a missing file)", () => {
-    expect(code(routeSection(read(PROMOTION)))).not.toBe("");
-  });
-
-  // TRIPWIRE. Passes while the route does NOT read `excluded`; red the day it does. Then make it `it`.
-  it.fails("the route reads the served excluded list itself", () => {
-    const sec = code(routeSection(read(PROMOTION)));
-    expect(sec).toMatch(new RegExp(`block(\\.get\\(|\\[)"${ATTESTATION_EXCLUDED}"`));
+    const r = actorRefusal(code(routeSection(read(PROMOTION))));
+    expect(r, `${AT}: no PromotionRefused under an acted_by condition`).not.toBeNull();
+    expect(r!.status, `${AT}: the refusal is not a 403`).toBe("403");
+    expect(StructuralRefusalDetail_error as readonly string[], `${AT}: "${r!.code}" is not a StructuralRefusalDetail code`).toContain(r!.code);
   });
 });

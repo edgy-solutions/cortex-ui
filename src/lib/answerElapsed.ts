@@ -31,16 +31,24 @@ import { artifactDuration } from "./formatDuration";
  * would state a total that is quietly missing a leg — a wrong measurement, which this codebase
  * treats as worse than an absent one everywhere else it renders a number.
  *
- * The count of hops COVERED travels with the figure for that reason: `1 of 2 hops` is honest
- * about what it is, and it cannot be misread as the whole.
+ * The count of artifacts COVERED travels with the figure for that reason: `1 of 2 measured` is
+ * honest about what it is, and it cannot be misread as the whole.
+ *
+ * ── WHAT THE CHAIN COUNTS IS ARTIFACTS, NOT HOPS ─────────────────────────────────────────
+ *
+ * This walk counts the artifacts in the lineage chain. It once called them "hops", and the footer
+ * printed `7m 35s · 4 hops`; perf's census (11-08) showed that read as engine hops and as a wall
+ * clock, and it is neither. The footer now shows separately labelled numbers (`answerFooter`):
+ * `work` (this sum), `artifacts` (this count), and `wall clock` and `hops`, which only the server
+ * can measure and which are drawn only once it serves them.
  */
 
 /** How much work produced this answer, and how much of that work was measured. */
 export interface AnswerElapsed {
-  /** Summed milliseconds across the measured hops. Null when none were measured. */
+  /** Summed milliseconds across the measured artifacts. Null when none were measured. */
   ms: number | null;
-  /** Hops in the lineage chain, this artifact included. */
-  hops: number;
+  /** Artifacts in the lineage chain, this one included. */
+  artifacts: number;
   /** How many of them carried a measurement. */
   measured: number;
 }
@@ -49,9 +57,9 @@ export interface AnswerElapsed {
  * A chain cannot be longer than this. Lineage comes off the wire and a cycle there — a row
  * naming itself, or two rows naming each other — would hang the render rather than draw a wrong
  * number. The visited set already breaks cycles; this bounds a long legitimate chain too, since
- * a hop count in the hundreds is a bug report, not a total worth summing.
+ * a chain in the hundreds is a bug report, not a total worth summing.
  */
-const MAX_HOPS = 8;
+const MAX_CHAIN = 8;
 
 /**
  * Walk the lineage from this artifact back through the answers it was derived from.
@@ -64,17 +72,17 @@ export function answerElapsed(
   a: Artifact | null | undefined,
   byId: (id: string) => Artifact | undefined,
 ): AnswerElapsed {
-  if (!a) return { ms: null, hops: 0, measured: 0 };
+  if (!a) return { ms: null, artifacts: 0, measured: 0 };
 
   const seen = new Set<string>();
   let total = 0;
-  let hops = 0;
+  let artifacts = 0;
   let measured = 0;
 
   let cur: Artifact | undefined = a;
-  while (cur && hops < MAX_HOPS && !seen.has(cur.id)) {
+  while (cur && artifacts < MAX_CHAIN && !seen.has(cur.id)) {
     seen.add(cur.id);
-    hops += 1;
+    artifacts += 1;
     // Read through the same refusal the card uses, so a negative or non-finite value is not
     // silently added into a sum that then looks plausible. `artifactDuration` returning a
     // string means the value passed; the raw number is what gets added.
@@ -90,20 +98,65 @@ export function answerElapsed(
     cur = parents.length ? byId(parents[0]) : undefined;
   }
 
-  return { ms: measured > 0 ? total : null, hops, measured };
+  return { ms: measured > 0 ? total : null, artifacts, measured };
 }
 
 /**
- * The row's label: the figure, plus what it covers when that is not obvious.
- *
- * A single measured hop is the ordinary case and says nothing extra — a `1 hop` on every row
- * would be noise, and noise is what gets a useful marker ignored. Anything else states its
- * coverage, because those are the cases where the number alone would mislead.
+ * What only the server can measure about an answer: the wall clock from the first request to the
+ * final render, and the engine hops it took. Perf serves these (field names to follow); until then
+ * every caller passes `NOT_SERVED` and neither number is drawn.
  */
-export function answerElapsedLabel(e: AnswerElapsed): string | null {
-  const text = artifactDuration(e.ms);
-  if (text === null) return null;
-  if (e.hops <= 1) return text;
-  if (e.measured === e.hops) return `${text} · ${e.hops} hops`;
-  return `${text} · ${e.measured} of ${e.hops} hops`;
+export interface ServedAnswerTiming {
+  wallClockMs: number | null;
+  hops: number | null;
+}
+
+export const NOT_SERVED: ServedAnswerTiming = { wallClockMs: null, hops: null };
+
+/** One labelled number in the answer footer. `key` is stable for tests and data attributes. */
+export interface FooterNumber {
+  key: "work" | "wall-clock" | "hops" | "artifacts";
+  label: string;
+  value: string;
+  title: string;
+}
+
+/**
+ * The answer footer: each number separately labelled, each drawn only when it exists.
+ *
+ * - `work`: the summed producer time. When some artifacts carry no measurement, the value says how
+ *   many it covers, so a partial sum is never read as the total.
+ * - `wall clock`, `hops`: served, never derived here. A served value that is not a usable number is
+ *   dropped the way an absent one is.
+ * - `artifacts`: the lineage chain's length, always known for a real artifact.
+ *
+ * No artifact, no footer: a served timing has nothing to annotate.
+ */
+export function answerFooter(e: AnswerElapsed, served: ServedAnswerTiming = NOT_SERVED): FooterNumber[] {
+  if (e.artifacts === 0) return [];
+  const out: FooterNumber[] = [];
+  const work = artifactDuration(e.ms);
+  if (work !== null) {
+    const partial = e.measured < e.artifacts;
+    out.push({
+      key: "work",
+      label: "work",
+      value: partial ? `${work} (${e.measured} of ${e.artifacts} measured)` : work,
+      title: partial
+        ? `Summed producer time over the ${e.measured} of ${e.artifacts} artifacts that recorded one; not a wall clock`
+        : "Summed producer time across the answer's artifacts; not a wall clock",
+    });
+  }
+  const wall = artifactDuration(served.wallClockMs);
+  if (wall !== null) {
+    out.push({ key: "wall-clock", label: "wall clock", value: wall, title: "First request to final render, as the server measured it" });
+  }
+  const hops = served.hops;
+  if (typeof hops === "number" && Number.isInteger(hops) && hops >= 0) {
+    out.push({ key: "hops", label: "hops", value: String(hops), title: "Engine hops, as the server counted them" });
+  }
+  if (e.artifacts > 0) {
+    out.push({ key: "artifacts", label: "artifacts", value: String(e.artifacts), title: "Artifacts in this answer's lineage chain" });
+  }
+  return out;
 }

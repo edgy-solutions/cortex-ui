@@ -1,4 +1,4 @@
-import { useMemo, useLayoutEffect, useRef, useState, useEffect, useCallback } from "react";
+import { Fragment, useMemo, useLayoutEffect, useRef, useState, useEffect, useCallback } from "react";
 import { Search, GripVertical, Clock, Hash, Shapes, Share2, X } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { foldedAskIds } from "@/lib/askFold";
@@ -16,7 +16,7 @@ import { INGEST_AWAITING_KIND_STATUS } from "@/lib/ingestWire";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { IngestFailureExtras } from "@/components/ingest/IngestFailureExtras";
 import { BatchExportPanel } from "@/components/ingest/BatchExportPanel";
-import { answerElapsed, answerElapsedLabel } from "@/lib/answerElapsed";
+import { answerElapsed, answerFooter, NOT_SERVED, type FooterNumber } from "@/lib/answerElapsed";
 import {
   useAnswerPanelStore,
   type AnswerSortMode,
@@ -751,13 +751,31 @@ function IngestReason({ a }: { a: Artifact }) {
   );
 }
 
+/**
+ * The answer's footer numbers, each with its own label and a title saying what it measures, so
+ * `work 12s · artifacts 2` cannot be read as a wall clock and a hop count. Shared by both rows.
+ */
+function AnswerFooter({ numbers }: { numbers: FooterNumber[] }) {
+  return (
+    <span data-answer-footer="">
+      {numbers.map((n, i) => (
+        <Fragment key={n.key}>
+          {i > 0 && " · "}
+          <span data-footer-number={n.key} title={n.title}>
+            <span className="text-slate-700">{n.label}</span> <span className="tabular-nums">{n.value}</span>
+          </span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   const byKind = useTaskKindStore((s) => s.byKind);
-  // null when nothing in the chain was measured — the row then shows no duration at all,
-  // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
-  // from an ask is two pieces of work, and reporting only the last leg understated it by the
-  // whole routing turn. The label says how many hops it covers when that is not one.
-  const took = answerElapsedLabel(answerElapsed(a, ctx.byId));
+  // Separately labelled numbers (see `answerFooter`): `work` is summed ACROSS the lineage chain,
+  // since an answer that came from an ask is two pieces of work; it is absent when nothing was
+  // measured, never a `0s`. `wall clock` and `hops` are the server's and wait until it serves them.
+  const footer = answerFooter(answerElapsed(a, ctx.byId), NOT_SERVED);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);
@@ -799,18 +817,10 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
           : undefined
       }
     >
-      {/* Time — and, under it, how long the answer took to produce.
-          Stacked rather than inline because this column is fixed-width and the
-          two are different KINDS of fact: when it happened, and how long it ran.
-          Rendered only when the producer measured it; an artifact with no
-          duration shows the clock alone, never a `0s` that would read as fast. */}
+      {/* Time. How long the answer ran is in the footer under the content: labelled numbers
+          do not fit this fixed-width column, and they are a different KIND of fact. */}
       <span className="w-11 flex-shrink-0 text-right text-[10px] font-mono text-slate-500 tabular-nums pt-2">
         {formatTime(a.created_at)}
-        {took && (
-          <span className="block text-[9px] text-slate-600" title={`Took ${took} to answer`}>
-            {took}
-          </span>
-        )}
       </span>
 
       {/* Spine rail + node */}
@@ -854,6 +864,11 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
             {/* See CanvasPane's header: a label beside a question is copied with it. */}
             <span className="text-slate-600 select-none">Q · </span>
             {highlight(a.question_text, ctx.searchHit)}
+          </p>
+        )}
+        {footer.length > 0 && (
+          <p className="text-[9px] font-mono text-slate-600 leading-snug mt-0.5 select-none">
+            <AnswerFooter numbers={footer} />
           </p>
         )}
       </div>
@@ -1031,11 +1046,10 @@ function ClusterHeader({
 }
 
 function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
-  // null when nothing in the chain was measured — the row then shows no duration at all,
-  // which is the honest rendering of "not recorded". Summed ACROSS HOPS: an answer that came
-  // from an ask is two pieces of work, and reporting only the last leg understated it by the
-  // whole routing turn. The label says how many hops it covers when that is not one.
-  const took = answerElapsedLabel(answerElapsed(a, ctx.byId));
+  // Separately labelled numbers (see `answerFooter`): `work` is summed ACROSS the lineage chain,
+  // since an answer that came from an ask is two pieces of work; it is absent when nothing was
+  // measured, never a `0s`. `wall clock` and `hops` are the server's and wait until it serves them.
+  const footer = answerFooter(answerElapsed(a, ctx.byId), NOT_SERVED);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
   const archetype = answerArchetype(a);
@@ -1073,7 +1087,7 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
         <p className="text-[10px] font-mono text-slate-500 leading-snug line-clamp-1 mt-0.5">
           {/* THE WORST OF THESE ROWS: the question shares one line with a label, a separator,
               a timestamp and a duration, so a selection over it copies
-              "Q · <question> · 14:32 · 2.1s". Everything that is not the question is marked
+              "Q · <question> · 14:32 · work 2.1s · artifacts 1". Everything that is not the question is marked
               unselectable, which leaves the question copyable ALONE from a row that shows four
               things. */}
           {captured && a.question_text && (
@@ -1084,7 +1098,12 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
             </>
           )}
           <span className="text-slate-600 select-none">{formatTime(a.created_at)}</span>
-          {took && <span className="text-slate-600 select-none"> · {took}</span>}
+          {footer.length > 0 && (
+            <span className="text-slate-600 select-none">
+              {" · "}
+              <AnswerFooter numbers={footer} />
+            </span>
+          )}
         </p>
       </div>
       {pinned && (

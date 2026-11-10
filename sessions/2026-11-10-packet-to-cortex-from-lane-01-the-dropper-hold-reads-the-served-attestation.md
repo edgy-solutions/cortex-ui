@@ -28,6 +28,10 @@ A `document_promotion` task's payload carries, from 1.9.0:
   same value.
 - `excluded` is empty under `self`. Under `second_party` it holds the dropper's `authz_id` and `on_behalf_of`,
   sorted, with blanks dropped.
+- **Added 11-10 (architect's note):** from ingest API 1.9.1 the block is declared in the OpenAPI as
+  `Attestation {mode, excluded[]}` on `HumanTask.payload` (`TaskPayload`). The server's act refuses exactly the ids in
+  the served `excluded`, never recomputing them from `dropped_by`, so the card and the server read one list. Pin
+  `db45763` is confirmed for 0.4.83, and your malformed-block-holds choice stands.
 
 ## What the card does
 
