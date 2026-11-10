@@ -1607,45 +1607,69 @@ describe("PdfEvidencePane caption", () => {
   });
 });
 
-describe("the dropper cannot attest its own origin", () => {
+describe("the dropper cannot attest its own origin: the card reads the served attestation (ingest 1.9.0, #324)", () => {
   const viewer = (authz_id?: string) =>
     usePersonaStore.setState({ entitlements: { authz_id, email: "x@example.com" } as never });
+  /** A task as #324 stamps it; `dropped_by` stays alice throughout, so any arm that holds on it alone fails. */
+  const attested = (attestation: unknown) => task({ payload: payload193({ attestation }) });
+  const SECOND_ALICE = { mode: "second_party", excluded: ["alice@example.com"] };
 
-  it("the dropper sees Promote held with the reason, and Reject open", async () => {
+  it("the server names the viewer: Promote held with the reason, and Reject open", async () => {
     viewer("alice@example.com");
-    await mount();
+    await mount(attested(SECOND_ALICE));
     expect(promoteBtn().disabled).toBe(true);
     expect(hold()).toBe("dropper");
     expect(document.querySelector("[data-promote-held=\"dropper\"]")!.textContent).toContain("someone else must attest its origin");
     expect(rejectBtn().disabled).toBe(false);
   });
 
-  it("someone who did not drop it can promote", async () => {
-    viewer("bob@example.com");
+  it("control: the self mode's empty list does not hold the dropper", async () => {
+    viewer("alice@example.com");
+    await mountPromotable(attested({ mode: "self", excluded: [] }));
+    expect(hold()).toBeNull();
+  });
+
+  it("no attestation key: the dropper is not held, the server decides at the act", async () => {
+    viewer("alice@example.com");
     await mountPromotable();
     expect(hold()).toBeNull();
   });
 
-  it("the dropper's hold does not wait for the rows: it shows while they are still loading", async () => {
+  it("someone the server does not name can promote", async () => {
+    viewer("bob@example.com");
+    await mountPromotable(attested(SECOND_ALICE));
+    expect(hold()).toBeNull();
+  });
+
+  it("the hold does not wait for the rows: it shows while they are still loading", async () => {
     viewer("alice@example.com");
     fetchIngestExtraction.mockReturnValue(new Promise(() => {}));
-    render(<ApprovalTaskCard task={task()} />);
+    render(<ApprovalTaskCard task={attested(SECOND_ALICE)} />);
     await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
     expect(hold()).toBe("dropper");
     expect(rejectBtn().disabled).toBe(false);
   });
 
-  it("the person it was dropped for sees Promote held", async () => {
+  it("a name the server lists is held even when dropped_by does not name it (the delegate)", async () => {
     viewer("carol@example.com");
-    await mount(task({ payload: payload193({ dropped_by: { authz_id: "svc:bot", on_behalf_of: "carol@example.com" } }) }));
+    await mount(attested({ mode: "second_party", excluded: ["carol@example.com", "svc:bot"] }));
     expect(promoteBtn().disabled).toBe(true);
     expect(hold()).toBe("dropper");
   });
 
+  it("a block that cannot be read holds Promote, with its own reason, and Reject open", async () => {
+    viewer("bob@example.com");
+    await mount(attested({ mode: "second_party", excluded: "alice@example.com" }));
+    expect(promoteBtn().disabled).toBe(true);
+    expect(hold()).toBe("attestation-unreadable");
+    expect(document.querySelector("[data-promote-held=\"attestation-unreadable\"]")!.textContent).toContain("attestation could not be read");
+    expect(rejectBtn().disabled).toBe(false);
+  });
+
   it("with no authz_id on the entitlements the card does not hold Promote", async () => {
-    // The email IS the dropper's id here, so a fallback to the email would hold Promote and fail this arm.
+    // The email IS the excluded id here, so a fallback to the email would hold Promote and fail this arm.
     usePersonaStore.setState({ entitlements: { email: "alice@example.com" } as never });
-    await mountPromotable();
+    await mountPromotable(attested(SECOND_ALICE));
     expect(hold()).toBeNull();
   });
 });

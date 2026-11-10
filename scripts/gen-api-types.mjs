@@ -15,6 +15,9 @@
  * anyOf) is also emitted as `export const <Schema>_<field> = [...] as const;`. Where several schemas of ONE
  * document carry the same field with an enum, one canonical `<FIELD>` constant is emitted too, and ONLY if
  * every copy is identical: a split enum THROWS naming the copies (a producer finding, not ours to paper over).
+ * The one exception is DECLARED_SPLITS below: a field that names a different thing in each schema, keyed on
+ * the field AND its exact schemas. It gets no <FIELD> constant. A declaration that no longer matches the
+ * document (other schemas, or the copies now agree) throws too, so the exception cannot outlive its reason.
  *
  * It THROWS on a construct it does not map (allOf / oneOf / a $ref outside #/components/schemas / a
  * parameter $ref): a type silently widened to `unknown` is the failure this generator exists to stop.
@@ -25,6 +28,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const METHODS = ["get", "post", "put", "delete", "patch"];
 const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * Fields whose enum is a DIFFERENT vocabulary in each schema that carries it, so no shared constant exists.
+ * `error`: two refusal bodies (#303, invincible-agent), each discriminating its own refusals.
+ */
+export const DECLARED_SPLITS = { error: ["AuthorizationUnavailableDetail", "StructuralRefusalDetail"] };
 
 const key = (k) => (IDENT.test(k) ? k : JSON.stringify(k));
 const lit = (v) => JSON.stringify(v);
@@ -173,6 +182,14 @@ export function generate(doc, { sourceName, sha }) {
       if (copies.length < 2) continue;
       const first = JSON.stringify(copies[0].values);
       const odd = copies.filter((c) => JSON.stringify(c.values) !== first);
+      const declared = Object.hasOwn(DECLARED_SPLITS, field) ? DECLARED_SPLITS[field] : undefined;
+      if (declared) {
+        const names = copies.map((c) => c.schema).sort();
+        if (JSON.stringify(names) !== JSON.stringify([...declared].sort()) || odd.length === 0) {
+          throw new Error(`declared split for field "${field}" no longer matches: declared ${JSON.stringify(declared)}; document ${copies.map((c) => `${c.schema}=${JSON.stringify(c.values)}`).join("; ")}`);
+        }
+        continue;
+      }
       if (odd.length > 0) {
         throw new Error(
           `split enum for field "${field}": ${copies.map((c) => `${c.schema}=${JSON.stringify(c.values)}`).join("; ")}`,

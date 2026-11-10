@@ -5,6 +5,7 @@ import { actRefusal } from "@/lib/reviewRowEdits";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import { PROPOSED_MOVED_ERROR } from "@/lib/accessProposal";
+import { StructuralRefusalDetail_error } from "@/api/generated/bff";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction, offeredVerbs } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
@@ -213,6 +214,19 @@ export function useTaskAct(task: ApprovalTaskPayload) {
           setRefusal({ message: policy.message ?? policy.error, code: policy.error, policy });
           return;
         }
+      }
+      // A STRUCTURAL REFUSAL (#303's StructuralRefusalDetail, e.g. the dropper attesting its own origin):
+      // the server's message, drawn inline. Which codes are structural comes from the generated enum, not
+      // from this file; a 403 carrying any other code keeps the toast below.
+      if (
+        status === 403 &&
+        d !== null &&
+        typeof d.message === "string" &&
+        d.message !== "" &&
+        (StructuralRefusalDetail_error as readonly string[]).includes(errorCode ?? "")
+      ) {
+        setRefusal({ message: d.message, code: errorCode });
+        return;
       }
       // PROPOSED (ADR-0062 section 7): the grant card approved a head sha that moved after review.
       if (status === 409 && errorCode === PROPOSED_MOVED_ERROR) {

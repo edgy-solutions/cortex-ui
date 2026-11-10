@@ -1,22 +1,36 @@
 import { usePersonaStore } from "@/store/usePersonaStore";
 
 /**
- * Mirror of the BFF's `_excluded_attesters` (`src/iagent/promotion.py`): the ids that may not attest
- * the origin of their own drop. The server refuses `promoted` from them with
- * `dropper_cannot_attest_origin` (403), so the card must not offer a button that can only be refused.
- * Exact string compare, no trim, no case folding, as the server does. A legacy string `dropped_by`
- * excludes nobody.
+ * The served attestation block (ingest 1.9.0, invincible-agent #324): `payload.attestation`, stamped
+ * at filing by `promotion.attestation_block`. The card does not work out who may promote; the server
+ * names them in `excluded`. No `mode` is read here: a mode this card does not know cannot open a hold.
  */
-export function excludedAttesters(payload: unknown): Set<string> {
-  const dropped =
-    payload && typeof payload === "object" ? (payload as Record<string, unknown>).dropped_by : undefined;
-  if (!dropped || typeof dropped !== "object" || Array.isArray(dropped)) return new Set();
-  const d = dropped as Record<string, unknown>;
-  return new Set([d.authz_id, d.on_behalf_of].filter((v): v is string => typeof v === "string" && v !== ""));
-}
+export type PromotionAttestation = { mode: string; excluded: string[] };
 
-export function viewerIsDropper(payload: unknown, viewerAuthzId: string | null): boolean {
-  return viewerAuthzId !== null && excludedAttesters(payload).has(viewerAuthzId);
+/** The payload key the producer stamps, and the list in it the card reads. The producer seal checks both spellings. */
+export const ATTESTATION_FIELD = "attestation";
+export const ATTESTATION_EXCLUDED = "excluded";
+
+/**
+ * Why Promote is held on the attestation alone, or null.
+ *
+ * - No `attestation` key, or a null one (the act route reads null as absent): no hold; the server
+ *   decides at the act.
+ * - A present block that is not an object, or whose `excluded` is not a list of strings: held,
+ *   `attestation-unreadable` (fail closed, Lane 1 11-10).
+ * - The viewer's `authz_id` in `excluded`, exact compare: held, `dropper`.
+ * - Viewer unknown: no hold; the server still refuses.
+ */
+export function attestationHold(
+  payload: unknown,
+  viewerAuthzId: string | null,
+): "dropper" | "attestation-unreadable" | null {
+  const block = payload && typeof payload === "object" ? (payload as Record<string, unknown>)[ATTESTATION_FIELD] : undefined;
+  if (block === undefined || block === null) return null;
+  if (typeof block !== "object" || Array.isArray(block)) return "attestation-unreadable";
+  const excluded = (block as Record<string, unknown>)[ATTESTATION_EXCLUDED];
+  if (!Array.isArray(excluded) || !excluded.every((v) => typeof v === "string")) return "attestation-unreadable";
+  return viewerAuthzId !== null && excluded.includes(viewerAuthzId) ? "dropper" : null;
 }
 
 /**

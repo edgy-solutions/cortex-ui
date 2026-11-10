@@ -57,6 +57,7 @@ import { resetReviewShapesCache } from "./useReviewShapes";
 import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
 import { fixtureDocumentReviewPayload } from "@/lib/documentReviewFixture";
 import { fixturePromotionPayload } from "@/lib/promotionReviewFixture";
+import { StructuralRefusalDetail_error } from "@/api/generated/bff";
 
 // The kinds these tests treat as served-declared (their own list, NOT cortex's display table: 2026-10-30 the
 // card no longer reads that table). A declared kind is handed the declaration the server would serve for it: with none, the card fails closed
@@ -1300,6 +1301,20 @@ describe("a policy refusal on /act (the declared envelope)", () => {
     press();
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Not authorized to act on this task"));
     expect(document.querySelector("[data-policy-refusal]")).toBeNull();
+    expect(document.querySelector("[data-act-refusal]")).toBeNull();
+  });
+  it("a 403 structural refusal (#303) draws the server's message inline, not ours", async () => {
+    // The code is read from the generated enum, so this arm fails if the producer drops it from the schema.
+    const code = StructuralRefusalDetail_error[0];
+    actOnHumanTask.mockRejectedValue(err(403, { error: code, message: "Served text, verbatim.", authz_id: "alice", task_id: "t" }));
+    press();
+    await waitFor(() => expect(document.querySelector("[data-act-refusal]")?.textContent).toContain("Served text, verbatim."));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+  it("a 403 whose code is not a structural one keeps the toast even with a message", async () => {
+    actOnHumanTask.mockRejectedValue(err(403, { error: "not_authorized_to_act", message: "Served text, verbatim." }));
+    press();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Not authorized to act on this task"));
     expect(document.querySelector("[data-act-refusal]")).toBeNull();
   });
   it("a 403 with a PARTIAL envelope also keeps the toast", async () => {

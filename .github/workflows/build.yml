@@ -246,7 +246,16 @@ env:
   #   NOT empty: the sample overlay adds safety_finding_review.yaml, and review_shapes/README.md
   #   changes (control: 381 files changed). Check 3: uv.lock iagent-mesh MOVED, rev v0.9.12 -> v0.9.13.
   #   Gate: the full suite against a git-archive export of c3b51ed7 placed as the sibling.
-  PRODUCER_REF: c3b51ed7ab921b045158af94bbd5bd1b593d8b03
+  # 2026-11-10 RE-PIN to de1873c2 (platform master; the merge of #324, ingest 1.9.0, named by the
+  #   architect for 0.4.83). c3b51ed7 is its ancestor. Every promotion task's payload carries
+  #   `attestation: {mode, excluded}`, which dropperHold.ts now reads instead of working the set out;
+  #   its producer seal reads promotion.py and gateway.py here. The OpenAPI adds #303's refusal
+  #   bodies; StructuralRefusalDetail.error splits from AuthorizationUnavailableDetail.error, declared
+  #   in the generator's DECLARED_SPLITS. NOT read off the pods. Check 2: task_kinds and review_shapes
+  #   diff (all seven dirs, three of them test fixtures) c3b51ed7..de1873c2 is EMPTY (control: 165 files changed). Check 3: uv.lock
+  #   iagent-mesh MOVED, v0.9.13 -> v0.9.15. Gate: the full suite against a git-archive export of
+  #   de1873c2 placed as the sibling.
+  PRODUCER_REF: de1873c23faa45f098db6cfdab2beec0aa2f64ce
 
 permissions:
   contents: read

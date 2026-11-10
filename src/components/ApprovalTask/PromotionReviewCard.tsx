@@ -1,7 +1,7 @@
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
-import { useViewerAuthzId, viewerIsDropper } from "@/lib/dropperHold";
+import { attestationHold, useViewerAuthzId } from "@/lib/dropperHold";
 import { verbLabel } from "@/lib/taskDeclaration";
 import { buildHeaderEdits, buildRowEdits, isPromotionRowEditsEnabled, type RowEditDraft } from "@/lib/reviewRowEdits";
 import type { HeaderEdit } from "@/api/client";
@@ -101,7 +101,7 @@ import { ReviewCallout } from "./ReviewCallout";
  * does not know holds Promote rather than passing it. Reject waits on neither, because "this is not
  * a notice" is exactly the decision a steward makes about a drop with no rows or no readable source.
  */
-type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back" | "dropper" | "unchecked";
+type PromoteHold = "rows-loading" | "no-rows" | "source-loading" | "no-source" | "sent-back" | "dropper" | "attestation-unreadable" | "unchecked";
 
 const HOLD_TEXT: Record<PromoteHold, string> = {
   "rows-loading": "Promote waits for the extracted rows.",
@@ -110,8 +110,10 @@ const HOLD_TEXT: Record<PromoteHold, string> = {
   "no-source": "Promote is off: the source cannot be shown, and a steward cannot vet what they cannot see. Reject is still open.",
   // Unlike the holds above this one also turns Reject off: see `sentBack` in the card.
   "sent-back": "",
-  // Known from the payload alone; the server refuses the promote verb from the dropper (dropper_cannot_attest_origin).
+  // The server names the viewer in `payload.attestation.excluded`; if a promote is refused anyway, the 403's text is the server's.
   dropper: "Promote is off: you dropped this document, and someone else must attest its origin. Reject is still open.",
+  "attestation-unreadable":
+    "Promote is off: the task's attestation could not be read, so the card cannot tell whether you may attest its origin. Reject is still open.",
   // Flag `promotionRuns` only; the text names the counts, so the card composes it (`uncheckedText`).
   unchecked: "",
 };
@@ -415,12 +417,12 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const rejectVerb = reasonVerbs.length === 1 ? reasonVerbs[0] : null;
   const otherVerbs = verbs.filter((v) => v !== promoteVerb && v !== rejectVerb);
   const viewerAuthzId = useViewerAuthzId();
-  const dropperHeld = viewerIsDropper(task.payload, viewerAuthzId);
+  const attestHeld = attestationHold(task.payload, viewerAuthzId);
   const promoteHold: PromoteHold | null =
     sentBack
       ? "sent-back"
-      : dropperHeld
-      ? "dropper"
+      : attestHeld
+      ? attestHeld
       : extraction.phase === "loading"
       ? "rows-loading"
       : rows.length === 0
@@ -1310,7 +1312,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               </p>
             )}
             {promoteVerb &&
-              (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper" || promoteHold === "unchecked") && (
+              (promoteHold === "no-rows" || promoteHold === "no-source" || promoteHold === "sent-back" || promoteHold === "dropper" || promoteHold === "attestation-unreadable" || promoteHold === "unchecked") && (
               <p className="text-[11px] text-amber-400/90" data-promote-held={promoteHold}>
                 {promoteHold === "sent-back" ? sentBackText(hold!) : promoteHold === "unchecked" ? uncheckedText : HOLD_TEXT[promoteHold]}
               </p>

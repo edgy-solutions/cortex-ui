@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { generate } from "../../scripts/gen-api-types.mjs";
+import { DECLARED_SPLITS, generate } from "../../scripts/gen-api-types.mjs";
 import { INGEST_LEAVES, INGEST_LEAF_SOURCES, readLeafCandidates, readLeafSource } from "../lib/ingestWire";
 import { DEFAULT_REJECT_CODES, readExtraction } from "../lib/promotionReview";
 import { HEADER_EDIT_FIELDS } from "../lib/reviewRowEdits";
@@ -74,6 +74,39 @@ describe("leaf (step 1): INGEST_LEAVES / INGEST_LEAF_SOURCES come from the v1 sn
   it("a split leaf enum (one copy changed) THROWS rather than picking a copy", () => {
     const doc = withExtra(v1, "StatusBody", "leaf", "document");
     expect(() => gen(doc, "ingest-v1.openapi.json")).toThrow(/split enum for field "leaf"/);
+  });
+});
+
+describe("a declared split (DECLARED_SPLITS): the field names a different thing in each schema", () => {
+  /** A deep copy with `field` on `schema` set to `values` (the schema is created if absent). */
+  const withEnum = (doc: any, schema: string, field: string, values: string[]) => {
+    const copy = JSON.parse(JSON.stringify(doc));
+    const s = (copy.components.schemas[schema] ??= { type: "object", properties: {} });
+    s.properties[field] = { type: "string", enum: values };
+    return copy;
+  };
+  for (const name of ["cortex-bff.openapi.json", "ingest-v1.openapi.json"] as const) {
+    const doc = name === "cortex-bff.openapi.json" ? bff : v1;
+    it(`${name}: each schema keeps its own constant and no shared ERROR is emitted`, () => {
+      const out = gen(doc, name);
+      for (const s of DECLARED_SPLITS.error) {
+        expect(out).toContain(`export const ${s}_error = ${JSON.stringify(snapshotEnum(doc, s, "error"))} as const;`);
+      }
+      expect(out).not.toMatch(/export const ERROR =/);
+    });
+  }
+  it("a third schema carrying the field THROWS: the declaration names the exact schemas", () => {
+    const doc = withEnum(bff, "SomeOtherDetail", "error", ["x"]);
+    expect(() => gen(doc, "cortex-bff.openapi.json")).toThrow(/declared split for field "error" no longer matches/);
+  });
+  it("copies that now agree THROW: the declaration has outlived its reason", () => {
+    const [a, b] = DECLARED_SPLITS.error;
+    const doc = withEnum(bff, b!, "error", snapshotEnum(bff, a!, "error"));
+    expect(() => gen(doc, "cortex-bff.openapi.json")).toThrow(/declared split for field "error" no longer matches/);
+  });
+  it("an undeclared field that splits still THROWS (review_shape)", () => {
+    const doc = withExtra(v1, "StatusBody", "review_shape", "document");
+    expect(() => gen(doc, "ingest-v1.openapi.json")).toThrow(/split enum for field "review_shape"/);
   });
 });
 
