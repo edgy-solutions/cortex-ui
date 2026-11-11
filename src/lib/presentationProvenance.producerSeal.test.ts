@@ -135,7 +135,13 @@ describe.skipIf(ROOT === null)("a declared measure's wire, from the producer's o
   });
 
   it("the row's target reaches the flat `reference` key through measure_verbs only", () => {
-    expect(read(VERBS), AT).toContain('reference=dict(rnd["target"])');
+    // Since producer ab3fc16d the target reaches `reference` on two branches: a MULTI_SERIES row through
+    // `_check_series` (which returns the validated target), any other shape directly. Both, and the row carrying it.
+    const src = read(VERBS);
+    expect(src, `${AT}: MULTI_SERIES takes its reference from _check_series`).toContain("series, reference = _check_series(rnd");
+    expect(src, `${AT}: _check_series returns the target as the reference`).toContain("return series, dict(target)");
+    expect(src, `${AT}: any other shape takes the target directly`).toContain('dict(rnd["target"]) if rnd.get("target") else None');
+    expect(src, `${AT}: the row carries the reference`).toContain("reference=reference,");
   });
 
   it("the declared envelope carries value_label, series and reference beside render and rows", () => {
