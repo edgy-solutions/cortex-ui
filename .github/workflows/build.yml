@@ -272,7 +272,13 @@ env:
   #   4f2dac35..6a4175a2 is EMPTY (control: aac9900b..6a4175a2, 5 files changed). Check 3: uv.lock
   #   iagent-mesh MOVED, v0.9.15 -> v0.9.19. Gate: the full suite against a git-archive export of
   #   6a4175a2 placed as the sibling.
-  PRODUCER_REF: 6a4175a2eef941a46976cda86f7b0bbf5a1b95cb
+  # 2026-11-11 RE-PIN to 8c3eb9af (platform master; the merge of #356, second parent 6a4175a2). Both
+  #   OpenAPI snapshots are byte-identical to 6a4175a2's; only the generated headers move. NOT read
+  #   off the pods. Check 2: task_kinds and review_shapes diff 6a4175a2..8c3eb9af is EMPTY (control:
+  #   aac9900b..8c3eb9af, 1 file changed). Check 3: uv.lock iagent-mesh stays v0.9.19 (edgy-dag-tools
+  #   moves 0.13.0 -> 0.14.0, which no seal reads). Gate: the full suite against a git-archive export
+  #   of 8c3eb9af placed as the sibling.
+  PRODUCER_REF: 8c3eb9afe2b1f843b265662a4b0f63170898669e
 
 permissions:
   contents: read
