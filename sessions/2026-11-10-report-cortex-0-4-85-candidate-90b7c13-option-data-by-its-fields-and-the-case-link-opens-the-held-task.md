@@ -132,6 +132,8 @@
   - The fix is the same `heldTasks` match: draw `ApprovalTaskCard` for the held row. That changes what the card
     offers, so it is left for a ruling, not folded into this beat. Lane 1 could instead serve `approvals[].task`,
     the field the contract already names.
+  - **Ruled (Chris, 2026-11-10):** "keep the panel as it is until that lands." The panel is unchanged, and cortex
+    does no matching of its own, until Lane 1 serves `approvals[].task`.
 - **OpenDDIL's 10-17 questions 1 and 2** are answered by this beat, in the packet:
   - `/case/{id}` opens the step pending for whoever opens it, when they hold exactly one;
   - otherwise it opens the read-only panel.
