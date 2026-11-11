@@ -1419,12 +1419,20 @@ export async function fileAccessProposal(body: AccessProposalBody): Promise<Acce
 /**
  * Reads cortex makes of fields the producer sends but does not declare. The read-side twin of AWAITING_DOOR.
  * Shape: { "<METHOD /path>": { "<dotted.path>": "<reason, evidence file>" } }. `[]` is an array step.
+ * (b) the producer sends it, undeclared. (p) a ruling names it and the producer neither sends nor declares it
+ * yet; cortex reads it as optional, so an absent value changes nothing.
  * client.responseSeal.test.ts fails an entry the schema now declares, and one nothing reads.
  */
 export const AWAITING_DECLARATION: Record<string, Record<string, string>> = {
   "POST /decision_subgraph": {
     "live_nodes.[].uri": "(b) the producer declares list[dict] but builds {uri, labels} per node; evidence: producer src/iagent/gateway.py:10573 at 4a5ff6b6 (and src/lib/decisionMap.test.ts fixtures)",
     "context_nodes.[].uri": "(b) same open dict, {uri, labels}; evidence: producer src/iagent/gateway.py:10525-10575 at 4a5ff6b6",
+  },
+  "GET /ingest/export/profiles": {
+    "[].accepts": "(p) architect ruling 2026-11-10 (B) 1, content kinds; saf owns the shape; evidence: invincible-agent sessions/2026-11-10-packet-to-saf-cc-lane-01-architect-from-cortex-export-as-reads-this-wire-confirm-or-correct.md",
+    "[].grain": "(p) architect ruling 2026-11-10 (B) 1, per_notice | per_part; same packet",
+    "[].dedupe": "(p) architect ruling 2026-11-10 (B) 1, optional dedupe on a grain; same packet",
+    "[].version": "(p) architect ruling 2026-11-10 (B) 1 and 6, the version an export records; same packet",
   },
   "GET /fleet/version": {
     self: "(b) the producer sends {self: {...}} but declares the body as an open object; evidence: producer src/iagent/gateway.py:971 at 4a5ff6b6 and src/api/bffVersion.test.ts",
