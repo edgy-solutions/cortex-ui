@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { foldedAskAnswers } from "@/lib/askFold";
-import { Maximize2, Minimize2, LayoutGrid, GitBranch, X, Plus, Share2 } from "lucide-react";
+import { Maximize2, Minimize2, LayoutGrid, GitBranch, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -26,6 +26,9 @@ import { StageCard } from "./StageCard";
 import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
 import { CanvasExportButton } from "./CanvasExportButton";
+import { SelectionActionBar } from "./SelectionActionBar";
+import { ExportSelectionDialog } from "@/components/ingest/ExportSelectionDialog";
+import { useCanExportSelection } from "@/lib/useCanExportSelection";
 
 /**
  * GlobalCanvasStage — the center canvas as ONE camera-driven world (ADR-0028
@@ -153,6 +156,8 @@ export function GlobalCanvasStage() {
 
   // Lasso multi-select (global overview only).
   const [sel, setSel] = useState<string[]>([]);
+  const canExport = useCanExportSelection();
+  const [exportSel, setExportSel] = useState<string[] | null>(null);
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const selRef = useRef(sel);
   selRef.current = sel;
@@ -887,44 +892,25 @@ export function GlobalCanvasStage() {
 
       {/* Selection action bar — bulk-add the lasso'd cards to a canvas. */}
       {isGlobal && !focusId && !marquee && sel.length > 0 && (
-        <div
-          data-overlay
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-neon-cyan/30 bg-slate-950/95 backdrop-blur-sm px-3 py-2 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
-        >
-          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
-            {sel.length} selected → Add to
-          </span>
-          {canvases.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => {
-                sel.forEach((id) => addItemAuto(c.id, id));
-                setSel([]);
-              }}
-              className="rounded-md border border-neon-cyan/30 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-neon-cyan hover:bg-neon-cyan/15 transition-colors"
-            >
-              {c.name}
-            </button>
-          ))}
-          <button
-            onClick={() => {
-              const id = createCanvas(`Canvas ${canvases.length + 1}`, undefined, false);
-              sel.forEach((aid) => addItemAuto(id, aid));
-              setSel([]);
-            }}
-            className="flex items-center gap-1 rounded-md border border-dashed border-slate-600/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 hover:text-neon-cyan transition-colors"
-          >
-            <Plus className="w-2.5 h-2.5" />
-            New
-          </button>
-          <button
-            onClick={() => setSel([])}
-            className="ml-1 text-slate-500 hover:text-rose-400"
-            title="Clear selection"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
+        <SelectionActionBar
+          count={sel.length}
+          canvases={canvases}
+          onAdd={(canvasId) => {
+            sel.forEach((id) => addItemAuto(canvasId, id));
+            setSel([]);
+          }}
+          onNew={() => {
+            const id = createCanvas(`Canvas ${canvases.length + 1}`, undefined, false);
+            sel.forEach((aid) => addItemAuto(id, aid));
+            setSel([]);
+          }}
+          onClear={() => setSel([])}
+          onExport={canExport ? () => setExportSel(sel) : undefined}
+        />
+      )}
+
+      {exportSel && (
+        <ExportSelectionDialog artifacts={artifacts} selection={exportSel} onClose={() => setExportSel(null)} />
       )}
 
       {/* Focus overlay: peer-view tabs + expand + overview (both views). */}

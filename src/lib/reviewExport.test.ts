@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest";
+import type { Artifact } from "@/api/types";
 import {
   EXPORT_BATCH_CAPABILITY,
   FIXTURE_ENTITLEMENTS,
   FIXTURE_154_PROFILES,
+  FIXTURE_PROVISIONAL_PROFILES,
+  exportScopeBody,
+  fixtureResolution,
+  profilesAccepting,
+  readExportResolution,
+  selectionNotices,
+  type ExportProfile,
   canExportBatch,
   filenameFromDisposition,
   isExportStage,
@@ -108,5 +116,93 @@ describe("refusalCode", () => {
   });
   it("is null/null for a plain error", () => {
     expect(refusalCode(new Error("network"))).toEqual({ status: null, code: null });
+  });
+});
+
+const base = { name: "p", format: "csv", granularity: "notice_part" };
+
+describe("readExportProfiles: the ruling-1 fields", () => {
+  it("reads accepts, grain, dedupe and version", () => {
+    const out = readExportProfiles([{ ...base, accepts: ["k1", "k2"], grain: "per_part", dedupe: true, version: "3" }]);
+    expect(out?.[0]).toMatchObject({ accepts: ["k1", "k2"], grain: "per_part", dedupe: true, version: "3" });
+  });
+  it.each([
+    ["accepts: a string", { accepts: "x" }],
+    ["accepts: an empty string entry", { accepts: [""] }],
+    ["accepts: a non-string entry", { accepts: [1] }],
+    ["grain: empty", { grain: "" }],
+    ["version: a number", { version: 2 }],
+    ["dedupe: a string", { dedupe: "yes" }],
+  ])("refuses the WHOLE body on %s", (_n, extra) => {
+    expect(readExportProfiles([{ ...base }, { ...base, name: "q", ...extra }])).toBeNull();
+  });
+  it("absent fields stay absent", () => {
+    const p = readExportProfiles([base])![0]!;
+    for (const k of ["accepts", "grain", "dedupe", "version"]) expect(k in p).toBe(false);
+  });
+});
+
+describe("profilesAccepting", () => {
+  const mk = (name: string, accepts?: string[]): ExportProfile => ({ ...base, name, ...(accepts ? { accepts } : {}) });
+  it("offers a profile that accepts every kind, in served order", () => {
+    const ps = [mk("z", ["a", "b"]), mk("y", ["b", "a", "c"])];
+    expect(profilesAccepting(ps, ["a", "b"]).map((p) => p.name)).toEqual(["z", "y"]);
+  });
+  it("does not offer a profile accepting only some of the kinds", () => {
+    expect(profilesAccepting([mk("z", ["a"])], ["a", "b"])).toEqual([]);
+  });
+  it("never offers a profile with no accepts", () => {
+    expect(profilesAccepting([mk("z")], ["a"])).toEqual([]);
+  });
+  it("empty kinds gives []", () => {
+    expect(profilesAccepting([mk("z", ["a"])], [])).toEqual([]);
+  });
+  it("the provisional fixture: the sample overlay takes both kinds, the 154 pair only the first", () => {
+    const out = profilesAccepting(FIXTURE_PROVISIONAL_PROFILES, ["synthetic-kind-a", "synthetic-kind-b"]);
+    expect(out.map((p) => p.name)).toEqual(["part-list"]);
+  });
+});
+
+describe("readExportResolution", () => {
+  const ok = { notices: [{ ingest_id: "i", notice_id: null, content_kind: "k" }], unexportable: [] };
+  it("reads the fixture's range resolution", () => {
+    const r = readExportResolution(JSON.parse(JSON.stringify(fixtureResolution({ from: "2026-01-01", to: "2026-01-02" }))));
+    expect(r?.notices).toHaveLength(2);
+    expect(r?.unexportable).toHaveLength(1);
+  });
+  it("null for a non-object", () => expect(readExportResolution("x")).toBeNull());
+  it("null when notices is missing", () => expect(readExportResolution({ unexportable: [] })).toBeNull());
+  it("null for an empty content_kind", () =>
+    expect(readExportResolution({ ...ok, notices: [{ ingest_id: "i", notice_id: null, content_kind: "" }] })).toBeNull());
+  it("null for a reason that is not a string", () =>
+    expect(readExportResolution({ ...ok, unexportable: [{ ingest_id: null, notice_id: null, reason_code: null, reason: 3 }] })).toBeNull());
+  it("notice_id: null is allowed", () => expect(readExportResolution(ok)?.notices[0]?.notice_id).toBeNull());
+  it("exportScopeBody spells the wire keys", () => {
+    expect(exportScopeBody({ ingestIds: ["a"] })).toEqual({ ingest_ids: ["a"] });
+    expect(exportScopeBody({ from: "x", to: "y" })).toEqual({ from: "x", to: "y" });
+  });
+});
+
+describe("selectionNotices", () => {
+  const ingest = (id: string, ingestId: string | null, summary = ""): Artifact =>
+    ({ id, summary, rendered_output: { components: [{ archetype: "INGEST", ingest: { ingest_id: ingestId } }] } }) as unknown as Artifact;
+  const answer = (id: string): Artifact => ({ id, summary: "an answer", rendered_output: { components: [] } }) as unknown as Artifact;
+  it("keeps an ingest id and collapses duplicates", () => {
+    const arts = [ingest("a1", "i-1"), ingest("a2", "i-1"), ingest("a3", "i-2")];
+    expect(selectionNotices(arts, ["a1", "a2", "a3"]).ingestIds).toEqual(["i-1", "i-2"]);
+  });
+  it("a null ingest_id goes to notReady, labelled by summary or id", () => {
+    const arts = [ingest("a1", null, "doc.pdf"), ingest("a2", null)];
+    expect(selectionNotices(arts, ["a1", "a2"])).toEqual({
+      ingestIds: [],
+      notReady: [{ id: "a1", label: "doc.pdf" }, { id: "a2", label: "a2" }],
+      others: 0,
+    });
+  });
+  it("an answer card counts toward others", () => {
+    expect(selectionNotices([answer("x")], ["x"])).toEqual({ ingestIds: [], notReady: [], others: 1 });
+  });
+  it("an id missing from the artifacts is ignored", () => {
+    expect(selectionNotices([answer("x")], ["gone"])).toEqual({ ingestIds: [], notReady: [], others: 0 });
   });
 });

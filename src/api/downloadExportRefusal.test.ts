@@ -7,19 +7,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
+const { mockGet, mockPost } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi.fn() }));
 vi.mock("axios", () => ({
   default: {
     get: vi.fn(),
     create: vi.fn(() => ({
       get: mockGet,
-      post: vi.fn(),
+      post: mockPost,
       interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
     })),
   },
 }));
 
-import { downloadBatchExport, downloadIngestExport } from "./client";
+import { downloadSelectionExport, downloadIngestExport, resolveIngestExport } from "./client";
 import { refusalCode } from "@/lib/reviewExport";
 
 // #154's bodies, verbatim in shape: gateway.py `_export_one` 409 and `policy_refusal` 403.
@@ -35,7 +35,10 @@ const blobRefusal = (status: number, body: unknown) => ({
   response: { status, data: new Blob([JSON.stringify(body)], { type: "application/json" }) },
 });
 
-beforeEach(() => mockGet.mockReset());
+beforeEach(() => {
+  mockGet.mockReset();
+  mockPost.mockReset();
+});
 
 describe("a Blob refusal body reaches refusalCode as #154's detail.error", () => {
   it("one notice: 409 ingest_not_promoted", async () => {
@@ -44,10 +47,19 @@ describe("a Blob refusal body reaches refusalCode as #154's detail.error", () =>
     expect(refusalCode(err), "the 409's code must survive the Blob body").toEqual({ status: 409, code: "ingest_not_promoted" });
   });
 
-  it("the batch: 403 not_entitled_to_export_batch", async () => {
-    mockGet.mockRejectedValueOnce(blobRefusal(403, NOT_ENTITLED));
-    const err = await downloadBatchExport("alpha-x", "2026-10-01", "2026-10-05").catch((e: unknown) => e);
+  it("the selection download: 403 not_entitled_to_export_batch", async () => {
+    mockPost.mockRejectedValueOnce(blobRefusal(403, NOT_ENTITLED));
+    const err = await downloadSelectionExport("alpha-x", ["ing-1", "ing-2"]).catch((e: unknown) => e);
     expect(refusalCode(err), "the 403's code must survive the Blob body").toEqual({ status: 403, code: "not_entitled_to_export_batch" });
+    expect(mockPost).toHaveBeenCalledWith("/ingest/export", { profile: "alpha-x", ingest_ids: ["ing-1", "ing-2"] }, { responseType: "blob" });
+  });
+
+  it("resolve: a JSON 409 passes through untouched, so refusalCode reads detail.error", async () => {
+    const refusal = { response: { status: 409, data: NOT_PROMOTED } };
+    mockPost.mockRejectedValueOnce(refusal);
+    const err = await resolveIngestExport({ ingestIds: ["ing-1"] }).catch((e: unknown) => e);
+    expect(err).toBe(refusal);
+    expect(refusalCode(err)).toEqual({ status: 409, code: "ingest_not_promoted" });
   });
 
   it("a body that is not JSON keeps its status and reads no code", async () => {

@@ -12,11 +12,16 @@ import { readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import {
   EXPORT_BATCH_PATH,
+  EXPORT_RESOLVE_PATH,
   exportOnePath,
+  exportScopeBody,
   filenameFromDisposition,
   jsonRefusalBody,
   readExportProfiles,
+  readExportResolution,
   type ExportProfile,
+  type ExportResolution,
+  type ExportScope,
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
@@ -1350,6 +1355,10 @@ export async function fetchCaseArtifact(path: string): Promise<unknown> {
  * read (`request`, validated by `readExportProfiles`). The two file downloads stay on the shared `api`
  * instance: their 200s are untyped bytes, read as a Blob. The paths are spelled once, in
  * `src/lib/reviewExport.ts`. A refusal is a non-2xx the caller reads with `refusalCode`.
+ *
+ * `resolveIngestExport` and `downloadSelectionExport` are CORTEX-PROPOSED and UNDECLARED (architect rulings
+ * 2026-11-10; saf owns the server side): their wire is spelled in `src/lib/reviewExport.ts` and saf confirms or
+ * corrects it. A non-2xx throws the axios error untouched.
  */
 export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
   const data = await request("GET /ingest/export/profiles", {});
@@ -1371,13 +1380,19 @@ export async function downloadIngestExport(
   return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 
-export async function downloadBatchExport(
+export async function resolveIngestExport(scope: ExportScope): Promise<ExportResolution> {
+  const { data } = await api.post<unknown>(EXPORT_RESOLVE_PATH, exportScopeBody(scope));
+  const resolution = readExportResolution(data);
+  if (resolution === null) throw new Error("malformed /ingest/export/resolve response");
+  return resolution;
+}
+
+export async function downloadSelectionExport(
   profile: string,
-  from: string,
-  to: string,
+  ingestIds: string[],
 ): Promise<{ blob: Blob; filename: string | null }> {
   const res = await api
-    .get<Blob>(EXPORT_BATCH_PATH, { params: { profile, from, to }, responseType: "blob" })
+    .post<Blob>(EXPORT_BATCH_PATH, { profile, ingest_ids: ingestIds }, { responseType: "blob" })
     .catch(async (err: unknown) => {
       await jsonRefusalBody(err);
       throw err;
