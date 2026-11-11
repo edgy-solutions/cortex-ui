@@ -4,13 +4,15 @@ import {
   EXPORT_BATCH_CAPABILITY,
   FIXTURE_ENTITLEMENTS,
   FIXTURE_154_PROFILES,
-  FIXTURE_PROVISIONAL_PROFILES,
-  exportScopeBody,
-  fixtureResolution,
-  profilesAccepting,
-  readExportResolution,
+  FIXTURE_PROFILES,
+  exportNoticesBody,
+  lassoTargets,
+  profilesFor,
+  readExportCheck,
+  readUnexportableRefusal,
   selectionNotices,
   type ExportProfile,
+  type ExportTarget,
   canExportBatch,
   filenameFromDisposition,
   isExportStage,
@@ -121,65 +123,161 @@ describe("refusalCode", () => {
 
 const base = { name: "p", format: "csv", granularity: "notice_part" };
 
-describe("readExportProfiles: the ruling-1 fields", () => {
-  it("reads accepts, grain, dedupe and version", () => {
-    const out = readExportProfiles([{ ...base, accepts: ["k1", "k2"], grain: "per_part", dedupe: true, version: "3" }]);
-    expect(out?.[0]).toMatchObject({ accepts: ["k1", "k2"], grain: "per_part", dedupe: true, version: "3" });
+describe("readExportProfiles: #356's declared keys", () => {
+  // The sample listing in #356's shape.
+  const sample = { ...base, accepts: null, grain: "per_notice", version: 2, dedupe: ["Part"], exportable_states: ["synthetic-state-a"] };
+  it("accepts #356's sample: int version, list dedupe, accepts null, exportable_states", () => {
+    const out = readExportProfiles([sample]);
+    expect(out?.[0]).toMatchObject({ accepts: null, grain: "per_notice", version: 2, dedupe: ["Part"], exportable_states: ["synthetic-state-a"] });
+  });
+  it("accepts a list for accepts", () => {
+    expect(readExportProfiles([{ ...base, accepts: ["k1", "k2"] }])?.[0]?.accepts).toEqual(["k1", "k2"]);
   });
   it.each([
     ["accepts: a string", { accepts: "x" }],
     ["accepts: an empty string entry", { accepts: [""] }],
     ["accepts: a non-string entry", { accepts: [1] }],
     ["grain: empty", { grain: "" }],
-    ["version: a number", { version: 2 }],
-    ["dedupe: a string", { dedupe: "yes" }],
+    ["grain: a number", { grain: 1 }],
+    ["version: a string", { version: "3" }],
+    ["version: a fraction", { version: 1.5 }],
+    ["dedupe: a boolean", { dedupe: true }],
+    ["dedupe: a non-string entry", { dedupe: [1] }],
+    ["exportable_states: a string", { exportable_states: "x" }],
+    ["exportable_states: an empty entry", { exportable_states: [""] }],
+    ["exportable_states: null", { exportable_states: null }],
   ])("refuses the WHOLE body on %s", (_n, extra) => {
     expect(readExportProfiles([{ ...base }, { ...base, name: "q", ...extra }])).toBeNull();
   });
-  it("absent fields stay absent", () => {
+  it("absent keys are accepted and stay absent (an older BFF)", () => {
     const p = readExportProfiles([base])![0]!;
-    for (const k of ["accepts", "grain", "dedupe", "version"]) expect(k in p).toBe(false);
+    for (const k of ["accepts", "grain", "dedupe", "version", "exportable_states"]) expect(k in p).toBe(false);
   });
 });
 
-describe("profilesAccepting", () => {
-  const mk = (name: string, accepts?: string[]): ExportProfile => ({ ...base, name, ...(accepts ? { accepts } : {}) });
-  it("offers a profile that accepts every kind, in served order", () => {
-    const ps = [mk("z", ["a", "b"]), mk("y", ["b", "a", "c"])];
-    expect(profilesAccepting(ps, ["a", "b"]).map((p) => p.name)).toEqual(["z", "y"]);
+describe("profilesFor", () => {
+  const mk = (name: string, extra: Partial<ExportProfile> = {}): ExportProfile => ({ ...base, name, exportable_states: ["synthetic-state-a"], ...extra });
+  const t = (kind: string | null, state: string | null, ingestId = "i"): ExportTarget => ({ ingestId, kind, state });
+  const names = (ps: ExportProfile[]) => ps.map((p) => p.name);
+
+  it("no targets offers nothing", () => expect(profilesFor([mk("z")], [])).toEqual([]));
+  it("keeps served order", () => {
+    expect(names(profilesFor([mk("z"), mk("y"), mk("x")], [t("k", "synthetic-state-a")]))).toEqual(["z", "y", "x"]);
   });
-  it("does not offer a profile accepting only some of the kinds", () => {
-    expect(profilesAccepting([mk("z", ["a"])], ["a", "b"])).toEqual([]);
+
+  // condition 1: exportable_states declared
+  it("1 near: a profile declaring exportable_states is offered", () => {
+    expect(names(profilesFor([mk("z")], [t("k", "synthetic-state-a")]))).toEqual(["z"]);
   });
-  it("never offers a profile with no accepts", () => {
-    expect(profilesAccepting([mk("z")], ["a"])).toEqual([]);
+  it("1 far: a profile with exportable_states ABSENT is never offered", () => {
+    const p = mk("z");
+    delete p.exportable_states;
+    expect(profilesFor([p], [t("k", "synthetic-state-a")])).toEqual([]);
+    expect(profilesFor([p], [t(null, null)])).toEqual([]);
   });
-  it("empty kinds gives []", () => {
-    expect(profilesAccepting([mk("z", ["a"])], [])).toEqual([]);
+
+  // condition 2: accepts
+  it("2 near: every known kind in accepts is offered", () => {
+    const ps = [mk("z", { accepts: ["a", "b"] })];
+    expect(names(profilesFor(ps, [t("a", "synthetic-state-a"), t("b", "synthetic-state-a")]))).toEqual(["z"]);
   });
-  it("the provisional fixture: the sample overlay takes both kinds, the 154 pair only the first", () => {
-    const out = profilesAccepting(FIXTURE_PROVISIONAL_PROFILES, ["synthetic-kind-a", "synthetic-kind-b"]);
-    expect(out.map((p) => p.name)).toEqual(["part-list"]);
+  it("2 far: one kind outside accepts refuses the profile", () => {
+    const ps = [mk("z", { accepts: ["a"] })];
+    expect(profilesFor(ps, [t("a", "synthetic-state-a"), t("b", "synthetic-state-a")])).toEqual([]);
+  });
+  it("2: accepts null offers any kind; so does accepts absent", () => {
+    expect(names(profilesFor([mk("z", { accepts: null }), mk("y")], [t("anything", "synthetic-state-a")]))).toEqual(["z", "y"]);
+  });
+  it("2: an unknown kind does not block", () => {
+    expect(names(profilesFor([mk("z", { accepts: ["a"] })], [t("a", "synthetic-state-a"), t(null, "synthetic-state-a")]))).toEqual(["z"]);
+  });
+
+  // condition 3: states
+  it("3 near: one target in an exportable state is enough", () => {
+    expect(names(profilesFor([mk("z")], [t("k", "synthetic-state-b"), t("k", "synthetic-state-a")]))).toEqual(["z"]);
+  });
+  it("3 far: every target in a state the profile does not list refuses it", () => {
+    expect(profilesFor([mk("z")], [t("k", "synthetic-state-b"), t("k", "synthetic-state-c")])).toEqual([]);
+  });
+  it("3: an unknown state does not block (the server decides)", () => {
+    expect(names(profilesFor([mk("z")], [t("k", null)]))).toEqual(["z"]);
+  });
+  it("one notice, a known state: only the profiles listing that state", () => {
+    const ps = [mk("z", { exportable_states: ["synthetic-state-a"] }), mk("y", { exportable_states: ["synthetic-state-b"] }), mk("x", { exportable_states: [] })];
+    expect(names(profilesFor(ps, [t("k", "synthetic-state-b")]))).toEqual(["y"]);
+  });
+  it("the fixture offers its sample set for a synthetic state, nothing for another", () => {
+    expect(names(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-a", "synthetic-state-a")]))).toEqual(["default-csv", "default-json", "part-list"]);
+    expect(names(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-b", "synthetic-state-a")]))).toEqual(["part-list"]);
+    expect(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-a", "synthetic-state-zzz")])).toEqual([]);
   });
 });
 
-describe("readExportResolution", () => {
-  const ok = { notices: [{ ingest_id: "i", notice_id: null, content_kind: "k" }], unexportable: [] };
-  it("reads the fixture's range resolution", () => {
-    const r = readExportResolution(JSON.parse(JSON.stringify(fixtureResolution({ from: "2026-01-01", to: "2026-01-02" }))));
-    expect(r?.notices).toHaveLength(2);
-    expect(r?.unexportable).toHaveLength(1);
+describe("readExportCheck", () => {
+  const ok = { profile: "p", version: 2, notices: 3, unexportable: [{ notice_id: "i-1", reason: "state_not_exportable", state: "synthetic-state-a" }, { notice_id: "i-2", reason: "not_available" }] };
+  it("reads #356's check_only body; an absent state is null", () => {
+    expect(readExportCheck(ok)).toEqual({
+      profile: "p",
+      version: 2,
+      notices: 3,
+      unexportable: [
+        { notice_id: "i-1", reason: "state_not_exportable", state: "synthetic-state-a" },
+        { notice_id: "i-2", reason: "not_available", state: null },
+      ],
+    });
   });
-  it("null for a non-object", () => expect(readExportResolution("x")).toBeNull());
-  it("null when notices is missing", () => expect(readExportResolution({ unexportable: [] })).toBeNull());
-  it("null for an empty content_kind", () =>
-    expect(readExportResolution({ ...ok, notices: [{ ingest_id: "i", notice_id: null, content_kind: "" }] })).toBeNull());
-  it("null for a reason that is not a string", () =>
-    expect(readExportResolution({ ...ok, unexportable: [{ ingest_id: null, notice_id: null, reason_code: null, reason: 3 }] })).toBeNull());
-  it("notice_id: null is allowed", () => expect(readExportResolution(ok)?.notices[0]?.notice_id).toBeNull());
-  it("exportScopeBody spells the wire keys", () => {
-    expect(exportScopeBody({ ingestIds: ["a"] })).toEqual({ ingest_ids: ["a"] });
-    expect(exportScopeBody({ from: "x", to: "y" })).toEqual({ from: "x", to: "y" });
+  it("reads an empty unexportable list", () => expect(readExportCheck({ ...ok, unexportable: [] })?.unexportable).toEqual([]));
+  it.each([
+    ["not an object", "x"],
+    ["no profile", { ...ok, profile: "" }],
+    ["version a string", { ...ok, version: "2" }],
+    ["notices negative", { ...ok, notices: -1 }],
+    ["notices a fraction", { ...ok, notices: 1.5 }],
+    ["unexportable missing", { profile: "p", version: 1, notices: 0 }],
+    ["an entry with an empty notice_id", { ...ok, unexportable: [{ notice_id: "", reason: "r" }] }],
+    ["an entry with no reason", { ...ok, unexportable: [{ notice_id: "i" }] }],
+    ["a state that is not a string", { ...ok, unexportable: [{ notice_id: "i", reason: "r", state: 3 }] }],
+  ])("null on %s", (_n, body) => expect(readExportCheck(body)).toBeNull());
+});
+
+describe("readUnexportableRefusal", () => {
+  const err = (data: unknown) => ({ response: { status: 422, data } });
+  it("reads detail.unexportable by shape, whatever the error code", () => {
+    const rows = [{ notice_id: "i-1", reason: "state_not_exportable", state: "synthetic-state-a" }];
+    expect(readUnexportableRefusal(err({ detail: { error: "export_notices_unexportable", unexportable: rows, message: "m" } }))).toEqual(rows);
+    expect(readUnexportableRefusal(err({ detail: { error: "some_other_code", unexportable: rows } }))).toEqual(rows);
+  });
+  it("null when absent or malformed", () => {
+    expect(readUnexportableRefusal(err({ detail: { error: "x" } }))).toBeNull();
+    expect(readUnexportableRefusal(err({ detail: "plain" }))).toBeNull();
+    expect(readUnexportableRefusal(err({ detail: { unexportable: [{ notice_id: 1, reason: "r" }] } }))).toBeNull();
+    expect(readUnexportableRefusal(new Error("x"))).toBeNull();
+  });
+});
+
+describe("exportNoticesBody", () => {
+  it("carries ingest ids as notice_ids; check_only only when true; never destination", () => {
+    expect(exportNoticesBody("p", ["a", "b"], false)).toEqual({ notice_ids: ["a", "b"], profile: "p" });
+    expect("check_only" in exportNoticesBody("p", ["a"], false)).toBe(false);
+    expect(exportNoticesBody("p", ["a"], true)).toEqual({ notice_ids: ["a"], profile: "p", check_only: true });
+    expect("destination" in exportNoticesBody("p", ["a"], true)).toBe(false);
+  });
+});
+
+describe("lassoTargets", () => {
+  const ingest = (id: string, ingestId: string | null, kind?: string): Artifact =>
+    ({ id, summary: "", rendered_output: { components: [{ archetype: "INGEST", ingest: { ingest_id: ingestId, ...(kind ? { content_kind: kind } : {}) } }] } }) as unknown as Artifact;
+  it("kind and state from the row; stage kept verbatim; the component's kind is the fallback; unknown stays null", () => {
+    const rows = {
+      "i-1": { stage: "synthetic-state-a", content_kind: "k-row" },
+      "i-2": { stage: null },
+    } as unknown as Parameters<typeof lassoTargets>[2];
+    const out = lassoTargets([ingest("a1", "i-1", "k-comp"), ingest("a2", "i-2", "k-comp"), ingest("a3", "i-3")], ["a1", "a2", "a3"], rows);
+    expect(out.targets).toEqual([
+      { ingestId: "i-1", kind: "k-row", state: "synthetic-state-a" },
+      { ingestId: "i-2", kind: "k-comp", state: null },
+      { ingestId: "i-3", kind: null, state: null },
+    ]);
   });
 });
 

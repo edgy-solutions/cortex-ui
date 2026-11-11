@@ -4,7 +4,7 @@
  *
  *   1. the key is a row of `policy/capability_grants.yaml` (a misspelt key is never served, so the control
  *      silently never shows), and
- *   2. the door the control calls, `GET EXPORT_BATCH_PATH`, is gated in `endpoint_gating_manifest.yaml` on
+ *   2. the door the control calls, `POST EXPORT_NOTICES_PATH`, is gated in `endpoint_gating_manifest.yaml` on
  *      `can_invoke(<that key>)` -- so "shown" and "admitted" are the same condition. If the door moves to
  *      another key, the control would offer a door that refuses.
  *
@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { EXPORT_BATCH_CAPABILITY, EXPORT_BATCH_PATH } from "./reviewExport";
+import { EXPORT_BATCH_CAPABILITY, EXPORT_NOTICES_PATH } from "./reviewExport";
 
 const GRANTS = "policy/capability_grants.yaml";
 const MANIFEST = "docs/architecture/endpoint_gating_manifest.yaml";
@@ -76,9 +76,9 @@ describe.skipIf(ROOT === null)("the batch capability is the producer's, and its 
     expect(keys, `${AT}: ${EXPORT_BATCH_CAPABILITY} is not a capability row`).toContain(EXPORT_BATCH_CAPABILITY);
   });
   it("the batch door is gated on can_invoke of that same key", () => {
-    const gate = gateFor(read(MANIFEST), "GET", EXPORT_BATCH_PATH);
-    expect(gate, `${AT}: the manifest has no GET ${EXPORT_BATCH_PATH} entry`).not.toBeNull();
-    expect(gate, `${AT}: GET ${EXPORT_BATCH_PATH} is not gated on the key the control shows on`).toContain(
+    const gate = gateFor(read(MANIFEST), "POST", EXPORT_NOTICES_PATH);
+    expect(gate, `${AT}: the manifest has no POST ${EXPORT_NOTICES_PATH} entry`).not.toBeNull();
+    expect(gate, `${AT}: POST ${EXPORT_NOTICES_PATH} is not gated on the key the control shows on`).toContain(
       `can_invoke(${EXPORT_BATCH_CAPABILITY})`,
     );
   });

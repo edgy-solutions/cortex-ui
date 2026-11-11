@@ -1,31 +1,29 @@
 /**
  * reviewExportSource -- the seam: the fixture when `reviewExportMock` is on, else the client.
- * (Routes declared at invincible-agent 10ac02fe (#154); see `reviewExport.ts`. The resolve route and the POST
- * download are PROVISIONAL, cortex-proposed.) The status read is NOT here: it is a real route.
+ * (Routes declared at invincible-agent 10ac02fe (#154) and 6a4175a2 (#356); see `reviewExport.ts`.) The status read is NOT here: it is a real route.
  */
 import {
   fetchIngestExportProfiles,
   downloadIngestExport,
-  downloadSelectionExport,
-  resolveIngestExport,
+  checkNoticesExport,
+  downloadNoticesExport,
   fetchEntitlements,
 } from "@/api/client";
 import { isReviewExportMockEnabled } from "./reviewExportFlag";
 import {
   FIXTURE_ENTITLEMENTS,
-  FIXTURE_PROVISIONAL_PROFILES,
+  FIXTURE_PROFILES,
   canExportBatch,
   fixtureExportBody,
-  fixtureResolution,
+  fixtureCheck,
+  type ExportCheck,
   type ExportProfile,
-  type ExportResolution,
-  type ExportScope,
 } from "./reviewExport";
 
 export type ExportFile = { blob: Blob; filename: string | null };
 
 export async function loadExportProfiles(): Promise<ExportProfile[]> {
-  if (isReviewExportMockEnabled()) return FIXTURE_PROVISIONAL_PROFILES;
+  if (isReviewExportMockEnabled()) return FIXTURE_PROFILES;
   return fetchIngestExportProfiles();
 }
 
@@ -34,14 +32,14 @@ export async function exportOne(ingestId: string, profile: ExportProfile): Promi
   return downloadIngestExport(ingestId, profile.name);
 }
 
-export async function resolveExport(scope: ExportScope): Promise<ExportResolution> {
-  if (isReviewExportMockEnabled()) return fixtureResolution(scope);
-  return resolveIngestExport(scope);
+export async function checkExport(profile: ExportProfile, ingestIds: string[]): Promise<ExportCheck> {
+  if (isReviewExportMockEnabled()) return fixtureCheck(profile.name, ingestIds);
+  return checkNoticesExport(profile.name, ingestIds);
 }
 
-export async function exportSelection(profile: ExportProfile, ingestIds: string[]): Promise<ExportFile> {
+export async function exportNotices(profile: ExportProfile, ingestIds: string[]): Promise<ExportFile> {
   if (isReviewExportMockEnabled()) return fixtureExportBody(profile, { ingestIds });
-  return downloadSelectionExport(profile.name, ingestIds);
+  return downloadNoticesExport(profile.name, ingestIds);
 }
 
 export async function loadCanExportBatch(): Promise<boolean> {

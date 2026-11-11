@@ -15,7 +15,7 @@ const saveBlob = vi.fn();
 vi.mock("@/lib/saveBlob", () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) }));
 
 import { ReviewExportControl } from "./ReviewExportControl";
-import { FIXTURE_PROVISIONAL_PROFILES } from "@/lib/reviewExport";
+import { FIXTURE_PROFILES } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import type { IngestStatusRow } from "@/lib/ingestWire";
 
@@ -133,7 +133,7 @@ describe("ReviewExportControl", () => {
     const { container } = render(<ReviewExportControl ingestId={ID} />);
     await waitFor(() => expect(names(container)).toEqual(["default-csv", "default-json", "part-list"]));
     const labels = [...container.querySelectorAll("[data-export-profile]")].map((e) => e.firstChild?.textContent);
-    expect(labels).toEqual(FIXTURE_PROVISIONAL_PROFILES.map((p) => p.label));
+    expect(labels).toEqual(FIXTURE_PROFILES.map((p) => p.label));
     expect(fetchIngestExportProfiles).not.toHaveBeenCalled();
   });
 });

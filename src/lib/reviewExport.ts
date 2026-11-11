@@ -1,16 +1,17 @@
 import type { Artifact } from "@/api/types";
 import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import type { IngestStatusRow } from "@/lib/ingestWire";
 
 /**
  * reviewExport -- export on the completed review card, and the batch export.
  *
  * Packet: invincible-agent `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`.
  *
- * Routes 1-3 are declared at invincible-agent 10ac02fe (#154); field 4 at c3b51ed7 (#290, ingest-v1 1.7.0).
+ * Routes 1-2 are declared at invincible-agent 10ac02fe (#154), route 3 at 6a4175a2 (#356); field 4 at c3b51ed7 (#290, ingest-v1 1.7.0).
  * The wire names are spelled ONCE, here:
  *   1. `GET /ingest/export/profiles`                      -> bare array of ExportProfile
  *   2. `GET /ingest/{ingest_id}/export?profile=<name>`    -> file bytes + Content-Disposition
- *   3. `GET /ingest/export?profile=&from=&to=`            -> batch file, same headers
+ *   3. `POST /ingest/export/notices`                       -> check_only list, or the batch file (see EXPORT AS below)
  *   4. `capabilities` on `GET /me/entitlements`           -> batch control, on `EXPORT_BATCH_CAPABILITY`
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
@@ -22,26 +23,26 @@ import { ingestComponentFrom } from "@/lib/ingestArtifact";
  * `export_profile_unknown`, ...). The file routes fetch as a Blob, so the client re-reads a refusal
  * body as JSON before `refusalCode` sees it (`jsonRefusalBody`).
  *
- * "EXPORT AS..." ON THE LASSO BAR (architect rulings 2026-11-10, relayed by Chris):
- *   1. Profiles gain `accepts` (content kinds), `grain` (`per_notice | per_part`, optional `dedupe`) and `version`.
+ * "EXPORT AS..." (architect rulings 2026-11-10, relayed by Chris; wire declared by saf's #356 at invincible-agent 6a4175a2):
+ *   1. Profiles carry `accepts` (content kinds; null = any), `grain`, `dedupe`, `version`, `exportable_states`.
  *   2. The server serves only the profiles the caller may use.
- *   3. Unexportable notices in a selection are listed with reasons BEFORE download, and the user may proceed
- *      without them. The file never fails silently.
- *   4. The panel above the answers list goes. "Export as..." joins the lasso bar. It resolves the selection to its
- *      notices and offers only the profiles that accept EVERY kind present. "Select by range" is a shortcut inside
- *      that dialog.
- *   5. Personal download is the default, and it needs no recipient.
- * saf owns the server side and has declared NO wire yet, so the resolve route and the POST form of the download
- * below are PROVISIONAL and CORTEX-PROPOSED (precedent: `accessProposal.ts`). They are spelled once, here, and saf
- * confirms or corrects them. Config names the case: nothing here knows a content kind, a profile or a column.
+ *   3. Unexportable notices are listed with reasons BEFORE download (`check_only`), and the user may proceed without them.
+ *   4. "Export as..." offers only the profiles that accept EVERY kind present and whose `exportable_states` include a state present.
+ *   5. Personal download is the default and needs no recipient: `destination` is never sent.
+ *   6. `POST /ingest/export/notices` `{notice_ids, profile, check_only?}`; `notice_ids` carries INGEST ids. The gates are
+ *      `ingest:exportBatch` then `can_export:<profile>`. Reason codes are shown verbatim, never branched on, and no state
+ *      name is spelled here: states are the `stage` the status routes serve (config names the case).
+ *
+ * RANGE IS HIDDEN: 6a4175a2's notices route serves no ids-in-a-range form, and the old `GET /ingest/export?from&to` builds
+ * the file directly with no unexportable list first, so it cannot meet ruling 3. "Select by range" returns when saf serves one.
  *
  * The gate is `stage === "promoted"` on `GET /ingest/{id}/status` (a REAL, declared route).
  */
 
 /** Route 2, declared at invincible-agent 10ac02fe (#154). */
 export const exportOnePath = (ingestId: string): string => `/ingest/${encodeURIComponent(ingestId)}/export`;
-/** Route 3, declared at invincible-agent 10ac02fe (#154). */
-export const EXPORT_BATCH_PATH = "/ingest/export";
+/** Route 3, declared at invincible-agent 6a4175a2 (#356). */
+export const EXPORT_NOTICES_PATH = "/ingest/export/notices";
 /** The capability the batch control is shown on. It is the key route 3's door is gated on (`can_invoke`), so the
  *  control shows exactly when the door would admit. Capability, never group (architect 2026-11-07). */
 export const EXPORT_BATCH_CAPABILITY = "ingest:exportBatch";
@@ -54,12 +55,14 @@ export type ExportProfile = {
   format: string;
   granularity: string;
   label?: string;
-  /** The content kinds the profile takes (ruling 1). Absent means cortex does not know, so it is never offered. */
-  accepts?: string[];
+  /** The content kinds the profile takes. null or absent = ANY kind. */
+  accepts?: string[] | null;
   /** `per_notice | per_part` today, read verbatim. */
   grain?: string;
-  dedupe?: boolean;
-  version?: string;
+  version?: number;
+  dedupe?: string[];
+  /** The states (the `stage` the status routes serve) a notice must be in to be exported. Absent: never offered. */
+  exportable_states?: string[];
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -78,31 +81,46 @@ export function readExportProfiles(body: unknown): ExportProfile[] | null {
     const p: ExportProfile = { name: e.name, format: e.format, granularity: e.granularity };
     if (typeof e.label === "string") p.label = e.label;
     if ("accepts" in e) {
-      if (!Array.isArray(e.accepts) || !e.accepts.every((k) => typeof k === "string" && k !== "")) return null;
-      p.accepts = e.accepts as string[];
+      if (e.accepts === null) p.accepts = null;
+      else if (Array.isArray(e.accepts) && e.accepts.every((k) => typeof k === "string" && k !== "")) p.accepts = e.accepts as string[];
+      else return null;
     }
     if ("grain" in e) {
       if (typeof e.grain !== "string" || e.grain === "") return null;
       p.grain = e.grain;
     }
     if ("version" in e) {
-      if (typeof e.version !== "string" || e.version === "") return null;
+      if (typeof e.version !== "number" || !Number.isInteger(e.version)) return null;
       p.version = e.version;
     }
     if ("dedupe" in e) {
-      if (typeof e.dedupe !== "boolean") return null;
-      p.dedupe = e.dedupe;
+      if (!Array.isArray(e.dedupe) || !e.dedupe.every((k) => typeof k === "string")) return null;
+      p.dedupe = e.dedupe as string[];
+    }
+    if ("exportable_states" in e) {
+      if (!Array.isArray(e.exportable_states) || !e.exportable_states.every((k) => typeof k === "string" && k !== "")) return null;
+      p.exportable_states = e.exportable_states as string[];
     }
     out.push(p);
   }
   return out;
 }
 
-/** The profiles, in served order, that accept EVERY kind. A profile with no `accepts` is never offered: cortex does
- *  not guess what it accepts. No kinds offers nothing. */
-export function profilesAccepting(profiles: ExportProfile[], kinds: string[]): ExportProfile[] {
-  if (kinds.length === 0) return [];
-  return profiles.filter((p) => Array.isArray(p.accepts) && kinds.every((k) => p.accepts!.includes(k)));
+export type ExportTarget = { ingestId: string; kind: string | null; state: string | null };
+
+/** The profiles, in served order, to offer for these targets. A profile is offered iff (1) it declares
+ *  `exportable_states` (absent: cortex does not guess), (2) it accepts every KNOWN kind present (`accepts` null/absent
+ *  takes any; an unknown kind does not block), and (3) at least one target is in an exportable state or has an unknown
+ *  state (the server decides). No targets offers nothing. No state name is spelled here. */
+export function profilesFor(profiles: ExportProfile[], targets: ExportTarget[]): ExportProfile[] {
+  if (targets.length === 0) return [];
+  return profiles.filter((p) => {
+    const states = p.exportable_states;
+    if (!Array.isArray(states)) return false;
+    const accepts = p.accepts;
+    if (Array.isArray(accepts) && !targets.every((t) => t.kind === null || accepts.includes(t.kind))) return false;
+    return targets.some((t) => t.state === null || states.includes(t.state));
+  });
 }
 
 export function profileLabel(p: ExportProfile): string {
@@ -121,44 +139,45 @@ export function canExportBatch(entitlements: unknown): boolean {
   return Array.isArray(c) && c.includes(EXPORT_BATCH_CAPABILITY);
 }
 
-// -- PROVISIONAL, CORTEX-PROPOSED (saf owns the server side; not declared yet) ------------------
-/** `POST /ingest/export/resolve`. Body `{ingest_ids}` or `{from, to}` (YYYY-MM-DD); response
- *  `{notices: [{ingest_id, notice_id, content_kind}], unexportable: [{ingest_id, notice_id, reason_code, reason}]}`. */
-export const EXPORT_RESOLVE_PATH = "/ingest/export/resolve";
-/** The download is `POST EXPORT_BATCH_PATH` with `{profile, ingest_ids}`: file bytes plus Content-Disposition. The
- *  server records the actor, the ids, the profile and its version. Cortex sends no recipient. */
-
-export type ExportScope = { ingestIds: string[] } | { from: string; to: string };
-export type ResolvedNotice = { ingest_id: string; notice_id: string | null; content_kind: string };
-export type Unexportable = { ingest_id: string | null; notice_id: string | null; reason_code: string | null; reason: string };
-export type ExportResolution = { notices: ResolvedNotice[]; unexportable: Unexportable[] };
-
-/** The resolve body, so its key names are spelled here once. */
-export function exportScopeBody(scope: ExportScope): Record<string, unknown> {
-  return "ingestIds" in scope ? { ingest_ids: scope.ingestIds } : { from: scope.from, to: scope.to };
+/** The `POST EXPORT_NOTICES_PATH` body. `notice_ids` carries INGEST ids. Never `destination` (personal download, ruling 5). */
+export function exportNoticesBody(profile: string, ingestIds: string[], checkOnly: boolean): Record<string, unknown> {
+  return { notice_ids: ingestIds, profile, ...(checkOnly ? { check_only: true } : {}) };
 }
 
-const strOrNull = (v: unknown): v is string | null => v === null || typeof v === "string";
+export type Unexportable = { notice_id: string; reason: string; state: string | null };
+export type ExportCheck = { profile: string; version: number; notices: number; unexportable: Unexportable[] };
 
-/** The resolution, or null when ANY part is malformed (strict, like `readExportProfiles`). */
-export function readExportResolution(body: unknown): ExportResolution | null {
-  if (!isRecord(body) || !Array.isArray(body.notices) || !Array.isArray(body.unexportable)) return null;
-  const notices: ResolvedNotice[] = [];
-  for (const n of body.notices) {
-    if (!isRecord(n)) return null;
-    if (typeof n.ingest_id !== "string") return null;
-    if (!strOrNull(n.notice_id)) return null;
-    if (typeof n.content_kind !== "string" || n.content_kind === "") return null;
-    notices.push({ ingest_id: n.ingest_id, notice_id: n.notice_id, content_kind: n.content_kind });
-  }
-  const unexportable: Unexportable[] = [];
-  for (const u of body.unexportable) {
+function readUnexportableList(v: unknown): Unexportable[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: Unexportable[] = [];
+  for (const u of v) {
     if (!isRecord(u)) return null;
-    if (!strOrNull(u.ingest_id) || !strOrNull(u.notice_id) || !strOrNull(u.reason_code)) return null;
+    if (typeof u.notice_id !== "string" || u.notice_id === "") return null;
     if (typeof u.reason !== "string" || u.reason === "") return null;
-    unexportable.push({ ingest_id: u.ingest_id, notice_id: u.notice_id, reason_code: u.reason_code, reason: u.reason });
+    if ("state" in u && u.state !== undefined && typeof u.state !== "string") return null;
+    out.push({ notice_id: u.notice_id, reason: u.reason, state: typeof u.state === "string" ? u.state : null });
   }
-  return { notices, unexportable };
+  return out;
+}
+
+/** The `check_only` 200, or null when ANY part is malformed. */
+export function readExportCheck(body: unknown): ExportCheck | null {
+  if (!isRecord(body)) return null;
+  if (typeof body.profile !== "string" || body.profile === "") return null;
+  if (typeof body.version !== "number" || !Number.isInteger(body.version)) return null;
+  if (typeof body.notices !== "number" || !Number.isInteger(body.notices) || body.notices < 0) return null;
+  const unexportable = readUnexportableList(body.unexportable);
+  if (unexportable === null) return null;
+  return { profile: body.profile, version: body.version, notices: body.notices, unexportable };
+}
+
+/** The unexportable list of a refused download (422 `detail.unexportable`), read by SHAPE, not by the error code. */
+export function readUnexportableRefusal(err: unknown): Unexportable[] | null {
+  const res = isRecord(err) && isRecord(err.response) ? err.response : null;
+  const data = res && isRecord(res.data) ? res.data : null;
+  const detail = data && isRecord(data.detail) ? data.detail : null;
+  if (!detail) return null;
+  return readUnexportableList(detail.unexportable);
 }
 
 /** Partition the lasso selection: the ingest ids to resolve (selection order, distinct), the INGEST cards that have no
@@ -184,6 +203,29 @@ export function selectionNotices(
     }
   }
   return { ingestIds, notReady, others };
+}
+
+/** The dialog's targets for a lasso selection: kind and state from the status rows (`rows[id]`), the kind falling back to
+ *  the card's own ingest component; an unknown state is null, a `stage` this client has no position for is kept verbatim. */
+export function lassoTargets(
+  artifacts: Artifact[],
+  selection: string[],
+  rows: Record<string, IngestStatusRow | undefined>,
+): { targets: ExportTarget[]; notReady: { id: string; label: string }[]; others: number } {
+  const { ingestIds, notReady, others } = selectionNotices(artifacts, selection);
+  const byIngest = new Map<string, Artifact>();
+  for (const a of artifacts) {
+    const id = ingestComponentFrom(a)?.ingest_id;
+    if (id && !byIngest.has(id)) byIngest.set(id, a);
+  }
+  const targets = ingestIds.map((id) => {
+    const a = byIngest.get(id);
+    const row = rows[id];
+    const kind = row?.content_kind ?? (a ? ingestComponentFrom(a)?.content_kind : null) ?? null;
+    const state = typeof row?.stage === "string" ? row.stage : null;
+    return { ingestId: id, kind: typeof kind === "string" ? kind : null, state };
+  });
+  return { targets, notReady, others };
 }
 
 function stripPath(name: string): string | null {
@@ -253,39 +295,38 @@ export const FIXTURE_154_COLUMNS: Record<string, string[]> = {
     "notice_date_ambiguous", "ltb_date_ambiguous", "no_parts",
   ],
 };
-/** SYNTHETIC content kinds for the provisional fixtures. */
+/** SYNTHETIC content kinds for the fixtures. */
 export const FIXTURE_KINDS = ["synthetic-kind-a", "synthetic-kind-b"];
-/** PROVISIONAL profiles (accepts / grain / version, ruling 1): the two 154 profiles plus a sample overlay (ruling 7). */
-export const FIXTURE_PROVISIONAL_PROFILES: ExportProfile[] = [
-  ...FIXTURE_154_PROFILES.map((p) => ({ ...p, accepts: [FIXTURE_KINDS[0]!], grain: "per_notice", version: "1" })),
+/** SYNTHETIC state names: the fixture invents them, no real stage is spelled. */
+export const FIXTURE_STATES = ["synthetic-state-a", "synthetic-state-b"];
+/** Profiles in #356's shape (int version, dedupe list, accepts list or null, exportable_states): the two 154 profiles
+ *  plus a sample overlay. */
+export const FIXTURE_PROFILES: ExportProfile[] = [
+  ...FIXTURE_154_PROFILES.map((p) => ({
+    ...p,
+    accepts: [FIXTURE_KINDS[0]!],
+    grain: "per_notice",
+    version: 1,
+    dedupe: [] as string[],
+    exportable_states: [...FIXTURE_STATES],
+  })),
   {
     name: "part-list",
     format: "csv",
     granularity: "notice_part",
     label: "Part list (sample)",
-    accepts: [...FIXTURE_KINDS],
+    accepts: null,
     grain: "per_part",
-    dedupe: true,
-    version: "1",
+    dedupe: ["Part"],
+    version: 1,
+    exportable_states: [...FIXTURE_STATES],
   },
 ];
-export const FIXTURE_PROVISIONAL_COLUMNS: Record<string, string[]> = { ...FIXTURE_154_COLUMNS, "part-list": ["Part"] };
+export const FIXTURE_COLUMNS: Record<string, string[]> = { ...FIXTURE_154_COLUMNS, "part-list": ["Part"] };
 
-/** The SYNTHETIC resolution: ids are all notices of the first kind; a range has two kinds and one refusal. */
-export function fixtureResolution(scope: ExportScope): ExportResolution {
-  if ("ingestIds" in scope) {
-    return {
-      notices: scope.ingestIds.map((id, i) => ({ ingest_id: id, notice_id: `synthetic-notice-${i + 1}`, content_kind: FIXTURE_KINDS[0]! })),
-      unexportable: [],
-    };
-  }
-  return {
-    notices: [
-      { ingest_id: "synthetic-range-1", notice_id: null, content_kind: FIXTURE_KINDS[0]! },
-      { ingest_id: "synthetic-range-2", notice_id: null, content_kind: FIXTURE_KINDS[1]! },
-    ],
-    unexportable: [{ ingest_id: "synthetic-range-3", notice_id: null, reason_code: "synthetic_refusal", reason: "synthetic: not promoted" }],
-  };
+/** The SYNTHETIC `check_only` answer: nothing is unexportable. */
+export function fixtureCheck(profile: string, ingestIds: string[]): ExportCheck {
+  return { profile, version: 1, notices: ingestIds.length, unexportable: [] };
 }
 
 /** The `GET /me/entitlements` body `reviewExportMock` stands in: the fields `canExportBatch` reads, as served. */
@@ -306,7 +347,7 @@ export function fixtureExportBody(
 ): { blob: Blob; filename: string } {
   const ids = "ingestId" in scope ? [scope.ingestId] : scope.ingestIds;
   const key = "ingestId" in scope ? scope.ingestId : `selection-${ids.length}`;
-  const columns = FIXTURE_PROVISIONAL_COLUMNS[profile.name] ?? [];
+  const columns = FIXTURE_COLUMNS[profile.name] ?? [];
   const rows = ids.map((id) => syntheticRow(columns, id));
   const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const text =

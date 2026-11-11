@@ -28,6 +28,8 @@ import { DockBar } from "./DockBar";
 import { CanvasExportButton } from "./CanvasExportButton";
 import { SelectionActionBar } from "./SelectionActionBar";
 import { ExportSelectionDialog } from "@/components/ingest/ExportSelectionDialog";
+import { lassoTargets } from "@/lib/reviewExport";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { useCanExportSelection } from "@/lib/useCanExportSelection";
 
 /**
@@ -158,6 +160,11 @@ export function GlobalCanvasStage() {
   const [sel, setSel] = useState<string[]>([]);
   const canExport = useCanExportSelection();
   const [exportSel, setExportSel] = useState<string[] | null>(null);
+  // The dialog reads kinds and states from the status rows as they stand when it opens.
+  const exportParts = useMemo(
+    () => (exportSel ? lassoTargets(artifacts, exportSel, useIngestStatusStore.getState().rows) : null),
+    [exportSel, artifacts],
+  );
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const selRef = useRef(sel);
   selRef.current = sel;
@@ -909,8 +916,14 @@ export function GlobalCanvasStage() {
         />
       )}
 
-      {exportSel && (
-        <ExportSelectionDialog artifacts={artifacts} selection={exportSel} onClose={() => setExportSel(null)} />
+      {exportSel && exportParts && (
+        <ExportSelectionDialog
+          targets={exportParts.targets}
+          notReady={exportParts.notReady}
+          others={exportParts.others}
+          source={`${exportSel.length} selected`}
+          onClose={() => setExportSel(null)}
+        />
       )}
 
       {/* Focus overlay: peer-view tabs + expand + overview (both views). */}

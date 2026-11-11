@@ -1,21 +1,21 @@
 /**
- * ExportSelectionDialog -- "Export as..." on the lasso bar (architect rulings 2026-11-10; see `reviewExport.ts`).
- * It resolves the selection to its notices, lists what cannot be exported and why BEFORE the download, and offers
- * only the profiles that accept EVERY content kind present. The user may proceed without the unexportable ones; only
- * the resolved notices are ever sent. "Select by range" replaces the resolution with a date range's. Nothing here
- * names a kind, a profile or a column: they are all read from what the server serves.
+ * ExportSelectionDialog -- "Export as..." on the lasso bar and on the review page (architect rulings 2026-11-10; wire
+ * declared by saf's #356, see `reviewExport.ts`). There is no resolve route: kinds and states come from the status rows
+ * (the caller's `targets`), and the unexportable list comes from `check_only` on picking a profile, BEFORE the download.
+ * The user may proceed without the unexportable ones; only the cleared ids are ever sent. Select-by-range is hidden
+ * (see the comment in `reviewExport.ts`). Nothing here names a kind, a state, a profile or a column.
  */
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { Artifact } from "@/api/types";
 import {
-  profilesAccepting,
-  selectionNotices,
+  profilesFor,
+  readUnexportableRefusal,
+  type ExportCheck,
   type ExportProfile,
-  type ExportResolution,
-  type ExportScope,
+  type ExportTarget,
+  type Unexportable,
 } from "@/lib/reviewExport";
-import { exportSelection, loadExportProfiles, resolveExport } from "@/lib/reviewExportSource";
+import { checkExport, exportNotices, loadExportProfiles } from "@/lib/reviewExportSource";
 import { saveBlob } from "@/lib/saveBlob";
 import {
   ExportFailureLine,
@@ -24,29 +24,26 @@ import {
   type ExportFailure,
 } from "@/components/ApprovalTask/ExportProfilePicker";
 
-type Mode = { kind: "ids" } | { kind: "range"; from: string; to: string };
-type Row = { key: string; ref: string; reason: string; code: string | null; dataKey: string };
-
 const NOT_READY_REASON = "the upload has not been accepted yet; it has no ingest id";
 
 export function ExportSelectionDialog({
-  artifacts,
-  selection,
+  targets,
+  notReady,
+  others,
+  source,
   onClose,
 }: {
-  artifacts: Artifact[];
-  selection: string[];
+  targets: ExportTarget[];
+  notReady: { id: string; label: string }[];
+  others: number;
+  /** The line shown in `data-export-source`: "N selected" on the lasso, the notice's ingest id on the review page. */
+  source: string;
   onClose: () => void;
 }) {
-  const [part] = useState(() => selectionNotices(artifacts, selection));
   const [profiles, setProfiles] = useState<ExportProfile[] | null>(null);
-  const [resolution, setResolution] = useState<ExportResolution | null>(
-    part.ingestIds.length > 0 ? null : { notices: [], unexportable: [] },
-  );
-  const [mode, setMode] = useState<Mode>({ kind: "ids" });
   const [selected, setSelected] = useState<string | null>(null);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [check, setCheck] = useState<{ profile: string; result: ExportCheck } | null>(null);
+  const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [failure, setFailure] = useState<ExportFailure | null>(null);
@@ -62,22 +59,6 @@ export function ExportSelectionDialog({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // A later resolve (a range) wins over an earlier one: only the newest request may set state.
-  async function resolve(scope: ExportScope, next: Mode) {
-    const mine = ++counter.current;
-    setFailure(null);
-    setDone(false);
-    try {
-      const r = await resolveExport(scope);
-      if (mine !== counter.current) return;
-      setResolution(r);
-      setMode(next);
-    } catch (e) {
-      if (mine !== counter.current) return;
-      setFailure(classifyExportError(e));
-    }
-  }
-
   useEffect(() => {
     let live = true;
     loadExportProfiles().then(
@@ -88,65 +69,91 @@ export function ExportSelectionDialog({
         if (live) setFailure(classifyExportError(e));
       },
     );
-    if (part.ingestIds.length > 0) void resolve({ ingestIds: part.ingestIds }, { kind: "ids" });
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 
-  const notices = resolution?.notices ?? [];
-  const kinds = [...new Set(notices.map((n) => n.content_kind))];
-  const offered = profilesAccepting(profiles ?? [], kinds);
+  const offered = profilesFor(profiles ?? [], targets);
   const profile = offered.find((p) => p.name === selected) ?? null;
   useEffect(() => {
     if (selected !== null && !offered.some((p) => p.name === selected)) setSelected(null);
   });
 
-  // Client-known drops (id mode only) come first, then the server's list.
-  const rows: Row[] = [
-    ...(mode.kind === "ids"
-      ? part.notReady.map((n) => ({ key: `nr-${n.id}`, ref: n.label, reason: NOT_READY_REASON, code: null, dataKey: n.id }))
-      : []),
-    ...(resolution?.unexportable ?? []).map((u, i) => ({
-      key: `u-${i}`,
-      ref: u.notice_id ?? u.ingest_id ?? "unknown",
-      reason: u.reason,
-      code: u.reason_code,
-      dataKey: u.ingest_id ?? u.notice_id ?? "unknown",
-    })),
-  ];
-  const skip = rows.length;
+  const allIds = targets.map((t) => t.ingestId);
 
-  const inverted = from !== "" && to !== "" && from > to;
-  const loading = resolution === null || (profiles === null && failure === null);
-  const state = failure
-    ? failure.kind
-    : busy
-      ? "downloading"
-      : done
-        ? "done"
-        : loading
-          ? "loading"
-          : notices.length === 0
-            ? "empty"
-            : "ready";
+  // A later pick wins over an earlier one: only the newest check may set state.
+  async function pick(name: string) {
+    const p = offered.find((x) => x.name === name);
+    if (!p) return;
+    const mine = ++counter.current;
+    setSelected(name);
+    setCheck(null);
+    setFailure(null);
+    setDone(false);
+    setChecking(true);
+    try {
+      const r = await checkExport(p, allIds);
+      if (mine !== counter.current) return;
+      setCheck({ profile: name, result: r });
+      setChecking(false);
+    } catch (e) {
+      if (mine !== counter.current) return;
+      setFailure(classifyExportError(e));
+      setChecking(false);
+    }
+  }
+
+  const current = check !== null && check.profile === selected ? check.result : null;
+  const unexportable: Unexportable[] = current?.unexportable ?? [];
+  const blocked = new Set(unexportable.map((u) => u.notice_id));
+  const cleared = allIds.filter((id) => !blocked.has(id));
+  const skip = notReady.length + unexportable.length;
 
   async function download() {
-    if (!profile || notices.length === 0) return;
+    if (!profile || current === null || cleared.length === 0) return;
     setBusy(true);
     setFailure(null);
     setDone(false);
     try {
-      const file = await exportSelection(profile, notices.map((n) => n.ingest_id));
+      const file = await exportNotices(profile, cleared);
       saveBlob(file.blob, file.filename ?? `export.${profile.name}.${profile.format}`);
       setDone(true);
     } catch (e) {
+      // The state changed between the check and the download: the server's rows join the shown ones. Joining, not
+      // replacing: the refusal names only ids that were sent, so a replace would clear the check's rows for a retry.
+      const rows = readUnexportableRefusal(e);
+      if (rows !== null) {
+        const added = rows.filter((r) => !blocked.has(r.notice_id));
+        setCheck({ profile: profile.name, result: { ...current, unexportable: [...current.unexportable, ...added] } });
+      }
       setFailure(classifyExportError(e));
     } finally {
       setBusy(false);
     }
   }
+
+  const loading = profiles === null && failure === null;
+  const state = failure
+    ? failure.kind
+    : busy
+      ? "downloading"
+      : checking
+        ? "checking"
+        : done
+          ? "done"
+          : loading
+            ? "loading"
+            : targets.length === 0
+              ? "empty"
+              : "ready";
+
+  const kinds = [...new Set(targets.map((t) => t.kind).filter((k): k is string => k !== null))];
+  const states = [...new Set(targets.map((t) => t.state).filter((k): k is string => k !== null))];
+  const blockedBy = [
+    kinds.length > 0 ? kinds.join(", ") : null,
+    states.length > 0 ? `in ${states.join(", ")}` : null,
+  ].filter((x): x is string => x !== null);
 
   return (
     <div
@@ -165,54 +172,32 @@ export function ExportSelectionDialog({
         </div>
 
         <p className="text-[11px] font-mono text-slate-300" data-export-source>
-          {mode.kind === "range" ? `range ${mode.from} to ${mode.to}` : `${selection.length} selected`}
+          {source}
         </p>
 
-        {mode.kind === "ids" && part.others > 0 && (
-          <p className="text-[11px] font-mono text-slate-500" data-export-others={part.others}>
-            {part.others} selected card(s) are not notices and are not exported here.
+        {others > 0 && (
+          <p className="text-[11px] font-mono text-slate-500" data-export-others={others}>
+            {others} selected card(s) are not notices and are not exported here.
           </p>
         )}
 
-        <div className="flex flex-col gap-1" data-export-range>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-300">
-            <label className="flex items-center gap-1">
-              From
-              <input type="date" data-range-from value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-900/50 border border-slate-800/60 rounded px-1" />
-            </label>
-            <label className="flex items-center gap-1">
-              To
-              <input type="date" data-range-to value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-900/50 border border-slate-800/60 rounded px-1" />
-            </label>
-            <button
-              type="button"
-              data-range-apply
-              disabled={from === "" || to === "" || inverted}
-              onClick={() => void resolve({ from, to }, { kind: "range", from, to })}
-              className="px-2 py-1 rounded border text-[10px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer border-slate-600/60 text-slate-300"
-            >
-              Select by range
-            </button>
-          </div>
-          {inverted && (
-            <p className="text-[11px] font-mono text-amber-400/90" data-range-error>
-              From is after To.
-            </p>
-          )}
-        </div>
-
         {skip > 0 && (
           <ul className="flex flex-col gap-1 text-[11px] font-mono text-amber-400/90" data-export-unexportable={skip}>
-            {rows.map((r) => (
-              <li key={r.key} data-unexportable={r.dataKey} data-reason-code={r.code ?? ""}>
-                {r.ref}: {r.reason}
-                {r.code ? ` (${r.code})` : ""}
+            {notReady.map((n) => (
+              <li key={`nr-${n.id}`} data-unexportable={n.id} data-reason-code="">
+                {n.label}: {NOT_READY_REASON}
+              </li>
+            ))}
+            {unexportable.map((u, i) => (
+              <li key={`u-${i}-${u.notice_id}`} data-unexportable={u.notice_id} data-reason-code={u.reason} data-state={u.state ?? ""}>
+                {u.notice_id}: {u.reason}
+                {u.state !== null ? ` (state: ${u.state})` : ""}
               </li>
             ))}
           </ul>
         )}
 
-        {loading ? null : notices.length === 0 ? (
+        {loading ? null : targets.length === 0 ? (
           <p className="text-[11px] font-mono text-slate-500" data-export-empty>
             No exportable notices in this selection.
           </p>
@@ -222,20 +207,20 @@ export function ExportSelectionDialog({
           </p>
         ) : profiles !== null && offered.length === 0 ? (
           <p className="text-[11px] font-mono text-slate-500" data-export-no-profile>
-            No export profile accepts every kind selected: {kinds.join(", ")}.
+            No export profile you hold takes {blockedBy.length > 0 ? blockedBy.join(" ") : "this selection"}.
           </p>
         ) : profiles !== null ? (
-          <ExportProfilePicker profiles={offered} selected={selected} onSelect={setSelected} />
+          <ExportProfilePicker profiles={offered} selected={selected} onSelect={(n) => void pick(n)} />
         ) : null}
 
         <button
           type="button"
           data-export-download
-          disabled={!profile || notices.length === 0 || busy}
+          disabled={!profile || current === null || cleared.length === 0 || busy || checking}
           onClick={() => void download()}
           className="self-start px-3 py-1.5 rounded border text-[11px] font-mono uppercase tracking-widest disabled:opacity-40 cursor-pointer bg-neon-cyan/10 border-neon-cyan/50 text-neon-cyan"
         >
-          {busy ? "..." : `Export ${notices.length}${skip > 0 ? `, skip ${skip}` : ""}`}
+          {busy ? "..." : `Export ${cleared.length}, skip ${skip}`}
         </button>
 
         {failure && <ExportFailureLine failure={failure} />}

@@ -263,7 +263,16 @@ env:
   #   off the pods. Check 2: task_kinds and review_shapes diff de1873c2..4f2dac35 is EMPTY (control:
   #   7 files changed). Check 3: uv.lock unchanged, iagent-mesh stays v0.9.15. Gate: the full suite
   #   against a git-archive export of 4f2dac35 placed as the sibling.
-  PRODUCER_REF: 4f2dac35fa108c6904e7762b2b9dc644e14be40d
+  # 2026-11-11 RE-PIN to 6a4175a2 (the head of saf's #356, lane/saf-export-profile-server, OPEN; the
+  #   architect: "build the #356 alignment now against 6a4175a2"). HELD UNPUSHED: this re-pins to the
+  #   merge sha before it is pushed, and rides 0.4.85 with #356 or not at all. 4f2dac35 is its
+  #   ancestor. The OpenAPI declares POST /ingest/export/notices (ExportNoticesRequest) and the
+  #   profile's accepts (nullable), grain, version (int), dedupe (list) and exportable_states, which
+  #   reviewExport.ts now reads. NOT read off the pods. Check 2: task_kinds and review_shapes diff
+  #   4f2dac35..6a4175a2 is EMPTY (control: aac9900b..6a4175a2, 5 files changed). Check 3: uv.lock
+  #   iagent-mesh MOVED, v0.9.15 -> v0.9.19. Gate: the full suite against a git-archive export of
+  #   6a4175a2 placed as the sibling.
+  PRODUCER_REF: 6a4175a2eef941a46976cda86f7b0bbf5a1b95cb
 
 permissions:
   contents: read

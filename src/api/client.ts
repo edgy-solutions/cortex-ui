@@ -11,17 +11,15 @@ import { readExportRecipients, type ExportRecipient } from "@/lib/canvasExport";
 import { readProvenanceFloor, type IngestLeaf } from "@/lib/ingestWire";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
 import {
-  EXPORT_BATCH_PATH,
-  EXPORT_RESOLVE_PATH,
+  EXPORT_NOTICES_PATH,
+  exportNoticesBody,
   exportOnePath,
-  exportScopeBody,
   filenameFromDisposition,
   jsonRefusalBody,
   readExportProfiles,
-  readExportResolution,
+  readExportCheck,
+  type ExportCheck,
   type ExportProfile,
-  type ExportResolution,
-  type ExportScope,
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
@@ -1351,14 +1349,13 @@ export async function fetchCaseArtifact(path: string): Promise<unknown> {
 }
 
 /**
- * The review-export routes, declared at invincible-agent 10ac02fe (#154). The profiles list is a typed
+ * The review-export routes, declared at invincible-agent 10ac02fe (#154) and 6a4175a2 (#356). The profiles list is a typed
  * read (`request`, validated by `readExportProfiles`). The two file downloads stay on the shared `api`
  * instance: their 200s are untyped bytes, read as a Blob. The paths are spelled once, in
  * `src/lib/reviewExport.ts`. A refusal is a non-2xx the caller reads with `refusalCode`.
  *
- * `resolveIngestExport` and `downloadSelectionExport` are CORTEX-PROPOSED and UNDECLARED (architect rulings
- * 2026-11-10; saf owns the server side): their wire is spelled in `src/lib/reviewExport.ts` and saf confirms or
- * corrects it. A non-2xx throws the axios error untouched.
+ * `checkNoticesExport` (check_only, a typed POST) and `downloadNoticesExport` are `POST /ingest/export/notices`, #356.
+ * A non-2xx throws the axios error untouched; a Blob refusal is re-read as JSON first.
  */
 export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
   const data = await request("GET /ingest/export/profiles", {});
@@ -1380,19 +1377,21 @@ export async function downloadIngestExport(
   return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 
-export async function resolveIngestExport(scope: ExportScope): Promise<ExportResolution> {
-  const { data } = await api.post<unknown>(EXPORT_RESOLVE_PATH, exportScopeBody(scope));
-  const resolution = readExportResolution(data);
-  if (resolution === null) throw new Error("malformed /ingest/export/resolve response");
-  return resolution;
+export async function checkNoticesExport(profile: string, ingestIds: string[]): Promise<ExportCheck> {
+  const data = await request("POST /ingest/export/notices", {
+    body: exportNoticesBody(profile, ingestIds, true) as BffOps["POST /ingest/export/notices"]["body"],
+  });
+  const check = readExportCheck(data);
+  if (check === null) throw new Error("malformed /ingest/export/notices check_only response");
+  return check;
 }
 
-export async function downloadSelectionExport(
+export async function downloadNoticesExport(
   profile: string,
   ingestIds: string[],
 ): Promise<{ blob: Blob; filename: string | null }> {
   const res = await api
-    .post<Blob>(EXPORT_BATCH_PATH, { profile, ingest_ids: ingestIds }, { responseType: "blob" })
+    .post<Blob>(EXPORT_NOTICES_PATH, exportNoticesBody(profile, ingestIds, false), { responseType: "blob" })
     .catch(async (err: unknown) => {
       await jsonRefusalBody(err);
       throw err;
@@ -1419,20 +1418,13 @@ export async function fileAccessProposal(body: AccessProposalBody): Promise<Acce
 /**
  * Reads cortex makes of fields the producer sends but does not declare. The read-side twin of AWAITING_DOOR.
  * Shape: { "<METHOD /path>": { "<dotted.path>": "<reason, evidence file>" } }. `[]` is an array step.
- * (b) the producer sends it, undeclared. (p) a ruling names it and the producer neither sends nor declares it
- * yet; cortex reads it as optional, so an absent value changes nothing.
+ * (b) the producer sends it, undeclared.
  * client.responseSeal.test.ts fails an entry the schema now declares, and one nothing reads.
  */
 export const AWAITING_DECLARATION: Record<string, Record<string, string>> = {
   "POST /decision_subgraph": {
     "live_nodes.[].uri": "(b) the producer declares list[dict] but builds {uri, labels} per node; evidence: producer src/iagent/gateway.py:10573 at 4a5ff6b6 (and src/lib/decisionMap.test.ts fixtures)",
     "context_nodes.[].uri": "(b) same open dict, {uri, labels}; evidence: producer src/iagent/gateway.py:10525-10575 at 4a5ff6b6",
-  },
-  "GET /ingest/export/profiles": {
-    "[].accepts": "(p) architect ruling 2026-11-10 (B) 1, content kinds; saf owns the shape; evidence: invincible-agent sessions/2026-11-10-packet-to-saf-cc-lane-01-architect-from-cortex-export-as-reads-this-wire-confirm-or-correct.md",
-    "[].grain": "(p) architect ruling 2026-11-10 (B) 1, per_notice | per_part; same packet",
-    "[].dedupe": "(p) architect ruling 2026-11-10 (B) 1, optional dedupe on a grain; same packet",
-    "[].version": "(p) architect ruling 2026-11-10 (B) 1 and 6, the version an export records; same packet",
   },
   "GET /fleet/version": {
     self: "(b) the producer sends {self: {...}} but declares the body as an open object; evidence: producer src/iagent/gateway.py:971 at 4a5ff6b6 and src/api/bffVersion.test.ts",
