@@ -6,6 +6,7 @@
  * (see the comment in `reviewExport.ts`). Nothing here names a kind, a state, a profile or a column.
  */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
   profilesFor,
@@ -155,7 +156,10 @@ export function ExportSelectionDialog({
     states.length > 0 ? `in ${states.join(", ")}` : null,
   ].filter((x): x is string => x !== null);
 
-  return (
+  // Portaled to document.body: on the notice card (0.4.87) this dialog mounts inside a canvas card whose
+  // camera transform makes `position: fixed` relative to the CARD, so it would draw scaled and clipped inside it.
+  // React events still bubble through the portal to the mounting tree (the card's stopPropagation wrapper).
+  return createPortal(
     <div
       data-overlay
       data-export-dialog={state}
@@ -225,6 +229,7 @@ export function ExportSelectionDialog({
 
         {failure && <ExportFailureLine failure={failure} />}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

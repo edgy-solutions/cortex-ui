@@ -69,7 +69,7 @@ describe("fetchIngestExportProfiles (typed read)", () => {
     const served = withState([...FIXTURE_154_PROFILES, XLSX]);
     reply.data = JSON.parse(JSON.stringify(served));
     expect(await fetchIngestExportProfiles()).toEqual(served);
-    const { container } = render(dialog());
+    const { baseElement: container } = render(dialog());
     await waitFor(() => expect(container.querySelector('[data-export-profile="per-part-xlsx"]')).not.toBeNull());
     expect(container.querySelector('[data-export-profile="per-part-xlsx"]')?.textContent).toContain("xlsx");
     expect(container.querySelectorAll("[data-export-profile]").length).toBe(3);
@@ -82,7 +82,7 @@ describe("fetchIngestExportProfiles (typed read)", () => {
 
   it("the picker shows its existing failure state for that body", async () => {
     reply.data = withState(BAD);
-    const { container } = render(dialog());
+    const { baseElement: container } = render(dialog());
     await waitFor(() => expect(container.querySelector("[data-export-dialog]")?.getAttribute("data-export-dialog")).toBe("failed"));
     expect(container.querySelector("[data-export-failed]")?.textContent).toContain("malformed /ingest/export/profiles");
     expect(container.querySelector("[data-export-profile]")).toBeNull();

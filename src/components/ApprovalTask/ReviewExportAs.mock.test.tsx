@@ -49,7 +49,7 @@ describe("ReviewExportAs on the mock demo", () => {
     expect(want.length, "some fixture profile lists the mock's stage").toBeGreaterThan(0);
     expect(want.length, "and not every one does: the filter is working").toBeLessThan(FIXTURE_PROFILES.length);
 
-    const { container } = render(<ReviewExportAs ingestId={id} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={id} />);
     await waitFor(() => expect(container.querySelector("[data-review-export-as]")).not.toBeNull());
     fireEvent.click(container.querySelector("[data-review-export-as]")!);
     await waitFor(() => expect(container.querySelector("[data-export-profile]")).not.toBeNull());

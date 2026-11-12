@@ -59,6 +59,7 @@ import {
 } from "@/lib/ingestWire";
 import { IngestFailureExtras } from "./IngestFailureExtras";
 import { IngestLeafChip } from "./IngestLeafChip";
+import { ReviewExportAs } from "@/components/ApprovalTask/ReviewExportAs";
 import { duplicatePhrase } from "@/lib/ingestWire";
 
 const RUNG_GLYPH: Record<string, string> = {
@@ -415,6 +416,13 @@ export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: Ing
               no review task visible to you
             </p>
           )}
+          {/* "Export as..." is NOT the reviewer's: it shows for any viewer holding ingest:exportBatch with a profile
+              listing this notice's state (ReviewExportAs gates all of that, not this card), so it sits outside the
+              reviewTask ternary. "May read the notice" is this card's own precondition: it only draws a row when the
+              status read served one (the not-found and error branches above return early). */}
+          <div role="presentation" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+            <ReviewExportAs ingestId={row.ingest_id} />
+          </div>
         </>
       )}
     </div>

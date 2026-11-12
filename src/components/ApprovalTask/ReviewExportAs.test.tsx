@@ -56,7 +56,7 @@ afterEach(() => {
 describe("ReviewExportAs", () => {
   it("is hidden without the capability, and never reads profiles", async () => {
     loadCanExportBatch.mockResolvedValue(false);
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await settle();
     expect(btn(container)).toBeNull();
     expect(loadExportProfiles).not.toHaveBeenCalled();
@@ -64,14 +64,14 @@ describe("ReviewExportAs", () => {
 
   it("is hidden with the flag off", async () => {
     window.localStorage.removeItem("cortex.reviewExport");
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await settle();
     expect(btn(container)).toBeNull();
     expect(loadCanExportBatch).not.toHaveBeenCalled();
   });
 
   it("hides again when the flag goes off after the profiles loaded (the gate is read every render)", async () => {
-    const { container, rerender } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container, rerender } = render(<ReviewExportAs ingestId={ID} />);
     await waitFor(() => expect(btn(container)).not.toBeNull());
     window.localStorage.removeItem("cortex.reviewExport");
     rerender(<ReviewExportAs ingestId={ID} />);
@@ -81,7 +81,7 @@ describe("ReviewExportAs", () => {
 
   it("is hidden while the stage is unknown (no row, or a null stage)", async () => {
     seed(null);
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await settle();
     expect(btn(container)).toBeNull();
     seed({ stage: null });
@@ -91,7 +91,7 @@ describe("ReviewExportAs", () => {
 
   it("is hidden when no profile lists the stage", async () => {
     seed({ stage: "synthetic-state-unlisted" });
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await waitFor(() => expect(loadExportProfiles).toHaveBeenCalled());
     await settle();
     expect(btn(container)).toBeNull();
@@ -99,14 +99,14 @@ describe("ReviewExportAs", () => {
 
   it("is hidden when the profile read fails", async () => {
     loadExportProfiles.mockRejectedValue(new Error("down"));
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await waitFor(() => expect(loadExportProfiles).toHaveBeenCalled());
     await settle();
     expect(btn(container)).toBeNull();
   });
 
   it("is shown when a profile lists the stage, and the dialog offers only that set", async () => {
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await waitFor(() => expect(btn(container)).not.toBeNull());
     fireEvent.click(btn(container)!);
     await waitFor(() => expect(container.querySelector("[data-export-profile]")).not.toBeNull());
@@ -118,7 +118,7 @@ describe("ReviewExportAs", () => {
 
   it("follows the status row: appears when the stage becomes one a profile lists", async () => {
     seed({ stage: "synthetic-state-unlisted" });
-    const { container } = render(<ReviewExportAs ingestId={ID} />);
+    const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await waitFor(() => expect(loadExportProfiles).toHaveBeenCalled());
     await settle();
     expect(btn(container)).toBeNull();

@@ -40,18 +40,18 @@ const dlg = (c: HTMLElement) => q(c, "[data-export-dialog]")!.getAttribute("data
 
 function mount(targets: ExportTarget[], extra: { notReady?: { id: string; label: string }[]; others?: number; onClose?: () => void } = {}) {
   const onClose = extra.onClose ?? vi.fn();
-  return {
-    onClose,
-    ...render(
-      <ExportSelectionDialog
-        targets={targets}
-        notReady={extra.notReady ?? []}
-        others={extra.others ?? 0}
-        source={`${targets.length} selected`}
-        onClose={onClose}
-      />,
-    ),
-  };
+  const r = render(
+    <ExportSelectionDialog
+      targets={targets}
+      notReady={extra.notReady ?? []}
+      others={extra.others ?? 0}
+      source={`${targets.length} selected`}
+      onClose={onClose}
+    />,
+  );
+  // The dialog is portaled to document.body (0.4.87: it mounts inside transformed canvas cards), so every query
+  // reads the body; `mountedIn` is the render container, which must NOT hold the dialog.
+  return { onClose, ...r, container: r.baseElement, mountedIn: r.container };
 }
 const profilesLoaded = async (c: HTMLElement) => waitFor(() => expect(dlg(c)).not.toBe("loading"));
 const pickProfile = (c: HTMLElement, name: string) => fireEvent.click(q(c, `[data-export-profile="${name}"]`)!);
@@ -260,6 +260,14 @@ describe("ExportSelectionDialog", () => {
     expect(dlg(container)).toBe("empty");
     expect(q(container, "[data-export-empty]")).not.toBeNull();
     expect(q(container, "[data-export-others]")!.getAttribute("data-export-others")).toBe("2");
+  });
+
+  it("is portaled: a direct child of document.body, not inside the tree that mounted it", async () => {
+    const { container, mountedIn } = mount([tgt("i-1")]);
+    await profilesLoaded(container);
+    const d = q(container, "[data-export-dialog]")!;
+    expect(d.parentElement).toBe(document.body);
+    expect(mountedIn.contains(d)).toBe(false);
   });
 
   it("Escape and the close button close it", async () => {
