@@ -37,10 +37,11 @@ vi.mock("@/lib/ingestTransport", () => ({
 }));
 const loadCanExportBatch = vi.fn();
 const loadExportProfiles = vi.fn();
+const checkExport = vi.fn();
 vi.mock("@/lib/reviewExportSource", () => ({
   loadCanExportBatch: (...a: unknown[]) => loadCanExportBatch(...a),
   loadExportProfiles: (...a: unknown[]) => loadExportProfiles(...a),
-  checkExport: vi.fn(),
+  checkExport: (...a: unknown[]) => checkExport(...a),
   exportNotices: vi.fn(),
 }));
 const renderPage = vi.fn();
@@ -186,6 +187,8 @@ describe("which card draws", () => {
     await waitFor(() => expect(document.querySelector("[data-review-export-as]")).not.toBeNull());
     expect(document.querySelectorAll("[data-review-export-as]")).toHaveLength(1);
     expect(document.querySelector("[data-review-export]")).toBeNull();
+    // A readable row decides on its own state: the reviewer path (a check per profile) never runs.
+    expect(checkExport).not.toHaveBeenCalled();
   });
 
   it("a document_promotion task naming an ingest_id draws the review card, and fetches both routes by that id", async () => {

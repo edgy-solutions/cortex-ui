@@ -1369,7 +1369,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             )}
           </div>
         )}
-        <ReviewExportAs ingestId={ingestId} />
+        <ReviewExportAs ingestId={ingestId} noticeId={review.notice_id ?? null} />
       </div>
     </div>
   );

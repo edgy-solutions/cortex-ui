@@ -3,7 +3,7 @@
  * declared by saf's #356, see `reviewExport.ts`). There is no resolve route: kinds and states come from the status rows
  * (the caller's `targets`), and the unexportable list comes from `check_only` on picking a profile, BEFORE the download.
  * The user may proceed without the unexportable ones; only the cleared ids are ever sent. Select-by-range is hidden
- * (see the comment in `reviewExport.ts`). Nothing here names a kind, a state, a profile or a column.
+ * (see the comment in `reviewExport.ts`). A refused row shows the label of the target whose ingestId it names (verbatim id when none); `data-unexportable` and the body keep the ingest id. Nothing here names a kind, a state, a profile or a column.
  */
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -32,13 +32,16 @@ export function ExportSelectionDialog({
   notReady,
   others,
   source,
+  admitted,
   onClose,
 }: {
   targets: ExportTarget[];
   notReady: { id: string; label: string }[];
   others: number;
-  /** The line shown in `data-export-source`: "N selected" on the lasso, the notice's ingest id on the review page. */
+  /** The line shown in `data-export-source`: "N selected" on the lasso, the notice's number on the review page (never the hash). */
   source: string;
+  /** When given, only these profile names are offered (the reviewer path, where the server's check admitted them). Absent: every profile the targets fit. */
+  admitted?: readonly string[];
   onClose: () => void;
 }) {
   const [profiles, setProfiles] = useState<ExportProfile[] | null>(null);
@@ -75,7 +78,7 @@ export function ExportSelectionDialog({
     };
   }, []);
 
-  const offered = profilesFor(profiles ?? [], targets);
+  const offered = profilesFor(profiles ?? [], targets).filter((p) => admitted === undefined || admitted.includes(p.name));
   const profile = offered.find((p) => p.name === selected) ?? null;
   useEffect(() => {
     if (selected !== null && !offered.some((p) => p.name === selected)) setSelected(null);
@@ -194,7 +197,7 @@ export function ExportSelectionDialog({
             ))}
             {unexportable.map((u, i) => (
               <li key={`u-${i}-${u.notice_id}`} data-unexportable={u.notice_id} data-reason-code={u.reason} data-state={u.state ?? ""}>
-                {u.notice_id}: {u.reason}
+                {targets.find((t) => t.ingestId === u.notice_id)?.label ?? u.notice_id}: {u.reason}
                 {u.state !== null ? ` (state: ${u.state})` : ""}
               </li>
             ))}

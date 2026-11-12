@@ -277,10 +277,18 @@ describe("lassoTargets", () => {
     } as unknown as Parameters<typeof lassoTargets>[2];
     const out = lassoTargets([ingest("a1", "i-1", "k-comp"), ingest("a2", "i-2", "k-comp"), ingest("a3", "i-3")], ["a1", "a2", "a3"], rows);
     expect(out.targets).toEqual([
-      { ingestId: "i-1", kind: "k-row", state: "synthetic-state-a" },
-      { ingestId: "i-2", kind: "k-comp", state: null },
-      { ingestId: "i-3", kind: null, state: null },
+      { ingestId: "i-1", kind: "k-row", state: "synthetic-state-a", label: "drop i-1" },
+      { ingestId: "i-2", kind: "k-comp", state: null, label: "drop i-2" },
+      { ingestId: "i-3", kind: null, state: null, label: "drop i-3" },
     ]);
+  });
+  it("label (0.4.88): the row's notice number, else the card's, else drop <12 hex>", () => {
+    const card = (id: string, ingestId: string, notice?: string): Artifact =>
+      ({ id, summary: "", rendered_output: { components: [{ archetype: "INGEST", ingest: { ingest_id: ingestId, ...(notice ? { notice_id: notice } : {}) } }] } }) as unknown as Artifact;
+    const long = "sha256:" + "3f9a1c7e5b2d" + "0".repeat(52);
+    const rows = { "i-1": { notice_id: "PCN-1" } } as unknown as Parameters<typeof lassoTargets>[2];
+    const out = lassoTargets([card("a1", "i-1", "PCN-card"), card("a2", "i-2", "PCN-2"), card("a3", long)], ["a1", "a2", "a3"], rows);
+    expect(out.targets.map((t) => t.label)).toEqual(["PCN-1", "PCN-2", "drop 3f9a1c7e5b2d"]);
   });
 });
 

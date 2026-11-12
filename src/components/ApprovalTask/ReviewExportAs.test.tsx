@@ -111,7 +111,7 @@ describe("ReviewExportAs", () => {
     fireEvent.click(btn(container)!);
     await waitFor(() => expect(container.querySelector("[data-export-profile]")).not.toBeNull());
     expect([...container.querySelectorAll("[data-export-profile]")].map((e) => e.getAttribute("data-export-profile"))).toEqual(["p1"]);
-    expect(container.querySelector("[data-export-source]")!.textContent).toBe(ID);
+    expect(container.querySelector("[data-export-source]")!.textContent).toBe("drop abc"); // no notice_id on this row: ingestLeadLine's fallback, not the hash
     fireEvent.click(container.querySelector('[data-export-profile="p1"]')!);
     await waitFor(() => expect(checkExport).toHaveBeenCalledWith(expect.objectContaining({ name: "p1" }), [ID]));
   });

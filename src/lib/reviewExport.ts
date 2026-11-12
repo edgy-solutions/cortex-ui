@@ -1,5 +1,5 @@
 import type { Artifact } from "@/api/types";
-import { ingestComponentFrom } from "@/lib/ingestArtifact";
+import { ingestComponentFrom, ingestLeadLine } from "@/lib/ingestArtifact";
 import type { IngestStatusRow } from "@/lib/ingestWire";
 
 /**
@@ -102,7 +102,9 @@ export function readExportProfiles(body: unknown): ExportProfile[] | null {
   return out;
 }
 
-export type ExportTarget = { ingestId: string; kind: string | null; state: string | null };
+/** `label` is DISPLAY ONLY (the notice's own number, else `drop <12 hex>`, via `ingestLeadLine`): nothing keys on it, and
+ *  `profilesFor` never reads it. The wire keeps carrying `ingestId`. */
+export type ExportTarget = { ingestId: string; kind: string | null; state: string | null; label?: string };
 
 /** The profiles, in served order, to offer for these targets. A profile is offered iff (1) it declares
  *  `exportable_states` (absent: cortex does not guess), (2) it accepts every KNOWN kind present (`accepts` null/absent
@@ -198,7 +200,7 @@ export function selectionNotices(
 }
 
 /** The dialog's targets for a lasso selection: kind and state from the status rows (`rows[id]`), the kind falling back to
- *  the card's own ingest component; an unknown state is null, a `stage` this client has no position for is kept verbatim. */
+ *  the card's own ingest component; `label` is the notice's number (row, else card), else `drop <12 hex>`; an unknown state is null, a `stage` this client has no position for is kept verbatim. */
 export function lassoTargets(
   artifacts: Artifact[],
   selection: string[],
@@ -215,7 +217,8 @@ export function lassoTargets(
     const row = rows[id];
     const kind = row?.content_kind ?? (a ? ingestComponentFrom(a)?.content_kind : null) ?? null;
     const state = typeof row?.stage === "string" ? row.stage : null;
-    return { ingestId: id, kind: typeof kind === "string" ? kind : null, state };
+    const number = row?.notice_id ?? (a ? ingestComponentFrom(a)?.notice_id : null) ?? null;
+    return { ingestId: id, kind: typeof kind === "string" ? kind : null, state, label: ingestLeadLine("", { notice_id: number, ingest_id: id }) };
   });
   return { targets, notReady, others };
 }
