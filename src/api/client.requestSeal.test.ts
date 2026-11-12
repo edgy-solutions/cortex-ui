@@ -351,7 +351,6 @@ const NOT_TRANSPORT: Record<string, string> = {
   opPath: "pure: fills an op's path template (URL building for the raw-fetch and SSE seams)",
   request: "the typed core: exercised by every CALLS case",
   requestFull: "the typed core, whole-response variant: exercised by fetchEntitlements / healthCheck / fetchIngestSource",
-  downloadIngestExport: "declared at invincible-agent 10ac02fe (#154); a Blob download, its 200 untyped (src/lib/reviewExport.ts)",
   fileAccessProposal: "POST /access/proposals: CORTEX-PROPOSED (ADR-0062 section 7, Draft; docs/specs/access-request-cards.md), not in the BFF snapshot yet; the wire is spelled once in src/lib/accessProposal.ts and sealed by accessProposal.test.ts",
   fetchIllustrationContent: "GET {content_path}: producer-chosen path from an ILLUSTRATION payload, guarded by gatewayRelativePath; not a BFF op (consumed-routes.md, 'Not BFF routes')",
   fetchCaseArtifact: "GET {output_artifact.uri}: the URI the case payload carries (GET /cases/{case_id}/action, a declared op reached untyped through the shared api instance, bearer attached), guarded by gatewayRelativePath",

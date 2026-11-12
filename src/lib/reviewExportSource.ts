@@ -1,10 +1,9 @@
 /**
  * reviewExportSource -- the seam: the fixture when `reviewExportMock` is on, else the client.
- * (Routes declared at invincible-agent 10ac02fe (#154) and 6a4175a2 (#356); see `reviewExport.ts`.) The status read is NOT here: it is a real route.
+ * (Only #356's notices routes (6a4175a2) and the #154 profiles read (10ac02fe) remain; see `reviewExport.ts`.) The status read is NOT here: it is a real route.
  */
 import {
   fetchIngestExportProfiles,
-  downloadIngestExport,
   checkNoticesExport,
   downloadNoticesExport,
   fetchEntitlements,
@@ -25,11 +24,6 @@ export type ExportFile = { blob: Blob; filename: string | null };
 export async function loadExportProfiles(): Promise<ExportProfile[]> {
   if (isReviewExportMockEnabled()) return FIXTURE_PROFILES;
   return fetchIngestExportProfiles();
-}
-
-export async function exportOne(ingestId: string, profile: ExportProfile): Promise<ExportFile> {
-  if (isReviewExportMockEnabled()) return fixtureExportBody(profile, { ingestId });
-  return downloadIngestExport(ingestId, profile.name);
 }
 
 export async function checkExport(profile: ExportProfile, ingestIds: string[]): Promise<ExportCheck> {

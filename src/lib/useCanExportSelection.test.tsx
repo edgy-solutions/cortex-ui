@@ -5,7 +5,6 @@ const fetchEntitlements = vi.fn();
 vi.mock("@/api/client", () => ({
   fetchEntitlements: (...a: unknown[]) => fetchEntitlements(...a),
   fetchIngestExportProfiles: vi.fn(),
-  downloadIngestExport: vi.fn(),
 }));
 
 import { useCanExportSelection } from "./useCanExportSelection";

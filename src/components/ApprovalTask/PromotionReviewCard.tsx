@@ -28,7 +28,6 @@ import {
 } from "@/lib/promotionReview";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { useTaskAct } from "./useTaskAct";
-import { ReviewExportControl } from "./ReviewExportControl";
 import { ReviewExportAs } from "./ReviewExportAs";
 import { isActBlocked, TaskActBlocked, TaskActNotices } from "./TaskActParts";
 import { PdfEvidencePane, type PdfPaneHandle, type SourcePhase } from "./PdfEvidencePane";
@@ -1363,10 +1362,6 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
           </div>
         )}
         <ReviewExportAs ingestId={ingestId} />
-        {/* Export: only once the task is no longer pending (the control itself gates on stage === "promoted"). */}
-        {(a.done !== null || (task.task_state != null && task.task_state !== "pending")) && (
-          <ReviewExportControl ingestId={ingestId} />
-        )}
       </div>
     </div>
   );

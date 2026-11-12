@@ -7,20 +7,19 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
  *
  * Packet: invincible-agent `sessions/2026-10-28-packet-to-lane-01-from-cortex-review-export-what-cortex-needs-on-the-wire.md`.
  *
- * Routes 1-2 are declared at invincible-agent 10ac02fe (#154), route 3 at 6a4175a2 (#356); field 4 at c3b51ed7 (#290, ingest-v1 1.7.0).
+ * Route 1 is declared at invincible-agent 10ac02fe (#154), route 2 at 6a4175a2 (#356); field 3 at c3b51ed7 (#290, ingest-v1 1.7.0).
  * The wire names are spelled ONCE, here:
  *   1. `GET /ingest/export/profiles`                      -> bare array of ExportProfile
- *   2. `GET /ingest/{ingest_id}/export?profile=<name>`    -> file bytes + Content-Disposition
- *   3. `POST /ingest/export/notices`                       -> check_only list, or the batch file (see EXPORT AS below)
- *   4. `capabilities` on `GET /me/entitlements`           -> batch control, on `EXPORT_BATCH_CAPABILITY`
+ *   2. `POST /ingest/export/notices`                       -> check_only list, or the batch file (see EXPORT AS below)
+ *   3. `capabilities` on `GET /me/entitlements`           -> batch control, on `EXPORT_BATCH_CAPABILITY`
  * The profile keys follow lane 01's `policy/exports/` header (invincible-agent
  * `sessions/2026-10-28-packet-to-fin-policy-exports-header-is-granularity-not-scope.md`):
  * `{name, format, granularity, label}`, format and granularity read verbatim (any non-empty string; config names the case, architect 2026-10-30). It was `scope: row | notice`
  * in cortex's proposal; 7f §2 records `scope` as a three-way collision, so lane 01 renamed it.
- * Routes 1-3 and the profile keys are declared at invincible-agent 10ac02fe (#154). A refusal there is
+ * Route 1 and the profile keys are declared at invincible-agent 10ac02fe (#154). A refusal there is
  * FastAPI's `HTTPException(detail={error, ...})`,
- * so the code is `detail.error` (`ingest_not_promoted`, `not_entitled_to_export_batch`,
- * `export_profile_unknown`, ...). The file routes fetch as a Blob, so the client re-reads a refusal
+ * so the code is `detail.error` (`not_entitled_to_export`, `not_entitled_to_export_batch`,
+ * `export_profile_unknown`, ...). The file route fetches as a Blob, so the client re-reads a refusal
  * body as JSON before `refusalCode` sees it (`jsonRefusalBody`).
  *
  * "EXPORT AS..." (architect rulings 2026-11-10, relayed by Chris; wire declared by saf's #356 at invincible-agent 6a4175a2):
@@ -30,20 +29,17 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
  *   4. "Export as..." offers only the profiles that accept EVERY kind present and whose `exportable_states` include a state present.
  *   5. Personal download is the default and needs no recipient: `destination` is never sent.
  *   6. `POST /ingest/export/notices` `{notice_ids, profile, check_only?}`; `notice_ids` carries INGEST ids. The gates are
- *      `ingest:exportBatch` then `can_export:<profile>`. Reason codes are shown verbatim, never branched on, and no state
- *      name is spelled here: states are the `stage` the status routes serve (config names the case).
+ *      `ingest:exportBatch` then `can_export:<profile>`. Reason codes are shown verbatim, never branched on, and the LOGIC spells
+ *      no state name: states are the `stage` the status routes serve (config names the case). Only the sealed mock mirror
+ *      `FIXTURE_PROFILES` spells them, because the producer serves them.
  *
  * RANGE IS HIDDEN: 6a4175a2's notices route serves no ids-in-a-range form, and the old `GET /ingest/export?from&to` builds
  * the file directly with no unexportable list first, so it cannot meet ruling 3. "Select by range" returns when saf serves one.
- *
- * The gate is `stage === "promoted"` on `GET /ingest/{id}/status` (a REAL, declared route).
  */
 
-/** Route 2, declared at invincible-agent 10ac02fe (#154). */
-export const exportOnePath = (ingestId: string): string => `/ingest/${encodeURIComponent(ingestId)}/export`;
-/** Route 3, declared at invincible-agent 6a4175a2 (#356). */
+/** Route 2, declared at invincible-agent 6a4175a2 (#356). */
 export const EXPORT_NOTICES_PATH = "/ingest/export/notices";
-/** The capability the batch control is shown on. It is the key route 3's door is gated on (`can_invoke`), so the
+/** The capability the batch control is shown on. It is the key route 2's door is gated on (`can_invoke`), so the
  *  control shows exactly when the door would admit. Capability, never group (architect 2026-11-07). */
 export const EXPORT_BATCH_CAPABILITY = "ingest:exportBatch";
 
@@ -111,7 +107,7 @@ export type ExportTarget = { ingestId: string; kind: string | null; state: strin
 /** The profiles, in served order, to offer for these targets. A profile is offered iff (1) it declares
  *  `exportable_states` (absent: cortex does not guess), (2) it accepts every KNOWN kind present (`accepts` null/absent
  *  takes any; an unknown kind does not block), and (3) at least one target is in an exportable state or has an unknown
- *  state (the server decides). No targets offers nothing. No state name is spelled here. */
+ *  state (the server decides). No targets offers nothing. The logic spells no state name. */
 export function profilesFor(profiles: ExportProfile[], targets: ExportTarget[]): ExportProfile[] {
   if (targets.length === 0) return [];
   return profiles.filter((p) => {
@@ -125,10 +121,6 @@ export function profilesFor(profiles: ExportProfile[], targets: ExportTarget[]):
 
 export function profileLabel(p: ExportProfile): string {
   return typeof p.label === "string" && p.label !== "" ? p.label : p.name;
-}
-
-export function isExportStage(stage: unknown): boolean {
-  return stage === "promoted";
 }
 
 /** The served `capabilities` list (every key the caller holds `can_invoke` on) carries the batch key. A body without
@@ -274,7 +266,7 @@ export function refusalCode(err: unknown): { status: number | null; code: string
   return { status, code: typeof raw === "string" ? raw : null };
 }
 
-// -- The fixture: SYNTHETIC, served only when `reviewExportMock` is on -----------------------
+// -- The fixtures: served only when `reviewExportMock` is on -----------------------
 /** What `GET /ingest/export/profiles` returns at invincible-agent 10ac02fe (#154): the two profiles in
  *  `policy/exports/*.yaml`, sorted by name. Sealed field for field by `reviewExport154.test.ts`. */
 export const FIXTURE_154_PROFILES: ExportProfile[] = [
@@ -295,34 +287,36 @@ export const FIXTURE_154_COLUMNS: Record<string, string[]> = {
     "notice_date_ambiguous", "ltb_date_ambiguous", "no_parts",
   ],
 };
-/** SYNTHETIC content kinds for the fixtures. */
-export const FIXTURE_KINDS = ["synthetic-kind-a", "synthetic-kind-b"];
-/** SYNTHETIC state names: the fixture invents them, no real stage is spelled. */
-export const FIXTURE_STATES = ["synthetic-state-a", "synthetic-state-b"];
-/** Profiles in #356's shape (int version, dedupe list, accepts list or null, exportable_states): the two 154 profiles
- *  plus a sample overlay. */
+/** A MIRROR of what `GET /ingest/export/profiles` serves at invincible-agent 8c3eb9af (#356 merge), for a viewer granted
+ *  every profile: the base rows (`policy/exports/*.yaml`) plus the sample overlay (`policy/overlays/sample/exports/*.yaml`),
+ *  sorted by name, filled as `export_profiles.py` fills them (`grain` from `_GRAIN_OF`, `accepts` null when absent,
+ *  `dedupe` [] when absent, `exportable_states` defaulting to `DEFAULT_EXPORTABLE_STATES`).
+ *  The stage names below are spelled because the producer serves them; they are sealed field for field by
+ *  `reviewExportMockProfiles.producerSeal.test.ts` and are used ONLY when `reviewExportMock` is on, so the demo offers the
+ *  real review button for a real stage. No code branches on them. */
 export const FIXTURE_PROFILES: ExportProfile[] = [
-  ...FIXTURE_154_PROFILES.map((p) => ({
-    ...p,
-    accepts: [FIXTURE_KINDS[0]!],
-    grain: "per_notice",
-    version: 1,
-    dedupe: [] as string[],
-    exportable_states: [...FIXTURE_STATES],
-  })),
   {
-    name: "part-list",
-    format: "csv",
-    granularity: "notice_part",
-    label: "Part list (sample)",
-    accepts: null,
-    grain: "per_part",
-    dedupe: ["Part"],
-    version: 1,
-    exportable_states: [...FIXTURE_STATES],
+    name: "default-csv", format: "csv", granularity: "notice_part", label: "Default CSV, one row per notice part",
+    accepts: null, grain: "per_part", dedupe: [], version: 1, exportable_states: ["promoted"],
+  },
+  {
+    name: "default-json", format: "json", granularity: "notice_part", label: "Default JSON, one row per notice part, with provenance",
+    accepts: null, grain: "per_part", dedupe: [], version: 1, exportable_states: ["promoted"],
+  },
+  {
+    name: "part-list", format: "csv", granularity: "notice_part", label: "Part list, one row per part",
+    accepts: null, grain: "per_part", dedupe: ["Part"], version: 1, exportable_states: ["promoted"],
+  },
+  {
+    name: "part-list-reviewed", format: "csv", granularity: "notice_part", label: "Part list (reviewed)",
+    accepts: null, grain: "per_part", dedupe: ["Part"], version: 1, exportable_states: ["review", "promoted"],
   },
 ];
-export const FIXTURE_COLUMNS: Record<string, string[]> = { ...FIXTURE_154_COLUMNS, "part-list": ["Part"] };
+export const FIXTURE_COLUMNS: Record<string, string[]> = {
+  ...FIXTURE_154_COLUMNS,
+  "part-list": ["Part"],
+  "part-list-reviewed": ["Part"],
+};
 
 /** The SYNTHETIC `check_only` answer: nothing is unexportable. */
 export function fixtureCheck(profile: string, ingestIds: string[]): ExportCheck {
@@ -343,10 +337,10 @@ function syntheticRow(columns: string[], key: string): Record<string, string> {
  *  granularity, columns, rows}), with one synthetic row per id. A profile the fixture does not know gets no columns. */
 export function fixtureExportBody(
   profile: ExportProfile,
-  scope: { ingestId: string } | { ingestIds: string[] },
+  scope: { ingestIds: string[] },
 ): { blob: Blob; filename: string } {
-  const ids = "ingestId" in scope ? [scope.ingestId] : scope.ingestIds;
-  const key = "ingestId" in scope ? scope.ingestId : `selection-${ids.length}`;
+  const ids = scope.ingestIds;
+  const key = `selection-${ids.length}`;
   const columns = FIXTURE_COLUMNS[profile.name] ?? [];
   const rows = ids.map((id) => syntheticRow(columns, id));
   const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);

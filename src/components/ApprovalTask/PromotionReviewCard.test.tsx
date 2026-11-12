@@ -35,6 +35,14 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestExtraction: (...a: unknown[]) => fetchIngestExtraction(...a),
   fetchReviewShapes: async () => REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })),
 }));
+const loadCanExportBatch = vi.fn();
+const loadExportProfiles = vi.fn();
+vi.mock("@/lib/reviewExportSource", () => ({
+  loadCanExportBatch: (...a: unknown[]) => loadCanExportBatch(...a),
+  loadExportProfiles: (...a: unknown[]) => loadExportProfiles(...a),
+  checkExport: vi.fn(),
+  exportNotices: vi.fn(),
+}));
 const renderPage = vi.fn();
 const destroy = vi.fn();
 const openPdf = vi.fn();
@@ -48,6 +56,8 @@ import { ApprovalTaskCard, type ApprovalTaskPayload } from "./ApprovalTaskCard";
 import { fixtureExtractionBody, fixturePromotionPayload, FIXTURE_NOTICE_ID } from "@/lib/promotionReviewFixture";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import type { IngestStatusRow } from "@/lib/ingestWire";
 
 const SHA = `sha256:${"5b15f205".padEnd(64, "a")}`;
 const DECL = {
@@ -105,8 +115,10 @@ beforeEach(() => {
   useTaskKindStore.setState({ status: "idle", byKind: {} });
   usePersonaStore.setState({ entitlements: null });
 });
+const INITIAL_INGEST = useIngestStatusStore.getState();
 afterEach(() => {
   cleanup();
+  useIngestStatusStore.setState(INITIAL_INGEST, true);
   window.localStorage.clear();
 });
 
@@ -158,14 +170,22 @@ function expectOutlineOn(rowIndex: number, body: Body = exBody()) {
 }
 
 describe("which card draws", () => {
-  it("a pending task renders no export control, even when the status would say promoted", async () => {
+  it("the review card draws exactly one export control, [data-review-export-as], and never [data-review-export]", async () => {
     window.localStorage.setItem("cortex.reviewExport", "1");
-    fetchIngestStatus.mockReset().mockResolvedValue({ stage: "promoted" });
+    window.localStorage.setItem("cortex.reviewExportMock", "1");
+    // SYNTHETIC stage: the profile lists it, the status row serves it, the capability admits.
+    useIngestStatusStore.setState({
+      rows: { [SHA]: { ingest_id: SHA, stage: "synthetic-state-a" } as unknown as IngestStatusRow },
+      track: vi.fn(),
+    });
+    loadCanExportBatch.mockResolvedValue(true);
+    loadExportProfiles.mockResolvedValue([
+      { name: "p1", format: "csv", granularity: "g", accepts: null, exportable_states: ["synthetic-state-a"] },
+    ]);
     await mount();
-    await new Promise((r) => setTimeout(r, 30));
-    expect(card()).not.toBeNull();
+    await waitFor(() => expect(document.querySelector("[data-review-export-as]")).not.toBeNull());
+    expect(document.querySelectorAll("[data-review-export-as]")).toHaveLength(1);
     expect(document.querySelector("[data-review-export]")).toBeNull();
-    expect(fetchIngestStatus).not.toHaveBeenCalled();
   });
 
   it("a document_promotion task naming an ingest_id draws the review card, and fetches both routes by that id", async () => {

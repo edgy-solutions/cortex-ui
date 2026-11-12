@@ -19,11 +19,10 @@ vi.mock("axios", () => ({
   },
 }));
 
-import { checkNoticesExport, downloadNoticesExport, downloadIngestExport } from "./client";
+import { checkNoticesExport, downloadNoticesExport } from "./client";
 import { readUnexportableRefusal, refusalCode } from "@/lib/reviewExport";
 
-// #154's bodies, verbatim in shape: gateway.py `_export_one` 409 and `policy_refusal` 403.
-const NOT_PROMOTED = { detail: { error: "ingest_not_promoted", status: "review", message: "only a promoted notice can be exported" } };
+// The notices route's refusal bodies, verbatim in shape: `policy_refusal` 403.
 const NOT_ENTITLED = {
   detail: {
     error: "not_entitled_to_export_batch",
@@ -41,12 +40,6 @@ beforeEach(() => {
 });
 
 describe("a Blob refusal body reaches refusalCode as #154's detail.error", () => {
-  it("one notice: 409 ingest_not_promoted", async () => {
-    mockGet.mockRejectedValueOnce(blobRefusal(409, NOT_PROMOTED));
-    const err = await downloadIngestExport("ing-1", "alpha-x").catch((e: unknown) => e);
-    expect(refusalCode(err), "the 409's code must survive the Blob body").toEqual({ status: 409, code: "ingest_not_promoted" });
-  });
-
   it("the notices download: 403 not_entitled_to_export_batch", async () => {
     mockPost.mockRejectedValueOnce(blobRefusal(403, NOT_ENTITLED));
     const err = await downloadNoticesExport("alpha-x", ["ing-1", "ing-2"]).catch((e: unknown) => e);
@@ -77,8 +70,8 @@ describe("a Blob refusal body reaches refusalCode as #154's detail.error", () =>
   });
 
   it("a body that is not JSON keeps its status and reads no code", async () => {
-    mockGet.mockRejectedValueOnce({ response: { status: 502, data: new Blob(["<html>bad gateway</html>"]) } });
-    const err = await downloadIngestExport("ing-1", "alpha-x").catch((e: unknown) => e);
+    mockPost.mockRejectedValueOnce({ response: { status: 502, data: new Blob(["<html>bad gateway</html>"]) } });
+    const err = await downloadNoticesExport("alpha-x", ["ing-1"]).catch((e: unknown) => e);
     expect(refusalCode(err)).toEqual({ status: 502, code: null });
   });
 });

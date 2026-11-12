@@ -2,10 +2,10 @@
  * The typed profiles read, through the REAL client and the real axios pipeline (adapter stubbed): a
  * stubbed adapter returning #154's body yields the two profiles; an element with `granularity: "answer"`
  * (#148's shape) passes VERBATIM, because granularity is config and not a cortex enum (architect 2026-10-30); a
- * body with an EMPTY granularity still yields a throw, and the picker shows its existing failure state.
+ * body with an EMPTY granularity still yields a throw, and the export dialog shows its existing failure state.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, act } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import type { AxiosAdapter } from "axios";
 
 const { reply, urls } = vi.hoisted(() => ({ reply: { data: [] as unknown }, urls: [] as string[] }));
@@ -30,12 +30,15 @@ vi.mock("axios", async (importOriginal) => {
 
 import { fetchIngestExportProfiles } from "./client";
 import { FIXTURE_154_PROFILES } from "@/lib/reviewExport";
-import { ReviewExportControl } from "@/components/ApprovalTask/ReviewExportControl";
-import { useIngestStatusStore } from "@/store/useIngestStatusStore";
-import type { IngestStatusRow } from "@/lib/ingestWire";
+import { ExportSelectionDialog } from "@/components/ingest/ExportSelectionDialog";
 
 const ID = "sha256:abc";
-const INITIAL = useIngestStatusStore.getState();
+// SYNTHETIC state: the dialog offers a profile only when it lists the target's state.
+const SA = "synthetic-state-a";
+const withState = <T extends object>(ps: T[]) => ps.map((p) => ({ ...p, exportable_states: [SA] }));
+const dialog = () => (
+  <ExportSelectionDialog targets={[{ ingestId: ID, kind: null, state: SA }]} notReady={[]} others={0} source={ID} onClose={() => {}} />
+);
 const ANSWER = { name: "per-answer", format: "csv", granularity: "answer", label: "x" };
 const BAD = [...FIXTURE_154_PROFILES, { ...ANSWER, granularity: "" }];
 
@@ -45,7 +48,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  useIngestStatusStore.setState(INITIAL, true);
   window.localStorage.clear();
 });
 
@@ -64,12 +66,10 @@ describe("fetchIngestExportProfiles (typed read)", () => {
 
   it("a format cortex has never seen passes verbatim through the real fetch, and the picker offers it", async () => {
     const XLSX = { name: "per-part-xlsx", format: "xlsx", granularity: "notice_part", label: "Excel" };
-    reply.data = JSON.parse(JSON.stringify([...FIXTURE_154_PROFILES, XLSX]));
-    expect(await fetchIngestExportProfiles()).toEqual([...FIXTURE_154_PROFILES, XLSX]);
-    act(() =>
-      useIngestStatusStore.setState({ rows: { [ID]: { ingest_id: ID, stage: "promoted" } as unknown as IngestStatusRow }, track: vi.fn() }),
-    );
-    const { container } = render(<ReviewExportControl ingestId={ID} />);
+    const served = withState([...FIXTURE_154_PROFILES, XLSX]);
+    reply.data = JSON.parse(JSON.stringify(served));
+    expect(await fetchIngestExportProfiles()).toEqual(served);
+    const { container } = render(dialog());
     await waitFor(() => expect(container.querySelector('[data-export-profile="per-part-xlsx"]')).not.toBeNull());
     expect(container.querySelector('[data-export-profile="per-part-xlsx"]')?.textContent).toContain("xlsx");
     expect(container.querySelectorAll("[data-export-profile]").length).toBe(3);
@@ -81,12 +81,9 @@ describe("fetchIngestExportProfiles (typed read)", () => {
   });
 
   it("the picker shows its existing failure state for that body", async () => {
-    reply.data = BAD;
-    act(() =>
-      useIngestStatusStore.setState({ rows: { [ID]: { ingest_id: ID, stage: "promoted" } as unknown as IngestStatusRow }, track: vi.fn() }),
-    );
-    const { container } = render(<ReviewExportControl ingestId={ID} />);
-    await waitFor(() => expect(container.querySelector("[data-review-export]")?.getAttribute("data-review-export")).toBe("failed"));
+    reply.data = withState(BAD);
+    const { container } = render(dialog());
+    await waitFor(() => expect(container.querySelector("[data-export-dialog]")?.getAttribute("data-export-dialog")).toBe("failed"));
     expect(container.querySelector("[data-export-failed]")?.textContent).toContain("malformed /ingest/export/profiles");
     expect(container.querySelector("[data-export-profile]")).toBeNull();
   });

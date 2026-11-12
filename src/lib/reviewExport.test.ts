@@ -4,7 +4,6 @@ import {
   EXPORT_BATCH_CAPABILITY,
   FIXTURE_ENTITLEMENTS,
   FIXTURE_154_PROFILES,
-  FIXTURE_PROFILES,
   exportNoticesBody,
   lassoTargets,
   profilesFor,
@@ -15,7 +14,6 @@ import {
   type ExportTarget,
   canExportBatch,
   filenameFromDisposition,
-  isExportStage,
   profileLabel,
   readExportProfiles,
   refusalCode,
@@ -60,13 +58,6 @@ describe("profileLabel", () => {
   it("uses the label, else the name", () => {
     expect(profileLabel({ name: "n", format: "csv", granularity: "notice_part", label: "L" })).toBe("L");
     expect(profileLabel({ name: "n", format: "csv", granularity: "notice_part" })).toBe("n");
-  });
-});
-
-describe("isExportStage", () => {
-  it("is true only for promoted", () => {
-    expect(isExportStage("promoted")).toBe(true);
-    for (const s of ["review", "released", undefined, "PROMOTED"]) expect(isExportStage(s)).toBe(false);
   });
 });
 
@@ -155,6 +146,18 @@ describe("readExportProfiles: #356's declared keys", () => {
   });
 });
 
+/** SYNTHETIC profiles, local to this file (the shipped mock mirrors the producer's real rows, so it cannot stand in here). */
+const SYNTH_STATES = ["synthetic-state-a", "synthetic-state-b"];
+const SYNTH_PROFILES: ExportProfile[] = ["default-csv", "default-json", "part-list"].map((name) => ({
+  name,
+  format: "csv",
+  granularity: "notice_part",
+  accepts: name === "part-list" ? null : ["synthetic-kind-a"],
+  grain: name === "part-list" ? "per_part" : "per_notice",
+  version: 1,
+  dedupe: [],
+  exportable_states: [...SYNTH_STATES],
+}));
 describe("profilesFor", () => {
   const mk = (name: string, extra: Partial<ExportProfile> = {}): ExportProfile => ({ ...base, name, exportable_states: ["synthetic-state-a"], ...extra });
   const t = (kind: string | null, state: string | null, ingestId = "i"): ExportTarget => ({ ingestId, kind, state });
@@ -207,9 +210,9 @@ describe("profilesFor", () => {
     expect(names(profilesFor(ps, [t("k", "synthetic-state-b")]))).toEqual(["y"]);
   });
   it("the fixture offers its sample set for a synthetic state, nothing for another", () => {
-    expect(names(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-a", "synthetic-state-a")]))).toEqual(["default-csv", "default-json", "part-list"]);
-    expect(names(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-b", "synthetic-state-a")]))).toEqual(["part-list"]);
-    expect(profilesFor(FIXTURE_PROFILES, [t("synthetic-kind-a", "synthetic-state-zzz")])).toEqual([]);
+    expect(names(profilesFor(SYNTH_PROFILES, [t("synthetic-kind-a", "synthetic-state-a")]))).toEqual(["default-csv", "default-json", "part-list"]);
+    expect(names(profilesFor(SYNTH_PROFILES, [t("synthetic-kind-b", "synthetic-state-a")]))).toEqual(["part-list"]);
+    expect(profilesFor(SYNTH_PROFILES, [t("synthetic-kind-a", "synthetic-state-zzz")])).toEqual([]);
   });
 });
 

@@ -13,7 +13,6 @@ import { gatewayRelativePath } from "@/lib/illustrationPath";
 import {
   EXPORT_NOTICES_PATH,
   exportNoticesBody,
-  exportOnePath,
   filenameFromDisposition,
   jsonRefusalBody,
   readExportProfiles,
@@ -1350,8 +1349,8 @@ export async function fetchCaseArtifact(path: string): Promise<unknown> {
 
 /**
  * The review-export routes, declared at invincible-agent 10ac02fe (#154) and 6a4175a2 (#356). The profiles list is a typed
- * read (`request`, validated by `readExportProfiles`). The two file downloads stay on the shared `api`
- * instance: their 200s are untyped bytes, read as a Blob. The paths are spelled once, in
+ * read (`request`, validated by `readExportProfiles`). The file download stays on the shared `api`
+ * instance: its 200 is untyped bytes, read as a Blob. The paths are spelled once, in
  * `src/lib/reviewExport.ts`. A refusal is a non-2xx the caller reads with `refusalCode`.
  *
  * `checkNoticesExport` (check_only, a typed POST) and `downloadNoticesExport` are `POST /ingest/export/notices`, #356.
@@ -1362,19 +1361,6 @@ export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
   const profiles = readExportProfiles(data);
   if (profiles === null) throw new Error("malformed /ingest/export/profiles response");
   return profiles;
-}
-
-export async function downloadIngestExport(
-  ingestId: string,
-  profile: string,
-): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await api
-    .get<Blob>(exportOnePath(ingestId), { params: { profile }, responseType: "blob" })
-    .catch(async (err: unknown) => {
-      await jsonRefusalBody(err);
-      throw err;
-    });
-  return { blob: res.data, filename: filenameFromDisposition(res.headers?.["content-disposition"] as string | undefined) };
 }
 
 export async function checkNoticesExport(profile: string, ingestIds: string[]): Promise<ExportCheck> {
