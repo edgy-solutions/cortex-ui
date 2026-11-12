@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { foldedAskAnswers } from "@/lib/askFold";
 import { Maximize2, Minimize2, LayoutGrid, GitBranch, Share2 } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -799,7 +799,7 @@ export function GlobalCanvasStage() {
         )}
 
         {/* Global arrangement labels (world space), cross-fade on mode change. */}
-        {isGlobal && (
+        {isGlobal && !focusId && (
           <div key={sortMode} className="animate-in fade-in duration-500">
             {globalLayout.labels.map((l) => (
               <button
@@ -825,7 +825,10 @@ export function GlobalCanvasStage() {
 
         {renderEntries.map(({ a, pos, itemId, size }) => {
           const isFocused = focusId === a.id;
-          const dim = focusId && !isFocused;
+          // A focused card is alone on the stage: the zoomed neighbours bled through its translucent glass face
+          // (their centred titles, magnified), so every other card is gone, not dimmed.
+          const gone = !!focusId && !isFocused;
+          const goneStyle: CSSProperties = gone ? { opacity: 0, visibility: "hidden", pointerEvents: "none" } : { opacity: 1 };
           if (isGlobal && cam.s * size.w < DOT_PX && !openedIds.has(a.id)) {
             return (
               <StageDot
@@ -835,7 +838,7 @@ export function GlobalCanvasStage() {
                 selected={selSet.has(a.id)}
                 onClick={() => onCardClick(a.id)}
                 onDoubleClick={() => onCardDouble(a.id)}
-                style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1 }}
+                style={{ left: pos.x, top: pos.y, ...goneStyle }}
                 size={size}
               />
             );
@@ -847,7 +850,7 @@ export function GlobalCanvasStage() {
               focused={isFocused}
               onClick={() => onCardClick(a.id)}
               onDoubleClick={() => onCardDouble(a.id)}
-              style={{ left: pos.x, top: pos.y, opacity: dim ? 0.4 : 1, zIndex: isFocused ? 10 : 1 }}
+              style={{ left: pos.x, top: pos.y, ...goneStyle, zIndex: isFocused ? 10 : 1 }}
               selected={selSet.has(a.id)}
               open={openedIds.has(a.id)}
               dragIds={selSet.has(a.id) ? sel : [a.id]}

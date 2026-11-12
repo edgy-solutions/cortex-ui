@@ -409,10 +409,12 @@ describe("record preview", () => {
   it("says what is sent today and what is recorded with the promotion", async () => {
     await mountRuns();
     key("j");
-    const sent = q("[data-record-sent]")!.textContent!;
-    expect(sent).toBe("sent today: promoted, the note, 0 row edits, 0 header edits");
+    // One part looked at of ten: Promote is held, so nothing is sent today (this line once claimed "promoted, ..." here).
+    const sentEl = q("[data-record-sent]")!;
+    expect(sentEl.hasAttribute("data-record-held")).toBe(true);
+    expect(sentEl.textContent).toBe("sent today: nothing; Promote is held");
     const prop = q("[data-record-coverage]")!;
-    expect(prop.textContent).toContain("recorded with the promotion: Looked at");
+    expect(prop.textContent).toContain("would be recorded with the promotion: Looked at");
     expect(prop.textContent).toContain("Looked at 1 of 10 parts,");
     expect(prop.textContent).toContain("shared facts confirmed once");
     // One rule groups many runs: the line counts RUNS and names the rule (it once said "15 rules").
@@ -429,6 +431,46 @@ describe("record preview", () => {
     expect(prop.textContent).toContain("1 shared facts confirmed once");
   });
 
+});
+
+describe("record preview tells the truth about the hold (Chris's 402-part screen)", () => {
+  const sentLine = () => q("[data-record-sent]")!;
+  const verbOf = () => promoteBtn().getAttribute("data-verb")!;
+  const namesVerb = () => sentLine().textContent!.includes(verbOf());
+
+  it("one part looked at of 402: Promote is held and the sent line says nothing is sent", async () => {
+    fetchIngestExtraction.mockImplementation(async () => scaleFixtureExtractionBody(SHA));
+    await mountRuns();
+    key("j");
+    expect(q("[data-coverage-problem]") !== null || q("[data-promote-held]") !== null).toBe(true);
+    expect(promoteBtn().disabled).toBe(true);
+    expect(sentLine().hasAttribute("data-record-held")).toBe(true);
+    const verb = verbOf();
+    expect(verb.length).toBeGreaterThan(0);
+    expect(sentLine().textContent, "a held card must not name the verb it will not send").not.toContain(verb);
+    expect(q("[data-record-coverage]")!.textContent).toContain("would be recorded with the promotion:");
+  }, 180_000);
+
+  it("the sent line and the button agree at every step of the walk to promotable", async () => {
+    fetchIngestExtraction.mockImplementation(async () => scaleFixtureExtractionBody(SHA));
+    await mountRuns();
+    const plan = buildReviewPlan(readExtraction(scaleFixtureExtractionBody(SHA))!.rows, `${SHA}:1`);
+    const seen = new Set<boolean>();
+    const check = (where: string) => {
+      const pair = { sentNamesVerb: namesVerb(), enabled: !promoteBtn().disabled };
+      expect(pair.sentNamesVerb, `sent line and Promote button disagree after ${where}`).toBe(pair.enabled);
+      seen.add(pair.enabled);
+    };
+    check("mount");
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) { key("J"); check(`J #${n}`); }
+    for (let n = 0; n < plan.checks.size + 5 && progress().left > 0; n++) { key("K"); check(`K #${n}`); }
+    for (const el of document.querySelectorAll<HTMLElement>("[data-shared-confirm]")) { fireEvent.click(el); check("confirm click"); }
+    expect(progress().left).toBe(0);
+    await waitFor(() => expect(promoteBtn().disabled).toBe(false));
+    check("final");
+    expect(seen.has(true) && seen.has(false), "the walk must cross the held/promotable boundary").toBe(true);
+    expect(sentLine().textContent).toBe(`sent today: ${verbOf()}, the note, 0 row edits, 0 header edits`);
+  }, 180_000);
 });
 
 /** The /act body the card's promote call would put on the wire: actOnHumanTask's positional args through the real buildActBody. */
@@ -834,8 +876,9 @@ describe("edited marks (editor flag on)", () => {
     expect(unitEl("p0")!.textContent).toContain("✎");
     expect(q("[data-run]")!.textContent).toContain("✎ 1");
     expect(unitEl("p1")!.hasAttribute("data-edited")).toBe(false);
-    // the preview counts the draft as sent today
-    expect(q("[data-record-sent]")!.textContent).toContain("1 row edits");
+    // Promote is held here (one part looked at), so the preview says nothing is sent; it once pinned "1 row edits" sent today.
+    // The draft itself is counted by the progress text asserted above.
+    expect(q("[data-record-sent]")!.hasAttribute("data-record-held")).toBe(true);
   });
 
   it("without the editor flag there is no fix on the callout and nothing reads edited", async () => {

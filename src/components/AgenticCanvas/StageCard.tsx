@@ -262,9 +262,10 @@ export function StageCard({
         ...style,
         width: size?.w ?? STAGE_CARD.w,
         height: size?.h ?? STAGE_CARD.h,
-        // Stage-2 morph rides these; opacity is the focus-dim.
+        // Stage-2 morph rides these. Opacity + visibility are the focus rule: a focused card is alone on the stage,
+        // because the zoomed neighbours bled through its glass face. Visibility holds until the fade ends.
         transition:
-          "left 650ms cubic-bezier(.3,.75,.25,1), top 650ms cubic-bezier(.3,.75,.25,1), opacity 400ms ease, border-color 200ms ease",
+          "left 650ms cubic-bezier(.3,.75,.25,1), top 650ms cubic-bezier(.3,.75,.25,1), opacity 400ms ease, visibility 400ms, border-color 200ms ease",
       }}
       /* THE ROOT NO LONGER LOOKS LIKE A CARD — the FACES do. Border, background, radius and
          shadow moved onto them, because a card whose skin stays put while its contents rotate

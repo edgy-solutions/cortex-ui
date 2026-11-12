@@ -454,7 +454,7 @@ export function GroupedReviewTable({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-full glass-panel border-neon-blue/30 overflow-hidden relative"
+      className="@container max-w-full glass-panel border-neon-blue/30 overflow-hidden relative"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
@@ -510,7 +510,14 @@ export function GroupedReviewTable({
       )}
 
       {/* Table (LEFT) and the notice source pane (RIGHT) — the PromotionReviewCard layout. */}
-      <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      {/* This card lives inside a canvas card, which is far narrower than the viewport, so the split keys on the
+          CARD (a container query; the root is @container), never on the viewport: md: fired on a wide screen
+          while the card was still narrow, and the old 5fr track was narrower than the four columns, so
+          Disposition, Replacement / LTB and the SET DISPOSITION buttons scrolled out of sight behind the pane.
+          Side by side from 64rem of card; the table takes its full width and the pane the rest. Below that they
+          stack. overflow-x-auto on the table wrapper stays as the last resort.
+          Proof: e2e/groupedReviewTableLayout.spec.ts (Chromium, by hand). */}
+      <div className="grid gap-4 @5xl:grid-cols-[max-content_minmax(0,1fr)]">
       <div className="overflow-x-auto font-mono min-w-0">
         <table className="w-full text-left border-collapse">
           <thead>

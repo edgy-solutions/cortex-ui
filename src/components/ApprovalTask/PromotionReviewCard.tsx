@@ -485,7 +485,9 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editsActive, draft, rows, headerDraft, ex]);
-  const canPromote = canAct && promoteVerb !== null && promoteHold === null && problems.length === 0 && coverageBad === null && !shapesLoading;
+  // One predicate drives the button AND the record preview line, so the preview never claims a send the button refuses.
+  const promoteHeld = promoteVerb === null || promoteHold !== null || problems.length > 0 || coverageBad !== null || shapesLoading;
+  const canPromote = canAct && !promoteHeld;
 
   useEffect(() => {
     rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
@@ -1231,15 +1233,21 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             )}
             {runsOn && plan && record && (
               <div className="rounded border border-white/5 px-2 py-1 text-[10px] font-mono text-slate-500" data-record-preview>
-                <p data-record-sent>
-                  sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
-                </p>
+                {promoteHeld ? (
+                  <p data-record-sent data-record-held>
+                    sent today: nothing; Promote is held
+                  </p>
+                ) : (
+                  <p data-record-sent>
+                    sent today: {promoteVerb ?? "the verb"}, the note, {rowCount} row edits, {headerCount} header edits
+                  </p>
+                )}
                 <p
                   data-record-coverage
                   data-record-coverage-parts={coverageParts}
                   data-record-coverage-sampled={record.sampled.length}
                 >
-                  recorded with the promotion: Looked at {record.looked_at.length} of {coverageParts} parts,
+                  {promoteHeld ? "would be recorded with the promotion" : "recorded with the promotion"}: Looked at {record.looked_at.length} of {coverageParts} parts,
                   of which {record.sampled.length} were sampled; {record.groups.reduce((n, c) => n + c.items.length, 0)} covered by{" "}
                   {record.groups.length} {record.groups.length === 1 ? "run" : "runs"}, each grouped by the rule {RUN_RULE}; {record.shared.filter((x) => x.confirmed).length} shared facts confirmed once
                 </p>
