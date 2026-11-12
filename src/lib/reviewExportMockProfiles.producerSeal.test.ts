@@ -16,11 +16,14 @@ import path from "node:path";
 import { FIXTURE_COLUMNS, FIXTURE_PROFILES } from "./reviewExport";
 import { INGEST_STAGES } from "./ingestWire";
 
+/** Spelled this way so `scripts/check-cross-repo-seals.mjs` censuses this file (it keys on the name). */
+const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
+
 function findRoot(): string | null {
   const rel = "policy/exports";
   const env = (process.env.CORTEX_PRODUCER_ROOT || "").trim();
   if (env && existsSync(path.join(env, rel))) return env;
-  for (const name of ["invincible-agent", "ia-01"]) {
+  for (const name of CANDIDATE_ROOTS) {
     const p = path.join(__dirname, "../../..", name);
     if (existsSync(path.join(p, rel))) return p;
   }

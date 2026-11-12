@@ -15,11 +15,14 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { FIXTURE_154_COLUMNS, FIXTURE_154_PROFILES } from "./reviewExport";
 
+/** Spelled this way so `scripts/check-cross-repo-seals.mjs` censuses this file (it keys on the name). */
+const CANDIDATE_ROOTS = ["invincible-agent", "ia-01"];
+
 function findExportsDir(): string | null {
   const rel = "policy/exports";
   const env = (process.env.CORTEX_PRODUCER_ROOT || "").trim();
   if (env && existsSync(path.join(env, rel))) return path.join(env, rel);
-  for (const name of ["invincible-agent", "ia-01"]) {
+  for (const name of CANDIDATE_ROOTS) {
     const p = path.join(__dirname, "../../..", name, rel);
     if (existsSync(p)) return p;
   }

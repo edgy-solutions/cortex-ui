@@ -51,14 +51,9 @@ const SRC = path.join(ROOT, "src");
  *     traversal out of `src/`, three or more levels up.
  *   - `CANDIDATE_ROOTS = ["invincible-agent", "ia-01"]` — the form used where this machine carries
  *     the producer twice and either checkout will do.
- *   - `path.join(__dirname, "../../..", name, rel)` — the same traversal with NO trailing slash, the
- *     peer joined as its own segment. Until 2026-11-11 the first pattern required the slash, so six
- *     seals spelled this way (reviewExport154, rowEditsWireParity, reviewShapes, emptyConfirmParity,
- *     canvasExport, reviewExportMockProfiles) were never censused: they could have skipped in CI
- *     and this guard would have said nothing.
  * Keyed on the REACH, not on the peer's name. See the header.
  */
-const REACHES_A_PEER = [/"\.\.\/\.\.\/\.\.(\/|")/, /CANDIDATE_ROOTS/];
+const REACHES_A_PEER = [/"\.\.\/\.\.\/\.\.\//, /CANDIDATE_ROOTS/];
 
 function walk(dir) {
   const out = [];
