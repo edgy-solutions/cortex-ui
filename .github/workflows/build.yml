@@ -281,7 +281,12 @@ env:
   # 2026-11-12 RE-PIN to 3a632cb3 (lane/saf-export-by-range, PR 364, OPEN: not merged). ingest-v1 is byte-identical to
   #   8c3eb9af; cortex-bff moves (POST /ingest/export/notices gains range, notice_ids optional). Re-pin to the merge
   #   sha when #364 merges, like a255a8e. Gate: the full suite against a git-archive export of 3a632cb3.
-  PRODUCER_REF: 3a632cb3dfc819e482be092900c0fc395a7a22f8
+  # 2026-11-13 RE-PIN to 47263e51 (platform master; the merge of #364, second parent df5e484b, the head gov approved).
+  #   ingest-v1 byte-identical; cortex-bff differs from 3a632cb3's only in two description strings on /export/cdrl
+  #   and /export/cdrl/profiles (fin #365, master side). Check 2: task_kinds and review_shapes diff
+  #   3a632cb3..47263e51 is EMPTY (control: aac9900b..47263e51, 3 files changed). Check 3: uv.lock iagent-mesh stays
+  #   v0.9.19. Gate: the full suite against a git-archive export of 47263e51 placed as the producer root.
+  PRODUCER_REF: 47263e51627b3499073a05c4d9c35b111f3ad559
 
 permissions:
   contents: read
