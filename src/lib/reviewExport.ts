@@ -33,8 +33,11 @@ import type { IngestStatusRow } from "@/lib/ingestWire";
  *      no state name: states are the `stage` the status routes serve (config names the case). Only the sealed mock mirror
  *      `FIXTURE_PROFILES` spells them, because the producer serves them.
  *
- * RANGE IS HIDDEN: 6a4175a2's notices route serves no ids-in-a-range form, and the old `GET /ingest/export?from&to` builds
- * the file directly with no unexportable list first, so it cannot meet ruling 3. "Select by range" returns when saf serves one.
+ * RANGE IS BACK, behind `exportRange` (off unless `VITE_FEATURES` names it), built against saf's #364 (3a632cb3, OPEN):
+ * `POST /ingest/export/notices` takes `{notice_ids}` XOR `{range:{from,to}}` (UTC days, inclusive, by RECEIPT time), and a
+ * range `check_only` returns the RESOLVED `notice_ids` beside `unexportable`, so the check precedes the file (ruling 3).
+ * The download never sends a range: it sends the cleared ids, since a range download would 422 on any unexportable notice
+ * in it. No day limit and no cap is spelled here: the server refuses and the dialog shows its message.
  */
 
 /** Route 2, declared at invincible-agent 6a4175a2 (#356). */
@@ -133,13 +136,19 @@ export function canExportBatch(entitlements: unknown): boolean {
   return Array.isArray(c) && c.includes(EXPORT_BATCH_CAPABILITY);
 }
 
+/** What names the notices: exactly one of the ingest ids or a UTC-day range. A union, so "both" and "neither" cannot be built. */
+export type ExportRange = { from: string; to: string };
+export type ExportSelector = { notice_ids: string[] } | { range: ExportRange };
+
 /** The `POST EXPORT_NOTICES_PATH` body. `notice_ids` carries INGEST ids. Never `destination` (personal download, ruling 5). */
-export function exportNoticesBody(profile: string, ingestIds: string[], checkOnly: boolean): Record<string, unknown> {
-  return { notice_ids: ingestIds, profile, ...(checkOnly ? { check_only: true } : {}) };
+export function exportNoticesBody(profile: string, selector: ExportSelector, checkOnly: boolean): Record<string, unknown> {
+  const sel = "range" in selector ? { range: { from: selector.range.from, to: selector.range.to } } : { notice_ids: selector.notice_ids };
+  return { ...sel, profile, ...(checkOnly ? { check_only: true } : {}) };
 }
 
 export type Unexportable = { notice_id: string; reason: string; state: string | null };
-export type ExportCheck = { profile: string; version: number; notices: number; unexportable: Unexportable[] };
+/** `noticeIds` is present only on a RANGE check: the resolved set, which the dialog needs because the range names no id. */
+export type ExportCheck = { profile: string; version: number; notices: number; unexportable: Unexportable[]; noticeIds?: string[] };
 
 function readUnexportableList(v: unknown): Unexportable[] | null {
   if (!Array.isArray(v)) return null;
@@ -154,15 +163,22 @@ function readUnexportableList(v: unknown): Unexportable[] | null {
   return out;
 }
 
-/** The `check_only` 200, or null when ANY part is malformed. */
-export function readExportCheck(body: unknown): ExportCheck | null {
+/** The `check_only` 200, or null when ANY part is malformed. A range check (`range: true`) must carry `notice_ids`, the
+ *  resolved set: without it the dialog could not name what to send. An ids check ignores one. An undeclared key is tolerated. */
+export function readExportCheck(body: unknown, opts: { range?: boolean } = {}): ExportCheck | null {
   if (!isRecord(body)) return null;
   if (typeof body.profile !== "string" || body.profile === "") return null;
   if (typeof body.version !== "number" || !Number.isInteger(body.version)) return null;
   if (typeof body.notices !== "number" || !Number.isInteger(body.notices) || body.notices < 0) return null;
   const unexportable = readUnexportableList(body.unexportable);
   if (unexportable === null) return null;
-  return { profile: body.profile, version: body.version, notices: body.notices, unexportable };
+  const out: ExportCheck = { profile: body.profile, version: body.version, notices: body.notices, unexportable };
+  if (opts.range === true) {
+    const ids = body.notice_ids;
+    if (!Array.isArray(ids) || !ids.every((i) => typeof i === "string" && i !== "")) return null;
+    out.noticeIds = ids as string[];
+  }
+  return out;
 }
 
 /** The unexportable list of a refused download (422 `detail.unexportable`), read by SHAPE, not by the error code. */
@@ -269,6 +285,14 @@ export function refusalCode(err: unknown): { status: number | null; code: string
   return { status, code: typeof raw === "string" ? raw : null };
 }
 
+/** A refusal's `detail.message`, verbatim (the range refusals state their cap there; cortex spells none). */
+export function refusalMessage(err: unknown): string | null {
+  const res = isRecord(err) && isRecord(err.response) ? err.response : null;
+  const data = res && isRecord(res.data) ? res.data : null;
+  const detail = data && isRecord(data.detail) ? data.detail : null;
+  return detail && typeof detail.message === "string" && detail.message !== "" ? detail.message : null;
+}
+
 // -- The fixtures: served only when `reviewExportMock` is on -----------------------
 /** What `GET /ingest/export/profiles` returns at invincible-agent 10ac02fe (#154): the two profiles in
  *  `policy/exports/*.yaml`, sorted by name. Sealed field for field by `reviewExport154.test.ts`. */
@@ -324,6 +348,20 @@ export const FIXTURE_COLUMNS: Record<string, string[]> = {
 /** The SYNTHETIC `check_only` answer: nothing is unexportable. */
 export function fixtureCheck(profile: string, ingestIds: string[]): ExportCheck {
   return { profile, version: 1, notices: ingestIds.length, unexportable: [] };
+}
+
+/** SYNTHETIC notices with a receipt day, for the mock's range form (the range is read against receipt time, #364). */
+export const FIXTURE_RECEIVED: { ingestId: string; day: string }[] = [
+  { ingestId: "synthetic-range-1", day: "2026-01-05" },
+  { ingestId: "synthetic-range-2", day: "2026-01-06" },
+  { ingestId: "synthetic-range-3", day: "2026-02-01" },
+];
+
+/** The SYNTHETIC range `check_only` answer: the fixture notices received in the (inclusive) range, nothing unexportable.
+ *  YYYY-MM-DD compares as a string. */
+export function fixtureCheckRange(profile: string, range: ExportRange): ExportCheck {
+  const ids = FIXTURE_RECEIVED.filter((n) => n.day >= range.from && n.day <= range.to).map((n) => n.ingestId);
+  return { profile, version: 1, notices: ids.length, unexportable: [], noticeIds: ids };
 }
 
 /** The `GET /me/entitlements` body `reviewExportMock` stands in: the fields `canExportBatch` reads, as served. */

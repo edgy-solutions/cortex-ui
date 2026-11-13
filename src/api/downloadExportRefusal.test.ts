@@ -63,10 +63,23 @@ describe("a Blob refusal body reaches refusalCode as #154's detail.error", () =>
 
   it("check_only: a well-formed body reads; a malformed one throws", async () => {
     mockPost.mockResolvedValueOnce({ data: { profile: "alpha-x", version: 1, notices: 1, unexportable: [] } });
-    await expect(checkNoticesExport("alpha-x", ["ing-1"])).resolves.toEqual({ profile: "alpha-x", version: 1, notices: 1, unexportable: [] });
+    await expect(checkNoticesExport("alpha-x", { notice_ids: ["ing-1"] })).resolves.toEqual({ profile: "alpha-x", version: 1, notices: 1, unexportable: [] });
     expect(mockPost.mock.calls[0]![1]).toEqual({ notice_ids: ["ing-1"], profile: "alpha-x", check_only: true });
     mockPost.mockResolvedValueOnce({ data: { profile: "alpha-x", version: "1", notices: 1, unexportable: [] } });
-    await expect(checkNoticesExport("alpha-x", ["ing-1"])).rejects.toThrow(/malformed/);
+    await expect(checkNoticesExport("alpha-x", { notice_ids: ["ing-1"] })).rejects.toThrow(/malformed/);
+  });
+
+  it("check_only by range (#364): sends range and no notice_ids, reads the resolved notice_ids; a reply without them throws", async () => {
+    const range = { from: "2026-01-01", to: "2026-01-02" };
+    mockPost.mockResolvedValueOnce({
+      data: { profile: "alpha-x", version: 1, notices: 2, unexportable: [], range: { ...range, field: "created_at" }, notice_ids: ["ing-1", "ing-2"], undeclared: true },
+    });
+    const got = await checkNoticesExport("alpha-x", { range });
+    expect(got.noticeIds).toEqual(["ing-1", "ing-2"]);
+    expect(mockPost.mock.calls[0]![1]).toEqual({ range, profile: "alpha-x", check_only: true });
+    expect("notice_ids" in (mockPost.mock.calls[0]![1] as object)).toBe(false);
+    mockPost.mockResolvedValueOnce({ data: { profile: "alpha-x", version: 1, notices: 2, unexportable: [] } });
+    await expect(checkNoticesExport("alpha-x", { range })).rejects.toThrow(/malformed/);
   });
 
   it("a body that is not JSON keeps its status and reads no code", async () => {

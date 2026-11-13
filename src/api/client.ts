@@ -18,6 +18,7 @@ import {
   readExportProfiles,
   readExportCheck,
   type ExportCheck,
+  type ExportSelector,
   type ExportProfile,
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
@@ -1353,7 +1354,8 @@ export async function fetchCaseArtifact(path: string): Promise<unknown> {
  * instance: its 200 is untyped bytes, read as a Blob. The paths are spelled once, in
  * `src/lib/reviewExport.ts`. A refusal is a non-2xx the caller reads with `refusalCode`.
  *
- * `checkNoticesExport` (check_only, a typed POST) and `downloadNoticesExport` are `POST /ingest/export/notices`, #356.
+ * `checkNoticesExport` (check_only, a typed POST; ids or a range, #364) and `downloadNoticesExport` (ids ONLY: the cleared ids,
+ * never a range) are `POST /ingest/export/notices`, #356.
  * A non-2xx throws the axios error untouched; a Blob refusal is re-read as JSON first.
  */
 export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
@@ -1363,11 +1365,11 @@ export async function fetchIngestExportProfiles(): Promise<ExportProfile[]> {
   return profiles;
 }
 
-export async function checkNoticesExport(profile: string, ingestIds: string[]): Promise<ExportCheck> {
+export async function checkNoticesExport(profile: string, selector: ExportSelector): Promise<ExportCheck> {
   const data = await request("POST /ingest/export/notices", {
-    body: exportNoticesBody(profile, ingestIds, true) as BffOps["POST /ingest/export/notices"]["body"],
+    body: exportNoticesBody(profile, selector, true) as BffOps["POST /ingest/export/notices"]["body"],
   });
-  const check = readExportCheck(data);
+  const check = readExportCheck(data, { range: "range" in selector });
   if (check === null) throw new Error("malformed /ingest/export/notices check_only response");
   return check;
 }
@@ -1377,7 +1379,7 @@ export async function downloadNoticesExport(
   ingestIds: string[],
 ): Promise<{ blob: Blob; filename: string | null }> {
   const res = await api
-    .post<Blob>(EXPORT_NOTICES_PATH, exportNoticesBody(profile, ingestIds, false), { responseType: "blob" })
+    .post<Blob>(EXPORT_NOTICES_PATH, exportNoticesBody(profile, { notice_ids: ingestIds }, false), { responseType: "blob" })
     .catch(async (err: unknown) => {
       await jsonRefusalBody(err);
       throw err;

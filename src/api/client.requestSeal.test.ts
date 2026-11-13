@@ -330,7 +330,10 @@ const CALLS: Record<string, Case[]> = {
   ],
   fetchAnswerBody: [{ name: "plain", op: "GET /answers/{answer_id}/body", run: () => (client as any).fetchAnswerBody("a1") }],
   retryIngest: [{ name: "plain", op: "POST /ingest/{ingest_id}/retry", run: () => (client as any).retryIngest("i1") }],
-  checkNoticesExport: [{ name: "check_only", op: "POST /ingest/export/notices", run: () => (client as any).checkNoticesExport("p1", ["i1", "i2"]) }],
+  checkNoticesExport: [
+    { name: "check_only, ids", op: "POST /ingest/export/notices", run: () => (client as any).checkNoticesExport("p1", { notice_ids: ["i1", "i2"] }) },
+    { name: "check_only, range (#364)", op: "POST /ingest/export/notices", run: () => (client as any).checkNoticesExport("p1", { range: { from: "2026-01-01", to: "2026-01-31" } }) },
+  ],
   downloadNoticesExport: [{ name: "download", op: "POST /ingest/export/notices", run: () => (client as any).downloadNoticesExport("p1", ["i1"]) }],
   fetchIngestExportProfiles: [{ name: "plain", op: "GET /ingest/export/profiles", run: () => (client as any).fetchIngestExportProfiles() }],
   fetchIngestExtraction: [{ name: "plain", op: "GET /ingest/{ingest_id}/extraction", run: () => (client as any).fetchIngestExtraction("i1") }],
@@ -409,5 +412,15 @@ describe("no undeclared route", () => {
       .filter((c) => !BY_KEY.has(c.op))
       .map((c) => c.op);
     expect(bad).toEqual([]);
+  });
+});
+
+describe("the seal can refuse a range body (#364)", () => {
+  const base = { via: "axios" as const, method: "POST", path: "/ingest/export/notices", query: {} };
+  it("the declared range body fits; a misspelled selector key, or a notice_ids-less body with an unknown key, does not", () => {
+    const snap = BY_KEY.get("POST /ingest/export/notices")!;
+    expect(violations({ ...base, body: { range: { from: "2026-01-01", to: "2026-01-02" }, profile: "p", check_only: true } }, snap)).toEqual([]);
+    const bad = violations({ ...base, body: { date_range: { from: "2026-01-01", to: "2026-01-02" }, profile: "p" } }, snap);
+    expect(bad.join("\n")).toMatch(/undeclared: date_range/);
   });
 });

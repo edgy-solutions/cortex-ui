@@ -15,8 +15,10 @@ import {
   canExportBatch,
   fixtureExportBody,
   fixtureCheck,
+  fixtureCheckRange,
   type ExportCheck,
   type ExportProfile,
+  type ExportRange,
 } from "./reviewExport";
 
 export type ExportFile = { blob: Blob; filename: string | null };
@@ -28,7 +30,13 @@ export async function loadExportProfiles(): Promise<ExportProfile[]> {
 
 export async function checkExport(profile: ExportProfile, ingestIds: string[]): Promise<ExportCheck> {
   if (isReviewExportMockEnabled()) return fixtureCheck(profile.name, ingestIds);
-  return checkNoticesExport(profile.name, ingestIds);
+  return checkNoticesExport(profile.name, { notice_ids: ingestIds });
+}
+
+/** The range form (#364, behind `exportRange`): the reply carries the RESOLVED ids as `noticeIds`. */
+export async function checkExportRange(profile: ExportProfile, range: ExportRange): Promise<ExportCheck> {
+  if (isReviewExportMockEnabled()) return fixtureCheckRange(profile.name, range);
+  return checkNoticesExport(profile.name, { range });
 }
 
 export async function exportNotices(profile: ExportProfile, ingestIds: string[]): Promise<ExportFile> {

@@ -260,11 +260,35 @@ describe("readUnexportableRefusal", () => {
 
 describe("exportNoticesBody", () => {
   it("carries ingest ids as notice_ids; check_only only when true; never destination", () => {
-    expect(exportNoticesBody("p", ["a", "b"], false)).toEqual({ notice_ids: ["a", "b"], profile: "p" });
-    expect("check_only" in exportNoticesBody("p", ["a"], false)).toBe(false);
-    expect(exportNoticesBody("p", ["a"], true)).toEqual({ notice_ids: ["a"], profile: "p", check_only: true });
-    expect("destination" in exportNoticesBody("p", ["a"], true)).toBe(false);
+    expect(exportNoticesBody("p", { notice_ids: ["a", "b"] }, false)).toEqual({ notice_ids: ["a", "b"], profile: "p" });
+    expect("check_only" in exportNoticesBody("p", { notice_ids: ["a"] }, false)).toBe(false);
+    expect(exportNoticesBody("p", { notice_ids: ["a"] }, true)).toEqual({ notice_ids: ["a"], profile: "p", check_only: true });
+    expect("destination" in exportNoticesBody("p", { notice_ids: ["a"] }, true)).toBe(false);
   });
+});
+
+describe("exportNoticesBody, the range selector (#364)", () => {
+  it("a range body has range and NO notice_ids; an ids body has notice_ids and NO range", () => {
+    const r = exportNoticesBody("p", { range: { from: "2026-01-01", to: "2026-01-31" } }, true);
+    expect(r).toEqual({ range: { from: "2026-01-01", to: "2026-01-31" }, profile: "p", check_only: true });
+    expect("notice_ids" in r).toBe(false);
+    expect("range" in exportNoticesBody("p", { notice_ids: ["a"] }, true)).toBe(false);
+  });
+});
+
+describe("readExportCheck, a range reply (#364)", () => {
+  const rangeReply = { profile: "p", version: 1, notices: 2, unexportable: [], range: { from: "2026-01-01", to: "2026-01-02", field: "created_at" }, notice_ids: ["a", "b"] };
+  it("reads the resolved notice_ids", () => expect(readExportCheck(rangeReply, { range: true })?.noticeIds).toEqual(["a", "b"]));
+  it("a range reply with no notice_ids is malformed", () => {
+    const { notice_ids: _n, ...rest } = rangeReply;
+    expect(readExportCheck(rest, { range: true })).toBeNull();
+  });
+  it("notice_ids that is not a list of strings is malformed", () => {
+    expect(readExportCheck({ ...rangeReply, notice_ids: [1] }, { range: true })).toBeNull();
+    expect(readExportCheck({ ...rangeReply, notice_ids: "a" }, { range: true })).toBeNull();
+  });
+  it("an undeclared extra key is tolerated", () => expect(readExportCheck({ ...rangeReply, undeclared: 1 }, { range: true })?.noticeIds).toEqual(["a", "b"]));
+  it("an ids check carries no noticeIds even when the reply has one", () => expect(readExportCheck(rangeReply)?.noticeIds).toBeUndefined());
 });
 
 describe("lassoTargets", () => {
