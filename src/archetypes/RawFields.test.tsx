@@ -11,7 +11,7 @@ import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { parityComponents } from "./competing-measures/parityPopulation.testkit";
 
 const readCapture = (f: string): unknown =>
-  JSON.parse(readFileSync(path.join(__dirname, "../../sessions", f), "utf8"));
+  JSON.parse(readFileSync(path.join(__dirname, "../../fixtures/captures", f), "utf8"));
 
 afterEach(cleanup);
 

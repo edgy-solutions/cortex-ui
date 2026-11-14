@@ -653,7 +653,7 @@ describe("HAZ-1003 human task row, as served (rev 171, caller bob)", () => {
 
   const capture = JSON.parse(
     readFileSync(
-      join(__dirname, "../../../sessions/2026-10-04-payload-haz-1003-human-task-row-rev-171.json"),
+      join(__dirname, "../../../fixtures/captures/2026-10-04-payload-haz-1003-human-task-row-rev-171.json"),
       "utf8",
     ),
   ) as HazCapture;

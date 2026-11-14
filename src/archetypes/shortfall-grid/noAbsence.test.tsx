@@ -30,7 +30,7 @@ afterEach(cleanup);
 const INTERACTION_ONLY: readonly string[] = ["data-cell-inspector"];
 
 const readCapture = (f: string): unknown =>
-  JSON.parse(readFileSync(path.join(__dirname, "../../../sessions", f), "utf8"));
+  JSON.parse(readFileSync(path.join(__dirname, "../../../fixtures/captures", f), "utf8"));
 
 function cardSubtrees(): Element[] {
   const roots: Element[] = [];

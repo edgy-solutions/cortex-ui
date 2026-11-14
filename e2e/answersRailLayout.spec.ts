@@ -25,7 +25,7 @@ const CORS: Record<string, string> = {
   "access-control-expose-headers": "*",
 };
 const TASK_KINDS = (
-  JSON.parse(readFileSync(path.resolve("sessions/2026-10-02-payload-task-kinds-rev-165-bob.json"), "utf8")) as { body: unknown }
+  JSON.parse(readFileSync(path.resolve("fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json"), "utf8")) as { body: unknown }
 ).body;
 
 function seededRows() {
