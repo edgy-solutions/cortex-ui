@@ -11,7 +11,7 @@ import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { useHumanTaskStore } from "@/store/useHumanTaskStore";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { WORKFLOW_CASE_FIXTURES } from "./fixtures";
-import taskKindsCapture from "../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
+import taskKindsCapture from "../../../fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json";
 import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 
 afterEach(() => {

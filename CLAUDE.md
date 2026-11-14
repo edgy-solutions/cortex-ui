@@ -31,7 +31,10 @@ when the FastAPI backend is absent.
 - `scripts/` — `check-transport-declarations.mjs` (guard), `redproof-*.mjs` (prove the guard can fail).
 - `tests/hop3/`, `tests/evidence/` — out-of-vitest `.mts` proofs, run by hand.
 - `docs/rulings/README.md` — MIRROR of the platform register, never an origin.
-- `sessions/` — dated dispatches/handoffs/reports/payload fixtures; the lane's ledger.
+- `sessions/` — the lane's local ledger, gitignored, never committed (ruled 2026-11-14). Citations of
+  `sessions/…` in code comments resolve in git history at `8298942` (`git show 8298942:sessions/<file>`).
+- `fixtures/captures/` — the producer captures tests read, tracked. A new capture a seal must see is
+  extracted here.
 - `helm/`, `Dockerfile`, `nginx.conf`, `docker-entrypoint.sh` — runtime env is injected at
   container start, not baked at build.
 
@@ -55,7 +58,7 @@ Since `1e31d92` (2026-09-23) a **sessions-only or docs-only push builds no image
 job diffs the push three-dot against its base and, if every changed path matches `^sessions/` or
 `^docs/`, the six image-build steps skip. **The checks still run** — `check:transport`, the full
 suite and `tsc` are deliberately outside the gate, because this repo has already paid once for a
-seal that silently stopped running in CI.
+seal that silently stopped running in CI. Since 2026-11-14 `sessions/` is untracked, so the docs-only case remains and the sessions arm is dormant.
 
 So the rule doc-tools wrote applies here too, and it is the consequence, not the feature:
 
@@ -97,15 +100,14 @@ plus the run's step list — separates them.
 | `helm_template_output.yaml` | `helm template` output, tracked | regenerate, don't read |
 | `docs/demo-week-work-cluster.md` (56k) | planning cluster | `grep -n '^#'` then `sed -n 'a,bp'` |
 | `src/api/types.ts` (48k) | wire types | `grep -n 'interface X\|type X'` |
-| `sessions/*payload*.json` (up to 38k) | producer fixtures | `jq 'keys'`, `jq -r '.rows[0]'` |
+| `fixtures/captures/*payload*.json` (up to 38k) | producer fixtures | `jq 'keys'`, `jq -r '.rows[0]'` |
 | `src/**/*.test.ts` (42k+ files) | big fixtures | grep the test name |
 | `*.log`, `errors.txt` | noise | `tail` |
 
 ## Handoff
 
-The project's handoff equivalent is `sessions/` — dated files, one per beat,
-committed as `docs(sessions):` / `chore(sessions):`. There is no single
-HANDOFF.md, and none was created. Newest as of 2026-09-20:
+Handoffs and reports stay dated files in `sessions/`, one per beat, local only, never committed.
+There is no single HANDOFF.md, and none was created. Newest as of 2026-09-20:
 
 `C:\Users\cnogr\git\cortex-ui\sessions\2026-09-19-report-cortex-60-overnight-pin-bumped-push-blocked-ledger-walked.md`
 
@@ -132,9 +134,8 @@ Index for the current payload set:
 
 ## Conventions (fleet directive 2026-10-06; text from invincible-agent `2b6fe0f6`)
 
-- **Only the owning lane commits in this repo; packets are placed, never committed, by anyone
-  else.** Another repo's lane drops its packet into `sessions/` and leaves it untracked (or
-  staged); the owning lane reads it and commits it with its own work.
+- **Session files are placed, never committed, in any repo (Chris's ruling, 2026-11-14).** The owning
+  lane reads a placed packet; nobody commits it.
 - **Print a length and a hash prefix, never a secret value.** To show that a token, password
   or key is present or matches, print `len` and the first 8 hex of its sha256 — never the
   value, and never decode a Secret's data into the transcript.

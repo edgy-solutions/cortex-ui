@@ -10,7 +10,7 @@ import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { WORKFLOW_CASE_FIXTURES } from "./fixtures";
 import type { CaseInstance, WorkflowCasePayload } from "./contract";
-import taskKindsCapture from "../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
+import taskKindsCapture from "../../../fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json";
 
 afterEach(() => {
   cleanup();

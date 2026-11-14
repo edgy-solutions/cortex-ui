@@ -32,7 +32,7 @@ import type { SpokenAnswer } from "@/api/spokenAnswer";
 
 afterEach(cleanup);
 
-const SESSIONS = path.join(__dirname, "../../../sessions");
+const SESSIONS = path.join(__dirname, "../../../fixtures/captures");
 const CAPTURE = "2026-09-19-payload-finance-eac-refusal.json";
 
 interface Capture {
@@ -285,7 +285,7 @@ describe("the ABSTAIN-born menu, walked on its own real capture — it dead-ends
 });
 
 describe("the capture corpus is swept, so a new menu capture cannot arrive unmeasured", () => {
-  it("names every option-bearing ELICITATION in sessions/*payload*.json and the fields it carries", () => {
+  it("names every option-bearing ELICITATION in fixtures/captures/*payload*.json and the fields it carries", () => {
     /*
       ⛔ THE CENSUS IS THE POINT, AND IT HAS ALREADY EARNED ITS KEEP. On its first run it named a
       capture this file's own header had claimed did not exist. What it reports is a LEDGER of

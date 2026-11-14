@@ -451,7 +451,7 @@ interface RefusalsFixture {
 }
 
 function loadRefusalsFixture(): RefusalsFixture {
-  const file = path.join(__dirname, "../../sessions/2026-09-30-payload-ingest-refusals-rev-162.json");
+  const file = path.join(__dirname, "../../fixtures/captures/2026-09-30-payload-ingest-refusals-rev-162.json");
   return JSON.parse(readFileSync(file, "utf8")) as RefusalsFixture;
 }
 

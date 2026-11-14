@@ -227,7 +227,7 @@ interface ExportCapture {
 }
 
 function loadExportCapture(): ExportCapture {
-  const file = path.join(__dirname, "../../sessions/2026-10-01-payload-export-package-roll-11.json");
+  const file = path.join(__dirname, "../../fixtures/captures/2026-10-01-payload-export-package-roll-11.json");
   return JSON.parse(readFileSync(file, "utf8")) as ExportCapture;
 }
 
@@ -278,7 +278,7 @@ interface Rev171Post {
 function loadRev171(name: string): unknown {
   const file = path.join(
     __dirname,
-    "../../sessions",
+    "../../fixtures/captures",
     `2026-10-04-payload-export-package-rev-171-${name}.json`,
   );
   return JSON.parse(readFileSync(file, "utf8"));
@@ -393,7 +393,7 @@ describe("canvasAnswerIds", () => {
 function loadMixed(): Record<string, unknown> {
   return JSON.parse(
     readFileSync(
-      path.join(__dirname, "../../sessions/2026-10-10-payload-export-mixed-board-rev187.json"),
+      path.join(__dirname, "../../fixtures/captures/2026-10-10-payload-export-mixed-board-rev187.json"),
       "utf8",
     ),
   ) as Record<string, unknown>;

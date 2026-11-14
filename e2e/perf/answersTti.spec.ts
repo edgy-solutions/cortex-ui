@@ -44,7 +44,7 @@ const CAP_MS = Number(process.env.PERF_CAP_MS ?? "90000");
 const QUIET_MS = 2_000;
 
 const TASK_KINDS = (
-  JSON.parse(readFileSync(path.resolve("sessions/2026-10-02-payload-task-kinds-rev-165-bob.json"), "utf8")) as { body: unknown }
+  JSON.parse(readFileSync(path.resolve("fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json"), "utf8")) as { body: unknown }
 ).body;
 
 const CORS: Record<string, string> = {

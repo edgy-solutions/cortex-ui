@@ -870,7 +870,7 @@ describe("the file itself", () => {
 describe("readMethod over the packet's executed dump", () => {
   const PACKET = path.join(
     __dirname,
-    "../../sessions",
+    "../../fixtures/captures",
     "2026-09-26-packet-from-ca-the-ts-mirror-of-completeness-total-available-and-methodblock.md",
   );
 

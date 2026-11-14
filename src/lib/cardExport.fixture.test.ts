@@ -35,8 +35,8 @@ import {
 } from "./cardExport.fixture";
 
 const REPORT =
-  "sessions/2026-09-26-capture-from-lane-1-the-lot-4-contribution-ranking-card-real-and-post-projector.md";
-const CAPTURE = "sessions/2026-09-26-payload-lot4-contribution-ranking.json";
+  "fixtures/captures/2026-09-26-capture-from-lane-1-the-lot-4-contribution-ranking-card-real-and-post-projector.md";
+const CAPTURE = "fixtures/captures/2026-09-26-payload-lot4-contribution-ranking.json";
 
 const captureText = readFileSync(CAPTURE, "utf8");
 

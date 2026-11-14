@@ -58,7 +58,7 @@ interface RevCapture {
 }
 
 function loadSeed(): Pcn26117Seed {
-  const file = path.join(__dirname, "../../../sessions/2026-10-06-payload-ingest-pcn26-117-rev-174.json");
+  const file = path.join(__dirname, "../../../fixtures/captures/2026-10-06-payload-ingest-pcn26-117-rev-174.json");
   const capture = JSON.parse(readFileSync(file, "utf8")) as RevCapture;
   const statusBody = capture.hops[1]?.response?.body as Record<string, unknown>;
   const row = readIngestStatusRow(statusBody);
