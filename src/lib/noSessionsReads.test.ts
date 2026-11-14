@@ -9,8 +9,7 @@
  * This file's own snippets are built by concatenation (`S + "…"`), so the file needs no exemption.
  */
 import { describe, it, expect } from "vitest";
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = path.join(__dirname, "../..");
@@ -35,9 +34,24 @@ function offendingLines(src: string): number[] {
   return hits;
 }
 
-const files = execSync("git ls-files --cached --others --exclude-standard", { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-  .split("\n")
-  .filter((f) => /\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(f) && !f.startsWith(S + "/") && !f.startsWith("node_modules/"));
+/**
+ * The population is a filesystem walk, not `git ls-files`: the suite also runs where there is no
+ * `.git` (a `git archive` export, which is how a gate sees exactly what CI checks out), and a
+ * guard that cannot list its population there crashes at collection with "0 test".
+ * SKIP names directories that are never tracked. A name missing from it can only over-scan (a
+ * stray untracked file trips the guard loudly), never hide a tracked one.
+ */
+const SKIP = new Set([".git", "node_modules", "dist", "dist-ssr", "coverage", S, ".claude", ".venv",
+  "test-results", "playwright-report", "walk-out"]);
+function walk(dir: string, rel: string, out: string[]): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const r = rel ? rel + "/" + e.name : e.name;
+    if (e.isDirectory()) { if (!SKIP.has(e.name)) walk(path.join(dir, e.name), r, out); }
+    else if (e.isFile() && /.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(e.name)) out.push(r);
+  }
+  return out;
+}
+const files = walk(ROOT, "", []);
 
 describe("no tracked code reads sessions/", () => {
   it("the instrument: enough files scanned, and this one among them", () => {
