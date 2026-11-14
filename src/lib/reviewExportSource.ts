@@ -6,13 +6,10 @@ import {
   fetchIngestExportProfiles,
   checkNoticesExport,
   downloadNoticesExport,
-  fetchEntitlements,
 } from "@/api/client";
 import { isReviewExportMockEnabled } from "./reviewExportFlag";
 import {
-  FIXTURE_ENTITLEMENTS,
   FIXTURE_PROFILES,
-  canExportBatch,
   fixtureExportBody,
   fixtureCheck,
   fixtureCheckRange,
@@ -42,8 +39,4 @@ export async function checkExportRange(profile: ExportProfile, range: ExportRang
 export async function exportNotices(profile: ExportProfile, ingestIds: string[]): Promise<ExportFile> {
   if (isReviewExportMockEnabled()) return fixtureExportBody(profile, { ingestIds });
   return downloadNoticesExport(profile.name, ingestIds);
-}
-
-export async function loadCanExportBatch(): Promise<boolean> {
-  return canExportBatch(isReviewExportMockEnabled() ? FIXTURE_ENTITLEMENTS : await fetchEntitlements());
 }

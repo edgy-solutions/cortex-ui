@@ -104,10 +104,13 @@ describe("the fetch is bootstrap, not card data", () => {
     "utf8",
   );
   const app = readFileSync(path.join(__dirname, "../App.tsx"), "utf8");
+  // The hook moved out of App.tsx so it can be rendered under test; App still mounts it.
+  const hook = readFileSync(path.join(__dirname, "../hooks/useEntitlementsSync.ts"), "utf8");
 
   it("the sources are read — positive control", () => {
     expect(picker).toContain("export function PersonaPicker");
     expect(app).toContain("export default function App");
+    expect(hook).toContain("export function useEntitlementsSync");
   });
 
   it("the PICKER does not fetch — it mounts behind the card tree", () => {
@@ -120,8 +123,8 @@ describe("the fetch is bootstrap, not card data", () => {
   it("APP fetches on auth-ready, keyed on the subject", () => {
     // Keyed on the sub rather than a boolean: a user switch must re-fetch, and a failed attempt
     // must not be recorded as a completed one.
-    expect(app).toContain("useEntitlementsSync");
-    expect(app).toMatch(/loadEntitlements\(fetchEntitlements\)/);
+    expect(app).toContain("useEntitlementsSync();");
+    expect(hook).toMatch(/loadEntitlements\(fetchEntitlements\)/);
   });
 });
 

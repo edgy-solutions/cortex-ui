@@ -8,14 +8,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
 
-const fetchEntitlements = vi.fn();
 const fetchIngestExportProfiles = vi.fn();
 const checkNoticesExport = vi.fn();
 const fetchIngestStatus = vi.fn();
 vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
   actOnHumanTask: vi.fn(),
-  fetchEntitlements: (...a: unknown[]) => fetchEntitlements(...a),
   fetchIngestExportProfiles: (...a: unknown[]) => fetchIngestExportProfiles(...a),
   checkNoticesExport: (...a: unknown[]) => checkNoticesExport(...a),
   fetchIngestStatus: (...a: unknown[]) => fetchIngestStatus(...a),
@@ -106,12 +104,12 @@ beforeEach(() => {
   window.localStorage.setItem("cortex.reviewExport", "1");
   fetchIngestSource.mockReset().mockResolvedValue({ bytes: new Uint8Array([37, 80, 68, 70]).buffer, status: 200, contentType: "application/pdf" });
   fetchIngestExtraction.mockReset().mockImplementation(async () => ({ ...fixtureExtractionBody(SHA), rows: [] }));
-  fetchEntitlements.mockReset().mockResolvedValue(GRANT);
   fetchIngestExportProfiles.mockReset().mockResolvedValue(PROFILES);
   checkNoticesExport.mockReset();
   fetchIngestStatus.mockReset().mockRejectedValue(notFound404());
   useTaskKindStore.setState({ status: "idle", byKind: {} });
-  usePersonaStore.setState({ entitlements: null });
+  // The control READS the store (the session owner loads it); seed the grant here.
+  usePersonaStore.setState({ entitlements: GRANT as never });
   act(() => useIngestStatusStore.getState().reset());
 });
 afterEach(() => {
@@ -133,7 +131,7 @@ describe("a reviewer who did not drop the notice, on a held Promote", () => {
   });
 
   it("arm 2: no grant (the only difference) -> absent, and neither the profile read nor a check is made", async () => {
-    fetchEntitlements.mockResolvedValue({ capabilities: [] });
+    usePersonaStore.setState({ entitlements: { capabilities: [] } as never });
     checks({ "p-listed": async () => ok("p-listed"), "p-other": async () => refused("p-other") });
     await mountHeld();
     await act(async () => {});

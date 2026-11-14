@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 
 const loadExportProfiles = vi.fn();
-const loadCanExportBatch = vi.fn();
 const checkExport = vi.fn();
 const exportNotices = vi.fn();
 vi.mock("@/lib/reviewExportSource", () => ({
   loadExportProfiles: (...a: unknown[]) => loadExportProfiles(...a),
-  loadCanExportBatch: (...a: unknown[]) => loadCanExportBatch(...a),
   checkExport: (...a: unknown[]) => checkExport(...a),
   exportNotices: (...a: unknown[]) => exportNotices(...a),
 }));
@@ -15,6 +13,7 @@ vi.mock("@/lib/saveBlob", () => ({ saveBlob: vi.fn() }));
 
 import { ReviewExportAs } from "./ReviewExportAs";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import type { IngestStatusRow } from "@/lib/ingestWire";
 
 const HEX = "3f9a1c7e5b2d4a60918273645f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c";
@@ -39,7 +38,7 @@ const pick = async (container: HTMLElement) => {
 
 beforeEach(() => {
   window.localStorage.setItem("cortex.reviewExport", "1");
-  loadCanExportBatch.mockResolvedValue(true);
+  usePersonaStore.setState({ entitlements: { capabilities: ["ingest:exportBatch"] } as never });
   loadExportProfiles.mockResolvedValue([{ name: "p1", format: "csv", granularity: "g", accepts: null, exportable_states: ["synthetic-state-a"] }]);
   checkExport.mockImplementation(async (p: { name: string }, ids: string[]) => ({ profile: p.name, version: 1, notices: ids.length, unexportable: [] }));
   exportNotices.mockResolvedValue({ blob: new Blob(["x"]), filename: "x.csv" });

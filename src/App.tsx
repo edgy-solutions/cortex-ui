@@ -25,15 +25,14 @@ import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
 import { registerFrontendCapabilities } from "@/api/client";
+import { useEntitlementsSync } from "@/hooks/useEntitlementsSync";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
 import { seedFromRest } from "@/lib/seedHumanTasks";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
-import { usePersonaStore } from "@/store/usePersonaStore";
 import { useCanvasSeedFromAnswers } from "@/lib/canvasSeedFromAnswer";
-import { fetchEntitlements } from "@/api/client";
 // SIDE-EFFECT IMPORT, and the bare form is load-bearing: this module installs
 // `window.__cortex` and exports nothing App needs, so an unused named binding would be a
 // binding a bundler may drop and a module nobody imports is dropped outright. Covered by the
@@ -373,37 +372,6 @@ function useSessionIsolation(): boolean {
     setReadyOwner(owner);
   }, [auth.isAuthenticated, owner]);
   return owner != null && readyOwner === owner;
-}
-
-/**
- * Entitlements are SESSION BOOTSTRAP, so they are fetched here — on auth-ready, at the top of
- * the tree — rather than by the picker that displays them.
- *
- * The picker mounts deep inside the answer surface, so owning the fetch there meant the request
- * deciding whether a user may choose a persona went out AFTER the card tree rendered, behind
- * however many artifacts the session had accumulated. Under HTTP/1.1 the browser caps ~6
- * connections per origin and Electric holds two of them open for its live shapes, so on a
- * session with dozens of cards the request could sit unsent until it timed out — and the picker,
- * having no dependency that would change afterwards, stayed inert for the rest of the session.
- *
- * This is the correct ordering on the merits, not a workaround: bootstrap data should not queue
- * behind card data in any protocol. HTTP/2 multiplexing (which the TLS-terminating venue gets
- * for free) makes the old ordering survivable rather than correct.
- */
-function useEntitlementsSync() {
-  const auth = useAuth();
-  const sub = auth.user?.profile?.sub ?? null;
-  const loadEntitlements = usePersonaStore((s) => s.loadEntitlements);
-  const loadedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!auth.isAuthenticated || !sub) return;
-    // Keyed on the SUBJECT rather than on a boolean: a user switch must re-fetch, and a failed
-    // attempt must not be mistaken for a completed one. The store bounds its own retries and
-    // surfaces a terminal failure through the picker's visible error state.
-    if (loadedFor.current === sub) return;
-    loadedFor.current = sub;
-    void loadEntitlements(fetchEntitlements);
-  }, [auth.isAuthenticated, sub, loadEntitlements]);
 }
 
 export default function App() {

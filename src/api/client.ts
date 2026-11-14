@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { reportForbidden } from "./forbidden";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
@@ -96,6 +97,22 @@ api.interceptors.request.use((cfg) => {
   // Stable session id groups this conversation's traces in Langfuse (see getSessionId)
   cfg.headers["X-Session-Id"] = getSessionId();
   return cfg;
+});
+
+/**
+ * A 403 on any axios route is REPORTED (the session owner refreshes the entitlements matrix) and then re-rejected
+ * as the SAME error object, so a caller's own 403 handling sees exactly what it saw before.
+ *
+ * `GET /me/entitlements` never reports: its 403 is a failed refresh, not a trigger -- reporting it would loop.
+ */
+api.interceptors.response.use(undefined, (error: unknown) => {
+  const e = error as { response?: { status?: number }; config?: { method?: string; url?: string } };
+  if (e?.response?.status === 403) {
+    const method = (e.config?.method ?? "get").toUpperCase();
+    const url = e.config?.url ?? "";
+    if (!(method === "GET" && url.split("?")[0] === "/me/entitlements")) reportForbidden(`${method} ${url}`);
+  }
+  return Promise.reject(error);
 });
 
 // ── The typed core ────────────────────────────────────────
@@ -611,6 +628,7 @@ export async function streamInterviewResponse(
     },
     onerror(err) {
       console.error("SSE Stream Error:", err);
+      if (err instanceof Response && err.status === 403) reportForbidden("POST /interview/stream");
       
       // If the BFF throws a 401, tell the user to log in again!
       if (err instanceof Response && err.status === 401) {
@@ -975,12 +993,13 @@ export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
   const auth = api.defaults.headers.common?.Authorization;
   if (typeof auth === "string" && auth) headers.Authorization = auth;
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: "PUT",
       headers,
       body: JSON.stringify({ canvases }),
       keepalive: true,
     });
+    if (res?.status === 403) reportForbidden("PUT /me/canvases");
   } catch {
     // The page is leaving. There is no retry to schedule and nobody to tell — the durable
     // fallback is the store's own localStorage copy, which has already been written.
@@ -1295,7 +1314,9 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
   };
   const token = getOidcToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(`${API_URL}${opPath("GET /cases/{case_id}", { path: { case_id: caseId } })}`, { method: "GET", headers });
+  const res = await fetch(`${API_URL}${opPath("GET /cases/{case_id}", { path: { case_id: caseId } })}`, { method: "GET", headers });
+  if (res?.status === 403) reportForbidden("GET /cases/{case_id}");
+  return res;
 }
 
 /**

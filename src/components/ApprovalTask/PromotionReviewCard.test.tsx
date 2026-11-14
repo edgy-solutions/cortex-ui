@@ -35,11 +35,9 @@ vi.mock("@/lib/ingestTransport", () => ({
   fetchIngestExtraction: (...a: unknown[]) => fetchIngestExtraction(...a),
   fetchReviewShapes: async () => REVIEW_SHAPES_FIXTURE.map((r) => ({ ...r })),
 }));
-const loadCanExportBatch = vi.fn();
 const loadExportProfiles = vi.fn();
 const checkExport = vi.fn();
 vi.mock("@/lib/reviewExportSource", () => ({
-  loadCanExportBatch: (...a: unknown[]) => loadCanExportBatch(...a),
   loadExportProfiles: (...a: unknown[]) => loadExportProfiles(...a),
   checkExport: (...a: unknown[]) => checkExport(...a),
   exportNotices: vi.fn(),
@@ -179,7 +177,7 @@ describe("which card draws", () => {
       rows: { [SHA]: { ingest_id: SHA, stage: "synthetic-state-a" } as unknown as IngestStatusRow },
       track: vi.fn(),
     });
-    loadCanExportBatch.mockResolvedValue(true);
+    usePersonaStore.setState({ entitlements: { capabilities: ["ingest:exportBatch"] } as never });
     loadExportProfiles.mockResolvedValue([
       { name: "p1", format: "csv", granularity: "g", accepts: null, exportable_states: ["synthetic-state-a"] },
     ]);

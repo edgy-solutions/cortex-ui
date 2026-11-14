@@ -2,17 +2,14 @@
  * "Export as..." on the notice card is for ANY viewer holding ingest:exportBatch (architect, 0.4.87), not only the
  * reviewer. alice holds the grants but not the review task and saw "no review task visible to you" and no export.
  *
- * The capability check and the profile filter run for real; only the wire is stubbed (fetchEntitlements,
- * fetchIngestExportProfiles). Each control pair differs ONLY in the entitlements' capabilities.
+ * The capability check and the profile filter run for real; only the wire is stubbed (fetchIngestExportProfiles; the entitlements matrix is seeded into the store, which the control reads). Each control pair differs ONLY in the entitlements' capabilities.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, cleanup, waitFor, act, fireEvent } from "@testing-library/react";
 
-const fetchEntitlements = vi.fn();
 const fetchIngestExportProfiles = vi.fn();
 vi.mock("@/api/client", () => ({
   actOnHumanTask: vi.fn(),
-  fetchEntitlements: (...a: unknown[]) => fetchEntitlements(...a),
   fetchIngestExportProfiles: (...a: unknown[]) => fetchIngestExportProfiles(...a),
 }));
 vi.mock("@/lib/ingestTransport", () => ({ retryIngest: vi.fn(), fetchIngestStatus: vi.fn(), correctIngestLeaf: vi.fn() }));
@@ -22,6 +19,7 @@ import { SeededCard } from "./ingestCardTestKit";
 import { useHumanTaskStore, type HumanTask } from "@/store/useHumanTaskStore";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import { promotionIngestId, type IngestStatusRow } from "@/lib/ingestWire";
 
 // SYNTHETIC stage and profile names: no real stage is spelled.
@@ -58,8 +56,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
-  fetchEntitlements.mockReset();
   fetchIngestExportProfiles.mockReset();
+  usePersonaStore.setState({ entitlements: null });
   useIngestStatusStore.getState().reset();
   useHumanTaskStore.setState({ tasks: [] });
   useTaskKindStore.setState({ status: "idle", byKind: {} });
@@ -70,11 +68,10 @@ const flush = () => act(() => new Promise<void>((r) => setTimeout(r, 30)));
 
 /** The ONLY differences between the paired arms are these two flags; granted changes only `capabilities`. */
 async function mount({ reviewer, granted }: { reviewer: boolean; granted: boolean }) {
-  fetchEntitlements.mockResolvedValue({ capabilities: granted ? [GRANT, "other:cap"] : ["other:cap"] });
+  usePersonaStore.setState({ entitlements: { capabilities: granted ? [GRANT, "other:cap"] : ["other:cap"] } as never });
   const r = row();
   useHumanTaskStore.setState({ tasks: reviewer ? [task(r)] : [] });
   render(<SeededCard ingestId={ID} seed={r} />);
-  await waitFor(() => expect(fetchEntitlements).toHaveBeenCalled(), { timeout: 400 }).catch(() => undefined); // absent when nothing mounted the control
   await flush();
 }
 
@@ -114,7 +111,7 @@ describe("Export as... on the notice card", () => {
   it("6. the dialog opens OUTSIDE the card (portaled to body), and no click inside it reaches the canvas", async () => {
     // On the canvas the card sits under a camera transform, so a fixed overlay rendered in place is positioned and
     // scaled relative to the CARD. The dialog must be a direct child of document.body, outside the render container.
-    fetchEntitlements.mockResolvedValue({ capabilities: [GRANT] });
+    usePersonaStore.setState({ entitlements: { capabilities: [GRANT] } as never });
     const r = row();
     useHumanTaskStore.setState({ tasks: [] });
     const outer = vi.fn();

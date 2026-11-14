@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 
 const loadExportProfiles = vi.fn();
-const loadCanExportBatch = vi.fn();
 const checkExport = vi.fn();
 const exportNotices = vi.fn();
 vi.mock("@/lib/reviewExportSource", () => ({
   loadExportProfiles: (...a: unknown[]) => loadExportProfiles(...a),
-  loadCanExportBatch: (...a: unknown[]) => loadCanExportBatch(...a),
   checkExport: (...a: unknown[]) => checkExport(...a),
   exportNotices: (...a: unknown[]) => exportNotices(...a),
 }));
@@ -15,6 +13,7 @@ vi.mock("@/lib/saveBlob", () => ({ saveBlob: vi.fn() }));
 
 import { ReviewExportAs } from "./ReviewExportAs";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import type { IngestStatusRow } from "@/lib/ingestWire";
 
 // SYNTHETIC state and kind names: no real stage is spelled.
@@ -41,7 +40,7 @@ const settle = () => new Promise((r) => setTimeout(r, 30));
 
 beforeEach(() => {
   window.localStorage.setItem("cortex.reviewExport", "1");
-  loadCanExportBatch.mockResolvedValue(true);
+  usePersonaStore.setState({ entitlements: { capabilities: ["ingest:exportBatch"] } as never });
   loadExportProfiles.mockResolvedValue([prof("p1", [SA]), prof("p2", [SB]), prof("p3")]);
   checkExport.mockImplementation(async (p: { name: string }, ids: string[]) => ({ profile: p.name, version: 1, notices: ids.length, unexportable: [] }));
   seed({ stage: SA, content_kind: "synthetic-kind-a" });
@@ -55,7 +54,7 @@ afterEach(() => {
 
 describe("ReviewExportAs", () => {
   it("is hidden without the capability, and never reads profiles", async () => {
-    loadCanExportBatch.mockResolvedValue(false);
+    usePersonaStore.setState({ entitlements: { capabilities: [] } as never });
     const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await settle();
     expect(btn(container)).toBeNull();
@@ -67,7 +66,6 @@ describe("ReviewExportAs", () => {
     const { baseElement: container } = render(<ReviewExportAs ingestId={ID} />);
     await settle();
     expect(btn(container)).toBeNull();
-    expect(loadCanExportBatch).not.toHaveBeenCalled();
   });
 
   it("hides again when the flag goes off after the profiles loaded (the gate is read every render)", async () => {
