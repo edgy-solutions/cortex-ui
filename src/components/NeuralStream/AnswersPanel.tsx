@@ -20,6 +20,8 @@ import {
   useAnswerPanelStore,
   type AnswerSortMode,
 } from "@/store/useAnswerPanelStore";
+import { SelectionActionBar } from "@/components/AgenticCanvas/SelectionActionBar";
+import { useSelectionActions } from "@/components/AgenticCanvas/useSelectionActions";
 import { LiveAnswerStrip } from "./LiveAnswerStrip";
 import { AccessDeniedCard } from "./AccessDeniedCard";
 import { useLiveStages } from "./useLiveStages";
@@ -187,7 +189,58 @@ export function AnswersPanel() {
     y: number;
     moved: boolean;
   } | null>(null);
-  const startRef = useRef<{ x: number; y: number; id: string } | null>(null);
+  const startRef = useRef<{ x: number; y: number; id: string; toggle: boolean; range: boolean } | null>(null);
+
+  // ── Multi-select (Ctrl/Cmd-click toggles, Shift-click ranges) ──────────
+  // Local to the panel, like the stage's lasso. Range order is the list's data order (`filtered`).
+  const [selIds, setSelIds] = useState<string[]>([]);
+  const anchorRef = useRef<string | null>(null);
+  // The row order ON SCREEN (grouped modes order rows by their sections, not by `filtered`); each list
+  // component publishes it through the row ctx. Empty until a list has rendered.
+  const orderRef = useRef<string[]>([]);
+  const screenOrder = () => (orderRef.current.length ? orderRef.current : filtered.map((a) => a.id));
+  const selectedIds = useMemo(() => new Set(selIds), [selIds]);
+  const clearSel = useCallback(() => {
+    anchorRef.current = null;
+    setSelIds((p) => (p.length ? [] : p));
+  }, []);
+  // Ids that leave the list leave the selection.
+  useEffect(() => {
+    const present = new Set(filtered.map((a) => a.id));
+    setSelIds((p) => (p.every((id) => present.has(id)) ? p : p.filter((id) => present.has(id))));
+  }, [filtered]);
+  useEffect(() => {
+    if (!selIds.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      clearSel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selIds.length, clearSel]);
+  const selActions = useSelectionActions(() => screenOrder().filter((id) => selectedIds.has(id)), clearSel);
+  const clickSelect = useCallback(
+    (id: string, range: boolean) => {
+      if (range) {
+        const order = screenOrder();
+        const to = order.indexOf(id);
+        const from = anchorRef.current ? order.indexOf(anchorRef.current) : -1;
+        if (to < 0 || from < 0) {
+          anchorRef.current = id;
+          setSelIds([id]);
+          return;
+        }
+        const [lo, hi] = from <= to ? [from, to] : [to, from];
+        setSelIds(order.slice(lo, hi + 1));
+        return;
+      }
+      anchorRef.current = id;
+      setSelIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered],
+  );
 
   const onRowPointerDown = useCallback(
     (e: React.PointerEvent, id: string) => {
@@ -204,7 +257,7 @@ export function AnswersPanel() {
       // selection is left alone here and suppressed at the moment the pointer crosses the
       // drag threshold — see the move handler, which clears whatever selection had begun.
       // Before that threshold the browser does what a browser does.
-      startRef.current = { x: e.clientX, y: e.clientY, id };
+      startRef.current = { x: e.clientX, y: e.clientY, id, toggle: e.ctrlKey || e.metaKey, range: e.shiftKey };
       setDrag({ id, x: e.clientX, y: e.clientY, moved: false });
     },
     []
@@ -236,13 +289,23 @@ export function AnswersPanel() {
       const moved =
         Math.abs(e.clientX - s.x) > 6 || Math.abs(e.clientY - s.y) > 6;
       if (!moved) {
+        if (s.toggle || s.range) {
+          clickSelect(s.id, s.range && !s.toggle);
+          return;
+        }
+        clearSel(); // a plain click leaves the list selection
         setCurrentArtifact(s.id); // a click, not a drag → select
         return;
       }
       if (droppedOnCanvas(e.clientX, e.clientY)) {
-        const n = pins.length % 8;
-        pinAnswer(s.id, 32 + n * 30, 32 + n * 30);
+        // A row in the list selection carries the whole selection, in screen order; any other row only itself.
+        const ids = selIds.includes(s.id) ? screenOrder().filter((id) => selIds.includes(id)) : [s.id];
+        ids.forEach((id, i) => {
+          const n = (pins.length + i) % 8;
+          pinAnswer(id, 32 + n * 30, 32 + n * 30);
+        });
         setCanvasOpen(true);
+        if (selIds.includes(s.id)) clearSel();
       }
     };
     document.addEventListener("pointermove", onMove);
@@ -251,7 +314,7 @@ export function AnswersPanel() {
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
     };
-  }, [drag, pins.length, pinAnswer, setCanvasOpen, setCurrentArtifact]);
+  }, [drag, pins.length, pinAnswer, setCanvasOpen, setCurrentArtifact, clickSelect, clearSel, selIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const draggingId = drag?.moved ? drag.id : null;
   const dragArtifact = draggingId
@@ -289,6 +352,8 @@ export function AnswersPanel() {
     currentArtifactId,
     pinnedIds,
     draggingId,
+    selectedIds,
+    orderRef,
     onPointerDown: onRowPointerDown,
     searchHit: q,
     byId: (id) => byIdMap.get(id),
@@ -311,7 +376,7 @@ export function AnswersPanel() {
     .join(" · ");
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
       {/* Header */}
       <div className="px-6 py-3 border-b border-glass-border flex items-center gap-2 flex-shrink-0">
         <span className="text-neon-cyan/70 text-sm leading-none">◎</span>
@@ -423,6 +488,18 @@ export function AnswersPanel() {
         )}
       </div>
 
+      {selIds.length > 0 && (
+        <SelectionActionBar
+          count={selIds.length}
+          canvases={selActions.canvases}
+          onAdd={selActions.onAdd}
+          onNew={selActions.onNew}
+          onClear={clearSel}
+          onExport={selActions.onExport}
+        />
+      )}
+      {selActions.exportDialog}
+
       {/* Drag ghost (body portal — floats above the canvas) */}
       {drag?.moved && dragArtifact && (
         <AnswerChitGhost
@@ -446,6 +523,10 @@ interface RowCtx {
   currentArtifactId: string | null;
   pinnedIds: Set<string>;
   draggingId: string | null;
+  /** The list's multi-selection (Ctrl/Cmd/Shift-click), distinct from the current artifact. */
+  selectedIds: Set<string>;
+  /** Published by VirtualRows: the ids of the rows in the order they are drawn. */
+  orderRef: { current: string[] };
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   searchHit: string;
   /**
@@ -565,6 +646,9 @@ function VirtualRows({ flat, ctx, view }: { flat: FlatItem[]; ctx: RowCtx; view:
     return { heights, index, ...layoutOffsets(heights) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat, version]);
+  useEffect(() => {
+    ctx.orderRef.current = flat.flatMap((it) => (it.kind === "time-row" || it.kind === "cluster-row" ? [it.a.id] : []));
+  }, [flat, ctx.orderRef]);
   const latest = useRef({ offsets, heights, index });
   latest.current = { offsets, heights, index };
   const pending = useRef<{ changed: boolean; changes: AnchorChange[] }>({ changed: false, changes: [] });
@@ -779,6 +863,7 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   const selected = a.id === ctx.currentArtifactId;
   const dragging = ctx.draggingId === a.id;
   const pinned = ctx.pinnedIds.has(a.id);
+  const listSelected = ctx.selectedIds.has(a.id);
   // A task is the same citizen as an answer, differing only in what it awaits.
   // Its state (not its location) tells the truth: pending glows pink + pulses
   // (it wants action), resolved settles to muted (it's history).
@@ -796,7 +881,10 @@ function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   return (
     <div
       onPointerDown={(e) => ctx.onPointerDown(e, a.id)}
-      className={`flex items-stretch gap-2 rounded-md cursor-grab transition-colors ${
+      data-answer-row={a.id}
+      aria-selected={listSelected}
+      data-selected={listSelected ? "true" : undefined}
+      className={`${listSelected ? "ring-1 ring-neon-cyan/60 bg-neon-cyan/10 " : ""}flex items-stretch gap-2 rounded-md cursor-grab transition-colors ${
         dragging
           ? "opacity-45"
           : selected
@@ -1053,11 +1141,15 @@ function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   const selected = a.id === ctx.currentArtifactId;
   const dragging = ctx.draggingId === a.id;
   const pinned = ctx.pinnedIds.has(a.id);
+  const listSelected = ctx.selectedIds.has(a.id);
 
   return (
     <div
       onPointerDown={(e) => ctx.onPointerDown(e, a.id)}
-      className={`flex items-start gap-2.5 rounded-md px-1.5 py-1.5 cursor-grab transition-colors ${
+      data-answer-row={a.id}
+      aria-selected={listSelected}
+      data-selected={listSelected ? "true" : undefined}
+      className={`${listSelected ? "ring-1 ring-neon-cyan/60 bg-neon-cyan/10 " : ""}flex items-start gap-2.5 rounded-md px-1.5 py-1.5 cursor-grab transition-colors ${
         dragging
           ? "opacity-45"
           : selected

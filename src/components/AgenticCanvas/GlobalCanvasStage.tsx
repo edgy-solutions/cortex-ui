@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { foldedAskAnswers } from "@/lib/askFold";
-import { Maximize2, Minimize2, LayoutGrid, GitBranch, Share2 } from "lucide-react";
+import { Maximize2, Minimize2, LayoutGrid, GitBranch, Share2, Plus, Minus } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useAnswerPanelStore } from "@/store/useAnswerPanelStore";
@@ -19,7 +19,21 @@ import {
 import { cullToViewport } from "@/lib/stageCull";
 import { StageDot } from "./StageDot";
 import { fetchLineageEdges } from "@/api/client";
-import { STAGE_CARD, cardSize } from "@/lib/stageConstants";
+import {
+  STAGE_CARD,
+  STAGE_MAX_USER_SCALE,
+  STAGE_MIN_SCALE,
+  cardSize,
+} from "@/lib/stageConstants";
+import {
+  centredCam,
+  clientToWorld,
+  fitScale,
+  placeBoard,
+  scrollForCentre,
+  stepUserZoom,
+  worldToPane,
+} from "@/lib/stageZoom";
 import { PlanningChrome } from "./PlanningChrome";
 import { mountsPlanningChrome, PLANNING_CHROME_INSET } from "./planningChromeMount";
 import { StageCard } from "./StageCard";
@@ -27,10 +41,7 @@ import { CanvasPane } from "./CanvasPane";
 import { DockBar } from "./DockBar";
 import { CanvasExportButton } from "./CanvasExportButton";
 import { SelectionActionBar } from "./SelectionActionBar";
-import { ExportSelectionDialog } from "@/components/ingest/ExportSelectionDialog";
-import { lassoTargets } from "@/lib/reviewExport";
-import { useIngestStatusStore } from "@/store/useIngestStatusStore";
-import { useCanExportSelection } from "@/lib/useCanExportSelection";
+import { useSelectionActions } from "./useSelectionActions";
 
 /**
  * GlobalCanvasStage — the center canvas as ONE camera-driven world (ADR-0028
@@ -80,29 +91,9 @@ export function worldFitCam(
   isGlobal: boolean,
   topInset = 0,
 ): { tx: number; ty: number; s: number } {
-  // The global overview keeps a generous margin — it is a wall of many cards and the dock
-  // overlaps its lower edge. A CUSTOM canvas is a laid-out board built to the pane on purpose,
-  // so the same margin is just unused width.
-  const fill = isGlobal ? 0.9 : 0.97;
-  // STRIP CLEARANCE. The planning strip is drawn over the top of the pane, so with a 6px top
-  // margin it covered panel 0's title band and the funding grid's own h3 read as the board's
-  // header. A positive `topInset` fits the board into what is left and never lets `ty` rise
-  // above it. At 0 the result is exactly what it was.
-  if (topInset > 0) {
-    const avail = vp.h - topInset;
-    const s2 = Math.min(Math.min(vp.w / world.w, avail / world.h) * fill, 1);
-    return {
-      tx: (vp.w - world.w * s2) / 2,
-      ty: topInset + Math.max(0, (avail - world.h * s2) / 2 - 6),
-      s: s2,
-    };
-  }
-  const s = Math.min(Math.min(vp.w / world.w, vp.h / world.h) * fill, 1);
-  return {
-    tx: (vp.w - world.w * s) / 2,
-    ty: (vp.h - world.h * s) / 2 - (isGlobal ? 20 : 6),
-    s,
-  };
+  // The margins (generous on the global overview, tight on a custom board), the strip clearance
+  // and the floor live in stageZoom — the user zoom places the board the same way at another scale.
+  return centredCam(world, vp, isGlobal, topInset, fitScale(world, vp, isGlobal, topInset));
 }
 
 export function customWorld(items: { x: number; y: number; w?: number; h?: number }[]) {
@@ -145,11 +136,9 @@ export function GlobalCanvasStage() {
   const canvases = useStageStore((s) => s.canvases);
   const setView = useStageStore((s) => s.setView);
   const addItemAt = useStageStore((s) => s.addItemAt);
-  const addItemAuto = useStageStore((s) => s.addItemAuto);
   const moveItem = useStageStore((s) => s.moveItem);
   const resizeItem = useStageStore((s) => s.resizeItem);
   const removeItem = useStageStore((s) => s.removeItem);
-  const createCanvas = useStageStore((s) => s.createCanvas);
 
   const sortMode = useAnswerPanelStore((s) => s.sortMode) as StageMode;
 
@@ -158,13 +147,7 @@ export function GlobalCanvasStage() {
 
   // Lasso multi-select (global overview only).
   const [sel, setSel] = useState<string[]>([]);
-  const canExport = useCanExportSelection();
-  const [exportSel, setExportSel] = useState<string[] | null>(null);
-  // The dialog reads kinds and states from the status rows as they stand when it opens.
-  const exportParts = useMemo(
-    () => (exportSel ? lassoTargets(artifacts, exportSel, useIngestStatusStore.getState().rows) : null),
-    [exportSel, artifacts],
-  );
+  const selActions = useSelectionActions(sel, () => setSel([]));
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const selRef = useRef(sel);
   selRef.current = sel;
@@ -324,6 +307,17 @@ export function GlobalCanvasStage() {
   // the very first render has something to hold.
   const camRef = useRef<Cam>({ tx: 0, ty: 0, s: 1 });
 
+  // The USER zoom: a factor on the overview/custom fit, set by the zoom controls. It belongs to one canvas
+  // and to the overview — it resets on a canvas switch and when a card or group takes the camera.
+  const [userZoom, setUserZoom] = useState(1);
+  const chromeInset = mountsPlanningChrome(isGlobal, activeCanvas?.use, focusId, fullPane)
+    ? PLANNING_CHROME_INSET
+    : 0;
+  const board = useMemo(
+    () => placeBoard(world, vp, isGlobal, chromeInset, userZoom),
+    [world, vp, isGlobal, chromeInset, userZoom],
+  );
+
   const cam = useMemo<Cam>(() => {
     const { w: vw, h: vh } = vp;
     const fp = focusId ? posOf(focusId) : null;
@@ -354,7 +348,7 @@ export function GlobalCanvasStage() {
     const grp = isGlobal && groupKey ? globalLayout.groups.find((g) => g.id === groupKey) : null;
     if (grp) {
       const b = grp.bbox;
-      const s = clamp(Math.min((vw * 0.86) / b.w, (vh * 0.78) / b.h), 0.15, 1.6);
+      const s = clamp(Math.min((vw * 0.86) / b.w, (vh * 0.78) / b.h), STAGE_MIN_SCALE, STAGE_MAX_USER_SCALE);
       const cx = b.x + b.w / 2;
       const cy = b.y + b.h / 2;
       return { tx: vw / 2 - cx * s, ty: vh / 2 - cy * s - 10, s };
@@ -363,12 +357,9 @@ export function GlobalCanvasStage() {
     // overlaps its lower edge. A CUSTOM canvas is a laid-out board that was built to the pane
     // on purpose, so the same margin is just unused width: three insets compounded (this one,
     // the world pad, and the template margin) left a seeded board at 78% of its pane.
-    const chromeInset = mountsPlanningChrome(isGlobal, activeCanvas?.use, focusId, fullPane)
-      ? PLANNING_CHROME_INSET
-      : 0;
-    return worldFitCam(world, { w: vw, h: vh }, isGlobal, chromeInset);
+    return board.cam;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h, fullPane, activeCanvas?.use]);
+  }, [focusId, groupKey, isGlobal, globalLayout, entries, vp, world.w, world.h, fullPane, activeCanvas?.use, board]);
 
   // The focused card's task marker (if any) — drives per-kind tab labels: the
   // three tabs are citizen-agnostic lenses (content / provenance / focus), so a
@@ -383,14 +374,69 @@ export function GlobalCanvasStage() {
   }, [focusId, dismissEvidence]);
   camRef.current = cam;
 
+  // ── Scroll + user zoom ──────────────────────────────────────────────────────────────────────
+  // The board may be larger than the pane (the floor won, or the user zoomed in). It then scrolls inside `scrollRef`,
+  // an inner scroller: the stage root stays the fixed frame the overlays (bars, dock, controls) are anchored to.
+  // Only the overview/custom camera scrolls; a focused card or group owns the camera and the scroller is pinned at 0.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scroll, setScroll] = useState({ x: 0, y: 0 });
+  const [instant, setInstant] = useState(false);
+  const camFree = !focusId && !fullPane && !(isGlobal && groupKey);
+  const pendingCentre = useRef<{ x: number; y: number } | null>(null);
+  const scrollNow = () => ({ x: scrollRef.current?.scrollLeft ?? 0, y: scrollRef.current?.scrollTop ?? 0 });
+
+  useEffect(() => {
+    setUserZoom(1);
+    setInstant(false);
+  }, [view, focusId, groupKey]);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (camFree || !el) return;
+    el.scrollLeft = 0;
+    el.scrollTop = 0;
+    setScroll({ x: 0, y: 0 });
+  }, [camFree]);
+  // Apply a pending zoom's scroll AFTER the new scale and spacer are in the DOM, so the pane-centre world point stays centred.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const wc = pendingCentre.current;
+    if (!el || !wc) return;
+    pendingCentre.current = null;
+    const next = scrollForCentre(wc, cam, vp);
+    el.scrollLeft = next.x;
+    el.scrollTop = next.y;
+    setScroll({ x: el.scrollLeft, y: el.scrollTop });
+  }, [cam.s, cam.tx, cam.ty, board.spacer.w, board.spacer.h]); // eslint-disable-line react-hooks/exhaustive-deps
+  const zoomBy = (dir: 1 | -1) => {
+    const next = stepUserZoom(userZoom, dir, board.fitS);
+    if (next === userZoom) return;
+    pendingCentre.current = clientToWorld(vp.w / 2, vp.h / 2, camRef.current, scrollNow());
+    setInstant(true);
+    setUserZoom(next);
+  };
+  const zoomFit = () => {
+    pendingCentre.current = { x: world.w / 2, y: world.h / 2 };
+    setInstant(true);
+    setUserZoom(1);
+  };
+  const canZoomIn = stepUserZoom(userZoom, 1, board.fitS) !== userZoom;
+  const canZoomOut = stepUserZoom(userZoom, -1, board.fitS) !== userZoom;
+
   /**
    * THE DOM HOLDS WHAT IS ON SCREEN. Only cards whose footprint meets the visible world rectangle
    * (plus one viewport of margin) mount; an opened card always does. Positions come from the
    * memoised layout above, so this is a filter and not a second layout.
    */
   const renderEntries = useMemo(
-    () => cullToViewport(entries, cam, vp, openedIds),
-    [entries, cam, vp, openedIds],
+    () =>
+      cullToViewport(
+        entries,
+        // The visible world rectangle moves with the scroll: cull against the pane-relative camera.
+        camFree ? { tx: cam.tx - scroll.x, ty: cam.ty - scroll.y, s: cam.s } : cam,
+        vp,
+        openedIds,
+      ),
+    [entries, cam, vp, openedIds, camFree, scroll],
   );
 
   // Selecting an answer in the LIST jumps to GLOBAL and zooms to it — but an
@@ -520,6 +566,9 @@ export function GlobalCanvasStage() {
       return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
+    // A press on the scroller's own scrollbar is a scroll, not the start of a lasso.
+    const sc = scrollRef.current;
+    if (sc && sc.clientWidth > 0 && (e.clientX - rect.left > sc.clientWidth || e.clientY - rect.top > sc.clientHeight)) return;
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     let last: { x: number; y: number; w: number; h: number } | null = null;
@@ -530,15 +579,11 @@ export function GlobalCanvasStage() {
       last = m;
       setMarquee(m);
       const c = camRef.current;
+      const sc = scrollNow();
       setSel(
         entries
           .filter(({ pos, size }) =>
-            rectsIntersect(m, {
-              x: pos.x * c.s + c.tx,
-              y: pos.y * c.s + c.ty,
-              w: size.w * c.s,
-              h: size.h * c.s,
-            }),
+            rectsIntersect(m, worldToPane({ x: pos.x, y: pos.y, w: size.w, h: size.h }, c, sc)),
           )
           .map((en) => en.a.id),
       );
@@ -644,8 +689,9 @@ export function GlobalCanvasStage() {
     if (!ids.length) return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const wx = (e.clientX - rect.left - cam.tx) / cam.s - STAGE_CARD.w / 2;
-    const wy = (e.clientY - rect.top - cam.ty) / cam.s - STAGE_CARD.h / 2;
+    const at = clientToWorld(e.clientX - rect.left, e.clientY - rect.top, cam, scrollNow());
+    const wx = at.x - STAGE_CARD.w / 2;
+    const wy = at.y - STAGE_CARD.h / 2;
     ids.forEach((id, i) => addItemAt(activeCanvas.id, id, wx + i * 28, wy + i * 28));
   };
 
@@ -709,15 +755,35 @@ export function GlobalCanvasStage() {
         </div>
       )}
 
+      {/* The scroller: the board scrolls here when it is larger than the pane (floor or user zoom). It is
+          `hidden` on an axis that fits, and whenever a card or group owns the camera. */}
+      <div
+        ref={scrollRef}
+        data-stage-scroll
+        className="absolute inset-0"
+        style={{
+          overflowX: camFree && board.overflowX ? "auto" : "hidden",
+          overflowY: camFree && board.overflowY ? "auto" : "hidden",
+        }}
+        onScroll={(e) => setScroll({ x: e.currentTarget.scrollLeft, y: e.currentTarget.scrollTop })}
+      >
+      <div
+        data-stage-spacer
+        className="absolute top-0 left-0 pointer-events-none"
+        style={{ width: camFree ? board.spacer.w : vp.w, height: camFree ? board.spacer.h : vp.h }}
+      />
       {/* The world — camera transform wraps every card. */}
       <div
+        data-stage-world
         className="absolute top-0 left-0"
         style={{
           width: world.w,
           height: world.h,
           transformOrigin: "0 0",
           transform: `translate(${cam.tx}px, ${cam.ty}px) scale(${cam.s})`,
-          transition: `transform ${CAM_MS}ms ${EASE}`,
+          // Instant only for a user zoom (its scroll is set in the same frame); a card or group taking the camera
+          // still animates, even straight after a zoom, before the reset effect has run.
+          transition: instant && camFree ? "none" : `transform ${CAM_MS}ms ${EASE}`,
         }}
       >
         {/* GRAPH edges — drawn behind the cards, in world space so they track
@@ -873,6 +939,39 @@ export function GlobalCanvasStage() {
           );
         })}
       </div>
+      </div>
+
+      {/* Zoom controls: the overview and custom canvases only — a focused card or group owns the camera. */}
+      {camFree && (
+        <div data-overlay data-stage-zoom className="absolute bottom-20 left-3 z-20 flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={!canZoomOut}
+            onClick={() => zoomBy(-1)}
+            className="rounded-md border border-slate-600/60 bg-slate-950/85 p-1.5 text-slate-300 hover:text-neon-cyan disabled:opacity-35 disabled:hover:text-slate-300 transition-colors"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            aria-label="Fit"
+            onClick={zoomFit}
+            className="rounded-md border border-slate-600/60 bg-slate-950/85 px-2 py-1.5 text-[9px] font-mono uppercase tracking-wider text-slate-300 hover:text-neon-cyan transition-colors"
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={!canZoomIn}
+            onClick={() => zoomBy(1)}
+            className="rounded-md border border-slate-600/60 bg-slate-950/85 p-1.5 text-slate-300 hover:text-neon-cyan disabled:opacity-35 disabled:hover:text-slate-300 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {/* THE INVITATION IS CHROME, NOT WORLD CONTENT — and it used to be the other way round.
           It sat inside the camera transform at `fontSize: 22` in world units, positioned at the
@@ -904,30 +1003,15 @@ export function GlobalCanvasStage() {
       {isGlobal && !focusId && !marquee && sel.length > 0 && (
         <SelectionActionBar
           count={sel.length}
-          canvases={canvases}
-          onAdd={(canvasId) => {
-            sel.forEach((id) => addItemAuto(canvasId, id));
-            setSel([]);
-          }}
-          onNew={() => {
-            const id = createCanvas(`Canvas ${canvases.length + 1}`, undefined, false);
-            sel.forEach((aid) => addItemAuto(id, aid));
-            setSel([]);
-          }}
+          canvases={selActions.canvases}
+          onAdd={selActions.onAdd}
+          onNew={selActions.onNew}
           onClear={() => setSel([])}
-          onExport={canExport ? () => setExportSel(sel) : undefined}
+          onExport={selActions.onExport}
         />
       )}
 
-      {exportSel && exportParts && (
-        <ExportSelectionDialog
-          targets={exportParts.targets}
-          notReady={exportParts.notReady}
-          others={exportParts.others}
-          source={`${exportSel.length} selected`}
-          onClose={() => setExportSel(null)}
-        />
-      )}
+      {selActions.exportDialog}
 
       {/* Focus overlay: peer-view tabs + expand + overview (both views). */}
       {focusId && !fullPane && (

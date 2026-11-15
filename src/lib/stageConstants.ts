@@ -364,3 +364,17 @@ export function cardSize(item?: Partial<CardSize> | null): CardSize {
     h: ok(item?.h) ? item.h : STAGE_CARD.h,
   };
 }
+
+/** The smallest scale any stage camera may use — the group camera's existing floor, now every camera's. Below it the
+ *  board is larger than the pane and the pane scrolls, rather than shrinking cards to nothing. */
+export const STAGE_MIN_SCALE = 0.15;
+
+/** The largest scale a USER zoom may reach — the group camera's ceiling. */
+export const STAGE_MAX_USER_SCALE = 1.6;
+
+/** One press of Zoom in / Zoom out multiplies the user zoom by this (a quarter step reads as a step, not a jump). */
+export const STAGE_ZOOM_STEP = 1.25;
+
+/** Space kept between the scrolled board's edge and the pane edge once the board overflows (the fit's own margins
+ *  are the percentage `fill`; an overflowing board has no slack to take a percentage of). */
+export const STAGE_SCROLL_MARGIN = 24;
