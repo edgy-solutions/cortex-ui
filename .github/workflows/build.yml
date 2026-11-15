@@ -288,7 +288,10 @@ env:
   #   v0.9.19. Gate: the full suite against a git-archive export of 47263e51 placed as the producer root.
   # 2026-11-14 RE-PIN to 581d5a60 (lane/saf-per-viewer-tasks, PR 386 head, OPEN: not merged). ingest-v1 byte-identical;
   #   cortex-bff gains GET /me/queue and GET /me/needs_you. Gate: the full suite against a git-archive export of 581d5a60.
-  PRODUCER_REF: 581d5a6071365e53edbe924cb09110db9d92a842
+  # 2026-11-14 RE-PIN to 2c69d256 (platform master; the merge of #386, second parent 581d5a60). docs/api is EMPTY
+  #   581d5a60..2c69d256 (control: 47263e51..581d5a60, 1 file changed); uv.lock unchanged. Gate: the full suite against a
+  #   git-archive export of 2c69d256 placed as the producer root.
+  PRODUCER_REF: 2c69d256b6fd0fc69470af4d9c852b50f3ffe582
 
 permissions:
   contents: read
