@@ -82,7 +82,7 @@ interface Pcn119Capture {
 }
 
 function loadCapture(): Pcn119Capture {
-  const file = path.join(__dirname, "../../../sessions/2026-10-07-payload-ingest-pcn26-119-rev-175.json");
+  const file = path.join(__dirname, "../../../fixtures/captures/2026-10-07-payload-ingest-pcn26-119-rev-175.json");
   return JSON.parse(readFileSync(file, "utf8")) as Pcn119Capture;
 }
 

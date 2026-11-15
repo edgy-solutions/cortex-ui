@@ -30,7 +30,7 @@ export const AUTH_HOST = "auth.friday.test";
 export const REALM_URL = `http://${AUTH_HOST}/realms/cortex`;
 const CLIENT_ID = "cortex-ui";
 
-const SESSIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), "../sessions");
+const SESSIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), "../fixtures/captures");
 
 interface RevCapture {
   hops: Array<{ response?: { body?: unknown } }>;

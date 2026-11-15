@@ -2,6 +2,8 @@
  * `fetchCase` — the REAL function, with `globalThis.fetch` stubbed at the HTTP level (so the
  * URL, method and headers it actually sends are what is asserted, not a mock of the function).
  * Fixtures: `cases.fixtures.ts` — producer-test-derived or hand-built, NOT a live capture.
+ *
+ * Since 2026-11-14 `sessions/` is never committed, so a capture a seal must see is extracted into `fixtures/captures/` and committed there; this walker sees only what has been extracted.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { config } from "@/config";
@@ -102,7 +104,7 @@ describe("readWorkflowCasePayload", () => {
 });
 
 const NL = String.fromCharCode(10);
-const SESSIONS =path.join(__dirname, "../../sessions");
+const SESSIONS =path.join(__dirname, "../../fixtures/captures");
 
 function walkSessions(dir: string): { path: string; text: string }[] {
   const out: { path: string; text: string }[] = [];
@@ -144,13 +146,13 @@ describe("a live capture — the /cases arrival seal", () => {
   const CAPTURE_FILES: string[] = [];
   const walked = walkSessions(SESSIONS);
 
-  it("sessions/ was actually scanned — the walker cannot read green on nothing", () => {
-    expect(walked.length, "sessions/ walk scanned 50 files or fewer").toBeGreaterThan(50);
+  it("fixtures/captures/ was actually scanned — the walker cannot read green on nothing", () => {
+    expect(walked.length, "fixtures/captures/ walk scanned fewer than 35 files").toBeGreaterThanOrEqual(35);
     expect(walked.some((f) => f.path.endsWith(".md")), "no .md scanned").toBe(true);
     expect(walked.some((f) => f.path.endsWith(".json")), "no .json scanned").toBe(true);
   });
 
-  it("every live GET /cases capture in sessions/ is named in CAPTURE_FILES", () => {
+  it("every live GET /cases capture in fixtures/captures/ is named in CAPTURE_FILES", () => {
     const found = findCaseCaptures(walked).sort();
     const unsealed = found.filter((f) => !CAPTURE_FILES.includes(f));
     expect(

@@ -15,7 +15,7 @@ import { parityComponents as ranking } from "@/archetypes/contribution-ranking/p
 import { parityComponents as knowledge } from "@/archetypes/knowledge-document/parityPopulation.testkit";
 
 const readCapture = (f: string): unknown =>
-  JSON.parse(readFileSync(path.join(__dirname, "../../sessions", f), "utf8"));
+  JSON.parse(readFileSync(path.join(__dirname, "../../fixtures/captures", f), "utf8"));
 import { componentFromMaintenanceBridge } from "@/archetypes/workflow-case/fromMaintenanceBridge";
 import {
   MAINT_ACTION_APPROVED,
@@ -92,7 +92,7 @@ describe("seal 6 — an archetype with no declaration shows no raw section", () 
       Object.values(o).forEach(walk);
     }
   };
-  const SESSIONS = path.join(__dirname, "../../sessions");
+  const SESSIONS = path.join(__dirname, "../../fixtures/captures");
   for (const f of readdirSync(SESSIONS).filter((n) => n.includes("payload") && n.endsWith(".json"))) {
     walk(JSON.parse(readFileSync(path.join(SESSIONS, f), "utf8")));
   }

@@ -7,6 +7,8 @@
  * never the bare card component — the thing under test is the WIRING, registry
  * lookup included, not just the card) and diffs the HTML. A baseline this test could regenerate
  * for itself would only ever agree with whatever the code does today.
+ *
+ * Since 2026-11-14 `sessions/` is never committed, so a capture a seal must see is extracted into `fixtures/captures/` and committed there; this walker sees only what has been extracted.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
@@ -18,7 +20,7 @@ import baseline from "./parity.baseline.json";
 
 afterEach(cleanup);
 
-const SESSIONS = path.join(__dirname, "../../../sessions");
+const SESSIONS = path.join(__dirname, "../../../fixtures/captures");
 const readCapture = (f: string): unknown => JSON.parse(readFileSync(path.join(SESSIONS, f), "utf8"));
 
 /** The population lives in `parityPopulation.testkit.ts`, shared with the raw-section seals. */
@@ -76,13 +78,13 @@ describe("SHORTFALL_GRID arrival — a capture that lands is not invisible", () 
     }
   }
 
-  it("sessions/ was actually scanned — the arm cannot pass on an empty directory read", () => {
-    expect(files.length, "fewer than 30 sessions/*.json files scanned").toBeGreaterThanOrEqual(30);
+  it("fixtures/captures/ was actually scanned — the arm cannot pass on an empty directory read", () => {
+    expect(files.length, "fewer than 33 fixtures/captures/*.json files scanned").toBeGreaterThanOrEqual(33);
     // Unparseable files are skipped and COUNTED, never silently absorbed.
-    expect(unparseable, "unparseable sessions/*.json files").toBeLessThan(files.length);
+    expect(unparseable, "unparseable fixtures/captures/*.json files").toBeLessThan(files.length);
   });
 
-  it("every SHORTFALL_GRID capture in sessions/ is named in CAPTURE_FILES", () => {
+  it("every SHORTFALL_GRID capture in fixtures/captures/ is named in CAPTURE_FILES", () => {
     const unlisted = landed.filter((f) => !CAPTURE_FILES.includes(f));
     expect(
       unlisted,

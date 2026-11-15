@@ -56,3 +56,6 @@ walk-out/
 
 # HAR captures (browser network dumps; large, contain tokens)
 *.har
+
+# Session files are placed, never committed (Chris, 2026-11-14). Captures a test reads live in fixtures/captures/.
+sessions/

@@ -38,7 +38,7 @@ interface IngestCapture {
 }
 
 function loadCapture(): IngestCapture {
-  const file = path.join(__dirname, "../../sessions/2026-10-01-payload-ingest-drop-roll-11.json");
+  const file = path.join(__dirname, "../../fixtures/captures/2026-10-01-payload-ingest-drop-roll-11.json");
   return JSON.parse(readFileSync(file, "utf8")) as IngestCapture;
 }
 
@@ -145,7 +145,7 @@ const E2E_CAPTURES = [
 
 describe.each(E2E_CAPTURES)("ingest end-to-end capture ($label) — what the live pipeline did with one drop", ({ file }) => {
   const e2e = JSON.parse(
-    readFileSync(path.join(__dirname, "../../sessions", file), "utf8"),
+    readFileSync(path.join(__dirname, "../../fixtures/captures", file), "utf8"),
   ) as E2eCapture;
   const statusHops = e2e.hops.filter(
     (h) => h.request?.method === "GET" && /^\/ingest\/.+\/status$/.test(h.request?.path ?? ""),
@@ -255,7 +255,7 @@ describe.each(E2E_CAPTURES)("ingest end-to-end capture ($label) — what the liv
 describe("rev-171 POST /ingest response — the new null fields", () => {
   const e2e = JSON.parse(
     readFileSync(
-      path.join(__dirname, "../../sessions/2026-10-04-payload-ingest-pcn23-002-stops-at-received-rev-171.json"),
+      path.join(__dirname, "../../fixtures/captures/2026-10-04-payload-ingest-pcn23-002-stops-at-received-rev-171.json"),
       "utf8",
     ),
   ) as E2eCapture;

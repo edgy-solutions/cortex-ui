@@ -109,7 +109,7 @@ function routingOf(c: Capture): Routing | undefined {
 }
 
 function load(name: string): Capture {
-  return JSON.parse(readFileSync(`sessions/${name}`, "utf8")) as Capture;
+  return JSON.parse(readFileSync(`fixtures/captures/${name}`, "utf8")) as Capture;
 }
 
 /** Read the payload table back out of a built document. */

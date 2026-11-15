@@ -3,6 +3,8 @@
  * (MAY BE ABSENT — the gateway projection drops it), dropped_by, promoted_by and the
  * provenance_floor banner. The fixture is DERIVED, not a capture — see noticePartsSourcesFixture.
  * The arrival arm (f) is what tells us when a capture lands.
+ *
+ * Since 2026-11-14 `sessions/` is never committed, so a capture a seal must see is extracted into `fixtures/captures/` and committed there; this walker sees only what has been extracted.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, cleanup } from "@testing-library/react";
@@ -111,10 +113,10 @@ describe("notice-parts sources", () => {
     expect(store()._lastUpdateSource[ID].source_provenance).toBe("sse:sources");
   });
 
-  it("f. arrival arm: no notice-parts capture has landed in sessions/*.json", () => {
-    const dir = join(process.cwd(), "sessions");
+  it("f. arrival arm: no notice-parts capture has landed in fixtures/captures/*.json", () => {
+    const dir = join(process.cwd(), "fixtures/captures");
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-    expect(files.length).toBeGreaterThanOrEqual(30);
+    expect(files.length).toBeGreaterThanOrEqual(33);
     const isCapture = (v: unknown): boolean => {
       if (Array.isArray(v)) return v.some(isCapture);
       if (typeof v !== "object" || v === null) return false;

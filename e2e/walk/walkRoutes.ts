@@ -145,7 +145,7 @@ const refusedRanking = (reason: string) => ({
  * fallback_reason no_verb_classified - the reason rev 185 gave the FRACAS question).
  */
 function capturedRouting(file: string): Record<string, unknown> {
-  const cap = JSON.parse(readFileSync(new URL(`../../sessions/${file}`, import.meta.url), "utf8")) as { routing: Record<string, unknown> };
+  const cap = JSON.parse(readFileSync(new URL(`../../fixtures/captures/${file}`, import.meta.url), "utf8")) as { routing: Record<string, unknown> };
   // The captures omit `about` (a subset of RouteDecision); RoutingDecision (HUD) reads `about.label`
   // unconditionally and the page crashes without it, so the type's required block is added.
   return { about: { label: "Subject", uri: "mesh:Subject", confidence: 0.9 }, ...cap.routing };
@@ -260,7 +260,7 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
   const promotedRow = hop("5-status-promoted");
   const humanTaskRow = hop("3-human-task-row");
   const taskKinds = readFileSync(
-    new URL("../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json", import.meta.url),
+    new URL("../../fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json", import.meta.url),
     "utf8",
   );
   const dupMessage = "already processed on 2026-10-08";

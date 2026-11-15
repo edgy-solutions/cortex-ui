@@ -45,7 +45,7 @@ interface Capture {
   raw_events: { event?: string; data?: { components?: Record<string, unknown>[] } }[];
 }
 const capture = JSON.parse(
-  readFileSync(path.join(__dirname, "../../../sessions", CAPTURE), "utf8"),
+  readFileSync(path.join(__dirname, "../../../fixtures/captures", CAPTURE), "utf8"),
 ) as Capture;
 
 /** The ask, found by SHAPE in the final payload the fleet streamed — never by event index. */
@@ -152,7 +152,7 @@ describe("what the cortex projected is what the fleet sent", () => {
 
 describe("the EAC row that used to be the pick's capture no longer asks on roll #7", () => {
   const eac = JSON.parse(
-    readFileSync(path.join(__dirname, "../../../sessions", "2026-09-29-payload-finance-eac-roll-7-no-longer-refuses.json"), "utf8"),
+    readFileSync(path.join(__dirname, "../../../fixtures/captures", "2026-09-29-payload-finance-eac-roll-7-no-longer-refuses.json"), "utf8"),
   ) as Capture;
   it("answers with COMPETING_MEASURES and carries no ELICITATION — so the 09-19 pick seal stays on its 09-19 capture", () => {
     expect(eac.fleet_sha).toBe("90fabab");

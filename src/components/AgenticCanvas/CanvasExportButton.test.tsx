@@ -58,7 +58,7 @@ interface ExportExchange {
 }
 
 function loadExportCapture(): { exchanges: ExportExchange[] } {
-  const file = path.join(__dirname, "../../../sessions/2026-10-01-payload-export-package-roll-11.json");
+  const file = path.join(__dirname, "../../../fixtures/captures/2026-10-01-payload-export-package-roll-11.json");
   return JSON.parse(readFileSync(file, "utf8")) as { exchanges: ExportExchange[] };
 }
 
@@ -379,7 +379,7 @@ describe("roll-11 capture — drives the button through the captured bodies", ()
 function loadMixed(): { documents: Record<string, unknown>[] } & Record<string, unknown> {
   return JSON.parse(
     readFileSync(
-      path.join(__dirname, "../../../sessions/2026-10-10-payload-export-mixed-board-rev187.json"),
+      path.join(__dirname, "../../../fixtures/captures/2026-10-10-payload-export-mixed-board-rev187.json"),
       "utf8",
     ),
   );

@@ -19,7 +19,7 @@ import baseline from "./parity.baseline.json";
 afterEach(cleanup);
 
 const readCapture = (f: string): unknown =>
-  JSON.parse(readFileSync(path.join(__dirname, "../../../sessions", f), "utf8"));
+  JSON.parse(readFileSync(path.join(__dirname, "../../../fixtures/captures", f), "utf8"));
 
 /** The population lives in `parityPopulation.testkit.ts`, shared with the raw-section seals. */
 function renderFresh(): Record<string, string> {

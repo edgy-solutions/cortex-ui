@@ -95,8 +95,10 @@ function resolveProducer(relative: string): string[] {
 const FOUND = resolveProducer(PRESENTATION);
 const MEASURES = resolveProducer(COST_MEASURES);
 
-/** This repo's own ledger: four levels up from src/components/registry is the repo root. */
-const SESSIONS = path.join(__dirname, "../../../sessions");
+/**
+ * This repo's tracked captures: four levels up from src/components/registry is the repo root. Since 2026-11-14 `sessions/` is never committed, so a capture a seal must see is extracted into `fixtures/captures/` and committed there; this walker sees only what has been extracted.
+ */
+const SESSIONS = path.join(__dirname, "../../../fixtures/captures");
 
 /** The tuple's second element — the card-level scalars the projector carries for this archetype. */
 function declaredFieldsFor(src: string, archetype: string): string[] {
@@ -199,7 +201,7 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
 
       // And the capture, read off disk rather than believed.
       const captureText = readFileSync(
-        path.join(__dirname, "../../../sessions/2026-09-26-payload-lot4-contribution-ranking.json"),
+        path.join(__dirname, "../../../fixtures/captures/2026-09-26-payload-lot4-contribution-ranking.json"),
         "utf8",
       );
       expect(captureText).toContain('"threshold_defaulted"'); // the control: this IS the capture
@@ -294,7 +296,7 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
       //    This is the half that makes it a restatement rather than new information.
       const capture = JSON.parse(
         readFileSync(
-          path.join(__dirname, "../../../sessions/2026-09-26-payload-lot4-contribution-ranking.json"),
+          path.join(__dirname, "../../../fixtures/captures/2026-09-26-payload-lot4-contribution-ranking.json"),
           "utf8",
         ),
       ) as { final?: { components?: { rows?: { amount: string }[] }[] } };
@@ -368,7 +370,7 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     // That is the failure worth keeping the memory of: not a wrong assertion, an assertion nothing
     // in the incoming data could reach. So the sweep is widened here, and what it measures is
     // asserted in both arms — including the arm that is still zero.
-    const dir = path.join(__dirname, "../../../sessions");
+    const dir = path.join(__dirname, "../../../fixtures/captures");
     const all = readdirSync(dir);
     const read = (n: string) => readFileSync(path.join(dir, n), "utf8");
 
@@ -395,8 +397,8 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
 
     // ── ARM 2: the whole ledger, which is where the capture actually landed. ─────────────────
     const ledger = all.filter((n) => n.endsWith(".md") || n.endsWith(".json"));
-    expect(ledger.length, "the widened sweep enumerated almost nothing — the directory is wrong")
-      .toBeGreaterThan(10);
+    expect(ledger.length, "the widened sweep enumerated fewer than the 35 files fixtures/captures/ holds — the directory is wrong")
+      .toBeGreaterThanOrEqual(35);
 
     const observed = ledger.filter((n) => jsonShaped("threshold_defaulted").test(read(n)));
     expect(observed.sort()).toEqual([
@@ -420,8 +422,31 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     // before any capture carried the field. Asserted, rather than described, because the tempting fix to
     // arm 1 was "widen the filter and keep using `includes`" — which would have reported the
     // field observed on 2026-09-19, a week before any capture carried it.
+    //
+    // SINCE 2026-11-14 THOSE FOUR REPORTS ARE NOT IN REACH: session files are never committed, and
+    // this walk sees only fixtures/captures/. Copying them in would commit session files under
+    // another name. So the four reports' own lines ride here VERBATIM, as decoys, and both
+    // instruments run over them. Each line is from the file named, readable with
+    // `git show 8298942:sessions/<file>`.
+    const PROSE_DECOYS: Record<string, string> = {
+      "2026-09-19-report-cortex-60-to-architect-w4-1-fixed-w4-2-is-a-projector-drop.md":
+        "So `threshold`, `threshold_defaulted`, `suppliers_above_threshold` — and `largest_share`,",
+      "2026-09-19-report-cortex-60-to-architect-w4-2-half-built-push-held.md":
+        "  level up. `threshold_defaulted: false` renders here for exactly the reason a false row flag does",
+      "2026-09-24-report-cortex-60-export-from-ui-built-and-the-lot-4-fixture-does-not-exist.md":
+        "projector tuple *\"names four fields which do not include\"* `threshold` / `threshold_defaulted`.",
+      "2026-09-25-report-cortex-60-two-of-three-done-item-1-blocked-and-a-probe-that-measured-nothing.md":
+        "`threshold`/`threshold_defaulted`. Read fresh from the producer, one occurrence, unambiguous:",
+    };
+    const decoys = Object.entries(PROSE_DECOYS);
+    const looseDecoys = decoys.filter(([, t]) => t.includes("threshold_defaulted")).map(([n]) => n);
+    const shapedDecoys = decoys.filter(([, t]) => jsonShaped("threshold_defaulted").test(t)).map(([n]) => n);
+    // The loose sweep counts all four as observations; the JSON-shaped one counts none.
+    expect(looseDecoys, "the loose sweep missed a prose decoy").toHaveLength(4);
+    expect(shapedDecoys, "the JSON-shaped matcher counted prose as a capture").toEqual([]);
+    // And over the real corpus, the loose sweep still finds every real capture the strict one does.
     const looseName = ledger.filter((n) => read(n).includes("threshold_defaulted"));
-    expect(looseName.length).toBeGreaterThan(observed.length);
+    expect(looseName.length + looseDecoys.length).toBeGreaterThan(observed.length);
     expect(looseName).toContain(observed[0]);
 
     // ── THE JOIN CLOSES: declared upstream, on the wire, and transcribed into the fixture. ───

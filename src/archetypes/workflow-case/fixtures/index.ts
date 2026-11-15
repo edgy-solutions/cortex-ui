@@ -9,8 +9,8 @@
  * this file) because the facts they transcribe genuinely carry it — a definition's own `name`
  * and a task's own `kind` are not something a fixture gets to launder.
  */
-import tasksCapture from "../../../../sessions/2026-10-02-payload-me-human-tasks-rev-165-bob.json";
-import taskKindsCapture from "../../../../sessions/2026-10-02-payload-task-kinds-rev-165-bob.json";
+import tasksCapture from "../../../../fixtures/captures/2026-10-02-payload-me-human-tasks-rev-165-bob.json";
+import taskKindsCapture from "../../../../fixtures/captures/2026-10-02-payload-task-kinds-rev-165-bob.json";
 import { taskToArtifact } from "@/lib/taskArtifact";
 import { parseTaskPayload } from "@/lib/taskPayload";
 import type { HumanTask } from "@/store/useHumanTaskStore";

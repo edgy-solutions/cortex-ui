@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SESSIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../sessions");
+const SESSIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../fixtures/captures");
 
 function capture(name: string): Record<string, unknown> {
   const j = JSON.parse(readFileSync(path.join(SESSIONS, `2026-09-19-payload-finance-${name}.json`), "utf8")) as {

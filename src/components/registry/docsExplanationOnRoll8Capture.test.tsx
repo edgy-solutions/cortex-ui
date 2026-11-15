@@ -21,7 +21,7 @@ afterEach(cleanup);
 
 const PLACEHOLDER = "No content available.";
 const capture = JSON.parse(
-  readFileSync(path.join(__dirname, "../../../sessions/2026-09-30-payload-docs-add-an-engine-roll-8.json"), "utf8"),
+  readFileSync(path.join(__dirname, "../../../fixtures/captures/2026-09-30-payload-docs-add-an-engine-roll-8.json"), "utf8"),
 ) as { fleet_sha: string; helm_revision: number; raw_events: { event?: string; data?: { components?: Record<string, unknown>[] } }[] };
 
 interface Page { title: string; body: string; cited_seals: string[]; audience_hint: string }
