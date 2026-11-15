@@ -101,14 +101,14 @@ How to read the table:
 | 10 | POST | `/export/package` | `startCanvasExport` :945 | `CanvasExportButton.tsx:98` | ✓ | ✓ | ✓ | none |
 | 11 | GET | `/export/package/artifact/{filename}` | `downloadExportArtifact` :960 | `CanvasExportButton.tsx:146` | ✓ | ✓ | ✓ | none (blob) |
 | 12 | GET | `/me/entitlements` | `fetchEntitlements` :56 (bare axios, not `api`) | `App.tsx:416` → `usePersonaStore`, `dropIdentity` | ✓ | ✓ | ✓ | none |
-| 13 | GET | `/me/human_tasks` | `fetchMyHumanTasks` :116 | `seedHumanTasks.ts:51` ← `App.tsx:110` | ✓ | ✓ | ✓ | none |
+| 13 | GET | `/me/queue` and `/me/needs_you` (0.4.89: replaced the direct `/me/human_tasks` read) | `fetchMyQueue`, `fetchNeedsYou` | `humanTaskQueue.ts` ← `useHumanTaskSync` | ✓ | ✓ | ✓ | none |
 | 14 | POST | `/human_tasks/{task_id}/act` | `actOnHumanTask` :222 (`buildActBody` :204) | `useTaskAct`, `GroupedReviewTable`, `IngestStatusCard`, `TriageTaskCard` | ✓ | ✓ | ✓ | none |
 | 15 | POST | `/access_requests` | `createAccessRequest` :258 | `AccessDeniedCard.tsx:50` | ✓ | ✓ | ✓ | none |
 | 16 | GET | `/reviews/{workflow_id}/batch` | `fetchReviewBatch` :295 | `useTaskArtifactSync.ts:44` → `GroupedReviewTable` | ✓ | ✓ | ✓ | none |
 | 17 | GET | `/notices/{notice_id}/provenance` | `fetchNoticeProvenance` :313 | `EvidencePane.tsx:30` | ✓ | ✓ | ✓ | none |
 | 18 | GET | `/task_kinds` | `fetchTaskKinds` :911 | `useTaskKindStore` ← `App.tsx:364` | ✓ | ✓ | ✓ | none |
 | 19 | GET | `/cases/{case_id}` | `fetchCaseResponse` :1110 (raw fetch) | `DeepLinkLanding.tsx:48`, `IngestStatusCard.tsx:107` | ✓ | ✓ | ✓ | none |
-| 20 | GET | `/electric/shape?table=human_task_projection` | `electricHumanTasks.ts:81` (ShapeStream) | `App.tsx:111` | ✓ | ✓ | **✗** `table` (and Electric's own params) undeclared | none |
+| 20 | (removed 0.4.89) | the Electric task shape is no longer subscribed | none | none | ✓ | ✓ | **✗** `table` (and Electric's own params) undeclared | none |
 | 21 | GET | `/electric/shape?table=answer_artifact_projection` | `electric.ts:275` (ShapeStream) | `App.tsx:92` | ✓ | ✓ | **✗** as row 20 | none |
 | 22 | POST | `/interview/stream` (SSE) | `streamInterviewResponse` :431 | `useInterviewAgent.ts:685` | ✓ | ✓ | ✓ | none (SSE) |
 | 23 | POST | `/canvas/seed` | `requestPortfolioCanvasSeed` :533 | **none**: console global only | ✓ | ✓ | ✓ | none |
@@ -297,12 +297,12 @@ Fields marked **unread** are typed or parsed but consumed by nothing.
 - **Read:** `cells[]{persona, domain}`, `default`, `authz_id` (3-state: absent falls back to the OIDC email), `email`.
 - **Unread:** `user_id`, `source`.
 
-**`GET /me/human_tasks`**
+**`GET /me/queue`** (0.4.89; was `/me/human_tasks`, same row shape)
 - **Read:** `tasks[]`, with `id` and `task_id` required, plus `workflow_id`, `audience`, `kind`, `status` (cast, not validated), `title`, `summary`, `requested_by`, `subject_ref`, `created_at`, `payload` (an object or a JSON string) and `declaration` (only if the key is present).
 - **Unread:** the top-level `email`.
 - **`payload` sub-fields** are read per card: `ingest_id`, `notice_id`, `mfr`, `notice_date`, `attempt`, `part_count`, `dropped_by`, `suggestion`, `evidence`, `warnings`, `reason_code` and `pages`. **`review_shape` is read by nothing.**
 
-**Electric `human_task_projection`** (row 20)
+**Electric task shape** (row 20; REMOVED 0.4.89, kept as history)
 - **Read:** the same columns as `/me/human_tasks`, minus `declaration`. `payload` arrives as a JSON string.
 - An Electric upsert **replaces** a REST-seeded row, so `declaration` is lost on live rows, and the card falls back to `/task_kinds`.
 - `must-refetch` is not handled.

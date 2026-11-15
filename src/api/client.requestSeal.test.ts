@@ -233,7 +233,8 @@ const noop = () => {};
 
 const CALLS: Record<string, Case[]> = {
   fetchEntitlements: [{ name: "plain", op: "GET /me/entitlements", run: () => client.fetchEntitlements() }],
-  fetchMyHumanTasks: [{ name: "plain", op: "GET /me/human_tasks", run: () => client.fetchMyHumanTasks() }],
+  fetchMyQueue: [{ name: "plain, no on_behalf_of", op: "GET /me/queue", run: () => client.fetchMyQueue() }],
+  fetchNeedsYou: [{ name: "plain, no on_behalf_of", op: "GET /me/needs_you", run: () => client.fetchNeedsYou() }],
   actOnHumanTask: [
     { name: "approved, bare", op: ACT, run: () => client.actOnHumanTask("t1", "approved") },
     { name: "approved with overrides and row_edits", op: ACT, run: () => client.actOnHumanTask("t1", "approved", "c", { M1: { disposition: "x", reason: "r" } } as never, rowEdits as never) },

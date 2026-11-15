@@ -27,10 +27,9 @@ import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/fronten
 import { registerFrontendCapabilities } from "@/api/client";
 import { useEntitlementsSync } from "@/hooks/useEntitlementsSync";
 import { startArtifactsSubscription } from "@/lib/electric";
-import { startHumanTasksSubscription } from "@/lib/electricHumanTasks";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
 import { useIngestArtifactSync } from "@/lib/useIngestArtifactSync";
-import { seedFromRest } from "@/lib/seedHumanTasks";
+import { useHumanTaskSync } from "@/hooks/useHumanTaskSync";
 import { reconcileSessionOwner } from "@/lib/sessionIsolation";
 import { useCanvasSeedFromAnswers } from "@/lib/canvasSeedFromAnswer";
 // SIDE-EFFECT IMPORT, and the bare form is load-bearing: this module installs
@@ -78,25 +77,6 @@ function useArtifactSync() {
     // Re-fires when the token changes (e.g. silent refresh issues
     // a new access_token).
     const stop = startArtifactsSubscription(token);
-    return stop;
-  }, [token]);
-}
-
-/**
- * HITL Slice 2 — mount the HumanTask queue subscription. Mirrors
- * useArtifactSync: the Electric `human_task_projection` shape is served through
- * cortex-bff's /electric/shape proxy, which per-user-filters by the caller's
- * authz_id — so the browser only receives THIS user's tasks. Deferred until a
- * token exists; re-fires on silent refresh.
- */
-function useHumanTaskSync() {
-  const auth = useAuth();
-  const token = auth.user?.access_token ?? null;
-  useEffect(() => {
-    // Seed the Tasks badge + canvas task-citizens from the authoritative REST
-    // snapshot on load. Electric is the best-effort live layer on top.
-    if (token) seedFromRest();
-    const stop = startHumanTasksSubscription(token);
     return stop;
   }, [token]);
 }

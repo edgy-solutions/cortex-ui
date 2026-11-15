@@ -2,7 +2,7 @@
  * Normalize a HumanTask's `payload` across its two producers.
  *
  * The projection column is `jsonb`, and the two paths that read it disagree: Electric's
- * replication stream delivers it as a JSON **string**, while the REST seed (`/me/human_tasks`)
+ * replication stream delivers it as a JSON **string**, while the REST read (`/me/queue`)
  * returns it already parsed. Left unnormalized, the triage card's warnings render on one path
  * and silently vanish on the other — which presents as an intermittent UI bug rather than a
  * shape mismatch, and is the resolution-discard pattern arriving at a second producer.

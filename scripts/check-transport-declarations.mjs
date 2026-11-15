@@ -56,7 +56,9 @@ const WRAPPER_FILES = ["src/api/client.ts"];
  */
 // Lowered 8 -> 6 (census 10 -> 6) when the four raw component fetches (figures x2, graph/node, federated_image)
 // moved into client.ts request().
-const MIN_EXPECTED_SITES = 6;
+// Lowered 6 -> 5 (census 6 -> 5) when the Electric human_task shape subscription was removed (0.4.89):
+// tasks are read only from /me/queue and /me/needs_you through client.ts request().
+const MIN_EXPECTED_SITES = 5;
 
 const MARKER = "transport-exception:";
 

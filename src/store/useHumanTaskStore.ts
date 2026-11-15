@@ -1,16 +1,14 @@
 /**
  * HITL HumanTask queue store (Case 2 — workflow-ack).
  *
- * Holds the current user's pending HumanTasks, fed in real time by the
- * Electric subscription in `@/lib/electricHumanTasks` (which subscribes to the
- * `human_task_projection` shape through cortex-bff's `/electric/shape` proxy —
- * the proxy server-injects `recipient_id = <verified caller authz_id>`, so the
- * browser only ever RECEIVES this user's tasks; the queue's per-user isolation
- * is enforced at the replication layer, not by client filtering).
+ * Holds the current user's pending HumanTasks. The ONLY feed is a snapshot of the per-viewer queue
+ * (`GET /me/queue` with `GET /me/needs_you`, read together by `@/lib/humanTaskQueue` and applied by
+ * `applyQueue`). There is no live writer: the direct read of the task table (an Electric shape) is gone,
+ * so freshness is the sync's refresh, not a stream.
  *
- * Mirrors the useCanvasStore upsert idiom: the subscription upserts rows; the
- * UI reads. A resolved task arrives as an `update` (status: pending -> approved
- * /rejected) and drops out of the pending view.
+ * The store also holds what the badge must show honestly: whether the first snapshot has landed
+ * (`queueLoaded`), why the last refresh failed (`queueError`), the served per-kind counts
+ * (`needsYou`), and a served delegation mark (`delegated`).
  */
 import { create } from "zustand";
 
@@ -33,43 +31,69 @@ export interface HumanTask {
    *  triage card's `warnings` / `reason_code` — the WHY that makes a refusal actionable. */
   payload?: Record<string, unknown> | null;
   createdAt: number;
-  /** Served on `/me/human_tasks`; the Electric projection does not carry it, so a live upsert
-   *  falls back to the `/task_kinds` registry (`fromKinds`) — which is the same declaration
-   *  source either way. */
+  /** Served on `/me/queue` rows. A row that does not carry it falls back to the `/task_kinds`
+   *  registry (`fromKinds`) — the same declaration source either way. */
   declaration?: unknown;
+}
+
+/** The served counts: per kind in SERVED order, and the total (`GET /me/needs_you`). */
+export interface NeedsYouCounts {
+  counts: Record<string, number>;
+  total: number;
+}
+
+/** A served delegation mark (`GET /me/queue` / `/me/needs_you` `delegated`). cortex never asks for one. */
+export interface DelegationMarkView {
+  delegated: boolean;
+  delegator: string;
+  delegate: string;
+  expires_at: string;
+  row_id: string;
+  read_at: string;
+}
+
+/** One refresh's result: the list and the counts of the SAME moment. */
+export interface QueueSnapshot {
+  tasks: HumanTask[];
+  needsYou: NeedsYouCounts;
+  delegated: DelegationMarkView | null;
 }
 
 interface HumanTaskState {
   tasks: HumanTask[];
 
-  /** Count of LIVE writes (`upsertTask`/`removeTask`), monotonic for the page's life. */
+  /** Ticket counter, monotonic for the page's life: every snapshot request and every local write takes one. */
   seq: number;
-  /** Row id → the `seq` of its last live write. A removal is stamped too: that is what stops a
-   *  snapshot from resurrecting it. */
+  /** Row id → the `seq` of its last LOCAL write (`upsertTask`). */
   writtenAt: Record<string, number>;
-  /** The `since` of the newest snapshot applied. A snapshot requested earlier that lands later is
-   *  older than one already applied, and is ignored. */
+  /** The ticket of the newest refresh whose outcome (snapshot OR failure) is applied. A refresh
+   *  requested earlier that lands later is older than one already applied, and is ignored. */
   appliedSince: number;
 
+  /** The first snapshot has applied. Until then nothing about the queue is known (not "empty"). */
+  queueLoaded: boolean;
+  /** Why the last refresh failed, or null. Rows are kept; the next success clears it. */
+  queueError: string | null;
+  /** The served counts of the last snapshot, or null before the first. */
+  needsYou: NeedsYouCounts | null;
+  /** The served delegation mark of the last snapshot, or null. */
+  delegated: DelegationMarkView | null;
+
+  /** A LOCAL write: this viewer's own resolution (`markTaskResolvedByTaskId`) and the ingest mock. */
   upsertTask: (task: HumanTask) => void;
-  removeTask: (rowId: string) => void;
-  /** Call BEFORE requesting the REST snapshot; hand the result to `replacePending`. */
+  /** Call BEFORE requesting a snapshot; hand the result to `applyQueue` / `failQueue`. */
   beginSnapshot: () => number;
-  // Reconcile the pending set to the authoritative REST snapshot: replace all
-  // PENDING rows with exactly `tasks`, so a task resolved out-of-band (by this
-  // user's own act, or another approver, or a workflow that failed) drops even
-  // when the Electric live-update didn't arrive.
+  // Reconcile the pending set, the counts and the delegation mark to ONE snapshot, in one write: the
+  // list and the counts never come from different moments.
   //
-  // THE SNAPSHOT IS AS OLD AS ITS REQUEST, NOT ITS RESPONSE (10-28). The REST read and the
-  // Electric stream start together, so a live write can land between the server reading the
-  // snapshot and the browser receiving it. Replacing wholesale then did two wrong things: a task
-  // Electric inserted in that window was dropped (and Electric never re-sends it), and a task
-  // Electric deleted, or this user resolved, was put back as pending, with nothing left to remove
-  // it. A row written live after `since` is newer than the snapshot, so the snapshot does not
-  // touch it, in either direction.
-  replacePending: (tasks: HumanTask[], since: number) => void;
-  /** Session purge: drop every task, and refuse any snapshot requested before this call, so a
-   *  previous owner's in-flight REST response cannot repopulate the store after the purge. */
+  // THE SNAPSHOT IS AS OLD AS ITS REQUEST, NOT ITS RESPONSE. A task this viewer resolved locally after
+  // `since` is newer than the snapshot, so the snapshot does not touch it; a task resolved before it
+  // stays resolved (the server may still be listing it pending), as one row.
+  applyQueue: (snapshot: QueueSnapshot, since: number) => void;
+  /** A refresh requested at `since` failed: keep the rows, say why. An older failure is ignored. */
+  failQueue: (message: string, since: number) => void;
+  /** Session purge: drop every task, count and error, and refuse any snapshot requested before this
+   *  call, so a previous owner's in-flight response cannot repopulate the store after the purge. */
   reset: () => void;
 }
 
@@ -83,6 +107,10 @@ export const useHumanTaskStore = create<HumanTaskState>((set, get) => ({
   seq: 0,
   writtenAt: {},
   appliedSince: 0,
+  queueLoaded: false,
+  queueError: null,
+  needsYou: null,
+  delegated: null,
 
   upsertTask: (task) =>
     set((state) => {
@@ -95,37 +123,46 @@ export const useHumanTaskStore = create<HumanTaskState>((set, get) => ({
       return { tasks: next, seq, writtenAt };
     }),
 
-  removeTask: (rowId) =>
-    set((state) => {
-      const seq = state.seq + 1;
-      return {
-        tasks: state.tasks.filter((t) => t.id !== rowId),
-        seq,
-        writtenAt: { ...state.writtenAt, [rowId]: seq },
-      };
-    }),
+  // A ticket of its own, so two refreshes requested with no write between them are still ordered.
+  beginSnapshot: () => {
+    const seq = get().seq + 1;
+    set({ seq });
+    return seq;
+  },
 
-  beginSnapshot: () => get().seq,
-
-  replacePending: (snapshot, since) =>
+  applyQueue: (snapshot, since) =>
     set((state) => {
       if (since < state.appliedSince) return {};
       const newer = (id: string) => (state.writtenAt[id] ?? -1) > since;
-      // Kept: anything written live after the request (its state, or its absence, is newer), and
-      // every resolved row. A row is resolved here only after the server ACCEPTED the act
-      // (`markTaskResolvedByTaskId`), and the projection catches up asynchronously, so a snapshot
-      // still listing it pending is lagging, not contradicting. Before 10-28 that case kept BOTH
-      // rows, one resolved and one pending, under one id.
+      // Kept: anything written locally after the request (its state is newer), and every resolved row.
+      // A row is resolved here only after the server ACCEPTED the act (`markTaskResolvedByTaskId`), and
+      // the read side can lag, so a snapshot still listing it pending is lagging, not contradicting.
       const kept = state.tasks.filter((t) => newer(t.id) || t.status !== "pending");
       const keptIds = new Set(kept.map((t) => t.id));
       return {
-        tasks: [...kept, ...snapshot.filter((t) => !newer(t.id) && !keptIds.has(t.id))],
+        tasks: [...kept, ...snapshot.tasks.filter((t) => !newer(t.id) && !keptIds.has(t.id))],
+        needsYou: snapshot.needsYou,
+        delegated: snapshot.delegated,
+        queueLoaded: true,
+        queueError: null,
         appliedSince: since,
       };
     }),
 
+  failQueue: (message, since) =>
+    set((state) => (since < state.appliedSince ? {} : { queueError: message, appliedSince: since })),
+
   reset: () =>
-    set((state) => ({ tasks: [], writtenAt: {}, seq: state.seq + 1, appliedSince: state.seq + 1 })),
+    set((state) => ({
+      tasks: [],
+      writtenAt: {},
+      seq: state.seq + 1,
+      appliedSince: state.seq + 1,
+      queueLoaded: false,
+      queueError: null,
+      needsYou: null,
+      delegated: null,
+    })),
 }));
 
 /** Pending tasks only — the inbox view. Selector helper for components. */

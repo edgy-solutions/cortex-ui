@@ -210,7 +210,8 @@ async function routeAll(page: Page, snapshot: string, counters: { registerPosts:
           .catch(() => {});
       }
       const json = (body: unknown) => route.fulfill({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify(body) });
-      if (req.method() === "GET" && u.pathname === "/me/human_tasks") return json({ email: PERF_USER, tasks: [] });
+      if (req.method() === "GET" && u.pathname === "/me/queue") return json({ email: PERF_USER, tasks: [], delegated: null });
+      if (req.method() === "GET" && u.pathname === "/me/needs_you") return json({ email: PERF_USER, counts: {}, total: 0, delegated: null });
       if (req.method() === "GET" && u.pathname === "/me/entitlements") {
         const cell = { persona: "PROGRAM_FINANCE_ANALYST", domain: "PROGRAM_FINANCE" };
         return json({ user_id: PERF_USER, email: PERF_USER, cells: [cell], default: cell, source: "topaz" });

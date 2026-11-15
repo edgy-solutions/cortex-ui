@@ -51,7 +51,7 @@ async function walkToAct(page: Page, f: Friday) {
 
 /**
  * The approval card: the document_promotion task is mirrored into a task-artifact from the
- * /me/human_tasks row (useTaskArtifactSync) and drawn by ApprovalTaskCard on its own, with no
+ * /me/queue row (useTaskArtifactSync) and drawn by ApprovalTaskCard on its own, with no
  * stream component involved. Its reason box (data-reason-input) carries the same accessible name.
  */
 function approvalCard(page: Page) {

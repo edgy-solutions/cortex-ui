@@ -77,7 +77,8 @@ async function setup(page: Page) {
         }
         return route.fulfill({ status: 200, headers: { ...base, "electric-offset": "100_0" }, body: isAnswers ? snapshot : JSON.stringify([{ headers: { control: "up-to-date" } }]) });
       }
-      if (u.pathname === "/me/human_tasks") return json({ email: PERF_USER, tasks: [] });
+      if (u.pathname === "/me/queue") return json({ email: PERF_USER, tasks: [], delegated: null });
+      if (u.pathname === "/me/needs_you") return json({ email: PERF_USER, counts: {}, total: 0, delegated: null });
       if (u.pathname === "/me/entitlements") {
         const cell = { persona: "PROGRAM_FINANCE_ANALYST", domain: "PROGRAM_FINANCE" };
         return json({ user_id: PERF_USER, email: PERF_USER, cells: [cell], default: cell, source: "topaz" });

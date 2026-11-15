@@ -1,15 +1,15 @@
 {
   "cortex-bff.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "47263e51627b3499073a05c4d9c35b111f3ad559",
-    "branch": "master (merge of PR 364, second parent df5e484b)",
+    "sha": "581d5a6071365e53edbe924cb09110db9d92a842",
+    "branch": "lane/saf-per-viewer-tasks (PR 386 head, open)",
     "path": "docs/api/cortex-bff.openapi.json",
-    "sha256": "d06d00b31911a645463b094102c937b0deae726a8876ffac6028a500d926b6ef"
+    "sha256": "f96cfb28b82a9a67dbea5c9c5fefc947ab9df725cf13fe84fbc74e423ed94721"
   },
   "ingest-v1.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "47263e51627b3499073a05c4d9c35b111f3ad559",
-    "branch": "master (merge of PR 364, second parent df5e484b)",
+    "sha": "581d5a6071365e53edbe924cb09110db9d92a842",
+    "branch": "lane/saf-per-viewer-tasks (PR 386 head, open)",
     "path": "docs/api/ingest-v1.openapi.json",
     "sha256": "4dbe0310fdf4c66202998da4d5392011d1e399695a07bcf5044feb381c29a01e"
   }

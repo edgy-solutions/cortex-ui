@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { reportForbidden } from "./forbidden";
+import { reportActed } from "./acted";
 import { config } from "@/config";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
@@ -235,16 +236,22 @@ export async function fetchEntitlements(): Promise<Entitlements> {
   return resp.data;
 }
 
-// ── HITL HumanTask queue (Slice 2 — workflow-ack) ───────────
+// ── HITL HumanTask queue: /me/queue (the list) and /me/needs_you (the counts) ───────────
 /**
- * REST initial-load of the caller's pending queue. cortex-bff filters by
- * recipient_id = the caller's authz_id (the SAME key the Electric proxy
- * injects), so this and the live subscription agree by construction. The live
- * path is the Electric subscription; this is the on-open snapshot.
+ * The viewer's PER-VIEWER queue: the only way cortex reads tasks. cortex-bff filters by what this viewer
+ * may see; a task they may not see is ABSENT. cortex never sends `on_behalf_of` (a delegated read is not
+ * asked for), so `delegated` comes back null unless the server says otherwise, and is shown if it does.
+ * The reply is parsed by `parseQueueListing` (`@/lib/humanTaskQueue`), which throws on a malformed one.
  */
-export type MyHumanTasksResponse = Resp<"GET /me/human_tasks">;
-export async function fetchMyHumanTasks(): Promise<MyHumanTasksResponse> {
-  return request("GET /me/human_tasks", {});
+export type MyQueueResponse = Resp<"GET /me/queue">;
+export async function fetchMyQueue(): Promise<MyQueueResponse> {
+  return request("GET /me/queue", {});
+}
+
+/** The counts per kind and the total, computed by the same function that serves the list. */
+export type NeedsYouResponse = Resp<"GET /me/needs_you">;
+export async function fetchNeedsYou(): Promise<NeedsYouResponse> {
+  return request("GET /me/needs_you", {});
 }
 
 /**
@@ -366,10 +373,13 @@ export async function actOnHumanTask(
   reviewCoverage?: ItemReviewCoverageWire
 ): Promise<ActOnTaskResult> {
   const body = buildActBody(decision, comment, overrides, rowEdits, reasonCode, headerEdits, page, reviewCoverage);
-  return request("POST /human_tasks/{task_id}/act", {
+  const res = await request("POST /human_tasks/{task_id}/act", {
     path: { task_id: taskId },
     body: body as BffOps["POST /human_tasks/{task_id}/act"]["body"],
   });
+  // The viewer's own act succeeded: the queue sync listens and re-reads (this seam knows no store).
+  reportActed(taskId);
+  return res;
 }
 
 /**

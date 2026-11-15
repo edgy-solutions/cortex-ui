@@ -6,7 +6,7 @@
  *   GET  /ingest/{id}/status  (received) <- the same capture, hops[1].response.body
  *   GET  /ingest/{id}/status  (rest)     <- buildPcn26117Fixture hops 1-status-extracting, 2b-status-review, 5-status-promoted
  *   GET  /ingest/mine                    <- the "no drops" body, verbatim from sessions/2026-10-16-packet-to-cortex-ingest-mine-is-live-in-191-and-the-status-body-carries-content-kind.md
- *   GET  /me/human_tasks                 <- fixture hop 3-human-task-row
+ *   GET  /me/queue (+ /me/needs_you)     <- fixture hop 3-human-task-row (the captured listing shape)
  *   POST /human_tasks/{id}/act           <- fixture hop 4b (walk A) or 4a (walk B)
  *   GET  /task_kinds                     <- sessions/2026-10-02-payload-task-kinds-rev-165-bob.json .body
  *
@@ -121,12 +121,6 @@ export const KNOWN_UNSERVED: Unserved[] = [
     label: "GET /electric/shape table=answer_artifact_projection",
     reason: NO_CAPTURE,
   },
-  {
-    method: "GET",
-    match: (u) => u.pathname === "/electric/shape" && u.searchParams.get("table") === "human_task_projection",
-    label: "GET /electric/shape table=human_task_projection",
-    reason: NO_CAPTURE,
-  },
 ];
 
 const CORS = {
@@ -197,7 +191,11 @@ export async function installFridayRoutes(page: Page, opts: { act: "4a" | "4b" }
         const body = actSucceeded ? promoted : statusCalls === 1 ? received : statusCalls === 2 ? extracting : review;
         return json(route, 200, body);
       }
-      if (method === "GET" && p === "/me/human_tasks") return json(route, 200, humanTaskRow);
+      if (method === "GET" && p === "/me/queue") return json(route, 200, humanTaskRow);
+      if (method === "GET" && p === "/me/needs_you") {
+        const n = (humanTaskRow as { tasks?: unknown[] }).tasks?.length ?? 0;
+        return json(route, 200, { counts: {}, total: n, delegated: null });
+      }
       if (method === "GET" && p === "/task_kinds") return json(route, 200, taskKinds);
       if (method === "POST" && p === actPath) {
         friday.actBodies.push(req.postDataJSON());

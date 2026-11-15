@@ -1,5 +1,5 @@
 /**
- * `humanTaskFromRow` — the per-row mapping `seedFromRest` uses, extracted and exported so a seal
+ * `humanTaskFromRow` — the per-row mapping the queue read uses, extracted and exported so a seal
  * can call the production function rather than hand-build a row (see `approvalTaskCard.test.tsx`'s
  * "HAZ-1003 human task row, as served" describe).
  *

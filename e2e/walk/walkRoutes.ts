@@ -239,7 +239,7 @@ function answerRow(m: WalkMock) {
   };
 }
 
-/** Install the table on one user's page. `who` decides only /me/human_tasks (bob has the task). */
+/** Install the table on one user's page. `who` decides only /me/queue and /me/needs_you (bob has the task). */
 export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | "bob"): Promise<void> {
   const seed = { ...loadSeed(), ingestId: WALK_INGEST_ID, sha256: WALK_SHA, droppedBy: { authz_id: ALICE } };
   const fixture = buildPcn26117Fixture(seed);
@@ -348,8 +348,12 @@ export async function installWalkRoutes(page: Page, m: WalkMock, who: "alice" | 
           source: "topaz",
         });
       }
-      if (method === "GET" && p === "/me/human_tasks") {
+      if (method === "GET" && p === "/me/queue") {
         return json(route, 200, who === "bob" ? { ...humanTaskRow, email: BOB } : { email: ALICE, tasks: [] });
+      }
+      if (method === "GET" && p === "/me/needs_you") {
+        const n = who === "bob" ? ((humanTaskRow as { tasks?: unknown[] }).tasks?.length ?? 0) : 0;
+        return json(route, 200, { email: who === "bob" ? BOB : ALICE, counts: {}, total: n, delegated: null });
       }
       if (method === "PUT" && p === "/me/canvases") return json(route, 200, {});
       if (method === "GET" && p === "/task_kinds") {

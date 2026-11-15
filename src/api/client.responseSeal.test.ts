@@ -78,7 +78,8 @@ import { AWAITING_DECLARATION } from "./client";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { dropIdentity } from "@/lib/dropIdentity";
 import { viewerAuthzIdOf } from "@/lib/dropperHold";
-import { humanTaskFromRow, seedFromRest } from "@/lib/seedHumanTasks";
+import { createQueueRefresher, parseNeedsYou, parseQueueListing } from "@/lib/humanTaskQueue";
+import { humanTaskFromRow } from "@/lib/seedHumanTasks";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { stageOutcomeSentence, useTaskAct } from "@/components/ApprovalTask/useTaskAct";
 import { GroupedReviewTable } from "@/components/GroupedReview/GroupedReviewTable";
@@ -289,7 +290,8 @@ for (let m = CALL_RE.exec(CLIENT_SRC); m; m = CALL_RE.exec(CLIENT_SRC)) {
 // ── (iii) the calls and the readers ────────────────────────────────────────
 const CALLS: Record<string, () => Promise<unknown>> = {
   fetchEntitlements: () => client.fetchEntitlements(),
-  fetchMyHumanTasks: () => client.fetchMyHumanTasks(),
+  fetchMyQueue: () => client.fetchMyQueue(),
+  fetchNeedsYou: () => client.fetchNeedsYou(),
   actOnHumanTask: () => client.actOnHumanTask("t-1", "approved"),
   requestTemplateCanvasSeed: () => client.requestTemplateCanvasSeed("tpl-1"),
   fetchDecisionSubgraph: () => client.fetchDecisionSubgraph({ class_uris: ["urn:x:A"] }),
@@ -335,14 +337,18 @@ const READERS: Record<string, Reader[]> = {
     function dropIdentityOf(e) { return dropIdentity(e, null); },
     function viewerAuthzIdOfEntitlements(e) { return viewerAuthzIdOf(e); },
   ],
-  fetchMyHumanTasks: [
+  fetchMyQueue: [
     function humanTaskFromRowAndDeclaration(r) {
       for (const t of r.tasks) {
         const task = humanTaskFromRow(t);
         if (task) readTaskDeclaration(task.declaration);
       }
     },
-    async function seedFromRestLive() { seedFromRest(); await settle(); },
+    function parseQueueListingOf(r) { parseQueueListing(r); },
+    async function queueRefreshLive() { await createQueueRefresher().refresh(); await settle(); },
+  ],
+  fetchNeedsYou: [
+    function parseNeedsYouOf(r) { parseNeedsYou(r); },
   ],
   actOnHumanTask: [
     function stageOutcomeSentenceOf(res) { return stageOutcomeSentence("approved", res); },
@@ -394,6 +400,7 @@ const NO_READER: Record<string, string> = {
   fetchIngestSource: "binary body (Blob): bytes, no fields",
   "GET /artifacts/{artifact_id}": "no client.ts function calls this op",
   "GET /ingest/retries": "no client.ts function calls this op",
+  "GET /me/human_tasks": "no client.ts function calls this op: tasks come only from /me/queue and /me/needs_you (0.4.89)",
   "GET /version": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/empty": "no client.ts function calls this op",
   "POST /ingest/{ingest_id}/title_leaf": "no client.ts function calls this op",
@@ -402,7 +409,8 @@ const NO_READER: Record<string, string> = {
 /** Ratchet: paths read per typed read. Falls only when a reader stops reading; see the failure message. */
 const READ_FLOOR: Record<string, number> = {
   fetchEntitlements: 9,
-  fetchMyHumanTasks: 24,
+  fetchMyQueue: 31,
+  fetchNeedsYou: 9,
   actOnHumanTask: 6,
   requestTemplateCanvasSeed: 2,
   fetchDecisionSubgraph: 9,
