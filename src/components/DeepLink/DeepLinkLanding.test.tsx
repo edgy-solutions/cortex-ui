@@ -25,7 +25,7 @@ import { readWorkflowCasePayload } from "@/lib/cases";
 // `approvals[].task`, which `case_projection.project_approvals` never serves ("omitted per the roll
 // spec"), so every arm was green while the real link never opened a task. The case below is built as
 // `project_workflow_case` builds it (instance ids `{case}~{n}`, approvals with no `task`), goes through
-// the real reader as `fetchCase` does, and the viewer's tasks are store rows as `electricHumanTasks`
+// the real reader as `fetchCase` does, and the viewer's tasks are store rows as `humanTaskFromRow`
 // maps them: `taskId` `{workflow_id}:{step_id}`, `workflowId` stamped.
 const WF1 = "case-1~1";
 const WF2 = "case-1~2";
@@ -182,5 +182,92 @@ describe("DeepLinkLanding other paths", () => {
       unmount();
     }
     expect(fetchCase).not.toHaveBeenCalled();
+  });
+});
+
+// ── /task/{task_id} (0.4.89): matched against the viewer's own queue, on the LOGICAL task id ─────────────
+const NOTHING = "Nothing is waiting for you at this link.";
+const goTask = async (taskId: string) => {
+  go(`/task/${encodeURIComponent(taskId)}`);
+  render(<DeepLinkLanding />);
+  await flush();
+};
+const loadQueue = (tasks: HumanTask[]) =>
+  useHumanTaskStore.setState({ tasks, queueLoaded: true, queueError: null });
+
+describe("DeepLinkLanding /task", () => {
+  let xhr: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    useHumanTaskStore.setState({ tasks: [], queueLoaded: false, queueError: null });
+    xhr = vi.spyOn(XMLHttpRequest.prototype, "open");
+  });
+  afterEach(() => xhr.mockRestore());
+
+  it("T3: queue loaded, one pending row carries that task_id: it opens, through the held-task path", async () => {
+    loadQueue([task("row-A", "wf-1", "T-1"), task("row-B", "wf-2", "T-2")]);
+    await goTask("T-2");
+    expectOpened("row-B");
+    expect(window.location.pathname).toBe("/");
+    expect(fetchCase).not.toHaveBeenCalled();
+  });
+
+  it("T3: the same task on several rows opens the FIRST in queue order", async () => {
+    loadQueue([task("row-1", "wf-1", "T-1"), task("row-2", "wf-2", "T-1")]);
+    await goTask("T-1");
+    expectOpened("row-1");
+  });
+
+  it("T4: no matching row says exactly the one sentence, and issues no further request", async () => {
+    loadQueue([task("row-A", "wf-1", "T-1")]);
+    await goTask("T-unknown");
+    const panel = document.querySelector('[data-task-link="nothing"]');
+    expect(panel?.textContent).toBe(NOTHING);
+    expect(fetchCase).not.toHaveBeenCalled();
+    expect(xhr).not.toHaveBeenCalled();
+    expect(useStageStore.getState().fullPane).toBe(false);
+  });
+
+  it("T4: a decided (non-pending) row is the same sentence as an unknown one", async () => {
+    loadQueue([task("row-A", "wf-1", "T-1", "approved")]);
+    await goTask("T-1");
+    expect(document.querySelector('[data-task-link="nothing"]')?.textContent).toBe(NOTHING);
+  });
+
+  it("T5: a link equal to a row's id (not its task_id) is nothing waiting", async () => {
+    loadQueue([task("row-A", "wf-1", "T-1")]);
+    await goTask("row-A");
+    expect(document.querySelector('[data-task-link="nothing"]')?.textContent).toBe(NOTHING);
+    expect(useStageStore.getState().fullPane).toBe(false);
+  });
+
+  it("T6: before the first snapshot it neither opens nor says nothing is waiting", async () => {
+    useHumanTaskStore.setState({ tasks: [task("row-A", "wf-1", "T-1")], queueLoaded: false, queueError: null });
+    await goTask("T-1");
+    expect(document.querySelector('[data-task-link="nothing"]')).toBeNull();
+    expect(useStageStore.getState().fullPane).toBe(false);
+    expect(document.body.textContent).not.toContain(NOTHING);
+    // ...and decides the moment the snapshot lands.
+    await act(async () => { loadQueue([task("row-A", "wf-1", "T-1")]); });
+    expectOpened("row-A");
+  });
+
+  it("T6: a queue error before the first snapshot shows that error, never nothing-waiting", async () => {
+    useHumanTaskStore.setState({ tasks: [], queueLoaded: false, queueError: "authorization_unavailable: try later" });
+    await goTask("T-1");
+    expect(document.querySelector('[data-task-link="error"]')?.textContent).toBe("authorization_unavailable: try later");
+    expect(document.body.textContent).not.toContain(NOTHING);
+  });
+
+  it("T7: a row whose task_id is null never matches (a link spelled like the null)", async () => {
+    loadQueue([{ ...task("row-N", "wf-1", "x"), taskId: null } as unknown as HumanTask]);
+    for (const spelled of ["null", "undefined", ""]) {
+      cleanup();
+      go("/");
+      useStageStore.setState({ fullPane: false, focusId: null });
+      if (spelled === "") continue; // an empty id is not a link at all (deepLink.test)
+      await goTask(spelled);
+      expect(document.querySelector('[data-task-link="nothing"]')?.textContent, spelled).toBe(NOTHING);
+      expect(useStageStore.getState().fullPane, spelled).toBe(false);
+    }
   });
 });

@@ -153,3 +153,41 @@ describe("every login carries the link", () => {
     expect(cbs[0]).toMatch(/: afterSignin$/);
   });
 });
+
+// ── /task/{task_id} (0.4.89) ───────────────────────────────────────────────
+describe("the /task/{task_id} link", () => {
+  it("T1: reads /task/<seg> with and without trailing slash, decoding once", () => {
+    expect(readDeepLink("/task/abc", "")).toEqual({ kind: "task", taskId: "abc" });
+    expect(readDeepLink("/task/abc/", "")).toEqual({ kind: "task", taskId: "abc" });
+    expect(readDeepLink("/task/a%20b", "")).toEqual({ kind: "task", taskId: "a b" });
+    expect(readDeepLink("/task/a%2520b", "")).toEqual({ kind: "task", taskId: "a%20b" });
+    expect(readDeepLink("/task/" + "a".repeat(512), "")).not.toBeNull();
+  });
+  it("T1: rejects every other spelling", () => {
+    for (const p of ["/Task/abc", "/TASK/abc", "/task/", "/task", "/task/a/b", "/tasks/x", "/task/%E0%A4%A", "/task/%20", "/task/" + "a".repeat(513)]) {
+      expect(readDeepLink(p, ""), p).toBeNull();
+    }
+  });
+  it("T2: deepLinkPath and safeReturnTo round-trip a task link canonically", () => {
+    expect(deepLinkPath({ kind: "task", taskId: "a b/c" })).toBe("/task/a%20b%2Fc");
+    expect(safeReturnTo({ returnTo: "/task/a%20b/" })).toBe("/task/a%20b");
+    expect(safeReturnTo({ returnTo: "/task/abc?idp=openddil" })).toBe("/task/abc");
+    expect(safeReturnTo({ returnTo: "/Task/abc" })).toBeNull();
+    expect(returnToFor({ pathname: "/task/abc/", search: "?idp=openddil" })).toBe("/task/abc");
+  });
+  it("T2: ?idp=openddil behaves as on /case/ and /ask, and never rides in returnTo", () => {
+    expect(idpHintFor({ pathname: "/task/abc", search: "?idp=openddil" })).toBe("openddil");
+    expect(idpHintFor({ pathname: "/task/abc", search: "?idp=other" })).toBeNull();
+    expect(idpHintFor({ pathname: "/Task/abc", search: "?idp=openddil" })).toBeNull();
+    window.history.replaceState({}, "", "/task/abc?idp=openddil");
+    try {
+      expect(signinArgs()).toEqual({ state: { returnTo: "/task/abc" }, extraQueryParams: { kc_idp_hint: "openddil" } });
+    } finally {
+      window.history.replaceState({}, "", "/");
+    }
+  });
+  it("leaves /case/ and /ask as they were", () => {
+    expect(readDeepLink("/case/abc", "")).toEqual({ kind: "case", caseId: "abc" });
+    expect(readDeepLink("/ask", "?q=hi")).toEqual({ kind: "ask", q: "hi" });
+  });
+});

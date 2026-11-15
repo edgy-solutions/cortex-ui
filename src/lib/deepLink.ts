@@ -1,11 +1,16 @@
 /**
- * Deep links into cortex: `/case/{id}` and `/ask?q=<text>`. There is no router; this is the whole
- * vocabulary. ENUMERATED SAFE SET: only these two shapes are links, everything else is null.
+ * Deep links into cortex: `/case/{id}`, `/task/{task_id}` and `/ask?q=<text>`. There is no router; this is the whole
+ * vocabulary. ENUMERATED SAFE SET: only these three shapes are links, everything else is null.
  * Exact, case-sensitive path match.
  */
-export type DeepLink = { kind: "case"; caseId: string } | { kind: "ask"; q: string };
+export type DeepLink =
+  | { kind: "case"; caseId: string }
+  | { kind: "task"; taskId: string }
+  | { kind: "ask"; q: string };
 
 const MAX_CASE_ID = 512;
+/** A task link shares the case link's length limit: both are an id the person was sent. */
+const MAX_TASK_ID = MAX_CASE_ID;
 const MAX_Q = 4000;
 
 export function readDeepLink(pathname: string, search: string): DeepLink | null {
@@ -20,6 +25,17 @@ export function readDeepLink(pathname: string, search: string): DeepLink | null 
     if (id.trim() === "" || id.length > MAX_CASE_ID) return null;
     return { kind: "case", caseId: id };
   }
+  const t = /^\/task\/([^/]+)\/?$/.exec(pathname);
+  if (t) {
+    let id: string;
+    try {
+      id = decodeURIComponent(t[1]);
+    } catch {
+      return null;
+    }
+    if (id.trim() === "" || id.length > MAX_TASK_ID) return null;
+    return { kind: "task", taskId: id };
+  }
   if (pathname === "/ask" || pathname === "/ask/") {
     const q = new URLSearchParams(search).get("q");
     if (q === null || q.trim() === "" || q.length > MAX_Q) return null;
@@ -29,9 +45,14 @@ export function readDeepLink(pathname: string, search: string): DeepLink | null 
 }
 
 export function deepLinkPath(link: DeepLink): string {
-  return link.kind === "case"
-    ? `/case/${encodeURIComponent(link.caseId)}`
-    : `/ask?q=${encodeURIComponent(link.q)}`;
+  switch (link.kind) {
+    case "case":
+      return `/case/${encodeURIComponent(link.caseId)}`;
+    case "task":
+      return `/task/${encodeURIComponent(link.taskId)}`;
+    case "ask":
+      return `/ask?q=${encodeURIComponent(link.q)}`;
+  }
 }
 
 export function returnToFor(loc: { pathname: string; search: string }): string | undefined {
@@ -58,7 +79,7 @@ export function safeReturnTo(state: unknown): string | null {
 }
 
 /**
- * THE BROKER MARKER (the architect, 2026-10-17, approved as proposed): `?idp=openddil` on either
+ * THE BROKER MARKER (the architect, 2026-10-17, approved as proposed): `?idp=openddil` on any
  * link shape selects OpenDDIL's login (Keycloak's `kc_idp_hint`) and starts it without the button
  * click (`RequireAuth`). Opt-in and ENUMERATED: any other value, any other spelling, or the marker
  * on a path that is not a link is ignored, and a link without it keeps the local login, because
