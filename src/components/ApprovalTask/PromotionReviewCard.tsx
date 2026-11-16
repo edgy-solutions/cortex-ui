@@ -1,3 +1,4 @@
+import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
 import { formatRequestedBy } from "@/lib/requestedBy";
@@ -490,7 +491,7 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
   const canPromote = canAct && !promoteHeld;
 
   useEffect(() => {
-    rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
+    scrollWithinPane(rowRefs.current[sel], { block: "nearest" });
     // `runsView` too: coming back to the table from the runs list must bring the selected row into view.
   }, [sel, runsView]);
 

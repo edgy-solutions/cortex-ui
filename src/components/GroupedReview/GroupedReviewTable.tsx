@@ -13,6 +13,7 @@
  * `items` is per-approver-filtered server-side (Seal 2); this renders what it's given and never
  * filters. Mirrors SupplyTable's shell + TaskCard's act-with-optimism.
  */
+import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, Trash2, Pencil, Plus } from "lucide-react";
@@ -252,7 +253,7 @@ export function GroupedReviewTable({
   }, [selected, provItems]);
   useEffect(() => {
     const el = selected === null ? null : rowRefs.current[selected];
-    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+    scrollWithinPane(el);
   }, [selected]);
   const onRowsKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -460,8 +461,13 @@ export function GroupedReviewTable({
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
         <div className="flex items-center gap-2 min-w-0">
           <PackageX className="w-4 h-4 text-neon-blue shrink-0" />
-          <p data-review-topline className="font-mono text-[10px] font-bold text-slate-300 tracking-widest uppercase truncate">
-            <span data-topline="notice">{batch.notice_type} {batch.notice_id}</span>
+          {/* THE NOTICE NUMBER IS NEVER CLIPPED (Chris, 2026-11-16). This line was `truncate`, so on
+              a narrow card "PCN PCN#20210316000.1 · DISPOSITION REVIEW · 1 PARTS" lost the end of
+              the one token a reviewer matches against the paper. It wraps now, and the notice breaks
+              inside itself only when it cannot fit on a line of its own. Sealed in Chromium by
+              e2e/taskFocus.spec.ts ("title clipped"), since jsdom measures nothing. */}
+          <p data-review-topline className="min-w-0 font-mono text-[10px] font-bold text-slate-300 tracking-widest uppercase">
+            <span data-topline="notice" className="[overflow-wrap:anywhere]">{batch.notice_type} {batch.notice_id}</span>
             {" · "}
             <span data-topline="stage">disposition review</span>
             {" · "}

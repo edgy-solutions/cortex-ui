@@ -703,6 +703,15 @@ export function GlobalCanvasStage() {
       // off a card and not take it with you, which is a strange property for a surface whose
       // job is showing you numbers.
       className={`h-full w-full relative overflow-hidden ${marquee ? "select-none" : ""}`}
+      // overflow hidden, so any scroll here is one the viewer cannot undo (2026-11-16).
+      onScroll={(e) => {
+        if (e.target !== e.currentTarget) return;
+        const el = e.currentTarget;
+        if (el.scrollTop !== 0 || el.scrollLeft !== 0) {
+          el.scrollTop = 0;
+          el.scrollLeft = 0;
+        }
+      }}
       style={{
         background:
           "radial-gradient(rgba(80,200,220,.10) 1px, transparent 1.5px) 0 0 / 44px 44px, #070F13",
@@ -765,7 +774,17 @@ export function GlobalCanvasStage() {
           overflowX: camFree && board.overflowX ? "auto" : "hidden",
           overflowY: camFree && board.overflowY ? "auto" : "hidden",
         }}
-        onScroll={(e) => setScroll({ x: e.currentTarget.scrollLeft, y: e.currentTarget.scrollTop })}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (!camFree) {
+            // A card or group owns the camera: this box is overflow hidden, so the viewer cannot undo a scroll (2026-11-16).
+            el.scrollLeft = 0;
+            el.scrollTop = 0;
+            setScroll({ x: 0, y: 0 });
+            return;
+          }
+          setScroll({ x: el.scrollLeft, y: el.scrollTop });
+        }}
       >
       <div
         data-stage-spacer

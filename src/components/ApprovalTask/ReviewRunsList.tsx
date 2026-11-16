@@ -1,3 +1,4 @@
+import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { useEffect, useMemo, useRef } from "react";
 import { placeOf, RUN_RULE, type ReviewPlan, type ReviewUnit, type Template, type UnitFlag } from "@/lib/reviewRuns";
 
@@ -117,7 +118,7 @@ export function ReviewRunsList({
   // Scroll the selected line into view like the table does; also when its run has just been opened.
   const selRunOpen = selRun === undefined ? true : open.has(selRun);
   useEffect(() => {
-    lineRefs.current.get(selectedUnit)?.scrollIntoView?.({ block: "nearest" });
+    scrollWithinPane(lineRefs.current.get(selectedUnit), { block: "nearest" });
   }, [selectedUnit, selRunOpen]);
 
   const selUnitObj = plan.units[selectedUnit];
@@ -128,7 +129,7 @@ export function ReviewRunsList({
       : "";
   const showSelected = () => {
     if (selRun !== undefined && !open.has(selRun)) onToggle(selRun);
-    else lineRefs.current.get(selectedUnit)?.scrollIntoView?.({ block: "nearest" });
+    else scrollWithinPane(lineRefs.current.get(selectedUnit), { block: "nearest" });
   };
 
   const line = (u: number, run: { affected: Template; replacement: Template | null } | null) => {

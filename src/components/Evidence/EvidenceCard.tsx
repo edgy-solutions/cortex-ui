@@ -1,3 +1,4 @@
+import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { useEffect, useRef } from "react";
 import { FileSearch, AlertTriangle, X } from "lucide-react";
 import { boxFraction, type Bbox, type PageDims } from "@/lib/bboxScale";
@@ -68,7 +69,7 @@ export function EvidenceCard({
   // the page renders taller than the card, so center the eye on the box.
   const regionRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    regionRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    scrollWithinPane(regionRef.current, { block: "center", inline: "nearest" });
   }, [item.page_image_url, item.mpn]);
 
   // Honesty summary, pulled UNDER the title (where the eye is): what this evidence

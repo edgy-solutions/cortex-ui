@@ -1,3 +1,4 @@
+import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { NO_DECLARATION_SERVED } from "@/lib/taskDeclaration";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ApprovalTaskCard } from "@/components/ApprovalTask/ApprovalTaskCard";
@@ -116,7 +117,7 @@ export function WorkflowCase({ case: payload }: WorkflowCaseProps) {
   const [sel, setSel] = useState(0);
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
   useEffect(() => {
-    rowRefs.current[sel]?.scrollIntoView?.({ block: "nearest" });
+    scrollWithinPane(rowRefs.current[sel], { block: "nearest" });
   }, [sel]);
   const onKeyDown = (e: KeyboardEvent<HTMLOListElement>) => {
     if (e.key === "ArrowDown") {
