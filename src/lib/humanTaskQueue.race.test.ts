@@ -176,6 +176,10 @@ describe("Q8 / Q9 / Q12 (store side): a refusal is kept visible, never an empty 
     ["counts is an array", { tasks: [] }, { counts: [1], total: 1 }],
     ["total is missing", { tasks: [] }, { counts: { k: 1 } }],
     ["the queue reply is not an object", "nope", { counts: {}, total: 0 }],
+    // task_id and kind are REQUIRED (saf 2026-11-15, Chris 2026-11-16). Before, such a row was dropped
+    // silently, and needs_you counted a task the list never showed.
+    ["a row's task_id is null", { tasks: [row("a"), { ...row("b"), task_id: null }] }, { counts: { k: 2 }, total: 2 }],
+    ["a row has no kind", { tasks: [{ ...row("b"), kind: undefined }] }, { counts: { k: 1 }, total: 1 }],
   ];
   for (const [name, q, n] of malformed) {
     it(`Q12: ${name}: an error state, rows kept, never an empty queue`, async () => {
@@ -189,6 +193,15 @@ describe("Q8 / Q9 / Q12 (store side): a refusal is kept visible, never an empty 
       expect(s.needsYou?.total, name).toBe(1);
     });
   }
+
+  it("Q12: a row without task_id is named in the error, by position and key, not skipped", async () => {
+    wire.fetchMyQueue.mockResolvedValueOnce({ tasks: [row("a"), { ...row("b"), task_id: null, kind: "" }] });
+    wire.fetchNeedsYou.mockResolvedValueOnce({ counts: { k: 2 }, total: 2 });
+    await refresher.refresh();
+    const s = useHumanTaskStore.getState();
+    expect(String(s.queueError)).toContain("task row 1 has no task_id, kind");
+    expect(s.queueLoaded).toBe(false);
+  });
 
   it("Q12: a malformed FIRST reply is not an empty loaded queue", async () => {
     wire.fetchMyQueue.mockResolvedValueOnce({ tasks: "x" });

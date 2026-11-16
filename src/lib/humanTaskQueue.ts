@@ -12,7 +12,7 @@ import {
   type NeedsYouCounts,
   type QueueSnapshot,
 } from "@/store/useHumanTaskStore";
-import { humanTaskFromRow } from "@/lib/seedHumanTasks";
+import { humanTaskFromRow, missingRequired } from "@/lib/seedHumanTasks";
 
 /** How stale the queue may get while the tab is open and nothing else triggered a read: long enough that a
  *  session costs two light requests per 20s, short enough that another approver's decision shows soon. */
@@ -29,11 +29,16 @@ export function parseQueueListing(resp: unknown): { tasks: HumanTask[]; delegate
     throw new MalformedQueueReply("/me/queue: `tasks` is not an array");
   }
   const tasks: HumanTask[] = [];
-  for (const row of resp.tasks as unknown[]) {
+  (resp.tasks as unknown[]).forEach((row, i) => {
     if (!isRec(row)) throw new MalformedQueueReply("/me/queue: a task row is not an object");
-    const task = humanTaskFromRow(row);
-    if (task) tasks.push(task);
-  }
+    // A row without a required key is the reply breaking its contract, so it is not skipped. Skipping it
+    // let /me/needs_you count a task the list never showed (`missingRequired`, seedHumanTasks.ts).
+    const missing = missingRequired(row);
+    if (missing.length > 0) {
+      throw new MalformedQueueReply(`/me/queue: task row ${i} has no ${missing.join(", ")}`);
+    }
+    tasks.push(humanTaskFromRow(row)!);
+  });
   return { tasks, delegated: parseDelegated(resp.delegated, "/me/queue") };
 }
 
