@@ -80,6 +80,14 @@ describe("notice-parts sources", () => {
     expect(q(c, "[data-source-uri]")).toHaveLength(2);
     expect(q(c, '[data-source-dropped-by="alice@example.com"]')).toHaveLength(2);
     expect(q(c, `[data-source-promoted-by="${PROMOTED_BY}"]`)).toHaveLength(2);
+    // THE CHIP READS THE PERSON, NOT THE SPECIES TAG (Chris, 2026-11-16). The attribute keeps the
+    // raw `human:` id; the text a reader sees drops it. The fixture must carry the prefix, or
+    // this arm cannot fail.
+    expect(PROMOTED_BY.startsWith("human:")).toBe(true);
+    expect(q(c, "[data-source-promoted-by]").map((e) => e.textContent)).toEqual([
+      "promoted by bob@example.com",
+      "promoted by bob@example.com",
+    ]);
     expect(q(c, "[data-source-mpn]")).toHaveLength(0);
     expect(vals(c, "data-source-uri")).toEqual([
       "http://internal/components/5530-182",

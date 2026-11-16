@@ -81,9 +81,14 @@ export function RoutingDecision() {
       {/* ACTING PERSONA — the caller persona/domain this decision was
           computed under (persona-driven verb eligibility). The premise
           that makes a same-query-different-verb divergence legible.
-          DISTINCT from the "Voice" chip below (owner_persona / answerer). */}
+          THE ONLY PERSONA ON THE PANEL'S FACE. The verb owner is in the Action
+          row's details ("Verb owned by"), not in a second chip. */}
       {decision.acting?.persona && (
-        <div className="flex items-center gap-1.5 -mt-1" title="The CALLER persona you're acting as (the picker selection). Distinct from 'Voice' below (the verb's owner / answerer). A data engineer can invoke a verb owned by a data steward — the two differ by design (ADR-0009).">
+        <div
+          data-routing-persona={decision.acting.persona}
+          className="flex items-center gap-1.5 -mt-1"
+          title="The persona you asked as (the picker selection). The persona that owns the chosen verb is under Action → details; the two can differ by design (ADR-0009)."
+        >
           <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
             Acting as
           </span>
@@ -167,31 +172,25 @@ export function RoutingDecision() {
             />
             {decision.action.owner_persona && (
               <DetailLine
-                k="Owner persona"
+                k="Verb owned by"
                 v={decision.action.owner_persona}
-                hint="(output-side persona on the verb edge — who in the system 'owns' this kind of answer)"
+                hint={
+                  decision.acting?.persona && decision.acting.persona !== decision.action.owner_persona
+                    ? `(the persona that owns this verb. You asked as ${decision.acting.persona}; a caller may run a verb another persona owns, ADR-0009)`
+                    : "(the persona that owns this verb, ADR-0009)"
+                }
               />
             )}
           </div>
         }
       >
         <ConfidenceBar value={decision.action.confidence} />
-        {/* Output-side persona attribution chip. Source: owner_persona
-            property on the (input)-[verb]->(output) edge in Neo4j. Per
-            [[persona-split]]: this is the substrate persona ("who in
-            the system owns this kind of answer"), NOT the caller-
-            identity persona (that's a separate future ADR). */}
-        {decision.action.owner_persona && (
-          <div className="mt-1.5 flex items-center gap-1.5" title="The persona that OWNS this verb — the answerer's voice (ADR-0009). Distinct from 'Acting as' above, which is the caller. They differ by design: a caller of one persona can invoke a verb owned by another.">
-            <span className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
-              Voice
-            </span>
-            <span className="text-[10px] font-mono text-neon-purple/80 px-1.5 py-0.5 rounded border border-neon-purple/30 bg-neon-purple/5">
-              {decision.action.owner_persona}
-            </span>
-            <span className="text-[8px] font-mono text-slate-600 italic">answered by</span>
-          </div>
-        )}
+        {/* NO SECOND PERSONA CHIP HERE (Chris, 2026-11-16: "show one clearly labelled persona,
+            not 'Acting as' and 'Voice' that disagree without explanation"). A "Voice" chip
+            used to sit here with the verb edge's `owner_persona`. Beside "Acting as" it read as two
+            answers to one question, and the explanation lived only in a hover title. The owner
+            persona (ADR-0009, [[persona-split]]) is still served and still shown, but only in this
+            row's details as "Verb owned by", with the reason the two can differ written out. */}
       </RoutingRow>
 
       <RoutingRow

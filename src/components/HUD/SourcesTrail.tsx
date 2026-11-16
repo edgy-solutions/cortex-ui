@@ -6,6 +6,7 @@ import { ProvenanceFloorLabel } from "@/components/ingest/ProvenanceFloorLabel";
 import type { SourceProvenanceEntry } from "@/lib/sourceProvenance";
 import type { Source } from "@/api/types";
 import { presentConfidence } from "@/lib/confidence";
+import { formatRequestedBy } from "@/lib/requestedBy";
 import { FiguresSlideIn } from "./FiguresSlideIn";
 
 /**
@@ -197,7 +198,7 @@ function SourceRow({
                   className="text-[9px] font-mono text-slate-400 border border-slate-600/30 rounded px-1.5 py-0.5"
                   data-source-dropped-by={provenance.dropped_by}
                 >
-                  dropped by {provenance.dropped_by}
+                  dropped by {formatRequestedBy(provenance.dropped_by)}
                 </span>
               )}
               {provenance.promoted_by && (
@@ -205,7 +206,7 @@ function SourceRow({
                   className="text-[9px] font-mono text-neon-green/80 border border-neon-green/30 rounded px-1.5 py-0.5"
                   data-source-promoted-by={provenance.promoted_by}
                 >
-                  promoted by {provenance.promoted_by}
+                  promoted by {formatRequestedBy(provenance.promoted_by)}
                 </span>
               )}
             </div>
