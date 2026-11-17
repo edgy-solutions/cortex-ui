@@ -13,6 +13,8 @@ import { carriesFiles, DRAG_IDLE_MS } from "@/lib/fileDropGuard";
 import { isIngestUiEnabled } from "@/lib/ingestFlag";
 import { INGEST_ACCEPT } from "@/lib/ingestAccept";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { sendReadiness } from "@/lib/sendReadiness";
+import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { useIngestComposerStore, dropReady, leafAsked, offeredDropLeaves } from "@/store/useIngestComposerStore";
 import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
@@ -56,6 +58,14 @@ export function InputBar() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasChip = ingestEnabled && chipFile !== null;
+  // Ruling 2026-11-16: no question is sent until the entitlement list has loaded. The selector
+  // returns the refusal text (a primitive) so the bar re-renders when the load finishes or fails.
+  // The ingest path is not a question, and mock mode reaches no server.
+  const sendBlockedText = usePersonaStore((s) => {
+    const r = sendReadiness(s);
+    return r.ready ? null : r.message;
+  });
+  const sendBlocked = !hasChip && !isMockGroundingEnabled() ? sendBlockedText : null;
   // Drops in flight: the rail's own entries (uploading + not yet terminal), counted off the one
   // place they live. The count is a number, so the selector returns a primitive.
   const inflight = useCanvasStore((s) =>
@@ -128,8 +138,8 @@ export function InputBar() {
     // Early return leaves the draft on disk — a submit that never dispatched has not
     // consumed the text, and clearing here would delete work the user still owes an attempt.
     if (!value.trim() || isProcessing) return;
-    sendMessage(value.trim());
-    clearDraft();
+    // Clear only on a send that went. "Not sent" (a refusal object, or false) keeps the draft.
+    if (sendMessage(value.trim()) === true) clearDraft();
   };
 
   // Disable while a stream is in flight to prevent spam-submits. The deeper
@@ -137,7 +147,7 @@ export function InputBar() {
   // surfacing the disabled state here makes the rate-limit visible to the
   // user instead of a button that looks active but does nothing.
   const isDisabled = isProcessing;
-  const sendDisabled = hasChip ? !(dropReady({ file: chipFile, kind: chipKind, leaf: chipLeaf }) && onBehalfOf) : !value.trim() || isDisabled;
+  const sendDisabled = hasChip ? !(dropReady({ file: chipFile, kind: chipKind, leaf: chipLeaf }) && onBehalfOf) : !value.trim() || isDisabled || sendBlocked !== null;
 
   return (
     <div className="px-6 pb-5 pt-2">
@@ -322,6 +332,11 @@ export function InputBar() {
             </button>
           </div>
         </div>
+        {sendBlocked !== null && (
+          <p className="relative px-1 pt-2 pl-3 font-mono text-[10px] text-amber-400/80" data-send-blocked>
+            {sendBlocked}
+          </p>
+        )}
       </motion.form>
     </div>
   );

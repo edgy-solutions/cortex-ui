@@ -230,3 +230,18 @@ describe("a turn the send path drops is reported, not assumed", () => {
     expect(dispatchReroute(bind({ capability_id: "C1" }), ask(), vi.fn()).blocked).toBeUndefined();
   });
 });
+
+describe("what the send callback reports", () => {
+  it("{ notSent } is shown verbatim, not as the in-flight wording", () => {
+    const send = vi.fn(() => ({ notSent: "X" }));
+    expect(dispatchReroute(bind({ capability_id: "C1" }), ask(), send).blocked).toBe("X");
+    const spoken: Reroute = { action: RESPEAK, slots: {}, query: "q", slot: "capability_id", spoken_answer: "words" };
+    expect(dispatchReroute(spoken, ask(), send).blocked).toBe("X");
+  });
+
+  it("false is still the in-flight wording; true is sent", () => {
+    const r = dispatchReroute(bind({ capability_id: "C1" }), ask(), vi.fn(() => false));
+    expect(r.blocked).toMatch(/still in flight/);
+    expect(dispatchReroute(bind({ capability_id: "C1" }), ask(), vi.fn(() => true))).toEqual({});
+  });
+});

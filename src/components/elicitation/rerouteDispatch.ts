@@ -77,9 +77,10 @@ export type SendTurn = (
    * FALSE MEANS THE TURN DID NOT GO OUT. The send path has guards of its own — an in-flight
    * turn is not queued — and they used to be invisible here, so this function reported success
    * by saying nothing while nothing had been sent. `void` is still accepted and still means
-   * "went": a test double that reports nothing is not claiming a drop.
+   * "went": a test double that reports nothing is not claiming a drop. `{ notSent }` is a refusal
+   * that carries its own reason (entitlements not loaded) and is shown verbatim.
    */
-) => boolean | void;
+) => boolean | void | { notSent: string };
 
 /**
  * Said when the send path refused the turn rather than this function. The reason belongs to the
@@ -128,6 +129,7 @@ export function dispatchReroute(
       value,
     });
     if (went === false) return { blocked: NOT_SENT };
+    if (typeof went === "object" && went !== null) return { blocked: went.notSent };
     return {};
   }
   // The phrase, verbatim, with the typed answer BESIDE it. A RESPEAK whose answer went missing
@@ -148,6 +150,7 @@ export function dispatchReroute(
     { slot: reroute.slot, label: reroute.spoken_answer.trim(), value: "" },
   );
   if (went === false) return { blocked: NOT_SENT };
+  if (typeof went === "object" && went !== null) return { blocked: went.notSent };
   return {};
 }
 

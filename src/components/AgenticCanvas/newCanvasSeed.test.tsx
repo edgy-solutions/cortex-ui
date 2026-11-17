@@ -25,6 +25,7 @@ vi.mock("@/api/client", async (orig) => ({
 import { DockBar } from "./DockBar";
 import { GlobalCanvasStage } from "./GlobalCanvasStage";
 import type { SeedRunner } from "./useTemplateSeed";
+import { usePersonaStore } from "@/store/usePersonaStore";
 import { useStageStore } from "@/store/useStageStore";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
@@ -70,6 +71,8 @@ const artifact = (id: string): Artifact =>
   }) as unknown as Artifact;
 
 beforeEach(() => {
+  // A LOADED matrix with no cells: sends are ready, with no cell (ruling 2026-11-16).
+  usePersonaStore.setState({ entitlements: { user_id: "u", source: "topaz", default: null, cells: [] }, entitlementsError: null, selectedPersona: null, selectedDomains: [] } as never);
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1600 });
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 900 });
   vi.stubGlobal(

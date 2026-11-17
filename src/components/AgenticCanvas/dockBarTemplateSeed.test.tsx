@@ -41,6 +41,7 @@ vi.mock("axios", async (importOriginal) => {
 });
 
 import { DockBar } from "./DockBar";
+import type { SeedRunner } from "./useTemplateSeed";
 import { useStageStore } from "@/store/useStageStore";
 import { useTemplateStore } from "@/store/useTemplateStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
@@ -77,6 +78,8 @@ const noAlarmClasses = () => {
 };
 
 beforeEach(() => {
+  // A LOADED matrix with no cells: sends are ready, with no cell (ruling 2026-11-16).
+  usePersonaStore.setState({ entitlements: { user_id: "u", source: "topaz", default: null, cells: [] }, entitlementsError: null, selectedPersona: null, selectedDomains: [] } as never);
   seen.length = 0;
   serve.length = 0;
   useStageStore.setState({ canvases: [], view: "global", focusId: null } as never);
@@ -255,5 +258,39 @@ describe("the finance row, through /canvas/seed", () => {
     fireEvent.click(screen.getByText("Create"));
     expect(useStageStore.getState().canvases).toHaveLength(1);
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("the send gate (ruling 2026-11-16)", () => {
+  const createOnce = (runner: SeedRunner) => {
+    render(<DockBar seedDeps={{ seed: runner }} />);
+    fireEvent.click(screen.getByText("New"));
+    fireEvent.click(document.querySelector(`[data-template-option="${FINANCE_TEMPLATE_ID}"]`)!);
+    fireEvent.click(screen.getByText("Create"));
+  };
+
+  it("not loaded: the runner is never called and the failure text is shown", async () => {
+    act(() => {
+      usePersonaStore.setState({ entitlements: null, entitlementsError: "HTTP 503", selectedPersona: null, selectedDomains: [] } as never);
+    });
+    const runner = vi.fn<SeedRunner>();
+    createOnce(runner);
+    await waitFor(() => expect(document.body.textContent).toContain("HTTP 503"));
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("loaded: the runner gets the cell", async () => {
+    act(() => {
+      usePersonaStore.setState({
+        entitlements: { user_id: "u", source: "topaz", default: null, cells: [{ persona: "P", domain: "D" }] },
+        entitlementsError: null,
+        selectedPersona: "P",
+        selectedDomains: ["D"],
+      } as never);
+    });
+    const runner = vi.fn<SeedRunner>().mockResolvedValue({ ok: true, artifactIds: ["f1"], seeded: 1, total: 6 } as never);
+    createOnce(runner);
+    await waitFor(() => expect(runner).toHaveBeenCalled());
+    expect(runner.mock.calls[0][2]).toEqual({ active_persona: "P", active_domains: ["D"] });
   });
 });

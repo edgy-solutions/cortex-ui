@@ -27,6 +27,10 @@ import { useInterviewStore } from "@/store/useInterviewStore";
 import { useCanvasStore, ELECTRIC_COVERED_FIELDS } from "@/store/useCanvasStore";
 import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import { lineageClaimVerdict, type LineageBearingBody } from "@/api/answeringArtifact";
+import { usePersonaStore } from "@/store/usePersonaStore";
+import { sendReadiness } from "@/lib/sendReadiness";
+
+const MOCK_KEY = "cortex-mock-grounding";
 import { useInterviewAgent } from "./useInterviewAgent";
 
 /**
@@ -111,6 +115,8 @@ const artifact = () => artifacts().at(-1)!;
 const provenance = (id: string) => useCanvasStore.getState()._lastUpdateSource[id] ?? {};
 
 beforeEach(() => {
+  // A LOADED matrix with no cells: a send is ready, with no cell (ruling 2026-11-16).
+  usePersonaStore.setState({ entitlements: { user_id: "u", source: "topaz", default: null, cells: [] }, entitlementsError: null, entitlementsLoading: false, selectedPersona: null, selectedDomains: [] } as never);
   window.localStorage.clear();
   window.sessionStorage.clear();
   useInterviewStore.getState().reset();
@@ -211,7 +217,7 @@ describe("useInterviewAgent — turn start", () => {
     // true for the whole stream — so the second keystroke produces no user message at all.
     const r = mount();
     await startTurn(r, "first");
-    let went: boolean | undefined;
+    let went: boolean | { notSent: string } | undefined;
     await act(async () => {
       went = r.result.current.sendMessage("second");
       await flush();
@@ -229,7 +235,7 @@ describe("useInterviewAgent — turn start", () => {
     // ask's `sub_query` as the whole phrase, the producer's refusal projection carries none, so
     // the turn arrived here empty. `false` is what makes that visible one layer up.
     const r = mount();
-    let went: boolean | undefined;
+    let went: boolean | { notSent: string } | undefined;
     await act(async () => {
       went = r.result.current.sendMessage("   ");
       await flush();
@@ -244,7 +250,7 @@ describe("useInterviewAgent — turn start", () => {
     // The near side. A `sendMessage` that returned false unconditionally would satisfy both
     // cases above and block every answer in the app while reporting a reason that is not true.
     const r = mount();
-    let went: boolean | undefined;
+    let went: boolean | { notSent: string } | undefined;
     await act(async () => {
       went = r.result.current.sendMessage("first");
       await flush();
@@ -1005,5 +1011,72 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     const r = mount();
     await composerTurn(r);
     expect(transport.request).not.toHaveProperty("answering_artifact_id");
+  });
+});
+
+describe("the send gate — no question until the entitlement list has loaded (ruling 2026-11-16)", () => {
+  const send = async (r: ReturnType<typeof mount>) => {
+    let out: unknown;
+    await act(async () => {
+      out = r.result.current.sendMessage(QUERY);
+      await flush();
+    });
+    return out;
+  };
+
+  it("LOADING: refused with a reason, no transport call, no message added", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: null, entitlementsLoading: true } as never);
+    const r = mount();
+    const out = await send(r);
+    expect(out).toEqual({ notSent: expect.stringMatching(/still loading/) });
+    expect(transport.calls).toBe(0);
+    expect(messages()).toHaveLength(0);
+    expect(artifacts()).toHaveLength(0);
+  });
+
+  it("FAILED: refused, and the reason carries the error", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: "HTTP 503 upstream", entitlementsLoading: false } as never);
+    const r = mount();
+    const out = (await send(r)) as { notSent: string };
+    expect(out.notSent).toContain("HTTP 503 upstream");
+    expect(out.notSent).toMatch(/nothing was sent/);
+    expect(transport.calls).toBe(0);
+    expect(messages()).toHaveLength(0);
+  });
+
+  it("READY: goes, and the body carries exactly the readiness cell", async () => {
+    usePersonaStore.setState({
+      entitlements: {
+        user_id: "u", source: "topaz", default: null,
+        cells: [
+          { persona: "PROGRAM_FINANCE_ANALYST", domain: "PROGRAM_FINANCE" },
+          { persona: "PROGRAM_FINANCE_ANALYST", domain: "DOCS" },
+        ],
+      },
+      selectedPersona: "PROGRAM_FINANCE_ANALYST",
+      selectedDomains: ["PROGRAM_FINANCE"],
+    } as never);
+    const r = mount();
+    const out = await send(r);
+    expect(out).toBe(true);
+    expect(transport.calls).toBe(1);
+    const expected = sendReadiness(usePersonaStore.getState());
+    expect(expected.ready && expected.cell).toBeTruthy();
+    expect(transport.request!.active_persona).toBe("PROGRAM_FINANCE_ANALYST");
+    expect(transport.request!.active_domains).toEqual(["PROGRAM_FINANCE", "DOCS"]);
+  });
+
+  it("MOCK GROUNDING while loading is not refused: the mock still runs", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: null, entitlementsLoading: true } as never);
+    window.localStorage.setItem(MOCK_KEY, "1");
+    try {
+      const r = mount();
+      const out = await send(r);
+      expect(out).toBe(true);
+      expect(transport.calls).toBe(0);
+      expect(messages().some((m) => m.role === "user")).toBe(true);
+    } finally {
+      window.localStorage.removeItem(MOCK_KEY);
+    }
   });
 });

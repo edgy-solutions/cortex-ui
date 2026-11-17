@@ -91,12 +91,16 @@ describe("platform domains stay in scope", () => {
     expect(inScope(["MESH"], ["MESH", "DOCS"])).toEqual(["MESH", "DOCS"]);
   });
 
-  it("the send site uses inScope, not the bare selection", async () => {
+  it("the one send decision (sendReadiness) uses inScope, and the hook and the seed take its cell", async () => {
     // The hook is too wide to mount here; the call is what it is forced to spell.
     const { readFileSync } = await import("node:fs");
-    const src = readFileSync("src/hooks/useInterviewAgent.ts", "utf8");
+    const src = readFileSync("src/lib/sendReadiness.ts", "utf8");
     expect(src).toMatch(/active_domains:\s*inScope\(/);
-    expect(src).not.toMatch(/active_domains:\s*personaSelection\.selectedDomains/);
+    for (const site of ["src/hooks/useInterviewAgent.ts", "src/components/AgenticCanvas/useTemplateSeed.ts"]) {
+      const s = readFileSync(site, "utf8");
+      expect(s, site).toMatch(/sendReadiness\(/);
+      expect(s, site).not.toMatch(/active_domains:\s*inScope/);
+    }
   });
 });
 

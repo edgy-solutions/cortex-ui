@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { requestTemplateCanvasSeed, type TemplateSeedResult } from "@/api/client";
 import type { AskBearingRefusal } from "@/lib/askBearingRefusal";
 import type { PolicyRefusal } from "@/lib/policyRefusal";
-import { inScope } from "@/lib/platformDomains";
+import { sendReadiness } from "@/lib/sendReadiness";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { useStageStore } from "@/store/useStageStore";
 import { foldSeedPanel, readSeedPanelEvent, type SeedPanelEvent, type SeedProgress } from "@/lib/seedProgress";
@@ -65,15 +65,14 @@ export function useTemplateSeed(onDone: () => void, deps?: TemplateSeedDeps) {
     setOutcome(null);
     setFailed(null);
     setPolicy(null);
-    // The cell the chat path sends: the persona's pick, plus its entitled platform domains.
-    const p = usePersonaStore.getState();
-    const cell =
-      p.hasEntitlements() && p.selectedPersona
-        ? {
-            active_persona: p.selectedPersona,
-            active_domains: inScope(p.selectedDomains, p.domainsFor(p.selectedPersona)),
-          }
-        : undefined;
+    // Ruling 2026-11-16: nothing is sent until the entitlement list has loaded.
+    const readiness = sendReadiness(usePersonaStore.getState());
+    if (!readiness.ready) {
+      setFailed(readiness.message);
+      setBusy(false);
+      return;
+    }
+    const cell = readiness.cell;
     let r: TemplateSeedResult;
     try {
       r = await runner(cur.templateId, bindings.current, cell, (raw) => {

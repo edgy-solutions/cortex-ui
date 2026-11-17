@@ -16,7 +16,7 @@ import {
 } from "@/store/useInterviewStore";
 
 import { useCanvasStore } from "@/store/useCanvasStore";
-import { inScope } from "@/lib/platformDomains";
+import { sendReadiness, type SendCell } from "@/lib/sendReadiness";
 import { readSourcesProvenance } from "@/lib/sourceProvenance";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import {
@@ -145,6 +145,8 @@ interface SendPayload {
   answeredWith?: AnsweredWith;
   /** The ask artifact this turn answers, when it answers one. */
   answeringArtifactId?: string;
+  /** Decided once at send by sendReadiness; undefined on the legacy path and in mock mode. */
+  cell?: SendCell;
 }
 
 export function useInterviewAgent() {
@@ -515,7 +517,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId }: SendPayload) => {
+    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId, cell }: SendPayload) => {
       // ⛔ READ THE DRAWN CARD FIRST — BEFORE ANYTHING IN THIS FUNCTION TOUCHES THE STORE.
       // `createPendingArtifact` below foregrounds THIS turn's own pending row, so the same read
       // taken a few lines later returns the artifact being created rather than the one the
@@ -643,7 +645,6 @@ export function useInterviewAgent() {
       // renders); on legacy JWT-claim clusters `selectedPersona` is
       // null and we send neither field, letting cortex-bff fall back
       // to the JWT-claim path.
-      const personaSelection = usePersonaStore.getState();
       const request: InterviewRequest = {
         message: userInput,
         // Only when a pick was made. An empty object is NOT the same as absent: the server
@@ -661,17 +662,8 @@ export function useInterviewAgent() {
         ...answeringArtifactBody(lineageClaim),
         session_id: sessionId,
         artifact_id: artifactId,
-        ...(personaSelection.hasEntitlements() && personaSelection.selectedPersona
-          ? {
-              active_persona: personaSelection.selectedPersona,
-              // The pick, plus the persona's entitled platform domains (MESH, DOCS), which the
-              // picker no longer offers but which must stay in scope. src/lib/platformDomains.ts.
-              active_domains: inScope(
-                personaSelection.selectedDomains,
-                personaSelection.domainsFor(personaSelection.selectedPersona),
-              ),
-            }
-          : {}),
+        // The cell was decided once, at send (src/lib/sendReadiness.ts).
+        ...(cell ?? {}),
       };
 
       // Stream the response
@@ -728,6 +720,9 @@ export function useInterviewAgent() {
    * ABSENCE OF A REPORT IS NOT A REPORT. Every early return in this function is now legible to
    * the caller, including the next one anyone adds — which is why the flag is "did it go"
    * rather than one boolean per guard.
+   *
+   * `{ notSent }` is a refusal WITH its reason (entitlements not loaded); it is truthy, so a caller
+   * must compare `=== true` / `=== false` or look for the object, never test truthiness.
    */
   const sendMessage = useCallback(
     (
@@ -736,14 +731,23 @@ export function useInterviewAgent() {
       spoken?: SpokenAnswer,
       answeredWith?: AnsweredWith,
       answeringArtifactId?: string,
-    ): boolean => {
+    ): boolean | { notSent: string } => {
       if (mutation.isPending || !userInput.trim()) return false;
+      // Ruling 2026-11-16: no question goes out until the entitlement list has loaded. Mock mode
+      // reaches no server, so the gate does not apply there.
+      let cell: SendCell | undefined;
+      if (!isMockGroundingEnabled()) {
+        const readiness = sendReadiness(usePersonaStore.getState());
+        if (!readiness.ready) return { notSent: readiness.message };
+        cell = readiness.cell;
+      }
       mutation.mutate({
         userInput: userInput.trim(),
         boundSlots,
         spoken,
         answeredWith,
         answeringArtifactId,
+        cell,
       });
       return true;
     },
