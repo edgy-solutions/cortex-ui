@@ -184,6 +184,22 @@ const DERIVED_BINDINGS = [
     domain_fit: ["SUSTAINMENT"],
     contract: INSTANCES_BY_PROPERTY_CONTRACT,
   },
+  // ⚠ DATED EXCEPTION TO THE 11-07 RULE — FIRST TO MIGRATE (architect via Chris, 2026-11-16).
+  // The 11-07 rule: no NEW hand-written binding; a binding comes from the producer's served `menu:` block.
+  // This row was ruled "row now, reader next". It moves to the served path before any other hand-written
+  // binding is added, and `assembleCapabilities.test.ts` ("the 11-07 rule") fails on any other addition.
+  // engine-o's `mesh:whereIsThisPartUsed` (ADR-0065 section 4) declares `mesh:WhereUsedSet`
+  // (ontology_service/where_used.py:60). The presentation agent projects it as INSTANCES_BY_PROPERTY: one
+  // row per end item and program, with `group_by` naming the column, which the view already reads.
+  // The backend half is the `capabilities.py` row with the same subject and object. Asked by lane 74's
+  // packet, 2026-11-16. persona_fit and domain_fit copy the NoticePartSet row; they only rank.
+  {
+    subject_uri: "mesh:WhereUsedSet",
+    object_uri: "mesh:InstancesByProperty",
+    persona_fit: ["SAFETY_ENGINEER", "SUSTAINMENT_ENGINEER"],
+    domain_fit: ["SUSTAINMENT"],
+    contract: INSTANCES_BY_PROPERTY_CONTRACT,
+  },
   // THE FIRST LIVE-VIEW BINDING (ADR-0042). Engine P's `mesh:planCostCurve` declares
   // `mesh:PeriodCostSeries` as its fixed output type; this row is what makes that type
   // ADDRESSABLE on this frontend's menu.

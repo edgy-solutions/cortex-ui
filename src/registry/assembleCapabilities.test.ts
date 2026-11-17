@@ -337,3 +337,65 @@ describe("engine-docs' answer is bound to the card that can now draw it", () => 
     expect(row.domain_fit).toEqual([]);
   });
 });
+
+describe("the 11-07 rule: no new hand-written binding, and one dated exception that migrates first", () => {
+  // The hand-written subjects the rule found (architect 2026-11-07: "no menu constant anywhere"; the
+  // existing rows are a scheduled migration to the producer's served `menu:` block). The file was
+  // unchanged from 10-08 to 11-16, so this is that population, frozen. It may only SHRINK as rows migrate.
+  const AS_OF_11_07 = [
+    "cost:PriceComposition", "fin:BurnRateSeries", "fin:EstimateAtCompletion", "fin:EstimateAtCompletionComparison",
+    "fin:FundingStatusGrid", "fin:PerformanceIndexSeries", "fin:VarianceDecomposition", "fin:VarianceDriverRanking",
+    "http://internal/sustainment/safety#DeferralRiskCard", "http://internal/sustainment/safety#FailureRecordSet",
+    "http://internal/sustainment/safety#FailureTrend", "http://internal/sustainment/safety#OrphanedHazardSet",
+    "http://internal/sustainment/safety#RiskAssessmentDraft", "http://invincible-agent/cost#CategoryBreakdown",
+    "http://invincible-agent/cost#LaborComposition", "http://invincible-agent/cost#LotCostBreakdown",
+    "http://invincible-agent/cost#LotCostingReview", "http://invincible-agent/cost#RateAssumptions",
+    "http://invincible-agent/cost#RateComparison", "http://invincible-agent/cost#SupplierConcentration",
+    "http://invincible-agent/cost#UnitPriceTrend", "http://invincible-agent/docs#DocExplanation",
+    "mesh:AssetProfile", "mesh:CanvasSeedResult", "mesh:CatalogListing", "mesh:ContributionSequence",
+    "mesh:DatasetAnalysisReport", "mesh:DecisionArtifact", "mesh:EffectSet", "mesh:FreshnessReport",
+    "mesh:FundingGapSet", "mesh:HumanApprovalTask", "mesh:ImpactSet", "mesh:InstancesByProperty",
+    "mesh:IntervalSchedule", "mesh:KnowledgeRetrievalResponse", "mesh:LineageTopology", "mesh:LoadThresholdGrid",
+    "mesh:MaturityMatrix", "mesh:NoticePartSet", "mesh:OwnershipFact", "mesh:PartObsolescenceReviewBatch",
+    "mesh:PeriodCostSeries", "mesh:SchemaDescription", "mesh:SlotElicitation", "mesh:StatefulSupportResponse",
+    "mesh:TagFilterResult", "mesh:WithheldPanel", "mesh:WorkflowObservation",
+  ];
+  // Architect via Chris, 2026-11-16: "row now, reader next … This row moves to the served path before any
+  // other hand-written binding is added." Lane 74's where-used.
+  const EXCEPTION = "mesh:WhereUsedSet";
+
+  it("the frozen population is the 49 it was, with no duplicates", () => {
+    expect(new Set(AS_OF_11_07).size).toBe(49);
+  });
+
+  it("every hand-written subject is one the rule found, or the one dated exception", () => {
+    const added = [...derivedSubjects()].filter((s) => !AS_OF_11_07.includes(s) && s !== EXCEPTION);
+    expect(added, "a new hand-written binding: bind it from the producer's served menu: block instead").toEqual([]);
+  });
+
+  it("the exception migrates FIRST: while it is hand-written, no 11-07 row has left before it", () => {
+    const now = derivedSubjects();
+    if (!now.has(EXCEPTION)) return; // migrated: this arm has done its job
+    expect(AS_OF_11_07.filter((s) => !now.has(s)), "migrate the where-used row first").toEqual([]);
+  });
+
+  it("while present, the row carries its dated-exception marker in the source text", () => {
+    const src = readFileSync(path.join(__dirname, "assembleCapabilities.ts"), "utf8");
+    const at = src.indexOf(`subject_uri: "${EXCEPTION}"`);
+    if (at < 0) return;
+    const before = src.slice(Math.max(0, at - 1600), at);
+    expect(before).toContain("DATED EXCEPTION TO THE 11-07 RULE");
+    expect(before).toContain("FIRST TO MIGRATE");
+    expect(before).toContain("2026-11-16");
+  });
+
+  it("where-used binds to INSTANCES_BY_PROPERTY, the card that already groups by the producer's group_by", () => {
+    // The registered menu, as the selector's reader sees it (lane 74 read the served one).
+    const rows = assembleCapabilities(CORTEX_UI_CAPABILITIES).filter((c) => c.subject_uri === EXCEPTION);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].archetype).toBe("INSTANCES_BY_PROPERTY");
+    // The backend half's object (presentation_agent/capabilities.py, the WhereUsedSet row). The fleet
+    // mirror seal pairs the two rows on subject AND object, so the object travels in the registration.
+    expect(rows[0].object_uri).toBe("mesh:InstancesByProperty");
+  });
+});
