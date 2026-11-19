@@ -1,5 +1,6 @@
 import React from "react";
-import type { InstancesByPropertyPayload, IbpColumn, IbpCell } from "./types";
+import type { InstancesByPropertyPayload, IbpColumn, IbpCell, IbpRow } from "./types";
+import { bounded } from "@/lib/boundedWarning";
 
 /**
  * INSTANCES_BY_PROPERTY renderer — GENERIC by construction.
@@ -30,6 +31,16 @@ const EMPTY_CELL = "—";
 const absent = (cell: IbpCell | undefined): cell is null | undefined | "" =>
   cell === undefined || cell === null || cell === "";
 
+/** A cell value: an object under a column key is not a cell value, so it reads as absent. */
+const cellOf = (row: IbpRow, key: string): IbpCell | undefined => {
+  const v = row[key];
+  return v !== null && typeof v === "object" ? undefined : v;
+};
+
+/** A tolerant {column key: phrase} map: a non-object or array is {}. Phrases are bounded at lookup. */
+const reasonMap = (v: unknown): Record<string, unknown> =>
+  v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
 export const InstancesByPropertyView: React.FC<{
   payload: InstancesByPropertyPayload;
   /** Optional: a tab click asks the host to re-query for that filter value.
@@ -37,24 +48,34 @@ export const InstancesByPropertyView: React.FC<{
   onSelectFilter?: (value: string) => void;
 }> = ({ payload, onSelectFilter }) => {
   const { title, columns, rows, target, row_identity, state_vocabulary, group_by } = payload;
+  const envelopeReasons = reasonMap(payload.absent_reason);
   const identityKey = row_identity?.key;
   const activeFilter = target?.filter_value;
 
   // GROUPING — by whichever column the producer's `group_by` names, in first-appearance order.
   const groupCol = group_by ? columns.find((c) => c.key === group_by) : undefined;
-  const groups: { value: IbpCell | undefined; rows: Record<string, IbpCell>[] }[] = [];
+  const groups: { value: IbpCell | undefined; rows: IbpRow[] }[] = [];
   if (groupCol) {
     for (const row of rows) {
-      const value = absent(row[groupCol.key]) ? undefined : row[groupCol.key];
+      const value = absent(cellOf(row, groupCol.key)) ? undefined : cellOf(row, groupCol.key);
       const g = groups.find((x) => x.value === value);
       if (g) g.rows.push(row);
       else groups.push({ value, rows: [row] });
     }
   }
 
-  const renderCell = (col: IbpColumn, row: Record<string, IbpCell>) => {
-    const cell = row[col.key];
+  const renderCell = (col: IbpColumn, row: IbpRow) => {
+    const cell = cellOf(row, col.key);
     if (absent(cell)) {
+      // Row before envelope; a phrase that fails the bound counts as missing.
+      const why = bounded(reasonMap(row.absent_reason)[col.key]) ?? bounded(envelopeReasons[col.key]);
+      if (why !== null) {
+        return (
+          <span className="text-[10px] leading-tight text-slate-500 italic" data-ibp-absent-reason data-ibp-cell-absent>
+            {why}
+          </span>
+        );
+      }
       return (
         <span className="text-slate-600" data-ibp-cell-absent title="not stated">
           {EMPTY_CELL}
@@ -74,9 +95,9 @@ export const InstancesByPropertyView: React.FC<{
     return <span className={`font-mono text-xs text-slate-300${/\s/.test(raw) ? "" : " whitespace-nowrap"}`}>{raw}</span>;
   };
 
-  const drawRow = (row: Record<string, IbpCell>, i: number) => (
+  const drawRow = (row: IbpRow, i: number) => (
     <tr
-      key={(identityKey && !absent(row[identityKey]) && String(row[identityKey])) || i}
+      key={(identityKey && !absent(cellOf(row, identityKey)) && String(cellOf(row, identityKey))) || i}
       data-ibp-row=""
       className="hover:bg-cyan-500/[0.04] transition-colors"
     >

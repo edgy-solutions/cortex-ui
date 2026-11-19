@@ -41,6 +41,14 @@ export interface IbpTarget {
  *  not 0 and not "": the widget draws it as absent and draws a served 0 as 0. */
 export type IbpCell = string | number | null;
 
+/** A map of column key to a producer phrase saying why a cell is absent. Read tolerantly: the wire
+ *  may carry anything here, so the reader checks the shape and bounds every phrase. */
+export type IbpAbsentReasons = Record<string, unknown>;
+
+/** One row as the wire carries it: cells keyed by column, plus an optional per-row `absent_reason`
+ *  map (a key INSIDE the row, never a column). */
+export type IbpRow = Record<string, IbpCell | IbpAbsentReasons>;
+
 export interface InstancesByPropertyPayload {
   archetype: "INSTANCES_BY_PROPERTY";
   title: string;
@@ -56,5 +64,8 @@ export interface InstancesByPropertyPayload {
   group_by?: string;
   /** The data. Keys match columns[].key. Always data (from /instances tomorrow,
    *  the hand-assembled feeder today). Values are strings/IRIs, numbers, or null (absent). */
-  rows: Record<string, IbpCell>[];
+  rows: IbpRow[];
+  /** Why a cell is absent, per column: {column key: phrase}. Drawn as served in an absent cell only.
+   *  A row's own `absent_reason` wins. A server older than this omits it. Read as unknown. */
+  absent_reason?: unknown;
 }

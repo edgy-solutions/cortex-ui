@@ -154,3 +154,110 @@ describe("the table fits the 640px canvas width (compact cells; real layout prov
     expect(c.querySelector(".glass-panel")!.className).toContain("p-4");
   });
 });
+
+describe("served absent_reason in an absent cell", () => {
+  const base = (rows: InstancesByPropertyPayload["rows"], extra: Record<string, unknown> = {}): InstancesByPropertyPayload => ({
+    archetype: "INSTANCES_BY_PROPERTY",
+    title: "t",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "stock", label: "Stock" },
+    ],
+    row_identity: { key: "name" },
+    rows,
+    ...extra,
+  });
+  const stock = (p: InstancesByPropertyPayload) => cellsOf(draw(p), p, "stock");
+
+  it("envelope reason in an all-null column", () => {
+    const p = base([{ name: "a", stock: null }, { name: "b", stock: null }], { absent_reason: { stock: "not held at this site" } });
+    const cs = stock(p);
+    expect(cs.map((c) => c.textContent)).toEqual(["not held at this site", "not held at this site"]);
+    expect(cs[0]!.querySelector("[data-ibp-absent-reason]")).not.toBeNull();
+    expect(cs[0]!.querySelector(".whitespace-nowrap")).toBeNull();
+  });
+  it("a reason is prose in the proportional font, so it adds no width to a table that fits with no spare pixel", () => {
+    // Measured 11-19 in Chromium at 640px with "no source" in two columns: in font-mono at 12px the
+    // Stock column grew 46→49px and the table overflowed by 10px; mono at 10px still +3px; the
+    // proportional font at 10px left every column at its dash width. jsdom measures nothing, so
+    // the decision is pinned as classes.
+    const p = base([{ name: "a", stock: null }], { absent_reason: { stock: "no source" } });
+    const span = draw(p).querySelector("[data-ibp-absent-reason]")!;
+    expect(span.className).not.toMatch(/\bfont-mono\b/);
+    expect(span.className).toMatch(/\btext-\[10px\]/);
+  });
+  it("a row reason beats the envelope; a row without one falls to the envelope", () => {
+    const p = base(
+      [{ name: "a", stock: null, absent_reason: { stock: "row says" } }, { name: "b", stock: "", absent_reason: { other: "x" } }],
+      { absent_reason: { stock: "envelope says" } },
+    );
+    expect(stock(p).map((c) => c.textContent)).toEqual(["row says", "envelope says"]);
+  });
+  it("neither present gives the dash", () => {
+    expect(stock(base([{ name: "a", stock: null }])).map((c) => c.textContent)).toEqual(["—"]);
+  });
+  it("a served 0 and any valued cell never draw a reason", () => {
+    const p = base([{ name: "a", stock: 0, absent_reason: { stock: "row", name: "r2" } }], { absent_reason: { stock: "env", name: "e2" } });
+    const c = draw(p);
+    expect(cellsOf(c, p, "stock")[0]!.textContent).toBe("0");
+    expect(c.querySelector("[data-ibp-absent-reason]")).toBeNull();
+    expect(c.textContent).not.toMatch(/env|row|r2|e2/);
+  });
+  it("a non-object absent_reason gives the dash", () => {
+    for (const bad of ["why", 3, ["stock"], null, true]) {
+      const p = base([{ name: "a", stock: null }], { absent_reason: bad });
+      expect(stock(p)[0]!.textContent).toBe("—");
+      cleanup();
+    }
+  });
+  it("an over-long or multi-line phrase falls through to the next source", () => {
+    const p = base(
+      [{ name: "a", stock: null, absent_reason: { stock: "x".repeat(161) } }, { name: "b", stock: null, absent_reason: { stock: "a\nb" } }],
+      { absent_reason: { stock: "envelope says" } },
+    );
+    expect(stock(p).map((c) => c.textContent)).toEqual(["envelope says", "envelope says"]);
+    const q = base([{ name: "a", stock: null, absent_reason: { stock: "x".repeat(161) } }], { absent_reason: { stock: "y".repeat(161) } });
+    cleanup();
+    expect(stock(q)[0]!.textContent).toBe("—");
+  });
+  it("the row's absent_reason object is never drawn as text or a cell", () => {
+    const p = base([{ name: "a", stock: 5, absent_reason: { stock: "SECRETPHRASE" } }]);
+    const c = draw(p);
+    expect(c.textContent).not.toContain("SECRETPHRASE");
+    expect(c.textContent).not.toContain("[object Object]");
+    expect(c.querySelectorAll("tr[data-ibp-row] td")).toHaveLength(2);
+  });
+  it("an object under a COLUMN key is not a value: drawn absent, never as [object Object]", () => {
+    // The per-row map is an object inside the row. Nothing stops a column from carrying a key that
+    // collides with it, or a producer from nesting a value; either must read as absent, not as text.
+    const p = base([{ name: "a", stock: { n: 5 } }]);
+    const c = draw(p);
+    expect(stock(p)[0]!.textContent).toBe("—");
+    expect(c.textContent).not.toContain("[object Object]");
+  });
+  it("an array map is not a map, even where an index could match a column key", () => {
+    // Every other column key misses an array by accident; a key that IS an index ("0") would not,
+    // so the breaking input names one.
+    const p: InstancesByPropertyPayload = {
+      ...base([{ "0": null }], { absent_reason: ["from an array"] }),
+      columns: [{ key: "0", label: "Zero" }],
+      row_identity: undefined,
+    };
+    const c = draw(p);
+    expect(c.textContent).not.toContain("from an array");
+    expect(c.querySelector("[data-ibp-cell-absent]")!.textContent).toBe("—");
+    cleanup();
+    const q: InstancesByPropertyPayload = {
+      ...base([{ "0": null, absent_reason: ["from a row array"] }]),
+      columns: [{ key: "0", label: "Zero" }],
+      row_identity: undefined,
+    };
+    expect(draw(q).textContent).not.toContain("from a row array");
+  });
+  it("an old payload without the key draws as before", () => {
+    const p = base([{ name: "a", stock: null }]);
+    const c = draw(p);
+    expect(c.querySelector("[data-ibp-absent-reason]")).toBeNull();
+    expect(c.querySelector("[data-ibp-cell-absent]")!.textContent).toBe("—");
+  });
+});
