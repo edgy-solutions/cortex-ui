@@ -9,6 +9,7 @@
  */
 import type { AskCardPayload } from "@/components/elicitation/Elicitation.contract";
 import { readEmbeddedAsk } from "./askBearingRefusal";
+import { bounded } from "./boundedWarning";
 
 export const REFUSAL_FIELD = "refusal";
 
@@ -27,6 +28,9 @@ export type RefusalEnvelope = {
    */
   // PROPOSED (unratified): refusal envelope carries ask, the #97 409's shape
   ask?: AskCardPayload;
+  /** A plain-language reason, drawn as served; `reason` stays the code. Absent unless one bounded line. */
+  // PROPOSED (unratified): refusal envelope carries message, a plain-language reason (architect 11-19 item e to lane 74)
+  message?: string;
 };
 
 export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
@@ -53,5 +57,8 @@ export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
   // PROPOSED (unratified): refusal envelope carries ask, the #97 409's shape
   const ask = readEmbeddedAsk(o.ask);
   if (ask) env.ask = ask;
+  // PROPOSED (unratified): refusal envelope carries message, a plain-language reason (architect 11-19 item e to lane 74)
+  const message = bounded(o.message);
+  if (message !== null) env.message = message;
   return env;
 }

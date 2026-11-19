@@ -67,3 +67,15 @@ describe("readRefusalEnvelope", () => {
     expect(Object.keys(env)).not.toContain("hazard_id");
   });
 });
+describe("refusal.message (PROPOSED)", () => {
+  const read = (message: unknown) =>
+    readRefusalEnvelope({ refusal: { refused: true, outcome: "x", reason: "code_a", message } })!;
+  it("a bounded line is kept", () => {
+    expect(read("  The source is down  ").message).toBe("The source is down");
+  });
+  it("over-long, multi-line, empty and non-string messages leave the key ABSENT", () => {
+    for (const bad of ["x".repeat(161), "a\nb", "  ", 3, null, {}, undefined]) {
+      expect("message" in read(bad)).toBe(false);
+    }
+  });
+});

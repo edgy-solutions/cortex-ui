@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { RefusalEnvelope } from "@/lib/refusalEnvelope";
 
 const HEADLINE: Record<string, string> = {
@@ -16,6 +16,8 @@ export const RefusalCard: React.FC<{
   scopeLabel?: string;
 }> = ({ envelope, archetype, scopeLabel }) => {
   const source = [envelope.connector, envelope.fn].filter(Boolean).join(" · ");
+  const [open, setOpen] = useState(false);
+  const hasDetail = envelope.reason !== null || source !== "";
   return (
     <div
       role="status"
@@ -44,8 +46,38 @@ export const RefusalCard: React.FC<{
         {archetype ? ` · ${archetype}` : ""}
         {scopeLabel ? ` · ${scopeLabel}` : ""}
       </p>
-      <p className="font-mono text-[11px] text-slate-400">{envelope.reason ?? "No reason given"}</p>
-      {source && <p className="font-mono text-[10px] text-slate-500">{source}</p>}
+      {envelope.message ? (
+        <>
+          {/* PROPOSED (unratified): refusal envelope carries message, a plain-language reason (architect 11-19 item e to lane 74) */}
+          <p data-refusal-message className="font-mono text-[11px] text-slate-400">
+            {envelope.message}
+          </p>
+          {hasDetail && (
+            <button
+              type="button"
+              data-refusal-detail-toggle
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+              className="font-mono text-[10px] text-slate-500 underline"
+            >
+              detail
+            </button>
+          )}
+          {hasDetail && open && (
+            <div data-refusal-detail className="space-y-1">
+              {envelope.reason !== null && (
+                <p className="font-mono text-[11px] text-slate-400">{envelope.reason}</p>
+              )}
+              {source && <p className="font-mono text-[10px] text-slate-500">{source}</p>}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="font-mono text-[11px] text-slate-400">{envelope.reason ?? "No reason given"}</p>
+          {source && <p className="font-mono text-[10px] text-slate-500">{source}</p>}
+        </>
+      )}
     </div>
   );
 };
