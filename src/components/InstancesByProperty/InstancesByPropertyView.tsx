@@ -66,12 +66,12 @@ export const InstancesByPropertyView: React.FC<{
     // keep the full IRI as the title (identity stays the IRI).
     if (col.key === identityKey && row_identity?.iri && row_identity?.display_from_local_name) {
       return (
-        <span className="font-semibold font-mono text-sm text-slate-100" title={raw}>
+        <span className={`font-semibold font-mono text-xs text-slate-100${/\s/.test(localName(raw)) ? "" : " whitespace-nowrap"}`} title={raw}>
           {localName(raw)}
         </span>
       );
     }
-    return <span className="font-mono text-sm text-slate-300">{raw}</span>;
+    return <span className={`font-mono text-xs text-slate-300${/\s/.test(raw) ? "" : " whitespace-nowrap"}`}>{raw}</span>;
   };
 
   const drawRow = (row: Record<string, IbpCell>, i: number) => (
@@ -81,7 +81,7 @@ export const InstancesByPropertyView: React.FC<{
       className="hover:bg-cyan-500/[0.04] transition-colors"
     >
       {columns.map((col) => (
-        <td key={col.key} className="px-3 py-3 align-top">
+        <td key={col.key} className="px-2 py-3 align-top">
           {renderCell(col, row)}
         </td>
       ))}
@@ -89,7 +89,7 @@ export const InstancesByPropertyView: React.FC<{
   );
 
   return (
-    <div className="glass-panel p-6 my-4 border-cyan-500/20 relative overflow-hidden">
+    <div className="glass-panel p-4 my-4 border-cyan-500/20 relative overflow-hidden">
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-1">
@@ -155,7 +155,7 @@ export const InstancesByPropertyView: React.FC<{
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest font-semibold text-cyan-400/70"
+                    className="px-2 py-2 font-mono text-[10px] uppercase tracking-wider font-semibold text-cyan-400/70"
                   >
                     {col.label}
                   </th>

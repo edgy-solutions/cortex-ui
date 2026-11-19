@@ -133,3 +133,24 @@ describe("the widget spells none of the producer's words", () => {
     }
   });
 });
+
+describe("the table fits the 640px canvas width (compact cells; real layout proved in Chromium)", () => {
+  it("a value with no whitespace is never broken mid-token; a value with a space may wrap", () => {
+    const p = { ...WHERE_USED, rows: [{ ...WHERE_USED.rows[0]!, configuration: "as designed", as_of: "2026-11-07" }] };
+    const c = draw(p);
+    const span = (key: string) => cellsOf(c, p, key)[0]!.querySelector("span")!;
+    expect(span("as_of").className).toContain("whitespace-nowrap");
+    expect(span("configuration").className).not.toContain("whitespace-nowrap");
+    expect(span("configuration").className).toContain("text-xs");
+  });
+  it("cells and headers carry the compact padding", () => {
+    const c = draw(WHERE_USED);
+    for (const th of c.querySelectorAll("thead th")) {
+      expect(th.className).toContain("px-2");
+      expect(th.className).toContain("tracking-wider");
+      expect(th.className).not.toContain("px-3");
+    }
+    for (const td of cellsOf(c, WHERE_USED, "as_of")) expect(td.className).toContain("px-2");
+    expect(c.querySelector(".glass-panel")!.className).toContain("p-4");
+  });
+});
