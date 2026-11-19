@@ -248,7 +248,8 @@ describe("served absent_reason in an absent cell", () => {
     expect(c.querySelector("[data-ibp-cell-absent]")!.textContent).toBe("—");
     cleanup();
     const q: InstancesByPropertyPayload = {
-      ...base([{ "0": null, absent_reason: ["from a row array"] }]),
+      // The wire can carry anything here; the type says object, so the wrong shape is cast in.
+      ...base([{ "0": null, absent_reason: ["from a row array"] as unknown as Record<string, unknown> }]),
       columns: [{ key: "0", label: "Zero" }],
       row_identity: undefined,
     };
