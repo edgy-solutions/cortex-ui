@@ -358,13 +358,21 @@ export function StageCard({
                 : "bg-neon-cyan"
             }`}
           />
-          {/* THE SUBJECT IS WHAT GIVES WAY. Six cards on one program share a subject and differ
-              only by verb, so when both halves truncate the reader loses the ONE word that tells
-              them apart — "NOTIONAL PROGRAM MER… · fin Eac Calcula…" names nothing. `min-w-0`
-              is what makes this span actually shrink: a flex child will not go below its content
-              width without it, which is why adding `truncate` alone never did anything here. */}
+          {/* NOTHING GIVES WAY. The eyebrow wraps to a second line when it does not fit (ruled
+              2026-11-19, after the notice title read "PCN26-…" in the rehearsal): neither the
+              subject nor the verb is cut, because either one alone can be the word that tells
+              six cards on one program apart. `min-w-0` is what lets this span shrink and wrap:
+              a flex child will not go below its content width without it. The full text is also
+              the title. */}
           <span
-            className={`text-[11px] font-mono uppercase tracking-widest truncate min-w-0 ${
+            data-eyebrow-subject=""
+            title={
+              task
+                ? taskKindLabel(task.kind, byKind)
+                : (spo.subjectLabel || (fallback ? "unresolved" : "answer")) +
+                  (custom && spo.verbLabel ? ` · ${spo.verbLabel}` : "")
+            }
+            className={`text-[11px] font-mono uppercase tracking-widest break-words min-w-0 ${
               task && taskPending ? "text-neon-pink/90" : "text-slate-400"
             }`}
           >
@@ -646,13 +654,21 @@ export function StageCard({
                 : "bg-neon-cyan"
             }`}
           />
-          {/* THE SUBJECT IS WHAT GIVES WAY. Six cards on one program share a subject and differ
-              only by verb, so when both halves truncate the reader loses the ONE word that tells
-              them apart — "NOTIONAL PROGRAM MER… · fin Eac Calcula…" names nothing. `min-w-0`
-              is what makes this span actually shrink: a flex child will not go below its content
-              width without it, which is why adding `truncate` alone never did anything here. */}
+          {/* NOTHING GIVES WAY. The eyebrow wraps to a second line when it does not fit (ruled
+              2026-11-19, after the notice title read "PCN26-…" in the rehearsal): neither the
+              subject nor the verb is cut, because either one alone can be the word that tells
+              six cards on one program apart. `min-w-0` is what lets this span shrink and wrap:
+              a flex child will not go below its content width without it. The full text is also
+              the title. */}
           <span
-            className={`text-[11px] font-mono uppercase tracking-widest truncate min-w-0 ${
+            data-eyebrow-subject=""
+            title={
+              task
+                ? taskKindLabel(task.kind, byKind)
+                : (spo.subjectLabel || (fallback ? "unresolved" : "answer")) +
+                  (custom && spo.verbLabel ? ` · ${spo.verbLabel}` : "")
+            }
+            className={`text-[11px] font-mono uppercase tracking-widest break-words min-w-0 ${
               task && taskPending ? "text-neon-pink/90" : "text-slate-400"
             }`}
           >

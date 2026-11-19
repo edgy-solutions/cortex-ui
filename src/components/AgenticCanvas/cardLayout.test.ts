@@ -77,10 +77,14 @@ describe("the reference label stays inside the plot", () => {
 });
 
 describe("the eyebrow keeps the half that disambiguates", () => {
-  it("the subject can shrink — `truncate` alone does nothing to a flex child", () => {
-    // A flex item will not go below its content width without `min-w-0`, so the subject span
-    // never actually yielded and both halves clipped together.
-    expect(CARD).toMatch(/text-\[11px\] font-mono uppercase tracking-widest truncate min-w-0/);
+  it("the subject wraps to a second line instead of being cut — in BOTH eyebrow copies", () => {
+    // Ruled 2026-11-19, after the notice title read "PCN26-…" in the rehearsal: wrap the header,
+    // so neither subject nor verb is cut. A flex item will not go below its content width without
+    // `min-w-0`, so that stays; `truncate` goes. Two copies (front face, back face): count them,
+    // because a pattern that matches once passes with one copy still cutting.
+    const wraps = CARD.match(/text-\[11px\] font-mono uppercase tracking-widest break-words min-w-0/g) ?? [];
+    expect(wraps.length).toBe(2);
+    expect(CARD).not.toMatch(/text-\[11px\] font-mono uppercase tracking-widest[^"`]*\btruncate\b/);
   });
 
   it("the verb shrinks LAST", () => {
