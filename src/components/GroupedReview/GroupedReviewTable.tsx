@@ -14,7 +14,7 @@
  * filters. Mirrors SupplyTable's shell + TaskCard's act-with-optimism.
  */
 import { scrollWithinPane } from "@/lib/scrollWithinPane";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { PackageX, AlertTriangle, CheckCircle2, Undo2, ShieldAlert, Trash2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -30,12 +30,28 @@ import { HumanTaskActRequest_reason_code } from "@/api/generated/bff";
 import type { ReviewBatch, ReviewItem } from "./types";
 import type { ProvenanceItem } from "../Evidence/EvidenceCard";
 import { WarningLines } from "../ExtractionWarning/WarningLines";
-import { boundWarnings } from "@/lib/boundedWarning";
+import { bounded, boundWarnings } from "@/lib/boundedWarning";
 import { ProvenanceSourcePane } from "./ProvenanceSourcePane";
 
 interface OverrideDraft {
   disposition: Disposition;
   reason: string;
+}
+
+/** Candidate dispositions the producer listed for an unproposed row: a known value by its label,
+ *  anything else as its bounded raw string; non-strings and unbounded strings are dropped. */
+function readCandidates(v: unknown): { raw: string; label: string }[] {
+  if (!Array.isArray(v)) return [];
+  const out: { raw: string; label: string }[] = [];
+  for (const c of v) {
+    if (typeof c === "string" && (DISPOSITIONS as readonly string[]).includes(c)) {
+      out.push({ raw: c, label: presentDisposition(c as Disposition).label });
+    } else {
+      const b = bounded(c);
+      if (b !== null) out.push({ raw: b, label: b });
+    }
+  }
+  return out;
 }
 
 const TONE_ACCENT: Record<ReturnType<typeof presentDisposition>["tone"], string> = {
@@ -764,6 +780,29 @@ export function GroupedReviewTable({
                         <AlertTriangle className="w-3 h-3" /> needs a disposition
                       </span>
                     )}
+                    {it.proposed_disposition == null && !it.added && (() => {
+                      const why = bounded(it.abstention_reason);
+                      const cands = readCandidates(it.candidate_dispositions);
+                      if (why === null && cands.length === 0) return null;
+                      return (
+                        <div className="mt-1 space-y-0.5">
+                          {why !== null && (
+                            <p data-review-abstention className="text-[10px] text-slate-400">{why}</p>
+                          )}
+                          {cands.length > 0 && (
+                            <p data-review-candidates className="text-[10px] text-slate-500">
+                              candidates:{" "}
+                              {cands.map((c, i) => (
+                                <Fragment key={i}>
+                                  {i > 0 && " · "}
+                                  <span data-review-candidate={c.raw}>{c.label}</span>
+                                </Fragment>
+                              ))}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   {/* Replacement / LTB */}

@@ -20,6 +20,11 @@ export interface ReviewItem {
   proposed_disposition: Disposition | null;
   /** doc-tools weak-extraction flag — the MPN read was uncertain. Carried forward, shown, never hidden. */
   needs_review: boolean;
+  /** Why a row has no proposal, from the producer (PR #450). All three are read tolerantly; a review
+   *  composed before this serves null / [] / null. Drawn beneath the disposition cell, never acted on. */
+  proposal_outcome?: unknown;
+  candidate_dispositions?: unknown;
+  abstention_reason?: string | null;
   replacement_mpn?: string | null;
   ltb_date?: string | null;
 }
