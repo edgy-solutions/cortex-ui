@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { FederatedImage } from "@/components/mesh/FederatedImage";
 import { actOnHumanTask } from "@/api/client";
 import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
+import { WarningLines } from "@/components/ExtractionWarning/WarningLines";
+import { boundWarnings } from "@/lib/boundedWarning";
 import { formatRequestedBy } from "@/lib/requestedBy";
 
 /**
@@ -48,7 +50,7 @@ export interface TriageTaskPayload {
   subject_ref: string | null;
   /** Extraction-quality warnings ("PARTS MAY BE MISSING: 2/5 table crops failed") — the WHY
    *  that makes the refusal actionable. Threaded from the triage payload. */
-  warnings?: string[];
+  warnings?: unknown[];
   reason_code?: string;
   /** Page renders from the extraction that FAILED. The card's instrument: alice is asked to
    *  judge whether a notice the machine could not read matters, and without the pages she has
@@ -202,16 +204,9 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
 
       {/* The WHY, given its own weight rather than buried in the summary line — this is the
           one thing that makes the refusal actionable to a human. */}
-      {task.warnings && task.warnings.length > 0 && (
+      {boundWarnings(task.warnings).length > 0 && (
         <div className="mb-4 rounded border border-amber-500/25 bg-amber-500/[0.06] p-3">
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-amber-400/80 mb-1.5">
-            why the extraction could not prepare this
-          </p>
-          <ul className="space-y-1">
-            {task.warnings.map((w, i) => (
-              <li key={i} className="text-[12px] text-amber-100/90 leading-snug">{w}</li>
-            ))}
-          </ul>
+          <WarningLines warnings={task.warnings} heading="why the extraction could not prepare this" />
         </div>
       )}
 

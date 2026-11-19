@@ -29,6 +29,8 @@ import { actFailureFallback, actRefusal, buildRowEdits, isReviewRowEditsEnabled 
 import { HumanTaskActRequest_reason_code } from "@/api/generated/bff";
 import type { ReviewBatch, ReviewItem } from "./types";
 import type { ProvenanceItem } from "../Evidence/EvidenceCard";
+import { WarningLines } from "../ExtractionWarning/WarningLines";
+import { boundWarnings } from "@/lib/boundedWarning";
 import { ProvenanceSourcePane } from "./ProvenanceSourcePane";
 
 interface OverrideDraft {
@@ -490,22 +492,13 @@ export function GroupedReviewTable({
           look fine, and the missing ones are invisible. Without this the reviewer
           dispositions a partial list believing it complete, and the absent parts silently
           never get one. Proceeding on degraded extraction is fine; proceeding silently
-          is not. Empty/absent on a clean extraction — no banner, no noise. */}
-      {(batch.extraction_warnings?.length ?? 0) > 0 && (
+          is not. Empty/absent on a clean extraction — no banner, no noise.
+          Lines are bounded (code + <=160-char message, detail behind a click): ruling 2026-11-19. */}
+      {boundWarnings(batch.extraction_warnings).length > 0 && (
         <div className="px-4 py-3 border-b border-amber-500/30 bg-amber-500/10">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="font-mono text-[10px] font-bold text-amber-300 uppercase tracking-widest">
-                Extraction incomplete — this list may be missing parts
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {batch.extraction_warnings!.map((w, i) => (
-                  <li key={i} className="text-[11px] text-amber-200/90 leading-snug">
-                    · {w}
-                  </li>
-                ))}
-              </ul>
+              <WarningLines warnings={batch.extraction_warnings} heading="Extraction incomplete — this list may be missing parts" />
               <p className="mt-1.5 text-[10px] text-amber-200/70 leading-snug">
                 Verify against the source document before resolving — parts absent from this
                 table receive no disposition.

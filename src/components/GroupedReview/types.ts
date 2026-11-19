@@ -41,5 +41,7 @@ export interface ReviewBatch {
    * missing parts simply never get a disposition and nobody notices. Absent/empty
    * on a clean extraction.
    */
-  extraction_warnings?: string[];
+  /** Items are { code, message, telemetry_ref } or legacy strings; the shape and code list are
+   *  doc-tools' (packet 2026-11-19). Rendered only through boundWarnings. */
+  extraction_warnings?: unknown[];
 }
