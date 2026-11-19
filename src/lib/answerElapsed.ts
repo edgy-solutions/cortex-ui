@@ -1,5 +1,5 @@
 import type { Artifact } from "@/api/types";
-import { lineageParentIds } from "./askFold";
+import { isAsk, lineageParentIds } from "./askFold";
 import { artifactDuration } from "./formatDuration";
 
 /**
@@ -41,6 +41,19 @@ import { artifactDuration } from "./formatDuration";
  * clock, and it is neither. The footer now shows separately labelled numbers (`answerFooter`):
  * `work` (this sum), `artifacts` (this count), and `wall clock` and `hops`, which only the server
  * can measure and which are drawn only once it serves them.
+ *
+ * ── 2026-11-19: THE FOOTER SHOWS THIS ANSWER'S TIME, NOT THE CHAIN'S ─────────────────────
+ *
+ * Perf found that the footer's `work` figure summed every artifact in the lineage chain, so a
+ * follow-up showed minutes when the answer itself took ~85 s. Ruling (2026-11-19): "the footer
+ * shows the time of this answer. A chain total, if shown at all, is labelled as a total and sits
+ * apart from it." And: "For an answer reached through an ask card, 'this answer's time' is the
+ * last step alone, with the ask's time shown beside it and labelled."
+ *
+ * So `work` is gone. The footer leads with `this answer` (the artifact's own duration_ms) and,
+ * when the first lineage parent is an ask, `ask` beside it. The chain sum survives only as
+ * `chain total`, in its own "total" group, drawn only when the chain holds more than this answer
+ * plus its ask.
  */
 
 /** How much work produced this answer, and how much of that work was measured. */
@@ -51,6 +64,12 @@ export interface AnswerElapsed {
   artifacts: number;
   /** How many of them carried a measurement. */
   measured: number;
+  /** This artifact's OWN valid duration_ms; null when not measured. */
+  ownMs: number | null;
+  /** Whether the first lineage parent is an ask card. */
+  hasAskParent: boolean;
+  /** That ask's own valid duration_ms; null when it has none (or there is no ask parent). */
+  askMs: number | null;
 }
 
 /**
@@ -72,7 +91,7 @@ export function answerElapsed(
   a: Artifact | null | undefined,
   byId: (id: string) => Artifact | undefined,
 ): AnswerElapsed {
-  if (!a) return { ms: null, artifacts: 0, measured: 0 };
+  if (!a) return { ms: null, artifacts: 0, measured: 0, ownMs: null, hasAskParent: false, askMs: null };
 
   const seen = new Set<string>();
   let total = 0;
@@ -98,7 +117,17 @@ export function answerElapsed(
     cur = parents.length ? byId(parents[0]) : undefined;
   }
 
-  return { ms: measured > 0 ? total : null, artifacts, measured };
+  const first = lineageParentIds(a)[0];
+  const parent = first ? byId(first) : undefined;
+  const hasAskParent = !!parent && parent.id !== a.id && isAsk(parent);
+  return {
+    ms: measured > 0 ? total : null,
+    artifacts,
+    measured,
+    ownMs: artifactDuration(a.duration_ms) !== null ? (a.duration_ms as number) : null,
+    hasAskParent,
+    askMs: hasAskParent && artifactDuration(parent!.duration_ms) !== null ? (parent!.duration_ms as number) : null,
+  };
 }
 
 /**
@@ -115,48 +144,71 @@ export const NOT_SERVED: ServedAnswerTiming = { wallClockMs: null, hops: null };
 
 /** One labelled number in the answer footer. `key` is stable for tests and data attributes. */
 export interface FooterNumber {
-  key: "work" | "wall-clock" | "hops" | "artifacts";
+  key: "this" | "ask" | "wall-clock" | "hops" | "chain-total" | "artifacts";
   label: string;
   value: string;
   title: string;
+  /** `answer`: about this answer. `total`: the chain, drawn apart from it. */
+  group: "answer" | "total";
 }
 
 /**
  * The answer footer: each number separately labelled, each drawn only when it exists.
  *
- * - `work`: the summed producer time. When some artifacts carry no measurement, the value says how
- *   many it covers, so a partial sum is never read as the total.
- * - `wall clock`, `hops`: served, never derived here. A served value that is not a usable number is
- *   dropped the way an absent one is.
- * - `artifacts`: the lineage chain's length, always known for a real artifact.
+ * - `this answer`: the artifact's own duration; absent when unmeasured, never a `0s`.
+ * - `ask`: the ask card's own duration, only when the first lineage parent is an ask and measured.
+ * - `wall clock`, `hops`: served, never derived here.
+ * - `chain total` and `artifacts`: the apart group, drawn only when the chain holds more than this
+ *   answer plus its ask. A partial sum carries "(N of M measured)".
  *
  * No artifact, no footer: a served timing has nothing to annotate.
  */
 export function answerFooter(e: AnswerElapsed, served: ServedAnswerTiming = NOT_SERVED): FooterNumber[] {
   if (e.artifacts === 0) return [];
   const out: FooterNumber[] = [];
-  const work = artifactDuration(e.ms);
-  if (work !== null) {
-    const partial = e.measured < e.artifacts;
+  const own = artifactDuration(e.ownMs);
+  if (own !== null) {
     out.push({
-      key: "work",
-      label: "work",
-      value: partial ? `${work} (${e.measured} of ${e.artifacts} measured)` : work,
-      title: partial
-        ? `Summed producer time over the ${e.measured} of ${e.artifacts} artifacts that recorded one; not a wall clock`
-        : "Summed producer time across the answer's artifacts; not a wall clock",
+      key: "this",
+      label: "this answer",
+      value: own,
+      title: "This answer's own producer time (its last step); not a wall clock",
+      group: "answer",
+    });
+  }
+  const ask = e.hasAskParent ? artifactDuration(e.askMs) : null;
+  if (ask !== null) {
+    out.push({
+      key: "ask",
+      label: "ask",
+      value: ask,
+      title: "The ask card's step before your pick; not included in this answer's time",
+      group: "answer",
     });
   }
   const wall = artifactDuration(served.wallClockMs);
   if (wall !== null) {
-    out.push({ key: "wall-clock", label: "wall clock", value: wall, title: "First request to final render, as the server measured it" });
+    out.push({ key: "wall-clock", label: "wall clock", value: wall, title: "First request to final render, as the server measured it", group: "answer" });
   }
   const hops = served.hops;
   if (typeof hops === "number" && Number.isInteger(hops) && hops >= 0) {
-    out.push({ key: "hops", label: "hops", value: String(hops), title: "Engine hops, as the server counted them" });
+    out.push({ key: "hops", label: "hops", value: String(hops), title: "Engine hops, as the server counted them", group: "answer" });
   }
-  if (e.artifacts > 0) {
-    out.push({ key: "artifacts", label: "artifacts", value: String(e.artifacts), title: "Artifacts in this answer's lineage chain" });
+  if (e.artifacts > (e.hasAskParent ? 2 : 1)) {
+    const total = artifactDuration(e.ms);
+    if (total !== null) {
+      const partial = e.measured < e.artifacts;
+      out.push({
+        key: "chain-total",
+        label: "chain total",
+        value: partial ? `${total} (${e.measured} of ${e.artifacts} measured)` : total,
+        title: partial
+          ? `Summed producer time over the ${e.measured} of ${e.artifacts} artifacts in this answer's lineage chain that recorded one; a total, not this answer's time`
+          : "Summed producer time across this answer's whole lineage chain; a total, not this answer's time",
+        group: "total",
+      });
+    }
+    out.push({ key: "artifacts", label: "artifacts", value: String(e.artifacts), title: "Artifacts in this answer's lineage chain", group: "total" });
   }
   return out;
 }

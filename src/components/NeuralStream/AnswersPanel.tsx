@@ -833,28 +833,39 @@ function IngestReason({ a }: { a: Artifact }) {
 
 /**
  * The answer's footer numbers, each with its own label and a title saying what it measures, so
- * `work 12s · artifacts 2` cannot be read as a wall clock and a hop count. Shared by both rows.
+ * `this answer 12s · chain total 20s` cannot be read as a wall clock and a hop count. Shared by both rows.
  */
 function AnswerFooter({ numbers }: { numbers: FooterNumber[] }) {
-  return (
-    <span data-answer-footer="">
-      {numbers.map((n, i) => (
+  const draw = (g: FooterNumber["group"]) =>
+    numbers
+      .filter((n) => n.group === g)
+      .map((n, i) => (
         <Fragment key={n.key}>
           {i > 0 && " · "}
           <span data-footer-number={n.key} title={n.title}>
             <span className="text-slate-700">{n.label}</span> <span className="tabular-nums">{n.value}</span>
           </span>
         </Fragment>
-      ))}
+      ));
+  const total = numbers.some((n) => n.group === "total");
+  return (
+    <span data-answer-footer="">
+      <span data-footer-group="answer">{draw("answer")}</span>
+      {total && (
+        <span data-footer-group="total" className="ml-2 border-l border-slate-700 pl-2">
+          {draw("total")}
+        </span>
+      )}
     </span>
   );
 }
 
 function TimeRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
   const byKind = useTaskKindStore((s) => s.byKind);
-  // Separately labelled numbers (see `answerFooter`): `work` is summed ACROSS the lineage chain,
-  // since an answer that came from an ask is two pieces of work; it is absent when nothing was
-  // measured, never a `0s`. `wall clock` and `hops` are the server's and wait until it serves them.
+  // Separately labelled numbers (see `answerFooter`): `this answer` is the artifact's OWN time
+  // (ruled 2026-11-19), with the ask's time beside it when it came through an ask; the chain sum is
+  // a labelled `chain total`, drawn apart. Absent when not measured, never a `0s`. `wall clock`
+  // and `hops` are the server's and wait until it serves them.
   const footer = answerFooter(answerElapsed(a, ctx.byId), NOT_SERVED);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);
@@ -1130,9 +1141,10 @@ function ClusterHeader({
 }
 
 function ClusterRow({ a, ctx }: { a: Artifact; ctx: RowCtx }) {
-  // Separately labelled numbers (see `answerFooter`): `work` is summed ACROSS the lineage chain,
-  // since an answer that came from an ask is two pieces of work; it is absent when nothing was
-  // measured, never a `0s`. `wall clock` and `hops` are the server's and wait until it serves them.
+  // Separately labelled numbers (see `answerFooter`): `this answer` is the artifact's OWN time
+  // (ruled 2026-11-19), with the ask's time beside it when it came through an ask; the chain sum is
+  // a labelled `chain total`, drawn apart. Absent when not measured, never a `0s`. `wall clock`
+  // and `hops` are the server's and wait until it serves them.
   const footer = answerFooter(answerElapsed(a, ctx.byId), NOT_SERVED);
   const summary = answerSummary(a);
   const captured = hasCapturedSummary(a);

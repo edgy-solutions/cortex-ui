@@ -31,6 +31,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { answerElapsed, answerFooter, NOT_SERVED, type FooterNumber } from "./answerElapsed";
+import { artifactDuration } from "./formatDuration";
 import type { Artifact } from "@/api/types";
 
 const art = (id: string, duration_ms: number | null, parent?: string) =>
@@ -38,6 +39,13 @@ const art = (id: string, duration_ms: number | null, parent?: string) =>
     id,
     duration_ms,
     ...(parent ? { derived_from_artifact_id: parent } : {}),
+  }) as unknown as Artifact;
+
+/** An ask card: an artifact whose output holds an ELICITATION component. */
+const askCard = (id: string, duration_ms: number | null, parent?: string) =>
+  ({
+    ...(art(id, duration_ms, parent) as unknown as Record<string, unknown>),
+    rendered_output: { components: [{ archetype: "ELICITATION" }] },
   }) as unknown as Artifact;
 
 /** A lookup over a fixed set, the shape the panel threads in. */
@@ -54,12 +62,15 @@ describe("the work is summed across the chain", () => {
     expect(e.ms).toBe(12400);
     expect(e.artifacts).toBe(2);
     expect(e.measured).toBe(2);
-    expect(line(answerFooter(e))).toBe("work 12s · artifacts 2");
+    // The ask is a plain artifact here (no ELICITATION), so it is a prior answer: own time only (chain of 2).
+    expect(line(answerFooter(e))).toBe("this answer 4.4s · chain total 12s · artifacts 2");
   });
 
-  it("a single-artifact answer shows its work and one artifact", () => {
+  it("a single-artifact answer shows only its own time; no total group", () => {
     const only = art("a", 4400);
-    expect(line(answerFooter(answerElapsed(only, lookup([only]))))).toBe("work 4.4s · artifacts 1");
+    const f = answerFooter(answerElapsed(only, lookup([only])));
+    expect(line(f)).toBe("this answer 4.4s");
+    expect(f.some((n) => n.group === "total")).toBe(false);
   });
 
   it("three artifacts still sum, and the count follows", () => {
@@ -67,7 +78,7 @@ describe("the work is summed across the chain", () => {
     const e = answerElapsed(rows[2], lookup(rows));
     expect(e.ms).toBe(6000);
     expect(e.artifacts).toBe(3);
-    expect(line(answerFooter(e))).toBe("work 6.0s · artifacts 3");
+    expect(line(answerFooter(e))).toBe("this answer 3.0s · chain total 6.0s · artifacts 3");
   });
 
   it("does NOT count the time the person spent deciding", () => {
@@ -92,7 +103,7 @@ describe("a partial sum is never presented as a total", () => {
     expect(e.ms).toBe(4400);
     expect(e.measured).toBe(1);
     expect(e.artifacts).toBe(2);
-    expect(line(answerFooter(e))).toBe("work 4.4s (1 of 2 measured) · artifacts 2");
+    expect(line(answerFooter(e))).toBe("this answer 4.4s · chain total 4.4s (1 of 2 measured) · artifacts 2");
   });
 
   it("draws NO work when nothing was measured, and still counts the artifacts", () => {
@@ -123,7 +134,81 @@ describe("a partial sum is never presented as a total", () => {
     const answer = art("ans-1", 4400, "ask-1");
     const e = answerElapsed(answer, lookup([ask, answer]));
     expect(e.measured).toBe(2);
-    expect(line(answerFooter(e))).toBe("work 4.4s · artifacts 2");
+    expect(line(answerFooter(e))).toBe("this answer 4.4s · chain total 4.4s · artifacts 2");
+  });
+});
+
+describe("the footer shows THIS answer's time (ruled 2026-11-19)", () => {
+  // prior answer (60 000) <- ask (41 000) <- answer (85 000)
+  const chain = () => {
+    const prior = art("prior", 60_000);
+    const ask = askCard("ask", 41_000, "prior");
+    const ans = art("ans", 85_000, "ask");
+    return answerFooter(answerElapsed(ans, lookup([prior, ask, ans])));
+  };
+  const val = (f: FooterNumber[], k: string) => f.find((n) => n.key === k)?.value;
+
+  it("this answer is the last step alone, never a chain sum", () => {
+    const f = chain();
+    expect(val(f, "this")).toBe(artifactDuration(85_000));
+    for (const n of f.filter((x) => x.key !== "chain-total")) {
+      expect(n.value).not.toBe(artifactDuration(186_000));
+      expect(n.value).not.toBe(artifactDuration(126_000));
+    }
+    expect(f.map((n) => n.key as string)).not.toContain("work");
+  });
+
+  it("the ask's own time sits beside it, labelled", () => {
+    const f = chain();
+    expect(val(f, "ask")).toBe(artifactDuration(41_000));
+    expect(f.find((n) => n.key === "ask")!.title).toMatch(/not included in this answer's time/);
+  });
+
+  it("the chain total is a labelled total in the apart group; this and ask are in the answer group", () => {
+    const f = chain();
+    expect(val(f, "chain-total")).toBe(artifactDuration(186_000));
+    expect(f.find((n) => n.key === "chain-total")!.title).toMatch(/a total, not this answer's time/);
+    const group = (k: string) => f.find((n) => n.key === k)!.group;
+    expect(group("chain-total")).toBe("total");
+    expect(group("artifacts")).toBe("total");
+    expect(group("this")).toBe("answer");
+    expect(group("ask")).toBe("answer");
+    expect(f.map((n) => n.key)).toEqual(["this", "ask", "chain-total", "artifacts"]);
+  });
+
+  it("an ask-reached answer with nothing before the ask shows no total group", () => {
+    const ask = askCard("ask", 41_000);
+    const ans = art("ans", 85_000, "ask");
+    const f = answerFooter(answerElapsed(ans, lookup([ask, ans])));
+    expect(f.map((n) => n.key)).toEqual(["this", "ask"]);
+  });
+
+  it("an unmeasured leaf with a measured ask: no this answer, ask present", () => {
+    const ask = askCard("ask", 41_000);
+    const ans = art("ans", null, "ask");
+    expect(answerFooter(answerElapsed(ans, lookup([ask, ans]))).map((n) => n.key)).toEqual(["ask"]);
+  });
+
+  it("near side: an ask parent with no duration draws no ask number", () => {
+    const ask = askCard("ask", null);
+    const ans = art("ans", 85_000, "ask");
+    expect(answerFooter(answerElapsed(ans, lookup([ask, ans]))).map((n) => n.key)).toEqual(["this"]);
+  });
+
+  it("a follow-up whose parent is NOT an ask: no ask, and the chain total is shown", () => {
+    const prior = art("prior", 60_000);
+    const ans = art("ans", 85_000, "prior");
+    const f = answerFooter(answerElapsed(ans, lookup([prior, ans])));
+    expect(f.map((n) => n.key)).toEqual(["this", "chain-total", "artifacts"]);
+    expect(val(f, "chain-total")).toBe(artifactDuration(145_000));
+  });
+
+  it("a chain with an unmeasured member marks the total as partial", () => {
+    const prior = art("prior", null);
+    const ask = askCard("ask", 41_000, "prior");
+    const ans = art("ans", 85_000, "ask");
+    const f = answerFooter(answerElapsed(ans, lookup([prior, ask, ans])));
+    expect(val(f, "chain-total")).toBe(`${artifactDuration(126_000)} (2 of 3 measured)`);
   });
 });
 
@@ -135,22 +220,22 @@ describe("wall clock and hops are the server's, drawn only when served", () => {
   };
 
   it("absent: neither is drawn, and nothing is derived to stand in for them", () => {
-    expect(answerFooter(two(), NOT_SERVED).map((n) => n.key)).toEqual(["work", "artifacts"]);
+    expect(answerFooter(two(), NOT_SERVED).map((n) => n.key)).toEqual(["this", "chain-total", "artifacts"]);
   });
 
-  it("served: each is its own labelled number, in the order work, wall clock, hops, artifacts", () => {
+  it("served: each is its own labelled number, in the order this answer, wall clock, hops, then the total group", () => {
     const f = answerFooter(two(), { wallClockMs: 455_000, hops: 4 });
-    expect(f.map((n) => n.key)).toEqual(["work", "wall-clock", "hops", "artifacts"]);
-    expect(line(f)).toBe("work 12s · wall clock 7m 35s · hops 4 · artifacts 2");
+    expect(f.map((n) => n.key)).toEqual(["this", "wall-clock", "hops", "chain-total", "artifacts"]);
+    expect(line(f)).toBe("this answer 4.4s · wall clock 7m 35s · hops 4 · chain total 12s · artifacts 2");
   });
 
   it("each served value stands alone: one served, the other absent", () => {
-    expect(answerFooter(two(), { wallClockMs: 455_000, hops: null }).map((n) => n.key)).toEqual(["work", "wall-clock", "artifacts"]);
-    expect(answerFooter(two(), { wallClockMs: null, hops: 3 }).map((n) => n.key)).toEqual(["work", "hops", "artifacts"]);
+    expect(answerFooter(two(), { wallClockMs: 455_000, hops: null }).map((n) => n.key)).toEqual(["this", "wall-clock", "chain-total", "artifacts"]);
+    expect(answerFooter(two(), { wallClockMs: null, hops: 3 }).map((n) => n.key)).toEqual(["this", "hops", "chain-total", "artifacts"]);
   });
 
   it("ZERO hops is a served count and is drawn", () => {
-    expect(line(answerFooter(two(), { wallClockMs: null, hops: 0 }))).toBe("work 12s · hops 0 · artifacts 2");
+    expect(line(answerFooter(two(), { wallClockMs: null, hops: 0 }))).toBe("this answer 4.4s · hops 0 · chain total 12s · artifacts 2");
   });
 
   it("a served value that is not a usable number is dropped like an absent one", () => {
@@ -159,13 +244,13 @@ describe("wall clock and hops are the server's, drawn only when served", () => {
       { wallClockMs: Number.NaN, hops: 2.5 },
       { wallClockMs: Infinity, hops: Number.NaN },
     ]) {
-      expect(answerFooter(two(), bad).map((n) => n.key), JSON.stringify(bad)).toEqual(["work", "artifacts"]);
+      expect(answerFooter(two(), bad).map((n) => n.key), JSON.stringify(bad)).toEqual(["this", "chain-total", "artifacts"]);
     }
   });
 
   it("every number carries a title saying what it measures", () => {
     for (const n of answerFooter(two(), { wallClockMs: 1000, hops: 1 })) expect(n.title, n.key).not.toBe("");
-    expect(answerFooter(two()).find((n) => n.key === "work")!.title).toMatch(/not a wall clock/);
+    expect(answerFooter(two()).find((n) => n.key === "this")!.title).toMatch(/not a wall clock/);
   });
 });
 
@@ -176,7 +261,7 @@ describe("the walk is bounded and does not trust the wire", () => {
     const answer = art("ans-1", 4400, "missing-parent");
     const e = answerElapsed(answer, lookup([answer]));
     expect(e.artifacts).toBe(1);
-    expect(line(answerFooter(e))).toBe("work 4.4s · artifacts 1");
+    expect(line(answerFooter(e))).toBe("this answer 4.4s");
   });
 
   it("a row naming ITSELF terminates", () => {
