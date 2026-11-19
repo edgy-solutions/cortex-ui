@@ -49,6 +49,14 @@ interface PersonaState {
   // changes (login as a different user), the store resets.
   ownerSub: string | null;
 
+  /**
+   * Personas granted since the picker was last opened, for the "New" marker (ruled 2026-11-19: a new grant
+   * never changes who a person acts as; the marker is approved). Display only: nothing reads it to pick a
+   * persona. Not persisted.
+   */
+  newPersonas: string[];
+  clearNewPersonas: () => void;
+
   // -- actions --------------------------------------------------------
 
   /**
@@ -148,6 +156,8 @@ function track(p: Promise<void>): Promise<void> {
  */
 function applyEntitlements(set: SetFn, get: GetFn, e: Entitlements, mode: "load" | "refresh"): void {
   const st = get();
+  const prevEntitlements = st.entitlements;
+  let didReset = false;
   // If this fetch is for a DIFFERENT user than the store's
   // current owner (e.g. after a user switch), reset selection
   // to that user's default before revealing the new matrix.
@@ -155,19 +165,33 @@ function applyEntitlements(set: SetFn, get: GetFn, e: Entitlements, mode: "load"
   // so the persisted selection is never carried over.
   if (mode === "load") {
     if (e.user_id === null || st.ownerSub !== e.user_id) {
+      didReset = true;
       get().resetForSub(e.user_id, isSet(e.default) ? e.default : null);
     }
   } else if (e.user_id !== null && st.ownerSub !== e.user_id) {
     // A refresh belongs to the SAME signed-in subject (the sync clears its timer on a subject change), so a
     // null id is not a different user: it must not wipe the pick. Only a real, different id resets.
+    didReset = true;
     get().resetForSub(e.user_id, isSet(e.default) ? e.default : null);
   } else if (st.selectedPersona !== null && !e.cells.some((c) => isSet(c) && c.persona === st.selectedPersona)) {
     // A revoked grant: the pick is no longer entitled, so fall back to the new default.
+    didReset = true;
     get().resetForSub(st.ownerSub, isSet(e.default) ? e.default : null);
+  }
+  // THE "NEW" MARKER: only a refresh over a held matrix for the same subject, with no reset in this call,
+  // can mark anything. It only ever adds to this list; it never touches the selection.
+  let newPersonas: string[] = [];
+  if (mode !== "load" && !didReset && prevEntitlements) {
+    const named = (en: Entitlements) => new Set(en.cells.map((c) => c.persona).filter((x): x is string => typeof x === "string"));
+    const before = named(prevEntitlements);
+    const now = named(e);
+    const merged = new Set<string>([...st.newPersonas, ...[...now].filter((x) => !before.has(x))]);
+    newPersonas = [...merged].filter((x) => now.has(x));
   }
   set({
     entitlements: e,
     entitlementsLoading: false,
+    newPersonas,
   });
   // If no selection yet (fresh session), seed from `default`.
   const firstSet = e.cells.find(isSet);
@@ -257,6 +281,11 @@ export const usePersonaStore = create<PersonaState>()(
       selectedPersona: null,
       selectedDomains: [],
       ownerSub: null,
+      newPersonas: [],
+
+      clearNewPersonas() {
+        if (get().newPersonas.length > 0) set({ newPersonas: [] });
+      },
 
       loadEntitlements(fetchFn, sleepFn = defaultSleep) {
         // ALWAYS a new request: a subject's first load never joins an older one (it may be the previous
@@ -285,6 +314,7 @@ export const usePersonaStore = create<PersonaState>()(
       resetForSub(sub, defaultCell) {
         set({
           ownerSub: sub,
+          newPersonas: [],
           selectedPersona: isSet(defaultCell) ? defaultCell.persona : null,
           selectedDomains: isSet(defaultCell) ? [defaultCell.domain] : [],
         });

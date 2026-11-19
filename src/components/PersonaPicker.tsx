@@ -71,9 +71,21 @@ export function PersonaPicker() {
     personas,
     unsetPersona,
     unsetDomainFor,
+    newPersonas,
+    clearNewPersonas,
   } = usePersonaStore();
 
   const [open, setOpen] = useState(false);
+  // The "New" marker lasts until the picker has been opened and closed (ruled 2026-11-19). Display only:
+  // clearing it never touches the selection.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open) wasOpen.current = true;
+    else if (wasOpen.current) {
+      wasOpen.current = false;
+      clearNewPersonas();
+    }
+  }, [open, clearNewPersonas]);
   const wrapRef = useRef<HTMLSpanElement>(null);
 
   // The fetch DELIBERATELY does not live here any more. Entitlements are session bootstrap
@@ -247,6 +259,7 @@ export function PersonaPicker() {
         data-pp-trigger
         data-pp-active-persona={selectedPersona ?? ""}
         data-pp-active-domain={activeDomain}
+        {...(newPersonas.length > 0 ? { "data-pp-new-count": newPersonas.length } : {})}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
@@ -264,6 +277,11 @@ export function PersonaPicker() {
           <span className="pp-sep"> · </span>
           <span>{activeDomain ? nice(activeDomain) : "—"}</span>
         </span>
+        {newPersonas.length > 0 && (
+          <span data-pp-new-badge="" className="pp-new" title="A persona was granted since you last looked; your current persona is unchanged">
+            New
+          </span>
+        )}
       </span>
 
       {open && (
@@ -281,7 +299,14 @@ export function PersonaPicker() {
                   aria-checked={sel}
                   onClick={() => pickPersona(p)}
                 >
-                  <span>{nice(p)}</span>
+                  <span>
+                    {nice(p)}
+                    {newPersonas.includes(p) && (
+                      <span data-pp-new="" className="pp-new">
+                        New
+                      </span>
+                    )}
+                  </span>
                   <span className="pp-dot">●</span>
                 </div>
               );
@@ -393,6 +418,11 @@ const PickerStyles = () => (
       background: rgba(63,230,214,.13); color: #eafeff;
       box-shadow: inset 0 0 0 1px rgba(63,230,214,.3);
       text-shadow: 0 0 12px rgba(63,230,214,.4);
+    }
+    .pp-new {
+      margin-left: 6px; padding: 0 5px; border-radius: 6px;
+      font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+      color: ${CYAN}; border: 1px solid rgba(63,230,214,.5);
     }
     .pp-dot { font-size: 9px; visibility: hidden; }
     .pp-item.pp-selected .pp-dot { visibility: visible; }
