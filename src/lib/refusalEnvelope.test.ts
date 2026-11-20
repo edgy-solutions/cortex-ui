@@ -79,3 +79,16 @@ describe("refusal.message (PROPOSED)", () => {
     }
   });
 });
+describe("refusal.lists (PROPOSED)", () => {
+  const read = (lists: unknown) =>
+    readRefusalEnvelope({ refusal: { refused: true, outcome: "x", reason: "code_a", lists } })!;
+  it("served lists arrive as the reader's output", () => {
+    const env = read([{ label: "L", items: ["a", "b"], total: 4 }]);
+    expect(env.lists).toEqual([{ label: "L", items: ["a", "b"], total: 4 }]);
+  });
+  it("absent, empty and malformed lists leave the key ABSENT", () => {
+    for (const bad of [undefined, [], "x", 3, null, {}, [{ items: "a" }], [{ items: [] }], [null]]) {
+      expect("lists" in read(bad)).toBe(false);
+    }
+  });
+});

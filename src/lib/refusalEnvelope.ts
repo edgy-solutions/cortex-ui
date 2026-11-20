@@ -10,6 +10,7 @@
 import type { AskCardPayload } from "@/components/elicitation/Elicitation.contract";
 import { readEmbeddedAsk } from "./askBearingRefusal";
 import { bounded } from "./boundedWarning";
+import { readServedLists, type ServedList } from "./servedLists";
 
 export const REFUSAL_FIELD = "refusal";
 
@@ -31,6 +32,9 @@ export type RefusalEnvelope = {
   /** A plain-language reason, drawn as served; `reason` stays the code. Absent unless one bounded line. */
   // PROPOSED (unratified): refusal envelope carries message, a plain-language reason (architect 11-19 item e to lane 74)
   message?: string;
+  /** Structured lists, drawn as lists; a message never carries one. Absent unless at least one list survives the reader. */
+  // PROPOSED (unratified): refusal envelope carries lists, a structured list field (architect 11-19 ruling d: a message never carries a list)
+  lists?: ServedList[];
 };
 
 export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
@@ -60,5 +64,8 @@ export function readRefusalEnvelope(comp: unknown): RefusalEnvelope | null {
   // PROPOSED (unratified): refusal envelope carries message, a plain-language reason (architect 11-19 item e to lane 74)
   const message = bounded(o.message);
   if (message !== null) env.message = message;
+  // PROPOSED (unratified): refusal envelope carries lists, a structured list field (architect 11-19 ruling d: a message never carries a list)
+  const lists = readServedLists(o.lists);
+  if (lists.length > 0) env.lists = lists;
   return env;
 }

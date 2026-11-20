@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ServedLists } from "./ServedLists";
 import type { RefusalEnvelope } from "@/lib/refusalEnvelope";
 
 const HEADLINE: Record<string, string> = {
@@ -78,6 +79,7 @@ export const RefusalCard: React.FC<{
           {source && <p className="font-mono text-[10px] text-slate-500">{source}</p>}
         </>
       )}
+      {envelope.lists && <ServedLists lists={envelope.lists} />}
     </div>
   );
 };
