@@ -54,6 +54,14 @@ import { artifactDuration } from "./formatDuration";
  * when the first lineage parent is an ask, `ask` beside it. The chain sum survives only as
  * `chain total`, in its own "total" group, drawn only when the chain holds more than this answer
  * plus its ask.
+ *
+ * ── 2026-11-20: THE FIRST INTENT CALL IS PART OF THE TIME ────────────────────────────────
+ *
+ * The producer's artifact clock starts AFTER the BFF's `/route_intent` model call returns, so
+ * `duration_ms` leaves that call out (6.5-10.3 s per answer). Architect order (11-19): count the
+ * first intent call in the footer time. Cortex adds the SERVED `intent_ms` to the artifact's
+ * `duration_ms`; it never times anything itself. Absent (or invalid) `intent_ms` means the figure
+ * is unchanged, and an `intent_ms` without a valid `duration_ms` is never an answer's time.
  */
 
 /** How much work produced this answer, and how much of that work was measured. */
@@ -70,6 +78,30 @@ export interface AnswerElapsed {
   hasAskParent: boolean;
   /** That ask's own valid duration_ms; null when it has none (or there is no ask parent). */
   askMs: number | null;
+  /** The valid served intent_ms added into `ownMs`; null when none was added. */
+  ownIntentMs: number | null;
+  /** The valid served intent_ms added into `askMs`; null when none was added. */
+  askIntentMs: number | null;
+}
+
+/** A served intent time, accepted by the same refusal as a duration; null otherwise. */
+function validIntent(a: Artifact): number | null {
+  return artifactDuration(a.intent_ms) !== null ? (a.intent_ms as number) : null;
+}
+
+/**
+ * An artifact's own time: duration_ms plus its served intent_ms when both are valid, duration_ms
+ * alone when the intent is not, and null when duration_ms is not valid (intent alone is never a
+ * time).
+ */
+function ownTime(a: Artifact): number | null {
+  if (artifactDuration(a.duration_ms) === null) return null;
+  return (a.duration_ms as number) + (validIntent(a) ?? 0);
+}
+
+/** The intent part that ownTime added, or null. */
+function addedIntent(a: Artifact): number | null {
+  return artifactDuration(a.duration_ms) === null ? null : validIntent(a);
 }
 
 /**
@@ -91,7 +123,7 @@ export function answerElapsed(
   a: Artifact | null | undefined,
   byId: (id: string) => Artifact | undefined,
 ): AnswerElapsed {
-  if (!a) return { ms: null, artifacts: 0, measured: 0, ownMs: null, hasAskParent: false, askMs: null };
+  if (!a) return { ms: null, artifacts: 0, measured: 0, ownMs: null, hasAskParent: false, askMs: null, ownIntentMs: null, askIntentMs: null };
 
   const seen = new Set<string>();
   let total = 0;
@@ -105,8 +137,9 @@ export function answerElapsed(
     // Read through the same refusal the card uses, so a negative or non-finite value is not
     // silently added into a sum that then looks plausible. `artifactDuration` returning a
     // string means the value passed; the raw number is what gets added.
-    if (artifactDuration(cur.duration_ms) !== null) {
-      total += cur.duration_ms as number;
+    const t = ownTime(cur);
+    if (t !== null) {
+      total += t;
       measured += 1;
     }
     const parents = lineageParentIds(cur);
@@ -124,9 +157,11 @@ export function answerElapsed(
     ms: measured > 0 ? total : null,
     artifacts,
     measured,
-    ownMs: artifactDuration(a.duration_ms) !== null ? (a.duration_ms as number) : null,
+    ownMs: ownTime(a),
     hasAskParent,
-    askMs: hasAskParent && artifactDuration(parent!.duration_ms) !== null ? (parent!.duration_ms as number) : null,
+    askMs: hasAskParent ? ownTime(parent!) : null,
+    ownIntentMs: addedIntent(a),
+    askIntentMs: hasAskParent ? addedIntent(parent!) : null,
   };
 }
 
@@ -172,7 +207,10 @@ export function answerFooter(e: AnswerElapsed, served: ServedAnswerTiming = NOT_
       key: "this",
       label: "this answer",
       value: own,
-      title: "This answer's own producer time (its last step); not a wall clock",
+      title:
+        e.ownIntentMs !== null
+          ? `This answer's own producer time (its last step), including its intent step (${artifactDuration(e.ownIntentMs)}); not a wall clock`
+          : "This answer's own producer time (its last step); not a wall clock",
       group: "answer",
     });
   }
@@ -182,7 +220,10 @@ export function answerFooter(e: AnswerElapsed, served: ServedAnswerTiming = NOT_
       key: "ask",
       label: "ask",
       value: ask,
-      title: "The ask card's step before your pick; not included in this answer's time",
+      title:
+        e.askIntentMs !== null
+          ? `The ask card's step before your pick, including its intent step (${artifactDuration(e.askIntentMs)}); not included in this answer's time`
+          : "The ask card's step before your pick; not included in this answer's time",
       group: "answer",
     });
   }

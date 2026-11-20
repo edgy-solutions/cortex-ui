@@ -51,6 +51,8 @@ import { loadFirstAnswersPage } from "@/lib/answersPaging";
  * EXCEPT the six body columns (rendered_output, routing, resolved_intent, sources, graph_trace,
  * graph_trace_alternates). Electric requires the primary key `id`. Exported because the seal reads it.
  */
+// `intent_ms` is deliberately NOT in this list: the Postgres column does not exist yet, and Electric
+// refuses a whole shape that names a missing column. Add it here once the producer's column exists.
 export const ANSWER_SUMMARY_COLUMNS: readonly string[] = [
   "id",
   "created_at",
@@ -141,7 +143,7 @@ export function rowToArtifact(row: Row): Artifact {
    * Zero is allowed through deliberately — a sub-millisecond cache hit is a real
    * measurement, and swallowing it would make the fastest answers look unmeasured.
    */
-  const parseDurationMs = (v: unknown): number | null => {
+  const parseDurationMs = (v: unknown, field: string = "duration_ms"): number | null => {
     const n = parseBigIntOrNull(v);
     if (n === null || !Number.isFinite(n) || n < 0) {
       // ABSENT AND REFUSED RENDER THE SAME AND MUST NOT DIAGNOSE THE SAME.
@@ -159,7 +161,7 @@ export function rowToArtifact(row: Row): Artifact {
       if (v != null) {
         // eslint-disable-next-line no-console
         console.warn(
-          "[electric] duration_ms ARRIVED AND WAS REFUSED for row",
+          `[electric] ${field} ARRIVED AND WAS REFUSED for row`,
           row.id,
           "— raw value:",
           v,
@@ -188,6 +190,8 @@ export function rowToArtifact(row: Row): Artifact {
     updated_at: parseBigInt(row.updated_at),
     // Absent until the producer emits it; absence is rendered as absence.
     duration_ms: parseDurationMs(row.duration_ms),
+    // PROPOSED producer field; null when absent (no column in the projection yet).
+    intent_ms: parseDurationMs(row.intent_ms, "intent_ms"),
     valid_as_of: parseBigInt(row.valid_as_of),
     valid_until: parseBigIntOrNull(row.valid_until),
     question_text: (row.question_text as string) ?? "",

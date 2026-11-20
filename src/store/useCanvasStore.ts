@@ -152,6 +152,8 @@ export const ELECTRIC_COVERED_FIELDS: readonly (keyof Artifact)[] = [
   // because it arrives ONLY via the projection — no local path writes it, and
   // the absence probe should say so if one ever starts.
   "duration_ms",
+  // The producer`s own measured /route_intent time (PROPOSED field); arrives ONLY via the projection, like duration_ms.
+  "intent_ms",
   // ── Added by the derived coverage check, not by anyone noticing ──────────────
   //
   // Both were projected by `rowToArtifact` and absent from this list, which meant
@@ -475,6 +477,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // claiming no local baseline for a field the Electric boundary later
         // writes — which is precisely what the absence probe exists to catch.
         duration_ms: null,
+        intent_ms: null, // PROPOSED producer field; present-as-key for the same reason as duration_ms
         // produced_by starts as a pending sentinel because the agent
         // identity isn't known at turn-start; refined when the
         // route_decision event arrives carrying real handled_by.

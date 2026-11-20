@@ -78,6 +78,7 @@ const serverRow = (id: string, overrides: Partial<Artifact> = {}): Artifact => (
   // refuses a fixture whose server value matches the pending one, because such a
   // field would pass its assertion without anything having actually arrived.
   duration_ms: 4200,
+  intent_ms: 7800, // differs from the pending null, so the coverage sweep exercises it
   valid_as_of: 500,
   valid_until: null,
   question_text: "who owns the alpha dashboard?",

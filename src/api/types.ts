@@ -468,6 +468,15 @@ export interface Artifact {
   duration_ms?: number | null;
 
   /**
+   * The producer's measured `/route_intent` time for this artifact's turn, in milliseconds. It is
+   * the intent call's own time, which `duration_ms` EXCLUDES because the bundle's clock starts
+   * after that call returns. Served only on an artifact whose turn ran one (a pick leg after an ask
+   * card skips it, so it carries none). Read VERBATIM, never timed or derived client-side.
+   */
+  // PROPOSED (unratified): answer artifact carries intent_ms, the route_intent call's own time (architect 11-19: count the first intent call in the footer time)
+  intent_ms?: number | null;
+
+  /**
    * As-of of the grounding. Semantically "the time-point the substrate
    * was sampled at," distinct from `created_at` which is when the
    * artifact was made. Initially equals `created_at`; diverges when

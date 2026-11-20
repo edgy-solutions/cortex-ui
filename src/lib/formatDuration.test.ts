@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { formatDuration, artifactDuration } from "./formatDuration";
-import { rowToArtifact } from "./electric";
+import { rowToArtifact, ANSWER_SUMMARY_COLUMNS } from "./electric";
 
 describe("formatDuration", () => {
   it("reads at the precision the number deserves", () => {
@@ -178,5 +178,40 @@ describe("the panel never manufactures a duration", () => {
     expect(panel).not.toMatch(/a\.duration_ms/);
     // And nothing anywhere defaults the absence into a number.
     expect(panel).not.toMatch(/duration_ms\s*\?\?/);
+  });
+});
+
+describe("the projection row carries intent_ms (PROPOSED producer field)", () => {
+  const base = {
+    id: "a1",
+    status: "complete",
+    durability_status: "durable",
+    created_at: 1,
+    updated_at: 2,
+    valid_as_of: 1,
+  };
+
+  it("maps a served intent_ms through", () => {
+    expect(rowToArtifact({ ...base, intent_ms: 7800 } as never).intent_ms).toBe(7800);
+  });
+
+  it("a bigint column arriving as a string is parsed, not passed through as text the footer would drop", () => {
+    expect(rowToArtifact({ ...base, intent_ms: "7800" } as never).intent_ms).toBe(7800);
+  });
+
+  it("a negative or non-numeric intent_ms is refused to null, the same as duration_ms", () => {
+    expect(rowToArtifact({ ...base, intent_ms: -5 } as never).intent_ms).toBeNull();
+    expect(rowToArtifact({ ...base, intent_ms: "abc" } as never).intent_ms).toBeNull();
+  });
+
+  it("a row without it carries null, as a present key", () => {
+    const a = rowToArtifact(base as never);
+    expect(a.intent_ms).toBeNull();
+    expect("intent_ms" in a).toBe(true);
+  });
+
+  it("ANSWER_SUMMARY_COLUMNS must not name intent_ms: the column does not exist yet and Electric refuses a whole shape naming a missing column", () => {
+    expect(ANSWER_SUMMARY_COLUMNS).not.toContain("intent_ms");
+    expect(ANSWER_SUMMARY_COLUMNS).toContain("duration_ms");
   });
 });

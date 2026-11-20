@@ -295,3 +295,83 @@ describe("the walk is bounded and does not trust the wire", () => {
     expect(answerFooter(e, { wallClockMs: 1000, hops: 1 })).toEqual([]);
   });
 });
+
+describe("the first intent call is part of the time (2026-11-20, served intent_ms)", () => {
+  const withIntent = (a: Artifact, intent_ms: unknown) => ({ ...a, intent_ms }) as unknown as Artifact;
+  const own = (a: Artifact) => answerElapsed(a, lookup([a]));
+
+  it("own = duration_ms + intent_ms", () => {
+    const e = own(withIntent(art("a", 80_000), 7_800));
+    expect(e.ownMs).toBe(87_800);
+    expect(e.ownIntentMs).toBe(7_800);
+    expect(e.ms).toBe(87_800);
+    expect(e.measured).toBe(1);
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["null", null],
+    ["negative", -5],
+    ["NaN", Number.NaN],
+    ["a string", "7800"],
+  ])("intent %s leaves own = duration_ms and ownIntentMs null", (_n, v) => {
+    const e = own(withIntent(art("a", 80_000), v));
+    expect(e.ownMs).toBe(80_000);
+    expect(e.ownIntentMs).toBeNull();
+  });
+
+  it("zero intent is a served value and is added (ownIntentMs 0)", () => {
+    const e = own(withIntent(art("a", 80_000), 0));
+    expect(e.ownMs).toBe(80_000);
+    expect(e.ownIntentMs).toBe(0);
+  });
+
+  it("duration null + intent: no own time, no this number, not measured", () => {
+    const e = own(withIntent(art("a", null), 7_800));
+    expect(e.ownMs).toBeNull();
+    expect(e.ownIntentMs).toBeNull();
+    expect(e.measured).toBe(0);
+    expect(e.ms).toBeNull();
+    expect(answerFooter(e).find((n) => n.key === "this")).toBeUndefined();
+  });
+
+  it("an ask parent's intent is added to the ask time; a pick leg without intent is unchanged", () => {
+    const ask = withIntent(askCard("ask", 41_000), 9_000);
+    const ans = art("ans", 85_000, "ask");
+    const e = answerElapsed(ans, lookup([ask, ans]));
+    expect(e.askMs).toBe(50_000);
+    expect(e.askIntentMs).toBe(9_000);
+    expect(e.ownMs).toBe(85_000);
+    expect(e.ownIntentMs).toBeNull();
+  });
+
+  it("the chain total sums own times including intent; measured count unchanged", () => {
+    const prior = withIntent(art("prior", 60_000), 6_500);
+    const ask = withIntent(askCard("ask", 41_000, "prior"), 9_000);
+    const ans = withIntent(art("ans", 85_000, "ask"), 7_800);
+    const e = answerElapsed(ans, lookup([prior, ask, ans]));
+    expect(e.ms).toBe(60_000 + 6_500 + 41_000 + 9_000 + 85_000 + 7_800);
+    expect(e.measured).toBe(3);
+    expect(e.artifacts).toBe(3);
+  });
+
+  it("footer titles: with intent they name the intent step and its formatted time", () => {
+    const ask = withIntent(askCard("ask", 41_000), 9_000);
+    const ans = withIntent(art("ans", 85_000, "ask"), 7_800);
+    const f = answerFooter(answerElapsed(ans, lookup([ask, ans])));
+    const t = f.find((n) => n.key === "this")!;
+    expect(t.value).toBe("1m 32s");
+    expect(t.title).toBe("This answer's own producer time (its last step), including its intent step (7.8s); not a wall clock");
+    const a = f.find((n) => n.key === "ask")!;
+    expect(a.value).toBe("50s");
+    expect(a.title).toBe("The ask card's step before your pick, including its intent step (9.0s); not included in this answer's time");
+  });
+
+  it("footer titles without intent equal the old titles exactly", () => {
+    const ask = askCard("ask", 41_000);
+    const ans = art("ans", 85_000, "ask");
+    const f = answerFooter(answerElapsed(ans, lookup([ask, ans])));
+    expect(f.find((n) => n.key === "this")!.title).toBe("This answer's own producer time (its last step); not a wall clock");
+    expect(f.find((n) => n.key === "ask")!.title).toBe("The ask card's step before your pick; not included in this answer's time");
+  });
+});
