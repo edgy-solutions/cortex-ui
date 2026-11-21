@@ -90,5 +90,8 @@ describe("no tracked code reads sessions/", () => {
       }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);
-  });
+    // It reads every tracked file, so its time grows with the repo and with machine load. On 11-20 it took 8.9 s on a
+    // loaded box, against vitest's 5 s default, and failed a gate on a timeout, not on an offender. A timeout here
+    // reports nothing about sessions/ reads, so the limit is set well above the walk.
+  }, 30_000);
 });
