@@ -338,7 +338,7 @@ describe("engine-docs' answer is bound to the card that can now draw it", () => 
   });
 });
 
-describe("the 11-07 rule: no new hand-written binding, and one dated exception that migrates first", () => {
+describe("the 11-07 rule: no new hand-written binding, and two dated exceptions; where-used migrates first", () => {
   // The hand-written subjects the rule found (architect 2026-11-07: "no menu constant anywhere"; the
   // existing rows are a scheduled migration to the producer's served `menu:` block). The file was
   // unchanged from 10-08 to 11-16, so this is that population, frozen. It may only SHRINK as rows migrate.
@@ -363,13 +363,16 @@ describe("the 11-07 rule: no new hand-written binding, and one dated exception t
   // Architect via Chris, 2026-11-16: "row now, reader next … This row moves to the served path before any
   // other hand-written binding is added." Lane 74's where-used.
   const EXCEPTION = "mesh:WhereUsedSet";
+  // Architect via Chris, 2026-11-22: "Add a capability for the flow-decomposition shape, so that kind of
+  // measure draws."
+  const SECOND_EXCEPTION = "fin:DeclaredMeasureSeries";
 
   it("the frozen population is the 49 it was, with no duplicates", () => {
     expect(new Set(AS_OF_11_07).size).toBe(49);
   });
 
-  it("every hand-written subject is one the rule found, or the one dated exception", () => {
-    const added = [...derivedSubjects()].filter((s) => !AS_OF_11_07.includes(s) && s !== EXCEPTION);
+  it("every hand-written subject is one the rule found, or one of the two dated exceptions", () => {
+    const added = [...derivedSubjects()].filter((s) => !AS_OF_11_07.includes(s) && s !== EXCEPTION && s !== SECOND_EXCEPTION);
     expect(added, "a new hand-written binding: bind it from the producer's served menu: block instead").toEqual([]);
   });
 
@@ -397,5 +400,30 @@ describe("the 11-07 rule: no new hand-written binding, and one dated exception t
     // The backend half's object (presentation_agent/capabilities.py, the WhereUsedSet row). The fleet
     // mirror seal pairs the two rows on subject AND object, so the object travels in the registration.
     expect(rows[0].object_uri).toBe("mesh:InstancesByProperty");
+  });
+
+  it("while present, the flow row carries its dated-exception marker in the source text", () => {
+    const src = readFileSync(path.join(__dirname, "assembleCapabilities.ts"), "utf8");
+    const at = src.indexOf(`subject_uri: "${SECOND_EXCEPTION}"`);
+    if (at < 0) return;
+    const before = src.slice(Math.max(0, at - 1600), at);
+    expect(before).toContain("DATED EXCEPTION TO THE 11-07 RULE");
+    expect(before).toContain("SECOND");
+    expect(before).toContain("2026-11-22");
+  });
+
+  it("the flow row is the declared menu block, field for field", () => {
+    // finance's `menu:` block: invincible-agent 0e58ed44, policy/overlays/sample/measure_verbs/fin_flow_acwp.yaml
+    const rows = assembleCapabilities(CORTEX_UI_CAPABILITIES).filter((c) => c.subject_uri === SECOND_EXCEPTION);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].archetype).toBe("FLOW_DECOMPOSITION");
+    expect(rows[0].object_uri).toBe("mesh:FlowDecomposition");
+    expect(rows[0].persona_fit).toEqual(["PROGRAM_FINANCE_ANALYST"]);
+    expect(rows[0].domain_fit).toEqual(["PROGRAM_FINANCE"]);
+  });
+
+  it("FLOW_DECOMPOSITION is on the registered menu exactly once", () => {
+    const rows = assembleCapabilities(CORTEX_UI_CAPABILITIES).filter((c) => c.archetype === "FLOW_DECOMPOSITION");
+    expect(rows).toHaveLength(1);
   });
 });

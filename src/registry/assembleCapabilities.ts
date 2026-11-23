@@ -48,6 +48,7 @@ import { VARIANCE_TREE_CONTRACT } from "../archetypes/variance-tree/contract";
 import { MULTI_SERIES_CONTRACT } from "../archetypes/multi-series/contract";
 import { ELICITATION_CONTRACT } from "../components/elicitation/Elicitation.contract";
 import { NAMED_HOLE_CONTRACT } from "../components/registry/NamedHole.contract";
+import { FLOW_DECOMPOSITION_CONTRACT } from "../archetypes/flow-decomposition/contract";
 import { STEP_LADDER_CONTRACT } from "../components/planning/StepLadder.contract";
 import {
   APPROVAL_TASK_CONTRACT,
@@ -199,6 +200,22 @@ const DERIVED_BINDINGS = [
     persona_fit: ["SAFETY_ENGINEER", "SUSTAINMENT_ENGINEER"],
     domain_fit: ["SUSTAINMENT"],
     contract: INSTANCES_BY_PROPERTY_CONTRACT,
+  },
+  // ⚠ DATED EXCEPTION TO THE 11-07 RULE — SECOND (architect via Chris, 2026-11-22: "Add a capability for the
+  // flow-decomposition shape, so that kind of measure draws.").
+  // Every declared finance measure answers as the one class `fin:DeclaredMeasureSeries`; a FLOW_DECOMPOSITION one
+  // is drawn by the flow card only if an archetype on the caller's registered menu matches its `render.shape`.
+  // This row copies, field for field, the `menu:` block finance declares on the row
+  // (invincible-agent 0e58ed44, policy/overlays/sample/measure_verbs/fin_flow_acwp.yaml), so that when
+  // /menu_blocks serves that block, the served row replaces this one on (subject, object) with no change in
+  // what is registered. It does not migrate before the where-used row; that arm still holds.
+  // Drawing also needs Lane 1's projector row (lane/01-flow-decomposition-is-projected, held).
+  {
+    subject_uri: "fin:DeclaredMeasureSeries",
+    object_uri: "mesh:FlowDecomposition",
+    persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+    domain_fit: ["PROGRAM_FINANCE"],
+    contract: FLOW_DECOMPOSITION_CONTRACT,
   },
   // THE FIRST LIVE-VIEW BINDING (ADR-0042). Engine P's `mesh:planCostCurve` declares
   // `mesh:PeriodCostSeries` as its fixed output type; this row is what makes that type
