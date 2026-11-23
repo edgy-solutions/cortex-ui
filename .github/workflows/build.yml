@@ -291,7 +291,17 @@ env:
   # 2026-11-14 RE-PIN to 2c69d256 (platform master; the merge of #386, second parent 581d5a60). docs/api is EMPTY
   #   581d5a60..2c69d256 (control: 47263e51..581d5a60, 1 file changed); uv.lock unchanged. Gate: the full suite against a
   #   git-archive export of 2c69d256 placed as the producer root.
-  PRODUCER_REF: 2c69d256b6fd0fc69470af4d9c852b50f3ffe582
+  # 2026-11-23 RE-PIN to 950b3eb9 (release 0.4.91, rolled 11-23 03:52Z; architect via Chris: "0.4.91 is live. Bump #64's
+  #   pin."). Check 1 NOT read by cortex: this box has no kube context (kubectl: "current-context is not set"). Cited from
+  #   lane/01's post-roll section 4 (11-23 18:10Z): 19 of 19 fleet containers equal image-digests.json at 950b3eb9, by
+  #   digest. Check 2: task_kinds diff 2c69d256..950b3eb9 is EMPTY (control: policy/ whole, 15 files differ); review_shapes
+  #   EMPTY. Check 3: uv.lock iagent-mesh v0.9.19 -> v0.9.26 (b9560dcf); iagent_mesh/rows.py byte-identical across the two
+  #   tags, ROW_DISPOSITIONS / HOLE_DISPOSITIONS equal LEDGER_DISPOSITIONS / LEDGER_HOLE_DISPOSITIONS (read as TEXT: no
+  #   python on the box, so not by import). meshSdkParity's own pin (v0.9.8) is separate and unmoved. docs/api:
+  #   cortex-bff byte-identical to 0e58ed44 (blob 3919101e; adds /menu_blocks); ingest-v1 1.9.1 -> 1.10.0, re-taken
+  #   (ActPromotion.review, PromotionReviewStart). Gate: the full suite against a gh tarball of 950b3eb9 placed as the
+  #   sibling invincible-agent.
+  PRODUCER_REF: 950b3eb912e2cbede454eea31ceb23a317c13fcc
 
 permissions:
   contents: read
