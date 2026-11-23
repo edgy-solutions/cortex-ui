@@ -308,6 +308,7 @@ const CALLS: Record<string, Case[]> = {
   healthCheck: [{ name: "plain", op: "GET /health", run: () => (client as any).healthCheck() }],
   fetchBffVersion: [{ name: "plain", op: "GET /fleet/version", run: () => (client as any).fetchBffVersion() }],
   fetchTemplates: [{ name: "plain", op: "GET /templates", run: () => (client as any).fetchTemplates() }],
+  fetchMenuBlocks: [{ name: "plain", op: "GET /menu_blocks", run: () => (client as any).fetchMenuBlocks() }],
   fetchTaskKinds: [{ name: "plain", op: "GET /task_kinds", run: () => (client as any).fetchTaskKinds() }],
   fetchExportRecipients: [{ name: "plain", op: "GET /export/package/recipients", run: () => (client as any).fetchExportRecipients() }],
   offerExportRecipients: [{ name: "plain", op: "POST /export/package/recipients", run: () => (client as any).offerExportRecipients(["a", "b"]) }],

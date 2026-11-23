@@ -93,6 +93,7 @@ import {
 } from "@/lib/ingestWire";
 import { readExtraction } from "@/lib/promotionReview";
 import { readReviewShapes } from "@/lib/reviewShapes";
+import { readMenuBlocks } from "@/lib/menuBlocks";
 import { profileLabel } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
@@ -298,6 +299,7 @@ const CALLS: Record<string, () => Promise<unknown>> = {
   registerFrontendCapabilities: () =>
     client.registerFrontendCapabilities({ frontend_id: "cortex-ui", frontend_version: "0", capabilities: [] }),
   fetchBffVersion: () => client.fetchBffVersion(),
+  fetchMenuBlocks: () => client.fetchMenuBlocks(),
   uploadIngest: () => client.uploadIngest(new File(["x"], "a.pdf"), "pdf", "me", "pdf"),
   fetchIngestStatus: () => client.fetchIngestStatus("i-1"),
   fetchIngestMine: () => client.fetchIngestMine(20),
@@ -326,6 +328,7 @@ const ROUTING = {
 type Reader = (result: any) => unknown;
 /** Each reader is a NAMED function: its name is what a failure reports. */
 const READERS: Record<string, Reader[]> = {
+  fetchMenuBlocks: [function readMenuBlocksOfBody(b) { return readMenuBlocks(b); }],
   fetchEntitlements: [
     async function personaStoreLoadEntitlements(e) {
       usePersonaStore.setState({ entitlements: null, ownerSub: null, selectedPersona: null, selectedDomains: [] });

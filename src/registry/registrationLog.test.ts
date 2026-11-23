@@ -48,7 +48,9 @@ describe("the registration log reports BOTH sides", () => {
     // Recomputing the list inside the handler would report what the assembler produces NOW
     // rather than what this request carried — identical today, and a lie the first time the
     // two can differ. That is the same class as reading a spec instead of the running pod.
-    expect(APP).toMatch(/const sent = assembleCapabilities\(CORTEX_UI_CAPABILITIES\)/);
+    // `sent` is the MERGED list (served blocks over the one assembly): what the request carries.
+    expect(APP).toMatch(/const merged = mergeServedBlocks\(\s*assembleCapabilities\(CORTEX_UI_CAPABILITIES\)/);
+    expect(APP).toMatch(/const sent = merged\.capabilities;/);
     expect(APP).toContain("capabilities: sent,");
     // Exactly one assembly call — a second would reintroduce the drift this prevents.
     expect(APP.split("assembleCapabilities(CORTEX_UI_CAPABILITIES)").length - 1).toBe(1);

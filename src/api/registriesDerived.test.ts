@@ -87,12 +87,16 @@ describe("a declared split (DECLARED_SPLITS): the field names a different thing 
   };
   for (const name of ["cortex-bff.openapi.json", "ingest-v1.openapi.json"] as const) {
     const doc = name === "cortex-bff.openapi.json" ? bff : v1;
-    it(`${name}: each schema keeps its own constant and no shared ERROR is emitted`, () => {
+    it(`${name}: each schema keeps its own constant and no shared FIELD constant is emitted`, () => {
       const out = gen(doc, name);
-      for (const s of DECLARED_SPLITS.error) {
-        expect(out).toContain(`export const ${s}_error = ${JSON.stringify(snapshotEnum(doc, s, "error"))} as const;`);
+      for (const [field, schemas] of Object.entries(DECLARED_SPLITS) as [string, string[]][]) {
+        const present = schemas.filter((s) => doc.components.schemas[s]);
+        if (present.length === 0) continue;
+        for (const s of present) {
+          expect(out).toContain(`export const ${s}_${field} = ${JSON.stringify(snapshotEnum(doc, s, field))} as const;`);
+        }
+        expect(out).not.toContain(`export const ${field.toUpperCase()} =`);
       }
-      expect(out).not.toMatch(/export const ERROR =/);
     });
   }
   it("a third schema carrying the field THROWS: the declaration names the exact schemas", () => {

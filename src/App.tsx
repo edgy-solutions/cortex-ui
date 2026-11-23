@@ -24,7 +24,8 @@ import { useRegistrationStore } from "@/store/useRegistrationStore";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { buildVersion } from "@/lib/buildVersion";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
-import { registerFrontendCapabilities } from "@/api/client";
+import { registerFrontendCapabilities, fetchMenuBlocks } from "@/api/client";
+import { mergeServedBlocks, readMenuBlocks } from "@/lib/menuBlocks";
 import { useEntitlementsSync } from "@/hooks/useEntitlementsSync";
 import { startArtifactsSubscription } from "@/lib/electric";
 import { useTaskArtifactSync } from "@/lib/useTaskArtifactSync";
@@ -145,7 +146,15 @@ export function useFrontendCapabilityRegistration() {
     // Assembled once per attempt, so the log can name what was SENT. Recomputing it inside the
     // handler would report what the assembler produces now rather than what this request
     // carried — the same value today, and a lie the first time the two can differ.
-    const sent = assembleCapabilities(CORTEX_UI_CAPABILITIES);
+    // Served placements merged over the hand rows (draft; see menuBlocks.ts). fetchMenuBlocks never
+    // throws, so registration happens whatever the read answers.
+    const merged = mergeServedBlocks(
+      assembleCapabilities(CORTEX_UI_CAPABILITIES),
+      readMenuBlocks(await fetchMenuBlocks()),
+    );
+    // eslint-disable-next-line no-console
+    console.info("[menu_blocks]", merged.report);
+    const sent = merged.capabilities;
     return registerFrontendCapabilities({
       frontend_id: CORTEX_UI_FRONTEND_ID,
       // THE COMMIT, NOT THE WORD "dev".
