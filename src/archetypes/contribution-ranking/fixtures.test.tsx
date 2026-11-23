@@ -140,6 +140,8 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
       ...CONTRIBUTION_RANKING_ABSENCES,
       "data-legend-unjudged",
       "data-extra-count",
+      // The VALUE of `data-withheld-tail` on the same element — one fact, its count.
+      "data-withheld-count",
       "data-inspector-extras",
       "data-inspector-dropped",
     ]);

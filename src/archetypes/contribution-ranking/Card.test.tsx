@@ -14,8 +14,10 @@ import path from "node:path";
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { ContributionRanking } from "./Card";
-import { FINANCE_VARIANCE_DRIVERS_ROWS } from "./fixtures";
+import { ContributionRanking, readWithheldTail } from "./Card";
+import { formatAmount } from "@/lib/formatAmount";
+import { FINANCE_VARIANCE_DRIVERS_ROWS, CONTRIBUTION_RANKING_FIXTURES } from "./fixtures";
+import type { ContributionRow } from "./contract";
 
 /** The row buttons, taken BEFORE a click — the inspector adds a Close button. */
 const rowButtons = () =>
@@ -766,5 +768,73 @@ describe("the row shows labelled values; the field names live in the detail view
     expect(
       document.querySelector("[data-cell-inspector] [data-inspector-dropped]")!.textContent,
     ).toContain("breakdown");
+  });
+});
+
+describe("a truncated ranking says so (the producer's declared tail)", () => {
+  const fixtureRows = (name: string) =>
+    CONTRIBUTION_RANKING_FIXTURES.find((f) => f.name === name)!.rows;
+  const TRUNCATED = () => fixtureRows("finance variance drivers truncated — the producer declared its tail");
+  const DISAGREE = () => fixtureRows("a tail the rows disagree on");
+
+  it("draws the tail as the last row of the list, with the card's own money format", () => {
+    render(<ContributionRanking rows={TRUNCATED()} value_unit="USD" />);
+    const el = document.querySelector("[data-withheld-tail]")!;
+    expect(el).not.toBeNull();
+    expect(el.getAttribute("data-withheld-count")).toBe("2");
+    expect(el.parentElement).toBe(document.querySelector("ol"));
+    expect(el.textContent).toContain(formatAmount(-40000, "USD"));
+    expect(el.textContent).toContain("2 more");
+    expect(document.querySelector("[data-withheld-disagree]")).toBeNull();
+  });
+
+  it("the two fields are not extras: the count is 16 (the 15 plus the exact twin, which stays an extra)", () => {
+    render(<ContributionRanking rows={TRUNCATED()} value_unit="USD" />);
+    for (const b of rowButtons()) {
+      expect(b.querySelector("[data-extra-count]")!.getAttribute("data-extra-count")).toBe("16");
+    }
+    const t = openExtras(0)!.textContent!;
+    expect(t).toContain("withheld_contribution_exact");
+    expect(t).not.toContain("withheld_contributors");
+  });
+
+  it("rows that disagree on the tail say so, and the ranked rows still draw", () => {
+    render(<ContributionRanking rows={DISAGREE()} value_unit="USD" />);
+    expect(document.querySelector("[data-withheld-disagree]")).not.toBeNull();
+    expect(document.querySelector("[data-withheld-tail]")).toBeNull();
+    expect(rowButtons().length).toBe(3);
+  });
+
+  it("an untruncated ranking declares neither", () => {
+    render(<ContributionRanking rows={FINANCE_VARIANCE_DRIVERS_ROWS} value_unit="USD" />);
+    expect(document.querySelector("[data-withheld-tail]")).toBeNull();
+    expect(document.querySelector("[data-withheld-disagree]")).toBeNull();
+  });
+
+  describe("readWithheldTail", () => {
+    const row = (extra: Record<string, unknown> = {}) =>
+      ({ entity_id: "a", entity_name: "A", contribution: 1, ...extra }) as unknown as ContributionRow;
+    const w = (n: unknown, c: unknown) => row({ withheld_contributors: n, withheld_contribution: c });
+    it("none", () => {
+      expect(readWithheldTail([row(), row(), row()]).kind).toBe("none");
+    });
+    it("tail", () => {
+      expect(readWithheldTail([w(2, -5), w(2, -5), w(2, -5)])).toEqual({ kind: "tail", count: 2, contribution: -5 });
+    });
+    it("disagree: present on 2 of 3 rows", () => {
+      expect(readWithheldTail([w(2, -5), w(2, -5), row()]).kind).toBe("disagree");
+    });
+    it("disagree: count 0", () => {
+      expect(readWithheldTail([w(0, -5), w(0, -5)]).kind).toBe("disagree");
+    });
+    it("disagree: count 1.5", () => {
+      expect(readWithheldTail([w(1.5, -5), w(1.5, -5)]).kind).toBe("disagree");
+    });
+    it("disagree: contribution NaN", () => {
+      expect(readWithheldTail([w(2, NaN), w(2, NaN)]).kind).toBe("disagree");
+    });
+    it("disagree: contributions differ", () => {
+      expect(readWithheldTail([w(2, -5), w(2, -6)]).kind).toBe("disagree");
+    });
   });
 });

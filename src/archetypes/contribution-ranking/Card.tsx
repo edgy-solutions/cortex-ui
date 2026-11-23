@@ -53,7 +53,50 @@ const CONSUMED_FIELDS = new Set([
   // The producer's own verdict vocabulary, deliberately NOT read as a judgement — see the
   // unjudged-ranking block. Showing it as a column would reintroduce it as one.
   "direction",
+  // The producer's declared tail, drawn as the last line of the list by `readWithheldTail`.
+  // `withheld_contribution_exact` is deliberately NOT here: like `contribution_exact` it stays
+  // an extra.
+  "withheld_contributors",
+  "withheld_contribution",
 ]);
+
+export type WithheldTail =
+  | { kind: "none" }
+  | { kind: "tail"; count: number; contribution: number }
+  | { kind: "disagree" };
+
+/**
+ * Reads the tail the producer declares when it truncates a ranking.
+ *
+ * Producer: `agent_fleet/finance_agent/measure_modules/variance_driver_ranking.py` at 9b6f4c9f,
+ * lines 59-82. `rank_drivers` cuts to `top_n` and, WHEN IT TRUNCATES, puts on EVERY returned row
+ * `withheld_contributors` (how many were cut) and `withheld_contribution` (their summed
+ * contribution). Its docstring: "`top_n` hiding contributors without saying so is a partial list
+ * that looks complete."
+ *
+ * The proper fix is an envelope-level `remainder` declaration, proposed to fin 11-23 (packet
+ * `2026-11-23-packet-to-lane-fin-...-waterfall-paging-download-...`); this reads the per-row
+ * fields until then.
+ *
+ *   none      no row carries either field
+ *   tail      every row carries both, identical, a positive integer count and a finite amount
+ *   disagree  anything else. The producer stamps identical values on every row by construction,
+ *             so a mismatch means the producer changed: say so rather than guess.
+ */
+export function readWithheldTail(rows: readonly ContributionRow[]): WithheldTail {
+  const has = (v: unknown) => v !== undefined && v !== null;
+  const pairs = rows.map((r) => {
+    const x = r as unknown as Record<string, unknown>;
+    return { n: x.withheld_contributors, c: x.withheld_contribution };
+  });
+  if (pairs.every((p) => !has(p.n) && !has(p.c))) return { kind: "none" };
+  if (!pairs.every((p) => has(p.n) && has(p.c))) return { kind: "disagree" };
+  const { n, c } = pairs[0];
+  if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) return { kind: "disagree" };
+  if (typeof c !== "number" || !Number.isFinite(c)) return { kind: "disagree" };
+  if (!pairs.every((p) => p.n === n && p.c === c)) return { kind: "disagree" };
+  return { kind: "tail", count: n, contribution: c };
+}
 
 /**
  * ── THE BRANCH CENSUS, ADR-0055 §2 ────────────────────────────────────────────────────────
@@ -80,6 +123,8 @@ const CONSUMED_FIELDS = new Set([
  *   data-extra-columns    fields the payload carried beyond the ones this card consumes — declared
  *                         on the row's count marker, listed in the detail view
  *   data-card-extras      CARD-LEVEL fields the payload carried beyond the ones it consumes
+ *   data-withheld-tail    the producer truncated the ranking and declared the tail
+ *   data-withheld-disagree the declared tail is inconsistent across rows
  *
  * EXCLUDED AS PRESENTATIONAL, each with its reason:
  *
@@ -364,6 +409,7 @@ export function ContributionRanking({
    * distinguish and it is decoration with a false reading attached.
    */
   const signedSet = ranked.some((r) => r.contribution < 0);
+  const tail = readWithheldTail(ranked);
 
   /**
    * THE BOUND, GIVEN THE SAME TREATMENT AS A ROW'S EXTRAS — and through the SAME function, not
@@ -521,6 +567,20 @@ export function ContributionRanking({
             </li>
           );
         })}
+        {tail.kind === "tail" && (
+          <li
+            data-withheld-tail
+            data-withheld-count={tail.count}
+            className="px-2 py-2 font-mono text-[11px] text-slate-500 tabular-nums"
+          >
+            {tail.count} more, totalling {formatAmount(tail.contribution, value_unit)}, not shown
+          </li>
+        )}
+        {tail.kind === "disagree" && (
+          <li data-withheld-disagree className="px-2 py-2 font-mono text-[10px] text-amber-500/70">
+            the rows disagree on what was withheld — tail not shown
+          </li>
+        )}
       </ol>
 
       {/* WHAT THE MARKS MEAN on the left, WHAT THE COLOURS MEAN on the right. Split because

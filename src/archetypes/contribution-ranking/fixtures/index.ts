@@ -25,6 +25,9 @@ export const CONTRIBUTION_RANKING_ABSENCES = [
   "data-extras-dropped",
   "data-extra-columns",
   "data-card-extras",
+  // Payload claims: the producer truncated and declared the tail / the declared tail is inconsistent.
+  "data-withheld-tail",
+  "data-withheld-disagree",
 ] as const;
 
 export type ContributionRankingAbsence = (typeof CONTRIBUTION_RANKING_ABSENCES)[number];
@@ -221,5 +224,33 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
     value_unit: "USD",
     // Judged, signed, shares present, every extra a scalar: only the extras claim moves.
     declares: ["data-extra-columns"],
+  },
+  {
+    /**
+     * Values constructed, shape per `rank_drivers` at 9b6f4c9f (no capture carries a truncated
+     * ranking): when it truncates, every row carries `withheld_contributors` and
+     * `withheld_contribution` (+ `_exact` from `_emit_money`).
+     */
+    name: "finance variance drivers truncated — the producer declared its tail",
+    rows: FINANCE_VARIANCE_DRIVERS_ROWS.map((r) => ({
+      ...r,
+      withheld_contributors: 2,
+      withheld_contribution: -40000,
+      withheld_contribution_exact: "-40000.00",
+    })) as unknown as ContributionRow[],
+    value_unit: "USD",
+    declares: ["data-extra-columns", "data-withheld-tail"],
+  },
+  {
+    /** Values constructed (as above): the third row's count differs, which the producer never does. */
+    name: "a tail the rows disagree on",
+    rows: FINANCE_VARIANCE_DRIVERS_ROWS.map((r, i) => ({
+      ...r,
+      withheld_contributors: i === 2 ? 3 : 2,
+      withheld_contribution: -40000,
+      withheld_contribution_exact: "-40000.00",
+    })) as unknown as ContributionRow[],
+    value_unit: "USD",
+    declares: ["data-extra-columns", "data-withheld-disagree"],
   },
 ];
