@@ -47,6 +47,14 @@ describe("a declared TCPI and a declared VAC draw through the interpreter", () =
     expect(raw.querySelector("[data-raw-field='render']")).not.toBeNull();
   });
 
+  it("an envelope's data_provenance reaches the screen through the real dispatch, verbatim (11-23)", () => {
+    const sentence = "Sandbox finance extract (as of 2026-11-01, ticket: T-77) Source: urn:x";
+    const c = draw({ ...DECLARED_TCPI_COMPONENT, data_provenance: sentence });
+    expect(c.querySelector("[data-served-provenance]")!.textContent).toBe(sentence);
+    // read by the card, so it is not also printed raw
+    expect(c.querySelector("[data-raw-field='data_provenance']")).toBeNull();
+  });
+
   it("control: an unknown archetype takes the no-render-registered path, not the card", () => {
     const c = draw({ ...DECLARED_TCPI_COMPONENT, archetype: "NOT_AN_ARCHETYPE" });
     expect(c.querySelector("[data-no-render-registered='NOT_AN_ARCHETYPE']")).not.toBeNull();

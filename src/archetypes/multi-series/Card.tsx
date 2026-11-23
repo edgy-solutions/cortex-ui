@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ServedProvenance, readServedProvenance } from "../ServedProvenance";
 import {
   ACCENT,
   SERIES_SECONDARY,
@@ -50,9 +51,11 @@ import {
  */
 const LINE_COLOURS = [ACCENT, SERIES_SECONDARY, LIMIT, OVER, MUTED];
 
-function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
+function DeliberateEmpty({ reason, scope, provenance }: { reason: string; scope?: string; provenance?: string }) {
   return (
     <div className="glass-panel p-6 my-4 border-amber-500/20">
+      {/* A refused finance answer still says where its data came from (flow card precedent). */}
+      <ServedProvenance text={provenance} />
       <div className="flex flex-col items-center justify-center gap-2 py-12">
         <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
           {scope ? `${scope} — nothing to draw` : "nothing to draw"}
@@ -70,6 +73,7 @@ export function MultiSeries({
   verdict,
   value_label,
   scope_label,
+  data_provenance,
   valid_as_of,
   state_version,
 }: {
@@ -79,12 +83,13 @@ export function MultiSeries({
   verdict?: string;
   value_label?: string;
   scope_label?: string;
+  data_provenance?: unknown;
   valid_as_of?: string;
   state_version?: number;
 }) {
   const result = validateMultiSeries(rows, series);
   if (result.kind === "empty") {
-    return <DeliberateEmpty reason={result.reason} scope={scope_label} />;
+    return <DeliberateEmpty reason={result.reason} scope={scope_label} provenance={readServedProvenance(data_provenance)} />;
   }
   const { rows: data, series: decls, unit } = result.data;
 
@@ -268,6 +273,12 @@ export function MultiSeries({
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {readServedProvenance(data_provenance) !== undefined && (
+        <div className="mt-3">
+          <ServedProvenance text={readServedProvenance(data_provenance)} />
+        </div>
+      )}
 
       {(valid_as_of || state_version !== undefined) && (
         <p className="mt-3 font-mono text-[9px] text-slate-500">

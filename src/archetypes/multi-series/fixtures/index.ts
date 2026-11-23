@@ -10,6 +10,7 @@
 export const MULTI_SERIES_ABSENCES = [
   "data-verdict",
   "data-reference-unreadable",
+  "data-served-provenance",
 ] as const;
 
 export type MultiSeriesAbsence = (typeof MULTI_SERIES_ABSENCES)[number];
@@ -20,6 +21,12 @@ export interface MultiSeriesFixture {
   envelope: Record<string, unknown>;
   declares: MultiSeriesAbsence[];
 }
+
+/**
+ * TRANSCRIBED from `finance_agent/seed.py::notional_banner` at producer 950b3eb9 — not composed here.
+ */
+const NOTIONAL_BANNER =
+  "NOTIONAL DATA — invented program, round figures, public EVM formulas. Not derived from any real program (ADR-0045 Decision 4).";
 
 /** Build a payload of ANY shape, so no fixture knows a consumer's field names. */
 const payload = (keys: string[], periods = 3, unit?: string | null) => ({
@@ -75,6 +82,12 @@ export const MULTI_SERIES_FIXTURES: MultiSeriesFixture[] = [
     rows: two().rows,
     envelope: { series: two().series, reference: { label: "target" } },
     declares: ["data-reference-unreadable"],
+  },
+  {
+    name: "the producer served a data_provenance sentence (the notional banner)",
+    rows: two().rows,
+    envelope: { series: two().series, data_provenance: NOTIONAL_BANNER },
+    declares: ["data-served-provenance"],
   },
   {
     name: "refused — the payload declares no series",

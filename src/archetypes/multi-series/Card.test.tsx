@@ -414,3 +414,43 @@ describe("a reference the card cannot read says so", () => {
     expect(container.querySelector("[data-reference-unreadable]")).toBeNull();
   });
 });
+
+describe("the served source rides on the answer (11-23)", () => {
+  const BANNER =
+    "NOTIONAL DATA — invented program, round figures, public EVM formulas. Not derived from any real program (ADR-0045 Decision 4).";
+  const ASSET =
+    "Sandbox finance extract (as of 2026-11-01, ticket: T-77) Source: urn:li:dataset:(urn:li:dataPlatform:s3,fin/evm,PROD)";
+  const NO_ASOF = "Sandbox finance extract (ticket: pending) Source: urn:x";
+  const drawWith = (data_provenance?: unknown) => {
+    const p = payload(["a"]);
+    return render(<MultiSeries rows={p.rows} series={p.series} data_provenance={data_provenance} />).container;
+  };
+  const shown = (c: HTMLElement) => c.querySelector("[data-served-provenance]");
+
+  it("the notional banner renders verbatim", () => {
+    expect(shown(drawWith(BANNER))!.textContent).toBe(BANNER);
+  });
+
+  it("an asset sentence renders verbatim — the as-of is visible because the producer said it", () => {
+    expect(shown(drawWith(ASSET))!.textContent).toBe(ASSET);
+  });
+
+  it("a sentence with no as-of renders verbatim and cortex adds no as-of", () => {
+    const c = drawWith(NO_ASOF);
+    expect(shown(c)!.textContent).toBe(NO_ASOF);
+    expect(c.textContent).not.toMatch(/as of/i);
+  });
+
+  it.each([["absent", undefined], ["empty", ""], ["blank", "   "], ["non-string", { urn: "x" }]])(
+    "%s draws nothing",
+    (_n, v) => {
+      expect(shown(drawWith(v))).toBeNull();
+    },
+  );
+
+  it("a refused answer still says where its data came from", () => {
+    const c = render(<MultiSeries rows={[]} series={undefined} data_provenance={BANNER} />).container;
+    expect(c.textContent).toMatch(/nothing to draw/);
+    expect(shown(c)!.textContent).toBe(BANNER);
+  });
+});

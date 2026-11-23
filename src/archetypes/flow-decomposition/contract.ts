@@ -54,6 +54,8 @@
  * adds BigInts.
  */
 
+import { readServedProvenance } from "../ServedProvenance";
+
 export const FLOW_SIGNS = ["positive", "negative", "zero"] as const;
 export type FlowSign = (typeof FLOW_SIGNS)[number];
 
@@ -149,7 +151,7 @@ export interface FlowTable {
 
 /** The banner, when one is served and not blank. Read by the refusal too, which has no table. */
 export const readProvenance = (comp: Record<string, unknown> | undefined): string | undefined =>
-  typeof comp?.data_provenance === "string" && comp.data_provenance.trim() !== "" ? comp.data_provenance : undefined;
+  readServedProvenance(comp?.data_provenance);
 
 export type FlowRead = FlowTable | { ok: false; refusal: FlowRefusalReason; detail: string };
 

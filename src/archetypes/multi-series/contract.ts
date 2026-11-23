@@ -238,7 +238,7 @@ export function validateMultiSeries(
  * ADR-0055 §2 — the envelope fields this CARD reads, as `index.ts`'s `reads`.
  *
  * Here `reads` equals the producer's whole tuple (`series`, `reference`, `verdict`,
- * `value_label`, `scope_label`): the card consumes every field the wire declares. `rows` rides as
+ * `value_label`, `scope_label`, `data_provenance`): the card consumes every field the wire declares. `rows` rides as
  * `payload_key`. `valid_as_of`/`state_version` are NOT here: the producer carries that pair "for
  * every archetype" outside any per-archetype tuple, so the dispatch passes them explicitly, same
  * as CONTRIBUTION_RANKING.
@@ -249,4 +249,5 @@ export const MULTI_SERIES_ENVELOPE_FIELDS = [
   "verdict",
   "value_label",
   "scope_label",
+  "data_provenance",
 ] as const;

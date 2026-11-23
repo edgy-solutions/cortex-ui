@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Sankey, Tooltip } from "recharts";
 import { StructuredFields } from "@/archetypes/StructuredFields";
 import { SIGN_NEGATIVE, SIGN_POSITIVE } from "@/lib/chartPalette";
+import { ServedProvenance } from "../ServedProvenance";
 import { FLOW_REFUSAL_WORDS, readFlowTable, readProvenance, type FlowSign, type FlowTable } from "./contract";
 import { buildFlowGraph, hoverFor, signedText, type DrawnNode, type FlowGraph } from "./model";
 
@@ -54,12 +55,7 @@ function chartHeight(graph: FlowGraph): number {
 }
 
 function Provenance({ text }: { text: string | undefined }) {
-  if (text === undefined) return null;
-  return (
-    <p data-flow-provenance className="rounded border border-sky-400/30 bg-sky-500/10 px-2 py-1 font-mono text-[10px] text-sky-200">
-      {text}
-    </p>
-  );
+  return <ServedProvenance text={text} data-flow-provenance />;
 }
 
 function Refusal({ reason, detail, fields }: { reason: keyof typeof FLOW_REFUSAL_WORDS; detail: string; fields: Record<string, unknown> }) {
