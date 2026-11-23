@@ -34,6 +34,7 @@ export function CellInspector({
   headline,
   lines,
   onDismiss,
+  children,
 }: {
   /** Which cell this is — identity, read from the payload's own labels. */
   title: ReactNode;
@@ -42,6 +43,8 @@ export function CellInspector({
   /** Supporting detail. An entry may be null; nulls are dropped rather than rendered empty. */
   lines?: (ReactNode | null | undefined)[];
   onDismiss: () => void;
+  /** Structured detail a grid composes; rendered after the lines, inside the frame. */
+  children?: ReactNode;
 }) {
   const shown = (lines ?? []).filter((l) => l !== null && l !== undefined && l !== false);
   return (
@@ -68,6 +71,9 @@ export function CellInspector({
           {line}
         </p>
       ))}
+      {children !== null && children !== undefined && children !== false && (
+        <div className="mt-2">{children}</div>
+      )}
     </div>
   );
 }

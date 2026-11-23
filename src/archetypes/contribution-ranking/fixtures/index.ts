@@ -50,6 +50,41 @@ const COMPLETE: ContributionRow[] = [
   { entity_id: "CA2", entity_name: "Control Account 4.2", contribution: 300000, share_of_total: 0.38, favourable: true },
 ];
 
+/**
+ * The finance variance-drivers payload, row by row. Exported so the card's test can open the same
+ * rows the parity seal sees.
+ *
+ * SHAPE transcribed from `agent_fleet/finance_agent/measures.py::fin_variance_drivers` at producer
+ * `950b3eb9` (release 0.4.91): the generic keys, the finance names, `_emit_money`'s `X_exact`
+ * twins for contribution/bcws/bcwp/acwp and `share_of_total`, the control-account extras
+ * `wbs_id`/`obs_id`/`bac` (technique is None at this level and the verb drops None), and `rank`
+ * from `rank_drivers`. FIGURES from the 09-19 capture's control-account level
+ * (`fixtures/captures/2026-09-19-payload-finance-variance-drivers.json`), not re-measured.
+ * `value` and `bac` are Decimals the verb does not pass through `_emit_money`; their wire type is
+ * not established by reading the source, so they are carried as numbers here. This is the payload
+ * whose raw names the architect saw.
+ */
+export const FINANCE_VARIANCE_DRIVERS_ROWS = [
+  { instance_id:"3.1", instance_label:"Integration and Test", property_label:"Cost variance", value:-1100000,
+    entity_id:"3.1", entity_name:"Integration and Test", variance_kind:"cost", contribution:-1100000,
+    share_of_total:0.9734513274336283, favourable:false, bcws:1800000, bcwp:1500000, acwp:2600000,
+    value_unit:"USD", scope_label:"Notional Program Meridian", wbs_id:"3", obs_id:"OBS-TEST", bac:3000000, rank:1,
+    contribution_exact:"-1100000.00", bcws_exact:"1800000.00", bcwp_exact:"1500000.00", acwp_exact:"2600000.00",
+    share_of_total_exact:"0.9734513274336283185840707965" },
+  { instance_id:"5.1", instance_label:"Logistics Support", property_label:"Cost variance", value:-150000,
+    entity_id:"5.1", entity_name:"Logistics Support", variance_kind:"cost", contribution:-150000,
+    share_of_total:0.13274336283185842, favourable:false, bcws:750000, bcwp:750000, acwp:900000,
+    value_unit:"USD", scope_label:"Notional Program Meridian", wbs_id:"5", obs_id:"OBS-LOG", bac:1500000, rank:2,
+    contribution_exact:"-150000.00", bcws_exact:"750000.00", bcwp_exact:"750000.00", acwp_exact:"900000.00",
+    share_of_total_exact:"0.1327433628318584070796460177" },
+  { instance_id:"1.1", instance_label:"Systems Engineering", property_label:"Cost variance", value:120000,
+    entity_id:"1.1", entity_name:"Systems Engineering", variance_kind:"cost", contribution:120000,
+    share_of_total:-0.10619469026548672, favourable:true, bcws:1200000, bcwp:1200000, acwp:1080000,
+    value_unit:"USD", scope_label:"Notional Program Meridian", wbs_id:"1", obs_id:"OBS-ENG", bac:2000000, rank:3,
+    contribution_exact:"120000.00", bcws_exact:"1200000.00", bcwp_exact:"1200000.00", acwp_exact:"1080000.00",
+    share_of_total_exact:"-0.1061946902654867256637168142" },
+] as unknown as ContributionRow[];
+
 export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
   {
     name: "complete — every claim the card can make, made",
@@ -175,5 +210,16 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
     // ONLY the card-level claim. The rows are the complete control set, so nothing else moves —
     // which is what makes this fixture's single declaration attributable to the bound alone.
     declares: ["data-card-extras"],
+  },
+  {
+    /**
+     * The producer's own finance payload, _exact twins and all — see FINANCE_VARIANCE_DRIVERS_ROWS
+     * for where the shape and the figures come from.
+     */
+    name: "finance variance drivers — the producer's row, _exact twins and all",
+    rows: FINANCE_VARIANCE_DRIVERS_ROWS,
+    value_unit: "USD",
+    // Judged, signed, shares present, every extra a scalar: only the extras claim moves.
+    declares: ["data-extra-columns"],
   },
 ];

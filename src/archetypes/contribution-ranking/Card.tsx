@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
 import { showMeasure } from "@/lib/showMeasure";
 import { CellInspector } from "@/components/planning/CellInspector";
@@ -75,8 +75,10 @@ const CONSUMED_FIELDS = new Set([
  *   data-sign-withheld    the DATA has one direction only, so a plus would assert a movement
  *   data-share-absent     the total was nought — a null share is absent, and 0% would read as
  *                         "contributes nothing"
- *   data-extras-dropped   a value ARRIVED that has no one-cell rendering here
- *   data-extra-columns    fields the payload carried beyond the ones this card consumes
+ *   data-extras-dropped   a value ARRIVED that has no one-cell rendering here — declared on the
+ *                         row's count marker, listed by name in the detail view
+ *   data-extra-columns    fields the payload carried beyond the ones this card consumes — declared
+ *                         on the row's count marker, listed in the detail view
  *   data-card-extras      CARD-LEVEL fields the payload carried beyond the ones it consumes
  *
  * EXCLUDED AS PRESENTATIONAL, each with its reason:
@@ -138,7 +140,8 @@ function displayableExtra(v: unknown): string | number | boolean | null {
 }
 
 /**
- * The columns the payload carries and this card was dropping.
+ * The extra fields the payload carries and this card was dropping: `extrasOf` finds them,
+ * `ExtraCount` counts them on the row, `InspectorExtras` names them in the detail view.
  *
  * Rows arrive with fields beyond contribution and share — a labour breakdown sends hours and
  * rate, an earned-value row sends its own inputs — and the card showed only the money.
@@ -153,8 +156,18 @@ function displayableExtra(v: unknown): string | number | boolean | null {
  *
  * NOT FORMATTED AS MONEY EITHER. An hours count and an hourly rate are not currency, and the
  * money formatter would print them as dollars — a unit this card was never told they carry.
+ *
+ * THE ROW COUNTS, THE DETAIL VIEW NAMES (architect 11-23 via Chris: "The ranking card prints raw
+ * field names under each row (acwp_exact, share_of_total_exact). Show the labelled values a person
+ * needs and move the rest behind the detailed view."). The field names are the producer's and are
+ * still not prettified — ADR-0045 — so they belong in the view a reader opens on purpose, not
+ * under every row. The count stays on the row because a field that arrived must not look absent;
+ * the attributes stay on the row because the parity seal reads them unclicked.
  */
-function ExtraColumns({ row }: { row: ContributionRow }) {
+function extrasOf(row: ContributionRow): {
+  extras: [string, string | number | boolean][];
+  dropped: string[];
+} {
   const extras: [string, string | number | boolean][] = [];
   // A FIELD THIS CARD CANNOT DRAW IS STILL A FIELD THAT ARRIVED. `displayableExtra` refuses an
   // object, an array and a NaN — correctly, since none has a one-cell rendering — but dropping
@@ -183,15 +196,50 @@ function ExtraColumns({ row }: { row: ContributionRow }) {
     }
     extras.push([k, shown]);
   }
+  return { extras, dropped };
+}
+
+/** The row's nameless count of what the detail view holds. */
+function ExtraCount({ row }: { row: ContributionRow }) {
+  const { extras, dropped } = extrasOf(row);
+  const n = extras.length + dropped.length;
+  if (n === 0) return null;
+  return (
+    <span
+      className="mt-1 block font-mono text-[9px] text-slate-500"
+      data-extra-columns
+      data-extra-count={n}
+    >
+      {n} more {n === 1 ? "field" : "fields"} in detail
+      {dropped.length > 0 && (
+        <span className="text-amber-500/70" data-extras-dropped={dropped.join(",")}>
+          {" "}
+          · {dropped.length} not drawable
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The detail view's list: every extra field verbatim, and the undrawable ones by name. */
+function InspectorExtras({ row }: { row: ContributionRow }) {
+  const { extras, dropped } = extrasOf(row);
   if (extras.length === 0 && dropped.length === 0) return null;
   return (
-    <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5" data-extra-columns>
-      {extras.map(([k, v]) => (
-        <span key={k} className="font-mono text-[10px] text-slate-500 tabular-nums">
-          <span className="text-slate-600">{k} </span>
-          {String(v)}
-        </span>
-      ))}
+    <>
+      {extras.length > 0 && (
+        <dl
+          className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-[10px] tabular-nums"
+          data-inspector-extras
+        >
+          {extras.map(([k, v]) => (
+            <Fragment key={k}>
+              <dt className="text-slate-600">{k}</dt>
+              <dd className="text-slate-400">{String(v)}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
       {/*
         NAMES, NEVER VALUES — the same rule the HUD's unread-fields panel keeps, and for the same
         two reasons: a value this card has no treatment for has no units and no formatter, and an
@@ -199,14 +247,14 @@ function ExtraColumns({ row }: { row: ContributionRow }) {
         reader is entitled to know a key arrived; what is in it is a different question.
       */}
       {dropped.length > 0 && (
-        <span
+        <p
           className="font-mono text-[10px] text-amber-500/70"
-          data-extras-dropped={dropped.join(",")}
+          data-inspector-dropped={dropped.join(",")}
         >
           {dropped.join(", ")} — not drawable here
-        </span>
+        </p>
       )}
-    </span>
+    </>
   );
 }
 
@@ -458,8 +506,8 @@ export function ContributionRanking({
                     }}
                   />
                 </span>
-                {/* Every other field the producer sent for this row — see ExtraColumns. */}
-                <ExtraColumns row={r} />
+                {/* How many other fields the producer sent for this row — see extrasOf. */}
+                <ExtraCount row={r} />
                 {/* A CAVEAT BELONGS ON ITS ROW. This one says a level-of-effort account's
                     schedule variance is structurally zero and carries no information about
                     progress — shown anywhere else, it is a caveat nobody connects to the
@@ -533,7 +581,9 @@ export function ContributionRanking({
             ) : null,
             selected.note ? <span className="text-amber-400/80">{selected.note}</span> : null,
           ]}
-        />
+        >
+          <InspectorExtras row={selected} />
+        </CellInspector>
       )}
 
       {(valid_as_of || state_version !== undefined) && (

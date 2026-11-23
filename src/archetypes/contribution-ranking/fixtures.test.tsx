@@ -132,7 +132,17 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
     // `data-legend-unjudged` is the legend's rendering of `no-verdict` rather than a separate
     // claim — the same fact said twice on one card, which the fixture set covers through
     // `data-no-verdict`. Named here rather than silently excluded.
-    const covered = new Set<string>([...CONTRIBUTION_RANKING_ABSENCES, "data-legend-unjudged"]);
+    // `data-extra-count` is the VALUE of `data-extra-columns` on the same element — one fact, its
+    // count. `data-inspector-extras` / `data-inspector-dropped` render only after a click, so they
+    // are reader state, not payload state: the row-level `data-extra-columns` /
+    // `data-extras-dropped` are the declarations, and the card tests seal the inspector side.
+    const covered = new Set<string>([
+      ...CONTRIBUTION_RANKING_ABSENCES,
+      "data-legend-unjudged",
+      "data-extra-count",
+      "data-inspector-extras",
+      "data-inspector-dropped",
+    ]);
     const uncovered = unique.filter((a) => !covered.has(a));
     expect(uncovered, "the card declares an absence no fixture flips").toEqual([]);
   });

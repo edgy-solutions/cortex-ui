@@ -15,6 +15,16 @@ import path from "node:path";
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ContributionRanking } from "./Card";
+import { FINANCE_VARIANCE_DRIVERS_ROWS } from "./fixtures";
+
+/** The row buttons, taken BEFORE a click — the inspector adds a Close button. */
+const rowButtons = () =>
+  Array.from(document.querySelector("ol")!.querySelectorAll("button")) as HTMLButtonElement[];
+/** The detail view's extras list, after clicking row `i`. Null when it has none. */
+const openExtras = (i: number) => {
+  fireEvent.click(rowButtons()[i]);
+  return document.querySelector("[data-cell-inspector] [data-inspector-extras]");
+};
 
 afterEach(cleanup);
 
@@ -266,11 +276,12 @@ describe("the payload's own columns are not dropped", () => {
     // The walk sheet predicted this and said why it is invisible: if the card shows only money,
     // the extra columns are being dropped and nothing reports it.
     render(<ContributionRanking rows={labour()} value_unit="USD" />);
-    const first = screen.getAllByRole("button")[0];
+    const first = rowButtons()[0];
     expect(first.querySelector("[data-extra-columns]")).not.toBeNull();
-    expect(first.textContent).toContain("61735");
-    expect(first.textContent).toContain("hours");
-    expect(first.textContent).toContain("rate");
+    const extras = openExtras(0)!;
+    expect(extras.textContent).toContain("61735");
+    expect(extras.textContent).toContain("hours");
+    expect(extras.textContent).toContain("rate");
   });
 
   it("labels them with the PRODUCER's field names, not prettified", () => {
@@ -278,7 +289,7 @@ describe("the payload's own columns are not dropped", () => {
     // hit exactly that when one verb title-cased its keys while another read a label table.
     const rows = [{ ...labour()[0], rate_vintage: "2021-02-01" }, labour()[1]];
     render(<ContributionRanking rows={rows} value_unit="USD" />);
-    expect(screen.getAllByRole("button")[0].textContent).toContain("rate_vintage");
+    expect(openExtras(0)!.textContent).toContain("rate_vintage");
   });
 
   it("does NOT format a NUMERIC extra as money either", () => {
@@ -291,7 +302,7 @@ describe("the payload's own columns are not dropped", () => {
       { entity_id: "b", entity_name: "B", contribution: 50, share_of_total: 0.5 },
     ];
     render(<ContributionRanking rows={rows} value_unit="USD" />);
-    const extras = screen.getAllByRole("button")[0].querySelector("[data-extra-columns]")!;
+    const extras = openExtras(0)!;
     expect(extras.textContent).toContain("61735");
     // The money formatter prefixes and abbreviates; the raw figure does neither. Asserted as
     // plain containment, because the regex written here carried literal BACKSPACE bytes — a
@@ -305,7 +316,7 @@ describe("the payload's own columns are not dropped", () => {
     // The money formatter would print an hours count as dollars, a unit this card was never
     // told they carry. Asserted by requiring the raw figure and forbidding a currency mark on it.
     render(<ContributionRanking rows={labour()} value_unit="USD" />);
-    const extras = screen.getAllByRole("button")[0].querySelector("[data-extra-columns]")!;
+    const extras = openExtras(0)!;
     expect(extras.textContent).toContain("61735");
     expect(extras.textContent).not.toContain("$61");
   });
@@ -315,15 +326,20 @@ describe("the payload's own columns are not dropped", () => {
     // above while adding a blank line to every row in the list.
     render(<ContributionRanking rows={rows()} value_unit="USD" />);
     expect(document.querySelector("[data-extra-columns]")).toBeNull();
+    expect(openExtras(0)).toBeNull();
   });
 
   it("does not re-show a field the card already speaks for", () => {
     // share_of_total, favourable and the note are rendered in their own places; repeating them
     // as raw columns would be the same figure twice with two formattings.
     render(<ContributionRanking rows={rows()} value_unit="USD" />);
-    const first = screen.getAllByRole("button")[0];
+    const first = rowButtons()[0];
     expect(first.textContent).not.toContain("share_of_total");
     expect(first.textContent).not.toContain("favourable");
+    fireEvent.click(first);
+    const opened = document.querySelector("[data-cell-inspector]")!.textContent!;
+    expect(opened).not.toContain("share_of_total");
+    expect(opened).not.toContain("favourable");
   });
 
   it("does not resurrect `direction` as a column", () => {
@@ -335,6 +351,9 @@ describe("the payload's own columns are not dropped", () => {
     ];
     render(<ContributionRanking rows={rows} value_unit="USD" />);
     expect(document.body.textContent).not.toContain("direction up");
+    openExtras(0);
+    expect(document.querySelector("[data-cell-inspector]")!.textContent).not.toContain("direction");
+    expect(document.body.textContent).not.toContain("direction up");
   });
 
   it("skips a field that is null or blank rather than printing a hole", () => {
@@ -344,6 +363,7 @@ describe("the payload's own columns are not dropped", () => {
     ];
     render(<ContributionRanking rows={rows} value_unit="USD" />);
     expect(document.querySelector("[data-extra-columns]")).toBeNull();
+    expect(openExtras(0)).toBeNull();
   });
 });
 
@@ -500,6 +520,10 @@ describe("the other decisions that carry a claim", () => {
     const el = document.querySelector("[data-extras-dropped]")!;
     expect(el).not.toBeNull();
     expect(el.getAttribute("data-extras-dropped")).toBe("breakdown");
+    fireEvent.click(rowButtons()[0]);
+    expect(
+      document.querySelector("[data-cell-inspector] [data-inspector-dropped]")!.textContent,
+    ).toContain("breakdown");
   });
 
   it("⛔ NAMES THE KEY AND NEVER THE VALUE", () => {
@@ -519,8 +543,11 @@ describe("the other decisions that carry a claim", () => {
         value_unit="USD"
       />,
     );
+    fireEvent.click(rowButtons()[0]);
     expect(document.body.innerHTML).not.toContain("COMMERCIALLY-SENSITIVE-9912");
-    expect(document.querySelector("[data-extras-dropped]")!.textContent).toContain("breakdown");
+    expect(
+      document.querySelector("[data-cell-inspector] [data-inspector-dropped]")!.textContent,
+    ).toContain("breakdown");
   });
 
   it("⛔ A DEFAULTED BOUND AND A CHOSEN ONE MUST RENDER DIFFERENTLY", () => {
@@ -628,20 +655,21 @@ describe("the other decisions that carry a claim", () => {
         value_unit="USD"
       />,
     );
-    const [over, under] = screen.getAllByRole("button").map(
-      (b) => b.querySelector("[data-extra-columns]")!,
-    );
-    expect(over, "the row carrying a boolean drew no extras strip at all").not.toBeNull();
+    const over = openExtras(0)!;
+    expect(over, "the row carrying a boolean drew no extras list at all").not.toBeNull();
+    const overText = over.textContent!;
+    const under = openExtras(1)!;
     expect(under).not.toBeNull();
-    expect(over.textContent).not.toBe(under.textContent);
+    const underText = under.textContent!;
+    expect(overText).not.toBe(underText);
 
     // AND THE DIFFERENCE IS THE PRODUCER'S OWN VOCABULARY, verbatim — not a tick, not "Yes",
     // not a local synonym. The field name is unprettified for the same reason every other
     // extra's is: a title-cased synonym is the translation layer ADR-0045 refused.
-    expect(over.textContent).toContain("above_threshold");
-    expect(over.textContent).toContain("true");
-    expect(under.textContent).toContain("above_threshold");
-    expect(under.textContent).toContain("false");
+    expect(overText).toContain("above_threshold");
+    expect(overText).toContain("true");
+    expect(underText).toContain("above_threshold");
+    expect(underText).toContain("false");
 
     // A BOOLEAN IS NOT UNDRAWABLE. It has a one-cell form, so it must not be named as a value
     // this card had to drop — which is the whole finding, stated in the negative.
@@ -656,10 +684,10 @@ describe("the other decisions that carry a claim", () => {
     // differently, and a card that treats it as an ordinary boolean renders them alike.
     const base = { entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1 };
     render(<ContributionRanking rows={[{ ...base, above_threshold: true }]} value_unit="USD" />);
-    const named = document.querySelector("[data-extra-columns]")!.textContent!.replace("above_threshold", "FIELD");
+    const named = openExtras(0)!.textContent!.replace("above_threshold", "FIELD");
     cleanup();
     render(<ContributionRanking rows={[{ ...base, ordinary_flag: true }]} value_unit="USD" />);
-    const plain = document.querySelector("[data-extra-columns]")!.textContent!.replace("ordinary_flag", "FIELD");
+    const plain = openExtras(0)!.textContent!.replace("ordinary_flag", "FIELD");
     expect(named).toBe(plain);
   });
 
@@ -676,5 +704,67 @@ describe("the other decisions that carry a claim", () => {
       />,
     );
     expect(document.querySelector("[data-extras-dropped]")).toBeNull();
+  });
+});
+
+describe("the row shows labelled values; the field names live in the detail view (11-23)", () => {
+  const KEYS = [
+    "instance_id", "instance_label", "property_label", "value", "variance_kind", "value_unit",
+    "scope_label", "wbs_id", "obs_id", "bac", "contribution_exact", "bcws_exact", "bcwp_exact",
+    "acwp_exact", "share_of_total_exact",
+  ];
+
+  it("⛔ THE ROW PRINTS NO FIELD NAME — acwp_exact and share_of_total_exact are what the architect saw", () => {
+    render(<ContributionRanking rows={FINANCE_VARIANCE_DRIVERS_ROWS} value_unit="USD" />);
+    const buttons = rowButtons();
+    expect(buttons.length).toBe(3);
+    // `value` and `bac` are too short to search for as text, so for them the row must hold no
+    // dt/dd/list and no "key value" pair — the old strip rendered each key as its own span.
+    const searchable = KEYS.filter((k) => k !== "value" && k !== "bac");
+    for (const b of buttons) {
+      for (const k of searchable) expect(b.textContent, k).not.toContain(k);
+      expect(b.querySelector("dt, dd, [data-inspector-extras]")).toBeNull();
+      expect(b.textContent).not.toMatch(/\bvalue \S/);
+      expect(b.textContent).not.toMatch(/\bbac \S/);
+      expect(b.textContent).toContain("$");
+      expect(b.textContent).toContain("%");
+    }
+    expect(buttons[0].textContent).toContain("Integration and Test");
+  });
+
+  it("the row COUNTS what the detail view NAMES — cardinality, not containment", () => {
+    render(<ContributionRanking rows={FINANCE_VARIANCE_DRIVERS_ROWS} value_unit="USD" />);
+    const marker = rowButtons()[0].querySelector("[data-extra-count]")!;
+    expect(marker.getAttribute("data-extra-count")).toBe("15");
+    const extras = openExtras(0)!;
+    const dts = Array.from(extras.querySelectorAll("dt")).map((d) => d.textContent);
+    expect(dts.length).toBe(15);
+    expect([...dts].sort()).toEqual([...KEYS].sort());
+  });
+
+  it("the detail view shows the exact twin verbatim", () => {
+    render(<ContributionRanking rows={FINANCE_VARIANCE_DRIVERS_ROWS} value_unit="USD" />);
+    const t = openExtras(0)!.textContent!;
+    expect(t).toContain("acwp_exact");
+    expect(t).toContain("2600000.00");
+    expect(t).toContain("share_of_total_exact");
+    expect(t).toContain("0.9734513274336283185840707965");
+    expect(t).not.toContain("$2.6M");
+  });
+
+  it("a dropped-only row still counts on the row", () => {
+    render(
+      <ContributionRanking
+        rows={[{ entity_id: "a", entity_name: "A", contribution: 10, share_of_total: 1, breakdown: { a: 1 } }]}
+        value_unit="USD"
+      />,
+    );
+    const marker = rowButtons()[0].querySelector("[data-extra-count]")!;
+    expect(marker.getAttribute("data-extra-count")).toBe("1");
+    expect(marker.textContent).toContain("1 more field in detail");
+    expect(openExtras(0)).toBeNull();
+    expect(
+      document.querySelector("[data-cell-inspector] [data-inspector-dropped]")!.textContent,
+    ).toContain("breakdown");
   });
 });
