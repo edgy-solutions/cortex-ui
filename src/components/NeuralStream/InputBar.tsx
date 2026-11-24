@@ -7,6 +7,7 @@ import { Paperclip, Send, Wifi, WifiOff, X } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
 import { useComposerDraft } from "@/hooks/useComposerDraft";
 import { PersonaPicker } from "@/components/PersonaPicker";
+import { AskableTrigger } from "@/components/NeuralStream/AskableMeasures";
 import { KindPicker } from "@/components/ingest/KindPicker";
 import { DropLeafRow } from "@/components/ingest/DropLeafRow";
 import { IngestDragOverlay } from "@/components/ingest/IngestDragOverlay";
@@ -264,6 +265,7 @@ export function InputBar() {
                 two-column palette opening upward. Replaces the former
                 static Zap glyph + the exposed dropdown row. */}
               <PersonaPicker />
+              <AskableTrigger />
               {ingestEnabled && (
                 <span className="relative inline-flex">
                   <button

@@ -25,6 +25,7 @@ import {
   type ExportProfile,
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
+import { readAskableMeasures, type AskableRead } from "@/lib/askableMeasures";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
 import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import {
@@ -1079,6 +1080,18 @@ export async function fetchTaskKinds(): Promise<unknown[] | null> {
   try {
     const data = await request("GET /task_kinds", {});
     return readTaskKindsResponse(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the caller can ask (`GET /askable_measures`, #525), read by `readAskableMeasures`.
+ * null = unreachable (cortex knows nothing), distinct from every served state.
+ */
+export async function fetchAskableMeasures(): Promise<AskableRead | null> {
+  try {
+    return readAskableMeasures(await request("GET /askable_measures", {}));
   } catch {
     return null;
   }

@@ -94,6 +94,7 @@ import {
 import { readExtraction } from "@/lib/promotionReview";
 import { readReviewShapes } from "@/lib/reviewShapes";
 import { readMenuBlocks } from "@/lib/menuBlocks";
+import { groupRows, matchesSearch } from "@/lib/askableMeasures";
 import { profileLabel } from "@/lib/reviewExport";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 
@@ -181,6 +182,14 @@ const SEEDS: Record<string, Record<string, unknown>> = {
     "live_nodes.[]": { uri: "urn:x:A", labels: ["Class"] },
     "live_edges.[]": { source: "urn:x:A", target: "urn:x:B", type: "REL" },
     "context_nodes.[]": { uri: "urn:x:B", labels: ["Class"] },
+  },
+  // composed must be true or the reader stops at not-composed and never reads a row; every AskableMeasure field is set.
+  "GET /askable_measures": {
+    composed: true,
+    "measures.[]": {
+      verb: "v", name: "n", description: "d", phrasings: ["p"], cells: ["c"],
+      shape: "s", unit: "u", example_ask: "e", group_label: "g",
+    },
   },
   "GET /ingest/{ingest_id}/extraction": { "rows.[].mpn": "ABC-1", "rows.[].row_index": 0, "rows.[].part_index": 0 },
 };
@@ -308,6 +317,7 @@ const CALLS: Record<string, () => Promise<unknown>> = {
   fetchReviewShapes: () => client.fetchReviewShapes(),
   correctIngestLeaf: () => client.correctIngestLeaf("i-1", "pcn"),
   fetchIngestExportProfiles: () => client.fetchIngestExportProfiles(),
+  fetchAskableMeasures: () => client.fetchAskableMeasures(),
 };
 
 const settle = () => rtlAct(async () => { await new Promise((r) => setTimeout(r, 30)); });
@@ -393,6 +403,13 @@ const READERS: Record<string, Reader[]> = {
   fetchIngestExtraction: [function readExtractionOf(raw) { return readExtraction(raw); }],
   fetchReviewShapes: [function readReviewShapesOf(raw) { return readReviewShapes(raw); }],
   correctIngestLeaf: [function readIngestStatusRowOfLeaf(raw) { return readIngestStatusRow(raw); }],
+  // The client function reads the body through readAskableMeasures (recorded); this reader then uses the derived rows as the panel does.
+  fetchAskableMeasures: [
+    function askablePanelUsesRows(r) {
+      if (r?.kind !== "ready") throw new Error("expected a ready read");
+      for (const g of groupRows(r.rows)) for (const row of g.rows) matchesSearch(row, "x");
+    },
+  ],
   fetchIngestExportProfiles: [function profileLabelsOf(ps) { return ps.map((p: any) => `${p.name}/${p.format}/${p.granularity}/${profileLabel(p)}`); }],
 };
 
@@ -427,6 +444,7 @@ const READ_FLOOR: Record<string, number> = {
   fetchReviewShapes: 4,
   correctIngestLeaf: 3,
   fetchIngestExportProfiles: 1,
+  fetchAskableMeasures: 16,
 };
 
 // ── run everything once, so the test names can carry the counts ────────────

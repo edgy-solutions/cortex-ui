@@ -345,7 +345,9 @@ describe("no My drops", () => {
 });
 
 describe("the composer row", () => {
-  it("is exactly wifi, bolt, clip, input, send -- nothing else", () => {
+  // The askable trigger joined the group after the bolt (architect via Chris, 11-23: "a person sees what they can ask
+  // in their persona and picks one"). Still a pin: anything else added here reds.
+  it("is exactly wifi, bolt, askable, clip, input, send -- nothing else", () => {
     render(<InputBar />);
     const row = document.querySelector("[data-ingest-composer] input[type='text']")!.parentElement!;
     const kids = [...row.children];
@@ -355,10 +357,11 @@ describe("the composer row", () => {
     expect((hiddenFile as HTMLInputElement).type).toBe("file");
     expect(send.getAttribute("aria-label")).toBe("Send");
     const inner = [...group.children];
-    expect(inner).toHaveLength(3);
+    expect(inner).toHaveLength(4);
     expect(inner[0].tagName.toLowerCase()).toBe("svg"); // wifi
     expect(inner[1].hasAttribute("data-persona-picker")).toBe(true); // bolt
-    expect(inner[2].querySelector("[data-ingest-attach]")).not.toBeNull(); // clip
+    expect(inner[2].querySelector("[data-askable-trigger]")).not.toBeNull(); // what can I ask?
+    expect(inner[3].querySelector("[data-ingest-attach]")).not.toBeNull(); // clip
     expect(group.className).toMatch(/flex items-center gap-2/);
   });
 
