@@ -12,6 +12,7 @@ names the same digest.
 |---|---|
 | Image | `ghcr.io/edgy-solutions/cortex-ui/frontend` |
 | Index digest | `sha256:cf64568d8b59cce54861967072ac3db54072068b9bd37817599e007e578d0766` |
+| Version tag | `ghcr.io/edgy-solutions/cortex-ui/frontend:0.4.0` (same digest; added to the existing index, not rebuilt) |
 | linux/amd64 | `sha256:149f03dc56b4c710514b87103662567a428d38a2f013af7ddc95e9e073976853` |
 | linux/arm64 | `sha256:ea2b41b03a49080c6fb01fce36c36812d845a76dcba29888f4cebc36816aff77` |
 | Source commit | [`1660b84e2941…`](https://github.com/edgy-solutions/cortex-ui/commit/1660b84e2941) |
@@ -23,7 +24,18 @@ The digest was checked from the registry, not taken from the pin's comment:
 - the control, `be1d177` (0.4.90's pin), resolves to `d02e6481…`;
 - the short tag and a zero sha both answer 404.
 
-The package is public, so a pull needs no credential.
+The package is public, so a pull needs no credential:
+
+```
+docker pull ghcr.io/edgy-solutions/cortex-ui/frontend:0.4.0
+# Digest: sha256:cf64568d8b59cce54861967072ac3db54072068b9bd37817599e007e578d0766
+```
+
+The version tag points at the multi-arch index, so the same pull works on amd64 and arm64.
+- It was added by `retag-image.yml` (run 45460803295), which copied the index bytes under `0.4.0`.
+- A later attempt to point `0.4.0` at another digest was refused (run 45461004763).
+- Checked from the registry: `0.4.0` resolves to `cf64568d…`, while the short sha `1660b84`, a zero sha, the truncated digest `sha256:cf64568d` and a zero digest all return 404.
+- A pull by version and a pull by digest, from an empty Docker config, return the same image id.
 
 ## Release line
 
@@ -31,6 +43,9 @@ The package is public, so a pull needs no credential.
   - Each such cut gets one patch number.
   - The minor number goes up only when the architect says so.
   - If the pin does not move, no release is cut.
+- Each release also tags its image `x.y.z`. Pushing the `cortex-ui-x.y.z` tag runs `retag-image.yml`.
+  - That workflow has no build step: it adds the version to the digest the tagged commit's own build pushed.
+  - It never moves a version that already exists.
 - The **chart** is unchanged at 0.3.0. Future chart releases are named `chart-cortex-ui-x.y.z` and never take Latest.
   - Chart releases up to 0.3.0 keep their old names.
   - The Helm repository (`https://edgy-solutions.github.io/cortex-ui`) serves them as before.
