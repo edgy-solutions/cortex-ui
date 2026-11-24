@@ -151,4 +151,4 @@ export function validateShortfallGrid(
  * `valid_as_of`/`state_version` are passed explicitly by the dispatch case, outside this list,
  * same as CONTRIBUTION_RANKING.
  */
-export const SHORTFALL_GRID_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label"] as const;
+export const SHORTFALL_GRID_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label", "data_provenance"] as const;

@@ -4,7 +4,7 @@
  * is to prove the omission lands clean: every projected archetype, drawn through the interpreter
  * with the null key and without it, must differ only by the raw row.
  *
- * Captures reach 5 of the 15 archetypes, so the other 10 use fixtures or hand payloads, each hand
+ * Captures reach 5 of the 16 archetypes, so the other 11 use fixtures or hand payloads, each hand
  * payload with text only its card draws. Two refusals would compare equal and prove nothing, which
  * is why `draws` exists.
  *
@@ -18,6 +18,7 @@ import { cleanup, render } from "@testing-library/react";
 import { SemanticInterpreter } from "@/components/registry/SemanticInterpreter";
 import { LEDGER_FIXTURES } from "@/components/ledger/fixtures/sourceLedger";
 import { rawFieldsOf } from "@/lib/rawFields";
+import { FLOW_DECOMPOSITION_FIXTURES } from "./flow-decomposition/fixtures";
 import { parityComponents as competing } from "./competing-measures/parityPopulation.testkit";
 import { parityComponents as ranking } from "./contribution-ranking/parityPopulation.testkit";
 import { parityComponents as deltaSet } from "./delta-set/parityPopulation.testkit";
@@ -153,6 +154,11 @@ const PACKAGES: Record<string, (r: (f: string) => unknown) => Record<string, Com
   COMPETING_MEASURES: competing,
   CONTRIBUTION_RANKING: ranking,
   DELTA_SET: deltaSet,
+  // No parity testkit: every packaged flow fixture, keyed by name (a refusal among them is on purpose).
+  FLOW_DECOMPOSITION: () =>
+    Object.fromEntries(
+      FLOW_DECOMPOSITION_FIXTURES.map((f) => [`fixture:${f.name}`, { archetype: "FLOW_DECOMPOSITION", ...f.payload }]),
+    ),
   MULTI_SERIES: multiSeries,
   SHORTFALL_GRID: shortfall,
   VARIANCE_TREE: variance,

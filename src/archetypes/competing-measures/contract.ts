@@ -88,6 +88,7 @@ export const COMPETING_MEASURES_ENVELOPE_FIELDS = [
   "reference_value",
   "value_unit",
   "scope_label",
+  "data_provenance",
 ] as const;
 
 export const COMPETING_MEASURES_ROW_REQUIREMENTS = {

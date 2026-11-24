@@ -175,4 +175,4 @@ export function validateVarianceTree(
  * that pair "for every archetype" outside any per-archetype tuple, so the dispatch passes them
  * explicitly, same as CONTRIBUTION_RANKING.
  */
-export const VARIANCE_TREE_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label"] as const;
+export const VARIANCE_TREE_ENVELOPE_FIELDS = ["value_label", "value_unit", "scope_label", "data_provenance"] as const;

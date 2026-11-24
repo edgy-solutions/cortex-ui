@@ -5,7 +5,11 @@
  *
  *     "CONTRIBUTION_RANKING": ("rows",
  *                             ("value_label", "value_unit", "scope_label", "verdict",
- *                              "threshold", "threshold_defaulted", "method")),
+ *                              "threshold", "threshold_defaulted", "method",
+ *                              "data_provenance")),
+ *
+ * `data_provenance` was added as the LAST element by producer #528 (80dcbbae), 2026-11-23 (tuple as
+ * of ba70c92a); it is passed through and drawn verbatim (`ServedProvenance`). The seven below were:
  *
  * SEVEN fields, copied verbatim and in order. `SemanticInterpreter.tsx`'s own pre-packaging
  * comment at the old `case "CONTRIBUTION_RANKING"` claimed SIX and omitted `method`, citing a
@@ -29,5 +33,6 @@ export const CONTRIBUTION_RANKING_ROW = {
     "threshold",
     "threshold_defaulted",
     "method",
+    "data_provenance",
   ],
 } as const;

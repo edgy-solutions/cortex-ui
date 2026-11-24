@@ -20,6 +20,8 @@ export const VARIANCE_TREE_ABSENCES = [
   "data-residual",
   "data-verdict-tag",
   "data-render-limit",
+  // #528 (80dcbbae): the producer's source sentence, drawn verbatim by `ServedProvenance`.
+  "data-served-provenance",
 ] as const;
 
 export type VarianceTreeAbsence = (typeof VARIANCE_TREE_ABSENCES)[number];
@@ -86,6 +88,10 @@ const deepTree = () => [
     ],
   },
 ];
+
+/** TRANSCRIBED from `finance_agent/seed.py::notional_banner` at producer 950b3eb9, as MULTI_SERIES's fixture has it. */
+const NOTIONAL_BANNER =
+  "NOTIONAL DATA — invented program, round figures, public EVM formulas. Not derived from any real program (ADR-0045 Decision 4).";
 
 export const VARIANCE_TREE_FIXTURES: VarianceTreeFixture[] = [
   {
@@ -166,5 +172,11 @@ export const VARIANCE_TREE_FIXTURES: VarianceTreeFixture[] = [
     rows: [{ level: "program", entity_id: "P", entity_name: "P" }],
     envelope: {},
     declares: [],
+  },
+  {
+    name: "the producer served a data_provenance sentence (the notional banner)",
+    rows: [leaf("WP", -100)],
+    envelope: { data_provenance: NOTIONAL_BANNER },
+    declares: ["data-variance-node", "data-depth", "data-share-bar", "data-stop-reason", "data-served-provenance"],
   },
 ];

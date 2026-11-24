@@ -74,6 +74,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
           value_unit={f.value_unit}
           threshold={f.threshold}
           threshold_defaulted={f.threshold_defaulted}
+          data_provenance={f.data_provenance}
         />,
       );
       // Scoped to this render's container, per ADR-0055 §2's collision rule — see
@@ -117,6 +118,7 @@ describe("CONTRIBUTION_RANKING fixtures discriminate", () => {
           value_unit={f.value_unit}
           threshold={f.threshold}
           threshold_defaulted={f.threshold_defaulted}
+          data_provenance={f.data_provenance}
         />,
       );
       const declared = readDeclaredAbsences(container, CONTRIBUTION_RANKING_ABSENCES);

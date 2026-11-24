@@ -704,6 +704,7 @@ const renderComponent = (
           rows={comp.rows}
           value_unit={comp.value_unit}
           scope_label={comp.scope_label}
+          data_provenance={comp.data_provenance}
           valid_as_of={comp.valid_as_of}
           state_version={comp.state_version}
         />

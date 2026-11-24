@@ -118,6 +118,7 @@ export const CONTRIBUTION_RANKING_ENVELOPE_FIELDS = [
   "scope_label",
   "threshold",
   "threshold_defaulted",
+  "data_provenance",
 ] as const;
 
 export interface ContributionRow {

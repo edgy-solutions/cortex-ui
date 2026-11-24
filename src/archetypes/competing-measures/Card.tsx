@@ -1,4 +1,5 @@
 import { formatAmount } from "@/lib/formatAmount";
+import { ServedProvenance, readServedProvenance } from "../ServedProvenance";
 import {
   validateCompetingMeasures,
   readField,
@@ -36,6 +37,7 @@ export interface CompetingMeasuresProps {
   reference_value?: number | null;
   value_unit?: string;
   scope_label?: string;
+  data_provenance?: unknown;
 }
 
 const num = (v: unknown): number | null =>
@@ -52,11 +54,14 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
   all_methods_answered,
   value_unit,
   scope_label,
+  data_provenance,
   } = props;
   const result = validateCompetingMeasures(methodRows);
   if (result.kind === "empty") {
     return (
       <div className="rounded-md border border-slate-700/50 bg-slate-800/30 p-4" data-refused>
+        {/* A refused finance answer still says where its data came from (flow card precedent). */}
+        <ServedProvenance text={readServedProvenance(data_provenance)} />
         <p className="font-mono text-[11px] uppercase tracking-widest text-slate-500">
           {result.reason}
         </p>
@@ -205,6 +210,12 @@ export function CompetingMeasures(props: CompetingMeasuresProps) {
           <MethodRow key={r.method_label} row={r} barMax={barMax} unit={value_unit} />
         ))}
       </ol>
+
+      {readServedProvenance(data_provenance) !== undefined && (
+        <div className="mt-3">
+          <ServedProvenance text={readServedProvenance(data_provenance)} />
+        </div>
+      )}
     </div>
   );
 }

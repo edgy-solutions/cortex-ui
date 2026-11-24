@@ -793,7 +793,7 @@ describe("⛔ the completeness pair as a truncation detector", () => {
     expect(component).toContain("data-spread-unreported");
     expect(component).toContain("data-range-absent");
     expect(component).toContain("data-completeness-unstated");
-    expect(COMPETING_MEASURES_ABSENCES).toHaveLength(7);
+    expect(COMPETING_MEASURES_ABSENCES).toHaveLength(8); // 7 + data-served-provenance (#528)
 
     // ⛔ THE SEAL, BEHAVIOURAL AND IN THE RULING'S OWN TERMS. Three rows, every one of them
     // answering, and a producer that states nothing: the case where the old code was MOST

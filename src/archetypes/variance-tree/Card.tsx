@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { formatAmount } from "@/lib/formatAmount";
+import { ServedProvenance, readServedProvenance } from "../ServedProvenance";
 import { showMeasure } from "@/lib/showMeasure";
 import { CellInspector } from "@/components/planning/CellInspector";
 import {
@@ -65,9 +66,11 @@ const STOP_LANGUAGE: Record<string, string> = {
   depth: "the analysis stopped here at its own depth limit",
 };
 
-function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
+function DeliberateEmpty({ reason, scope, provenance }: { reason: string; scope?: string; provenance?: string }) {
   return (
     <div className="glass-panel p-6 my-4 border-amber-500/20">
+      {/* A refused finance answer still says where its data came from (flow card precedent). */}
+      <ServedProvenance text={provenance} />
       <div className="flex flex-col items-center justify-center gap-2 py-12">
         <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
           {scope ? `${scope} — nothing to draw` : "nothing to draw"}
@@ -269,6 +272,7 @@ export function VarianceTree({
   value_label,
   value_unit,
   scope_label,
+  data_provenance,
   valid_as_of,
   state_version,
 }: {
@@ -276,13 +280,14 @@ export function VarianceTree({
   value_label?: string;
   value_unit?: string;
   scope_label?: string;
+  data_provenance?: unknown;
   valid_as_of?: string;
   state_version?: number;
 }) {
   const [selected, setSelected] = useState<VarianceNode | null>(null);
   const result = validateVarianceTree(rows);
   if (result.kind === "empty") {
-    return <DeliberateEmpty reason={result.reason} scope={scope_label} />;
+    return <DeliberateEmpty reason={result.reason} scope={scope_label} provenance={readServedProvenance(data_provenance)} />;
   }
   const root = result.root;
 
@@ -341,6 +346,12 @@ export function VarianceTree({
             ) : null,
           ]}
         />
+      )}
+
+      {readServedProvenance(data_provenance) !== undefined && (
+        <div className="mt-3">
+          <ServedProvenance text={readServedProvenance(data_provenance)} />
+        </div>
       )}
 
       {(valid_as_of || state_version !== undefined) && (
