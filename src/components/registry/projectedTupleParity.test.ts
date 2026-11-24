@@ -147,7 +147,7 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     ).toBeGreaterThan(0);
   });
 
-  it.skipIf(FOUND.length === 0)("names SEVEN fields, and the count is asserted on purpose", () => {
+  it.skipIf(FOUND.length === 0)("names EIGHT fields, and the count is asserted on purpose", () => {
     const fields = declaredEnvelopeFields(readFileSync(FOUND[0], "utf8"));
     // ⛔ IT WAS SIX, AND THE EXACT COUNT IS WHY WE KNOW. This was written `toHaveLength(6)` with
     // the note "if the producer adds a seventh field, this goes red and someone re-reads it". On
@@ -155,8 +155,9 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
     // ranking states its own method, and the projector carries it"). A `>=` bound would have let
     // that through silently — the same drift that put a stale count in a comment for months.
     //
-    // SEVEN, still not "at least seven", for the same reason.
-    expect(fields).toHaveLength(7);
+    // It went red again on 2026-11-23: #528 (`80dcbbae`) appended `data_provenance`, the served
+    // source sentence the card draws verbatim. EIGHT, still not "at least eight".
+    expect(fields).toHaveLength(8);
     expect(fields).toEqual([
       "value_label",
       "value_unit",
@@ -165,6 +166,7 @@ describe("the CONTRIBUTION_RANKING projector tuple, as the producer declares it"
       "threshold",
       "threshold_defaulted",
       "method",
+      "data_provenance",
     ]);
   });
 

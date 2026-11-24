@@ -310,6 +310,7 @@ const CALLS: Record<string, Case[]> = {
   fetchTemplates: [{ name: "plain", op: "GET /templates", run: () => (client as any).fetchTemplates() }],
   fetchMenuBlocks: [{ name: "plain", op: "GET /menu_blocks", run: () => (client as any).fetchMenuBlocks() }],
   fetchTaskKinds: [{ name: "plain", op: "GET /task_kinds", run: () => (client as any).fetchTaskKinds() }],
+  fetchAskableMeasures: [{ name: "plain", op: "GET /askable_measures", run: () => (client as any).fetchAskableMeasures() }],
   fetchExportRecipients: [{ name: "plain", op: "GET /export/package/recipients", run: () => (client as any).fetchExportRecipients() }],
   offerExportRecipients: [{ name: "plain", op: "POST /export/package/recipients", run: () => (client as any).offerExportRecipients(["a", "b"]) }],
   startCanvasExport: [
