@@ -10,19 +10,36 @@
 # It refuses to MOVE a tag: a release tag already pointing elsewhere fails the run. Re-running
 # for the same digest is a no-op that still verifies.
 #
-# Run: gh workflow run retag-image.yml -f digest=sha256:<64 hex> -f tag=<x.y.z>
+# ⛔ PART OF EVERY CORTEX RELEASE (architect, 2026-11-24). Pushing the app tag `cortex-ui-x.y.z`
+# runs this workflow, which ADDS the image tag `x.y.z` to the index digest that the tagged commit's
+# master build already pushed (`frontend:<full sha>`). This workflow has no build step, so a tag
+# push still builds nothing; it only names bytes that exist. If that commit has no image, the run
+# fails and nothing is built.
+#
+# A tag push runs the workflow file AT THE TAGGED COMMIT, so a release tag on a commit older than
+# this trigger runs nothing. Dispatch it instead; it takes the same code path:
+#   gh workflow run retag-image.yml -f release_tag=cortex-ui-<x.y.z>
+#
+# Or name the digest by hand (the original form):
+#   gh workflow run retag-image.yml -f digest=sha256:<64 hex> -f tag=<x.y.z>
 
 name: Retag Image By Digest
 
 on:
+  push:
+    tags:
+      - "cortex-ui-[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: "App release tag (cortex-ui-x.y.z): tag the image its commit's build pushed. Leave digest and tag empty."
+        required: false
       digest:
-        description: "Index digest to tag (sha256:<64 hex>) — the one the gates passed"
-        required: true
+        description: "Index digest to tag (sha256:<64 hex>), the one the gates passed"
+        required: false
       tag:
         description: "Release tag (x.y.z)"
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -36,15 +53,13 @@ jobs:
         env:
           DIGEST: ${{ inputs.digest }}
           TAG: ${{ inputs.tag }}
+          # A tag push names the release by its ref; a dispatch may name it by input.
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
           REPO: ${{ github.repository }}/frontend
           ACTOR: ${{ github.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::digest must be sha256:<64 hex>, got '$DIGEST'"; exit 1; }
-          # A release tag only: never a sha, never latest.
-          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag must be x.y.z, got '$TAG'"; exit 1; }
-
           REG="https://ghcr.io/v2/${REPO}"
           TOKEN=$(curl -fsS -u "${ACTOR}:${GH_TOKEN}" "https://ghcr.io/token?scope=repository:${REPO}:pull,push" | jq -r .token)
           [ -n "$TOKEN" ] && [ "$TOKEN" != null ] || { echo "::error::no registry token"; exit 1; }
@@ -55,6 +70,23 @@ jobs:
             local h; h=$(curl -sS -o /dev/null -D - -w '%{http_code}' -I -H "$AUTH" -H "$ACCEPT" "$REG/manifests/$1")
             if [ "$(tail -n1 <<<"$h")" = 200 ]; then grep -i '^docker-content-digest:' <<<"$h" | awk '{print $2}' | tr -d '\r'; else echo "HTTP $(tail -n1 <<<"$h")"; fi
           }
+
+          # 0. An app release tag names the image its commit's master build pushed, never a new build.
+          if [ -n "$RELEASE_TAG" ]; then
+            [ -z "$DIGEST" ] && [ -z "$TAG" ] || { echo "::error::give release_tag OR digest+tag, not both"; exit 1; }
+            [[ "$RELEASE_TAG" =~ ^cortex-ui-([0-9]+\.[0-9]+\.[0-9]+)$ ]] || { echo "::error::release tag must be cortex-ui-x.y.z, got '$RELEASE_TAG'"; exit 1; }
+            TAG="${BASH_REMATCH[1]}"
+            # The API dereferences an annotated tag to its commit; github.sha is not relied on.
+            SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq .sha)
+            [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::$RELEASE_TAG resolves to no commit ('$SHA')"; exit 1; }
+            DIGEST=$(resolve "$SHA")
+            [[ "$DIGEST" == sha256:* ]] || { echo "::error::${REPO}:${SHA} answered $DIGEST: that commit's master build pushed no image (a docs-only push builds none). Nothing was built; tag a commit that has one."; exit 1; }
+            echo "release $RELEASE_TAG -> commit $SHA -> ${REPO}:${SHA} = $DIGEST -> image tag $TAG"
+          fi
+
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::digest must be sha256:<64 hex>, got '$DIGEST'"; exit 1; }
+          # A release tag only: never a sha, never latest.
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag must be x.y.z, got '$TAG'"; exit 1; }
 
           # 1. The source: exactly the bytes stored at DIGEST, and they must be a two-platform index.
           curl -fsS -H "$AUTH" -H "$ACCEPT" -o index.json "$REG/manifests/$DIGEST"
