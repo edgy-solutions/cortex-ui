@@ -18,8 +18,9 @@ on:
     paths:
       - "helm/**"
       # The chart's own checks. A change to a guard must run that guard and its redproof, or an
-      # edit that silently disarms one lands on master unmeasured. chart-releaser is a no-op on
-      # these pushes: it publishes only charts whose version moved.
+      # edit that silently disarms one lands on master unmeasured. chart-releaser itself runs only
+      # when Chart.yaml's version is not yet in the gh-pages index (see "Is this chart version
+      # already published?" below); cr on its own packages any chart with a changed file.
       - "scripts/check-chart-renders.mjs"
       - "scripts/redproof-chart-*.mjs"
       - ".github/workflows/helm-release.yml"
@@ -76,9 +77,40 @@ jobs:
         run: node scripts/redproof-chart-renders.mjs
       - name: Prove the chart can still refuse a bad image pin
         run: node scripts/redproof-chart-image-pin.mjs
+      # ⛔ The CHART line and the APP line no longer share tag names (architect, 2026-11-24).
+      # App releases are `cortex-ui-x.y.z`, cut at the commit an iagent release pins, and hold
+      # Latest. Chart releases are `chart-cortex-ui-x.y.z` (.github/cr.yaml) and never take Latest.
+      # Past chart releases (cortex-ui-0.1.0 … 0.3.0) keep their names; their index URLs are absolute.
+      #
+      # Why the guard: cr diffs helm/ against the NEAREST tag of any kind (`git describe --tags
+      # HEAD~`) and packages any chart with a changed file, whether or not its version moved.
+      # Before the rename, an unbumped edit failed loudly on the existing release name. After it,
+      # the same edit would publish a SECOND copy of an already-published version under the new
+      # name. The .tgz file name is `<name>-<version>.tgz` under either template, so the index is
+      # asked by file name.
+      - name: Is this chart version already published?
+        id: published
+        run: |
+          set -euo pipefail
+          V=$(sed -n 's/^version:[[:space:]]*//p' helm/cortex-ui/Chart.yaml | tr -d "\"' \r")
+          [ -n "$V" ] || { echo "::error::no version: in helm/cortex-ui/Chart.yaml"; exit 1; }
+          git fetch --no-tags origin gh-pages
+          INDEX=$(git show FETCH_HEAD:index.yaml)
+          # Control: a version that is published must be found, or this check cannot tell.
+          grep -qF "/cortex-ui-0.3.0.tgz" <<<"$INDEX" || { echo "::error::control cortex-ui-0.3.0.tgz not found in index.yaml: this check cannot see the index"; exit 1; }
+          if grep -qF "/cortex-ui-$V.tgz" <<<"$INDEX"; then
+            echo "::notice::chart $V is already in the gh-pages index; chart-releaser skipped. Bump helm/cortex-ui/Chart.yaml version to publish a chart change."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "chart $V is not in the index: releasing it as chart-cortex-ui-$V"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Run chart-releaser
+        if: steps.published.outputs.skip == 'false'
         uses: helm/chart-releaser-action@v1.6.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           charts_dir: helm
+          config: .github/cr.yaml
+          mark_as_latest: false

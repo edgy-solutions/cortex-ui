@@ -1,0 +1,5 @@
+# chart-releaser config, read by .github/workflows/helm-release.yml.
+# Chart releases are named chart-<chart>-<version>, so they never collide with the app's
+# cortex-ui-x.y.z releases (cut at the commit an invincible-agent release pins).
+# Ruled by the architect, 2026-11-24. Releases before that keep their old names.
+release-name-template: "chart-{{ .Name }}-{{ .Version }}"
