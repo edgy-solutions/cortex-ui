@@ -34,7 +34,7 @@ vi.mock("axios", async (importOriginal) => {
 });
 
 import axios from "axios";
-import { fetchAskableMeasures } from "./client";
+import { fetchAskableMeasures, parseSSE } from "./client";
 
 const url = () => {
   const c = h.seen.at(-1) as InternalAxiosRequestConfig;
@@ -86,9 +86,40 @@ describe("fetchAskableMeasures — a served refusal", () => {
     const r = await fetchAskableMeasures({ active_persona: "p", active_domains: ["a"] });
     expect(r).toMatchObject({ kind: "refused", refusal: { status: 403, code: "persona_not_held", reason: "You do not hold p." } });
   });
-  it("a response with no readable detail still says it was refused, not empty", async () => {
-    h.reply = { status: 500, data: "boom" };
+  it("a 4xx with no readable detail still says it was refused, not empty", async () => {
+    h.reply = { status: 400, data: "boom" };
     const r = await fetchAskableMeasures();
-    expect(r).toMatchObject({ kind: "refused", refusal: { status: 500 } });
+    expect(r).toMatchObject({ kind: "refused", refusal: { status: 400 } });
   });
+  it("a bare 5xx is an outage, not a refusal: null, so the list says unreachable", async () => {
+    h.reply = { status: 500, data: "boom" };
+    expect(await fetchAskableMeasures()).toBeNull();
+  });
+  it("a 5xx that carries a served reason stays a refusal with those words", async () => {
+    h.reply = { status: 503, data: { detail: "the askable list could not be read" } };
+    expect(await fetchAskableMeasures()).toEqual({
+      kind: "refused",
+      refusal: { status: 503, code: null, reason: "the askable list could not be read" },
+    });
+  });
+});
+
+describe("parseSSE — the pick's failure events, in the shape the producer emits", () => {
+  // gateway.py f7c3f5e6 _perror(): payload keys message, kind, retryable, cause (missing_domains only on the
+  // verb_not_visible cause). Both pick causes are emitted with kind understanding / verifying_route.
+  for (const [cause, kind] of [
+    ["askable_pick_unroutable", "understanding"],
+    ["askable_pick_fell_back", "verifying_route"],
+  ] as const) {
+    it(`${cause} survives the parse as a pipeline_error with its cause`, () => {
+      const data = JSON.stringify({ message: "the picked measure's route is no longer valid: x", kind, retryable: kind === "verifying_route", cause });
+      expect(parseSSE("pipeline_error", data)).toEqual({
+        type: "pipeline_error",
+        kind,
+        message: "the picked measure's route is no longer valid: x",
+        retryable: kind === "verifying_route",
+        cause,
+      });
+    });
+  }
 });

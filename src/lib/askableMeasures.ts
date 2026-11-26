@@ -115,17 +115,26 @@ export function groupRows(rows: AskableRow[]): { label: string | null; rows: Ask
 export function readAskableRefusal(err: unknown): AskableRefusal | null {
   const r = isObj(err) && isObj(err.response) ? err.response : null;
   if (!r || typeof r.status !== "number") return null;
-  return refusalFromDetail(r.status, isObj(r.data) ? r.data.detail : undefined);
+  const served = servedRefusal(r.status, isObj(r.data) ? r.data.detail : undefined);
+  // A 4xx is the server saying no, with or without words. A 5xx is a refusal only when it SAID something
+  // (the pick's 503 for an unreadable list); a bare 5xx is an outage, and reads as unreachable.
+  if (served === null && r.status >= 500) return null;
+  return served ?? refusalFromDetail(r.status, undefined);
 }
 
-export function refusalFromDetail(status: number, detail: unknown): AskableRefusal {
+/** The server's own words, or null when it gave none. */
+function servedRefusal(status: number, detail: unknown): AskableRefusal | null {
   if (typeof detail === "string" && detail.trim() !== "") return { status, code: null, reason: detail };
   if (isObj(detail)) {
     const code = optStr(detail.error);
     const reason = optStr(detail.message) ?? optStr(detail.reason) ?? code;
     if (reason !== null) return { status, code, reason };
   }
-  return { status, code: null, reason: `The server refused this (${status}).` };
+  return null;
+}
+
+export function refusalFromDetail(status: number, detail: unknown): AskableRefusal {
+  return servedRefusal(status, detail) ?? { status, code: null, reason: `The server refused this (${status}).` };
 }
 
 /** What an Ask sends: the entry verb as listed, no bindings (the server asks for any unbound parameter). */

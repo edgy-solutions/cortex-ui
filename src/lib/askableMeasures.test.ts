@@ -122,6 +122,14 @@ describe("refusals and the pick", () => {
     const r = readAskableRefusal(err(403, { error: "persona_not_held", message: "You do not hold p." }));
     expect(r).toMatchObject({ status: 403, code: "persona_not_held", reason: "You do not hold p." });
   });
+  it("a bare 5xx is not a refusal; a 5xx with served words is", () => {
+    expect(readAskableRefusal(err(500, undefined))).toBeNull();
+    expect(readAskableRefusal(err(502, ""))).toBeNull();
+    expect(readAskableRefusal(err(503, "the list could not be read"))).toEqual({
+      status: 503, code: null, reason: "the list could not be read",
+    });
+    expect(readAskableRefusal(err(404, undefined))).toMatchObject({ status: 404 });
+  });
   it("no response is not a refusal", () => {
     expect(readAskableRefusal(new Error("network"))).toBeNull();
   });
