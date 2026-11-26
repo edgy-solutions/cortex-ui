@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "react-oidc-context";
+import { registerDraftSaver, saveDraft, takeDraft } from "@/auth/authGate";
 import { motion } from "framer-motion";
 import { Paperclip, Send, Wifi, WifiOff, X } from "lucide-react";
 import { useAgent } from "@/hooks/useAgent";
@@ -29,6 +30,16 @@ export function InputBar() {
   const { value, setValue, clearDraft } = useComposerDraft();
   const { sendMessage, isConnected, isProcessing } = useAgent();
   const textInputRef = useRef<HTMLInputElement>(null);
+
+  // A gate-started sign-in is a full-page redirect: the debounced composer draft may not have flushed. The gate
+  // asks for the current text just before it leaves (sessionStorage, one key), and it is restored once on return.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  useEffect(() => registerDraftSaver(() => saveDraft(valueRef.current)), []);
+  useEffect(() => {
+    const held = takeDraft();
+    if (held !== null) setValue(held);
+  }, [setValue]);
 
   // The `/ask?q=` deep link: the question is TYPED into the composer and nothing is sent. Replaces
   // any existing draft (the link is the person's explicit intent). The draft restore keeps a

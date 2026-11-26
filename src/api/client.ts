@@ -3,6 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { reportForbidden } from "./forbidden";
 import { reportActed } from "./acted";
 import { config } from "@/config";
+import { currentToken, gateActive, onUnauthorized, waitForToken } from "@/auth/authGate";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
 import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
@@ -43,24 +44,7 @@ import type { HeaderEdit_field, HumanTaskActRequest_reason_code } from "./genera
 import type { Operations as V1Operations } from "./generated/ingestV1";
 
 // ── Auth Utilities ─────────────────────────────────────────
-/**
- * Retrieves the OIDC user from session storage.
- * Matches the React OIDC Context storage pattern.
- */
-function getOidcToken(): string | null {
-  const storageKey = `oidc.user:${config.VITE_KEYCLOAK_REALM_URL}:${config.VITE_KEYCLOAK_CLIENT_ID}`;
-  const oidcStorage = sessionStorage.getItem(storageKey);
-
-  if (oidcStorage) {
-    try {
-      const user = JSON.parse(oidcStorage);
-      return user?.access_token || null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+// The stored token has one reader, and the gate holds calls until there is one: src/auth/authGate.ts.
 
 // ── Config ────────────────────────────────────────────────
 const API_URL = config.VITE_API_URL;
@@ -88,8 +72,9 @@ function getSessionId(): string {
 }
 
 // Attach Bearer token, Trace ID (per request) and Session ID (per sitting) to all REST requests
-api.interceptors.request.use((cfg) => {
-  const token = getOidcToken();
+api.interceptors.request.use(async (cfg) => {
+  // Hold until a signed-in user exists; a wait that times out rejects (SignInRequiredError) and nothing is sent.
+  const token = await waitForToken();
   if (token) {
     cfg.headers.Authorization = `Bearer ${token}`;
   }
@@ -108,6 +93,8 @@ api.interceptors.request.use((cfg) => {
  */
 api.interceptors.response.use(undefined, (error: unknown) => {
   const e = error as { response?: { status?: number }; config?: { method?: string; url?: string } };
+  // A 401 starts sign-in (once) and reads as SignInRequiredError. Not in no-auth mode / with no provider: the gate is off.
+  if (e?.response?.status === 401 && gateActive()) return Promise.reject(onUnauthorized());
   if (e?.response?.status === 403) {
     const method = (e.config?.method ?? "get").toUpperCase();
     const url = e.config?.url ?? "";
@@ -568,7 +555,7 @@ export async function streamInterviewResponse(
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const token = getOidcToken();
+  const token = await waitForToken();
   const body = await buildInterviewBody(request);
 
   const ctrl = new AbortController();
@@ -640,12 +627,8 @@ export async function streamInterviewResponse(
       console.error("SSE Stream Error:", err);
       if (err instanceof Response && err.status === 403) reportForbidden("POST /interview/stream");
       
-      // If the BFF throws a 401, tell the user to log in again!
-      if (err instanceof Response && err.status === 401) {
-          alert("Your session has expired. Please log in again.");
-          window.location.href = "/"; // Redirect to root/login
-          throw err;
-      }
+      // A 401 joins the same gate as every other transport: sign-in starts once, the caller reads SignInRequiredError.
+      if (err instanceof Response && err.status === 401 && gateActive()) throw onUnauthorized();
       
       // Re-throw for all other network errors
       throw err;
@@ -1000,8 +983,9 @@ export async function fetchBffVersion(): Promise<BffVersionResult> {
 export async function saveCanvasesUrgently(canvases: unknown[]): Promise<void> {
   const url = `${API_URL}${opPath("PUT /me/canvases", {})}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const auth = api.defaults.headers.common?.Authorization;
-  if (typeof auth === "string" && auth) headers.Authorization = auth;
+  // The page is leaving: no waiting here, only the token that is already stored.
+  const token = currentToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   try {
     const res = await fetch(url, {
       method: "PUT",
@@ -1322,10 +1306,11 @@ export async function fetchCaseResponse(caseId: string): Promise<Response> {
     "X-Trace-Id": crypto.randomUUID(),
     "X-Session-Id": getSessionId(),
   };
-  const token = getOidcToken();
+  const token = await waitForToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${API_URL}${opPath("GET /cases/{case_id}", { path: { case_id: caseId } })}`, { method: "GET", headers });
   if (res?.status === 403) reportForbidden("GET /cases/{case_id}");
+  if (res?.status === 401 && gateActive()) throw onUnauthorized();
   return res;
 }
 

@@ -1,3 +1,4 @@
+import { isSignInRequired } from "@/auth/authGate";
 import { profileLabel, refusalCode, type ExportProfile } from "@/lib/reviewExport";
 
 /** One toggle button per SERVED profile, in served order. Nothing is hard-coded here. */
@@ -32,16 +33,24 @@ export function ExportProfilePicker({
   );
 }
 
-export type ExportFailure = { kind: "refused"; status: number; code: string | null } | { kind: "failed"; message: string };
+export type ExportFailure = { kind: "signin" } | { kind: "refused"; status: number; code: string | null } | { kind: "failed"; message: string };
 
 /** A refusal (the server answered with a status) is `refused`; anything else is `failed`. */
 export function classifyExportError(err: unknown): ExportFailure {
+  if (isSignInRequired(err)) return { kind: "signin" };
   const { status, code } = refusalCode(err);
   if (status !== null) return { kind: "refused", status, code };
   return { kind: "failed", message: err instanceof Error ? err.message : "export failed" };
 }
 
 export function ExportFailureLine({ failure }: { failure: ExportFailure }) {
+  if (failure.kind === "signin") {
+    return (
+      <p className="text-[11px] font-mono text-amber-400/90" role="status" data-export-signin>
+        Your sign-in expired — signing you in again.
+      </p>
+    );
+  }
   if (failure.kind === "refused") {
     return (
       <p className="text-[11px] font-mono text-amber-400/90" role="status" data-export-refusal={failure.code ?? "unknown"}>

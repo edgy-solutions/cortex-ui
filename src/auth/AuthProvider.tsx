@@ -3,6 +3,7 @@ import { AuthProvider as OidcProvider, useAuth } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
 import { config } from "@/config";
 import { afterSignin, signinArgs } from "@/lib/deepLink";
+import { notifyUser, registerSignIn, requireSignIn } from "@/auth/authGate";
 
 const oidcConfig = {
   authority: config.VITE_KEYCLOAK_REALM_URL,
@@ -58,21 +59,42 @@ const oidcConfig = {
 //
 // Guarded by a ref so a burst of renewal errors doesn't produce
 // overlapping redirects.
+//
+// There is ONE door to sign-in: authGate.requireSignIn. This component registers its starter, reports
+// the user to the gate (so calls held for a token are released), and recovery goes through the same door.
 function SilentRenewRecovery() {
   const auth = useAuth();
   const recovering = useRef(false);
+  const authRef = useRef(auth);
+  authRef.current = auth;
+
   useEffect(() => {
-    return auth.events.addSilentRenewError((err) => {
-      if (recovering.current) return;
-      recovering.current = true;
-      console.warn("[auth] silent renew failed — re-authenticating:", err?.message ?? err);
-      void auth.removeUser().finally(() => {
-        auth.signinRedirect(signinArgs()).catch((e) => {
-          console.error("[auth] signinRedirect after silent-renew failure also failed:", e);
+    registerSignIn(() => authRef.current.signinRedirect(signinArgs()));
+    return () => registerSignIn(null);
+  }, []);
+
+  const token = auth.user?.access_token;
+  useEffect(() => {
+    notifyUser(token ? { access_token: token } : null);
+  }, [token]);
+
+  useEffect(() => {
+    const unsubs = [
+      auth.events.addUserLoaded((u) => notifyUser(u)),
+      auth.events.addUserUnloaded(() => notifyUser(null)),
+      auth.events.addSilentRenewError((err) => {
+        if (recovering.current) return;
+        recovering.current = true;
+        console.warn("[auth] silent renew failed — re-authenticating:", err?.message ?? err);
+        void auth.removeUser().finally(() => {
+          // requireSignIn is idempotent and saves the typed draft first. If the start fails the gate
+          // lets go of its in-flight mark; so do we.
+          requireSignIn("silent-renew");
           recovering.current = false;
         });
-      });
-    });
+      }),
+    ];
+    return () => unsubs.forEach((u) => u());
   }, [auth]);
   return null;
 }

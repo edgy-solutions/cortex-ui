@@ -491,6 +491,8 @@ describe("every module that can outlive a reload is in a register", () => {
       "keys are COMPUTED per owner (cortex.promotionReview.v1:<sub>.<task>.<ingest>.<attempt>), so A's looked set and unsent fixes are unreachable from B's session by construction; a null owner writes nothing at all; deliberately unpurged, because a re-login by the SAME steward is exactly when a resume must hold",
     "api/client.ts":
       "writes cortex-session-id to sessionStorage, which dies with the tab — a new tab is a new session id by construction, so the localStorage list's remit does not reach it",
+    "auth/authGate.ts":
+      "reads the OIDC user from sessionStorage and writes ONE key, cortex-signin-draft, to sessionStorage only, just before a gate-started sign-in redirect; it dies with the tab and is read-and-deleted on the first mount after the return, so at most one typed question crosses one redirect in one tab — a different person signing in on that tab sees it in the composer once, which is no more than they would see had the redirect not happened",
     "lib/sessionIsolation.ts":
       "writes the owner stamp itself; purging it would make every reconcile look like a first observation and the purge would fire forever",
   };

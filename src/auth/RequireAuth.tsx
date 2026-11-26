@@ -3,6 +3,7 @@ import { useAuth } from "react-oidc-context";
 import { LogIn, ShieldAlert } from "lucide-react";
 import { config } from "@/config";
 import { idpHintFor, signinArgs } from "@/lib/deepLink";
+import { setPassThrough } from "@/auth/authGate";
 
 /**
  * RequireAuth guard component.
@@ -17,6 +18,8 @@ import { idpHintFor, signinArgs } from "@/lib/deepLink";
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const disableAuth = config.VITE_NO_AUTH === "true";
+  // The one reader of the flag tells the API gate: in no-auth mode it never waits and never redirects.
+  setPassThrough(disableAuth);
   const hinted = !disableAuth && idpHintFor(window.location) !== null;
   const started = useRef(false);
   const [autoFailed, setAutoFailed] = useState(false);
