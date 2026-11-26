@@ -96,9 +96,12 @@ describe("platform domains stay in scope", () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/lib/sendReadiness.ts", "utf8");
     expect(src).toMatch(/active_domains:\s*inScope\(/);
+    expect(src).toMatch(/export function resolveSendCell[\s\S]*?:\s*sendReadiness\(/);
     for (const site of ["src/hooks/useInterviewAgent.ts", "src/components/AgenticCanvas/useTemplateSeed.ts"]) {
       const s = readFileSync(site, "utf8");
-      expect(s, site).toMatch(/sendReadiness\(/);
+      // resolveSendCell (the one resolver the send, the Ask and the askable list share) only adds the mock-mode
+      // short-circuit, and delegates to sendReadiness (asserted above).
+      expect(s, site).toMatch(/(sendReadiness|resolveSendCell)\(/);
       expect(s, site).not.toMatch(/active_domains:\s*inScope/);
     }
   });
