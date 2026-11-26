@@ -215,12 +215,12 @@ function readEdge(raw: unknown, index: number): RawEdge | Extract<FlowRead, { ok
 }
 
 /** A decimal string as BigInt units of 10^-scale. */
-function scaled(exact: string, scale: number): bigint {
+export function scaled(exact: string, scale: number): bigint {
   const [whole, frac = ""] = exact.split(".");
   return BigInt(whole + frac.padEnd(scale, "0"));
 }
 
-function formatScaled(units: bigint, scale: number): string {
+export function formatScaled(units: bigint, scale: number): string {
   const neg = units < BigInt(0);
   const digits = (neg ? -units : units).toString().padStart(scale + 1, "0");
   const body = scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;

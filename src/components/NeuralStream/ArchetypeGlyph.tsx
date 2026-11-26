@@ -32,6 +32,7 @@ import {
   FileUp,
   Shapes,
   Split,
+  ChartColumnStacked,
 } from "lucide-react";
 import type { AnswerArchetype } from "@/lib/answerDisplay";
 
@@ -174,6 +175,9 @@ export function glyphFor(t: AnswerArchetype): {
     case "FLOW_DECOMPOSITION":
       // A total splitting into parts, left to right; Workflow is taken by VARIANCE_TREE.
       return { Icon: Split, color: "text-neon-blue/80" };
+    case "WATERFALL":
+      // Bars standing on one another's tops: the walk from start to end.
+      return { Icon: ChartColumnStacked, color: "text-neon-blue/80" };
     default:
       return { Icon: HelpCircle, color: "text-slate-500" };
   }

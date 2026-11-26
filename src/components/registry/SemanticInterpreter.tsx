@@ -644,6 +644,23 @@ const renderComponent = (
       );
     }
 
+    case "WATERFALL": {
+      // cortex-proposed (see waterfall/row.ts). Chosen only by the served render.shape on the
+      // server; a FLOW_DECOMPOSITION carrying `walk` still draws as a flow above. Not advertised
+      // until invincible-agent #553 is deployed (waterfall/advertise.test.ts).
+      const pkg = archetypePackage("WATERFALL");
+      if (!pkg) break;
+      const Waterfall = pkg.Card;
+      return (
+        <Waterfall
+          {...{
+            [pkg.row.payload_key]: comp[pkg.row.payload_key],
+            ...pick(comp, pkg.reads),
+          }}
+        />
+      );
+    }
+
     case "CONTRIBUTION_RANKING": {
       // N entities ordered by their share of one total. NOT a DELTA_SET: that is N metrics with
       // one comparison, grouped by direction and deliberately unordered. Here the order IS the
@@ -822,7 +839,9 @@ const isFullWidth = (archetype: string) =>
   // MODEL_EXPLANATION declares "full-width" (contract.ts) — a question table wants the row.
   archetype === "MODEL_EXPLANATION" ||
   // FLOW_DECOMPOSITION declares "full-width" (contract.ts) — a Sankey wants the row.
-  archetype === "FLOW_DECOMPOSITION";
+  archetype === "FLOW_DECOMPOSITION" ||
+  // WATERFALL declares "full-width" (contract.ts) — a walk of bars wants the row.
+  archetype === "WATERFALL";
 
 export const SemanticInterpreter: React.FC<SemanticInterpreterProps> = ({ payload, previewRows, hidePersona, artifactId }) => {
   const { personaConfig } = useMeshConfig();

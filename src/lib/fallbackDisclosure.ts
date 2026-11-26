@@ -88,6 +88,8 @@ const CLAIMS_AN_ANSWER: Record<AnswerArchetype, boolean> = {
   MODEL_EXPLANATION: true,
   // States how a total divides — a claim, not a request.
   FLOW_DECOMPOSITION: true,
+  // States how a start total reaches an end total — a claim, not a request.
+  WATERFALL: true,
 
   // ── REQUESTS. These ask the reader for something and claim nothing. ──
   /** The menu. Withholding this strands the reader mid-elicitation — see the header. */

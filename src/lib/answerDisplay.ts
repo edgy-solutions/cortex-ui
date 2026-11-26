@@ -81,6 +81,9 @@ export type AnswerArchetype =
   // cortex-proposed (src/archetypes/flow-decomposition/contract.ts) — a total flowing into its
   // parts, level by level. Dispatch, glyph and label land in one change, as above.
   | "FLOW_DECOMPOSITION"
+  // cortex-proposed (src/archetypes/waterfall/row.ts) — a start total walked to an end total by
+  // signed steps. Dispatch, glyph and label land in one change, as above.
+  | "WATERFALL"
   // A DROP, as a turn on the rail (src/lib/ingestArtifact.ts). Client-made, never an answer.
   | "INGEST"
   | "UNKNOWN";
@@ -123,6 +126,7 @@ export const DISPLAY_ARCHETYPES = [
   "ILLUSTRATION",
   "MODEL_EXPLANATION",
   "FLOW_DECOMPOSITION",
+  "WATERFALL",
   "INGEST",
 ] as const satisfies readonly Exclude<AnswerArchetype, "UNKNOWN">[];
 
@@ -279,6 +283,8 @@ export function archetypeLabel(t: AnswerArchetype): string {
       // NOT "Decomposition" — VARIANCE_TREE owns that word, and two rows with one header hide
       // the difference between a nested list and a flow.
       return "Flow";
+    case "WATERFALL":
+      return "Walk";
     case "INGEST":
       return "Ingest";
     default:
