@@ -33,6 +33,15 @@ export interface AskBearingRefusal {
   /** The ask builder threw server-side; the exception TYPE, verbatim. */
   askUnavailable?: string;
   policy?: RefusalPolicy;
+  /** The shared-slot NAME the producer served (`ask.binding_slot`), accepted ask or not. */
+  slot?: string;
+  /**
+   * The caller may view NOTHING to choose from: an ask whose disposition is `abstain`, with a
+   * served slot name to say it in. Only true when both are served; otherwise the plain path.
+   */
+  emptyList?: true;
+  /** Who can grant it, from `detail.refusal.grantable_by`, when served. */
+  grantableBy?: string;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -72,6 +81,11 @@ export function readAskBearingRefusal(detail: unknown): AskBearingRefusal | null
       // #97 (unmerged, 473f9c40): ask.binding_slot -- no slot name, nothing can be re-sent.
       const bindingSlot = nonEmpty(rawAsk.binding_slot);
       if (ask && bindingSlot !== "") out.ask = { ...ask, binding_slot: bindingSlot };
+      if (bindingSlot !== "") out.slot = bindingSlot;
+      // An ABSTAIN (validateAsk's own lever, both of them) with no members to choose from.
+      const abstained = rawAsk.disposition === "abstain" || rawAsk.status === "slot_abstain";
+      const noOptions = !Array.isArray(rawAsk.options) || rawAsk.options.length === 0;
+      if (abstained && noOptions && bindingSlot !== "") out.emptyList = true;
     }
     // #97 (unmerged, 473f9c40): ask.policy -- INSIDE ask, not top-level detail.
     const p = rawAsk.policy;
@@ -85,6 +99,10 @@ export function readAskBearingRefusal(detail: unknown): AskBearingRefusal | null
       // producer sent the two apart.
       if (out.policy.message !== "") out.message = out.policy.message;
     }
+  }
+  const refusal = detail.refusal;
+  if (isRecord(refusal) && nonEmpty(refusal.grantable_by) !== "") {
+    out.grantableBy = nonEmpty(refusal.grantable_by);
   }
   return out;
 }

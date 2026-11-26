@@ -35,6 +35,27 @@ const askCard = {
   bound_slots_offered: [],
   accepted_slots: {},
   message: MERIDIAN_MESSAGE,
+  // Required by the snapshot's CanvasSeedAsk (cortex-bff.openapi.json) and absent from the
+  // hand-built shape until 2026-11-25; the schema wins.
+  summary: "",
+  structured_data: {
+    options: [{ value: "NP-MERIDIAN", label: "Notional Program Meridian" }],
+    option_source: "enumeration",
+    total_count: 1,
+    scoped_by: [],
+    bound_slots_offered: [],
+    already_known: {},
+  },
+  data: "",
+  sources: [],
+};
+
+/** CanvasSeedConflictDetail.refusal: required, always present on the 409 (the slot_refusal envelope). */
+const seedRefusal = {
+  policy_id: "program_members",
+  missing_binding: "can_view_program(program)",
+  grantable_by: "a program owner can add you",
+  candidates: [],
 };
 
 /** (a) an ask with one option, and the slot name a picker re-sends under. */
@@ -42,6 +63,28 @@ export const SEED_409_ASK = {
   error: "unbound_required_slot",
   message: MERIDIAN_MESSAGE,
   ask: { ...askCard, template_id: FINANCE_TEMPLATE_ID, binding_slot: "program" },
+  refusal: seedRefusal,
+} as const;
+
+/** (a2) SEVERAL options, in the schema's shape: the caller may view three programs. */
+const MANY = [
+  { value: "NP-MERIDIAN", label: "Notional Program Meridian" },
+  { value: "NP-ORION", label: "Notional Program Orion" },
+  { value: "NP-VEGA", label: "Notional Program Vega" },
+];
+export const SEED_409_ASK_MANY = {
+  error: "unbound_required_slot",
+  message: "Which program did you mean?",
+  ask: {
+    ...askCard,
+    options: MANY,
+    total_count: 3,
+    message: "Which program did you mean?",
+    structured_data: { ...askCard.structured_data, options: MANY, total_count: 3 },
+    template_id: FINANCE_TEMPLATE_ID,
+    binding_slot: "program",
+  },
+  refusal: seedRefusal,
 } as const;
 
 /** (b) an abstain: the caller can see no program, so there is a policy and nothing to choose. */
@@ -66,19 +109,26 @@ export const SEED_409_POLICY = {
         "You hold PROGRAM_FINANCE_ANALYST · PROGRAM_FINANCE, but this was asked from another cell, which can see no program. Choose PROGRAM_FINANCE_ANALYST · PROGRAM_FINANCE and ask again.",
     },
   },
+  refusal: seedRefusal,
 } as const;
+
+/** (b2) The producer's default `message`: the exception text, ADR reference and all (canvas_template.py:395). */
+export const ADR_EXCEPTION_TEXT =
+  "template 'program_finance' has panel(s) consuming shared slot(s) ['program'] that nothing binds yet, so those panels would refuse. Supply it in `bindings`. This is the ADR-0050 §3 carry, not a fault in the template or the request.";
 
 /** (c) the ask builder threw; the 409 keeps its plain refusal. */
 export const SEED_409_ASK_UNAVAILABLE = {
   error: "unbound_required_slot",
-  message: "program_finance needs program bound before it can seed.",
+  message: ADR_EXCEPTION_TEXT,
   ask: { error: "ask_unavailable", detail: "TimeoutError" },
+  refusal: seedRefusal,
 } as const;
 
 /** (d) no ask at all: what a cortex-bff that has not rolled #97 answers. */
 export const SEED_409_NO_ASK = {
   error: "unbound_required_slot",
-  message: "program_finance needs program bound before it can seed.",
+  message: ADR_EXCEPTION_TEXT,
+  refusal: seedRefusal,
 } as const;
 
 /** (e) an ask that cannot be re-sent: no `binding_slot`. */

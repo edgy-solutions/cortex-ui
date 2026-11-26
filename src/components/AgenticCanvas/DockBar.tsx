@@ -448,7 +448,13 @@ export function DockBar({ seedDeps }: { seedDeps?: TemplateSeedDeps } = {}) {
               that refused, so the reader is looking at it when they reach for that button again. */}
           {seed.refusal && !seed.busy && (
             <div className="mb-2" data-seed-refusal>
-              <RefusalWithAsk refusal={seed.refusal} onPick={seed.pick} busy={seed.busy} />
+              <RefusalWithAsk
+                refusal={seed.refusal}
+                onPick={seed.pick}
+                busy={seed.busy}
+                title={selectedRow?.title}
+                slots={selectedRow?.sharedSlots}
+              />
             </div>
           )}
           {seed.busy && (

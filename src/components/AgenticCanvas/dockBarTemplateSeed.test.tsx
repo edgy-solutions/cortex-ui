@@ -48,8 +48,10 @@ import { usePersonaStore } from "@/store/usePersonaStore";
 import { POLICY_REFUSAL_DETAIL } from "@/lib/policyRefusalFixture";
 import { readTemplateCatalog } from "@/lib/templateCatalog";
 import {
+  ADR_EXCEPTION_TEXT,
   FINANCE_TEMPLATE_ID,
   SEED_409_ASK,
+  SEED_409_ASK_MANY,
   SEED_409_ASK_UNAVAILABLE,
   SEED_409_NO_ASK,
   SEED_409_POLICY,
@@ -185,31 +187,55 @@ describe("the finance row, through /canvas/seed", () => {
     expect(body(2).bindings).toEqual({ program: "NP-MERIDIAN", period: "FY26" });
   });
 
-  it("(d) a 409 with no ask draws the server's text, quietly", async () => {
+  it("(d) a 409 with no ask draws cortex's plain sentence, not the server's ADR text", async () => {
     serve.push({ status: 409, data: { detail: SEED_409_NO_ASK } });
     chooseFinanceAndCreate();
     await waitFor(() => expect(document.querySelector("[data-refusal-message]")).not.toBeNull());
-    expect(document.querySelector("[data-refusal-message]")?.textContent).toBe(SEED_409_NO_ASK.message);
+    const line = document.querySelector("[data-refusal-message]")!;
+    // Slot name and title come from the served template row; "ADR-0050" is the exception text.
+    expect(line.textContent).toBe('Choose a program to create "Program finance status".');
+    // Wrong-card arm: the picker's own label is on screen, so the slot word and the sentence are
+    // asserted on the refusal block itself, and the ADR text only behind the disclosure.
+    expect(document.querySelector("[data-seed-refusal]")?.textContent).toContain("Choose a program");
+    expect(line.textContent).not.toMatch(/ADR-0050/);
+    const detail = document.querySelector("[data-refusal-detail]")!;
+    expect(detail.tagName).toBe("DETAILS");
+    expect(detail.textContent).toContain(ADR_EXCEPTION_TEXT);
+    expect(line.contains(detail)).toBe(false);
     expect(document.querySelector("[data-refusal-choice]")).toBeNull();
     noAlarmClasses();
   });
 
-  it("(b) a policy refusal draws the policy's message and its repair", async () => {
+  it("an ask with THREE options, in the schema's shape, draws three choices and the pick binds", async () => {
+    serve.push({ status: 409, data: { detail: SEED_409_ASK_MANY } });
+    serve.push({ status: 200, data: { artifact_ids: ["f1"] } });
+    chooseFinanceAndCreate();
+    await waitFor(() => expect(document.querySelector("[data-refusal-choice]")).not.toBeNull());
+    const buttons = Array.from(document.querySelectorAll("[data-refusal-choice] [data-ask-option]"));
+    expect(buttons.map((b) => b.getAttribute("data-ask-option"))).toEqual(["NP-MERIDIAN", "NP-ORION", "NP-VEGA"]);
+    fireEvent.click(buttons[1]);
+    await waitFor(() => expect(useStageStore.getState().canvases).toHaveLength(1));
+    expect(body(1)).toEqual({ template_id: "program_finance", bindings: { program: "NP-ORION" } });
+  });
+
+  it("(b) an empty list says you're not a member of any program, then the grant line and repair", async () => {
     serve.push({ status: 409, data: { detail: SEED_409_POLICY } });
     chooseFinanceAndCreate();
     await waitFor(() => expect(document.querySelector("[data-refusal-message]")).not.toBeNull());
-    expect(document.querySelector("[data-refusal-message]")?.textContent).toBe(
-      SEED_409_POLICY.ask.policy.message,
-    );
+    expect(document.querySelector("[data-refusal-message]")?.textContent).toBe("You're not a member of any program.");
+    expect(document.querySelector("[data-refusal-grant]")?.textContent).toBe(SEED_409_POLICY.ask.policy.message);
+    expect(document.querySelectorAll("[data-ask-option]")).toHaveLength(0);
     expect(document.querySelector("[data-refusal-repair]")?.textContent).toBe("switch_cell");
     expect(document.querySelector("[data-refusal-choice]")).toBeNull();
     noAlarmClasses();
   });
 
-  it("(c) ask_unavailable draws the plain message and a small token", async () => {
+  it("(c) ask_unavailable draws the plain sentence and a small token", async () => {
     serve.push({ status: 409, data: { detail: SEED_409_ASK_UNAVAILABLE } });
     chooseFinanceAndCreate();
     await waitFor(() => expect(document.querySelector("[data-refusal-message]")).not.toBeNull());
+    expect(document.querySelector("[data-refusal-message]")?.textContent).toBe('Choose a program to create "Program finance status".');
+    expect(document.querySelector("[data-refusal-message]")?.textContent).not.toMatch(/ADR-0050/);
     expect(document.querySelector("[data-refusal-ask-unavailable]")?.getAttribute("data-refusal-ask-unavailable")).toBe(
       "TimeoutError",
     );

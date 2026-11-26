@@ -22,10 +22,16 @@ export function RefusalWithAsk({
   refusal,
   onPick,
   busy,
+  title,
+  slots,
 }: {
   refusal: AskBearingRefusal;
   onPick: (value: string) => void;
   busy?: boolean;
+  /** The template's served title, for the plain sentence. */
+  title?: string;
+  /** The template row's served shared-slot names, used when the 409 names none. */
+  slots?: readonly string[];
 }) {
   const { ask } = refusal;
 
@@ -53,15 +59,42 @@ export function RefusalWithAsk({
     );
   }
 
+  // THE LINE A PERSON READS. The server's `message` is the exception text (ADR reference and
+  // all) unless a policy chose it, so it is the line only when a policy did. An empty list says
+  // so in the served slot word; any other unbound slot gets a sentence cortex composes from
+  // served names, and the server text goes behind a disclosure.
+  const slotNames = refusal.slot ? [refusal.slot] : [...(slots ?? [])];
+  const line = refusal.emptyList
+    ? `You're not a member of any ${refusal.slot}.`
+    : refusal.policy
+      ? refusal.message
+      : `Choose a ${slotNames.length > 0 ? slotNames.join(" and ") : "value"}${title ? ` to create "${title}"` : ""}.`;
+  const detail = !refusal.emptyList && !refusal.policy && refusal.message !== "" ? refusal.message : "";
   return (
     <div className="flex flex-col gap-0.5" data-refusal-message-block>
       <p className="font-mono text-[10px] leading-snug text-slate-400" data-refusal-message>
-        {refusal.message}
+        {line}
       </p>
+      {refusal.emptyList && refusal.policy && refusal.policy.message !== "" && (
+        <p className="font-mono text-[10px] leading-snug text-slate-500" data-refusal-grant>
+          {refusal.policy.message}
+        </p>
+      )}
+      {refusal.emptyList && !refusal.policy && refusal.grantableBy && (
+        <p className="font-mono text-[10px] leading-snug text-slate-500" data-refusal-grant>
+          {refusal.grantableBy}
+        </p>
+      )}
       {refusal.policy && typeof refusal.policy.repair === "string" && refusal.policy.repair !== "" && (
         <p className="font-mono text-[10px] leading-snug text-slate-500" data-refusal-repair>
           {refusal.policy.repair}
         </p>
+      )}
+      {detail !== "" && (
+        <details className="font-mono text-[9px] text-slate-500" data-refusal-detail>
+          <summary className="cursor-pointer">details</summary>
+          {detail}
+        </details>
       )}
       {refusal.askUnavailable !== undefined && (
         <span

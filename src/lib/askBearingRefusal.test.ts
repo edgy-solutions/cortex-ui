@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readAskBearingRefusal, readSeedConflict } from "./askBearingRefusal";
 import {
   SEED_409_ASK,
+  SEED_409_ASK_MANY,
   SEED_409_ASK_NO_BINDING_SLOT,
   SEED_409_ASK_UNAVAILABLE,
   SEED_409_NO_ASK,
@@ -27,6 +28,22 @@ describe("readAskBearingRefusal -- the seed 409's detail", () => {
     expect(r.policy?.repair).toBe("switch_cell");
     // An abstain is not an ask validateAsk accepts: no ask key at all.
     expect("ask" in r).toBe(false);
+    // The EMPTY LIST is its own claim, in the served slot word; a plain refusal is not it.
+    expect(r.emptyList).toBe(true);
+    expect(r.slot).toBe("program");
+  });
+
+  it("(a2) an ask with several options, in the schema's shape, is accepted whole and is not an empty list", () => {
+    const r = readAskBearingRefusal(SEED_409_ASK_MANY)!;
+    expect(r.ask?.options.map((o) => o.value)).toEqual(["NP-MERIDIAN", "NP-ORION", "NP-VEGA"]);
+    expect(r.ask?.binding_slot).toBe("program");
+    expect("emptyList" in r).toBe(false);
+  });
+
+  it("an abstain with no served slot name is not claimed as an empty list", () => {
+    const { binding_slot: _b, ...ask } = SEED_409_POLICY.ask;
+    void _b;
+    expect("emptyList" in readAskBearingRefusal({ ...SEED_409_POLICY, ask })!).toBe(false);
   });
 
   it("(b2) a policy on the TOP-LEVEL detail is not read: the producer puts it inside ask", () => {
@@ -45,7 +62,9 @@ describe("readAskBearingRefusal -- the seed 409's detail", () => {
 
   it("(d) no ask is only a message, with no key standing in for the rest", () => {
     const r = readAskBearingRefusal(SEED_409_NO_ASK)!;
-    expect(Object.keys(r)).toEqual(["message"]);
+    expect(Object.keys(r)).toEqual(["message", "grantableBy"]);
+    expect(r.emptyList).toBeUndefined();
+    expect(r.slot).toBeUndefined();
     expect(r.message).toBe(SEED_409_NO_ASK.message);
   });
 
@@ -62,7 +81,7 @@ describe("readAskBearingRefusal -- the seed 409's detail", () => {
   });
 
   it("writes no undefined-valued key on any arm", () => {
-    for (const d of [SEED_409_ASK, SEED_409_POLICY, SEED_409_ASK_UNAVAILABLE, SEED_409_NO_ASK]) {
+    for (const d of [SEED_409_ASK, SEED_409_ASK_MANY, SEED_409_POLICY, SEED_409_ASK_UNAVAILABLE, SEED_409_NO_ASK]) {
       const r = readAskBearingRefusal(d)!;
       for (const [k, v] of Object.entries(r)) expect(v, k).not.toBeUndefined();
       if (r.policy) for (const [k, v] of Object.entries(r.policy)) expect(v, k).not.toBeUndefined();
