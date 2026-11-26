@@ -944,6 +944,99 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     expect(lineageClaimVerdict(body)).toBe("ownership_decides");
   });
 
+  it("an ASKABLE PICK posts askable_pick under the SAME cell, with no lineage claim and no seed_panel", async () => {
+    // A drawn answer is foregrounded, so a composer turn WOULD claim it (arm above). A pick must not:
+    // the server refuses askable_pick beside answering_artifact_id or seed_panel.
+    foreground(drawn());
+    usePersonaStore.setState({
+      entitlements: { user_id: "u", source: "topaz", default: null, cells: [{ persona: "P1", domain: "D1" }] },
+      selectedPersona: "P1",
+      selectedDomains: ["D1"],
+    } as never);
+    const r = mount();
+    let out: unknown;
+    await act(async () => {
+      out = r.result.current.sendAsk("Row name", { verb: "the.verb", bindings: {} });
+      await flush();
+    });
+    expect(out).toBe(true);
+    const req = transport.request!;
+    expect(req.message).toBe("Row name");
+    expect(req.askable_pick).toEqual({ verb: "the.verb", bindings: {} });
+    expect(req.active_persona).toBe("P1");
+    expect(req.active_domains).toEqual(["D1"]);
+    expect(req).not.toHaveProperty("seed_panel");
+    expect(req).not.toHaveProperty("answering_artifact_id");
+    expect(req).not.toHaveProperty("bound_slots");
+  });
+
+  it("a pick refused with 422 shows the SERVED words as the message error, not the generic text", async () => {
+    // The stream throws the Response itself from onopen and onerror rethrows it (client.ts).
+    const words = "askable_pick_verb_not_visible: the verb is not visible in this cell";
+    const r = mount();
+    await act(async () => {
+      r.result.current.sendAsk("Row", { verb: "v", bindings: {} });
+      await flush();
+    });
+    await act(async () => {
+      transport.settle!.reject(new Response(JSON.stringify({ detail: words }), { status: 422, headers: { "content-type": "application/json" } }));
+      await flush();
+    });
+    await waitFor(() => expect(agentMsg().error).toBe(words));
+    expect(agentMsg().error).not.toBe("NETWORK_OR_BACKEND_UNREACHABLE");
+  });
+
+  it("an ordinary question refused the same way keeps the generic unreachable text", async () => {
+    const r = mount();
+    await startTurn(r);
+    await act(async () => {
+      transport.settle!.reject(new Response(JSON.stringify({ detail: "served words" }), { status: 422 }));
+      await flush();
+    });
+    await waitFor(() => expect(agentMsg().error).toBe("NETWORK_OR_BACKEND_UNREACHABLE"));
+  });
+
+  for (const [cause, kind] of [
+    ["askable_pick_unroutable", "understanding"],
+    ["askable_pick_fell_back", "verifying_route"],
+  ] as const) {
+    it(`a pick that ends in ${cause} is drawn as a FAILURE, never a normal answer`, async () => {
+      // Shape from gateway.py (f7c3f5e6) _perror(): message, kind, retryable, cause; then stream_end.
+      const message = "the picked measure's route is no longer valid: x";
+      const r = mount();
+      await act(async () => {
+        r.result.current.sendAsk("Row", { verb: "v", bindings: {} });
+        await flush();
+      });
+      emit({ type: "pipeline_error", kind, message, retryable: kind === "verifying_route", cause } as StreamEvent);
+      emit({ type: "stream_end" } as StreamEvent);
+      const row = steps().find((s) => s.kind === kind)!;
+      expect(row.status).toBe("error");
+      expect(row.label).toBe(message);
+      expect(agentMsg().isReceipt).toBeFalsy();
+      expect(agentMsg().content ?? "").not.toMatch(/deployed to Canvas/);
+      expect(artifact().status).not.toBe("complete");
+    });
+  }
+
+  it("an ordinary composer turn carries no askable_pick", async () => {
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request).not.toHaveProperty("askable_pick");
+  });
+
+  it("sendAsk is refused, like any send, while the entitlements are loading", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: null, entitlementsLoading: true } as never);
+    const r = mount();
+    let out: unknown;
+    await act(async () => {
+      out = r.result.current.sendAsk("Row", { verb: "v", bindings: {} });
+      await flush();
+    });
+    expect(out).toEqual({ notSent: expect.stringMatching(/still loading/) });
+    expect(transport.calls).toBe(0);
+  });
+
   it("an answered ask IS honoured, so the refusal above is about the composer and not the field", async () => {
     // The contrasting half. Without it "refused" reads as the field never working anywhere, and
     // the two ask-card paths — which is where every menu answer goes — are honoured today.

@@ -11,6 +11,9 @@
  * DECLARES for the archetype, not everything the card today is given. `defineArchetype` enforces
  * the inclusion the other way (a card may not read what the row does not declare), never the
  * reverse.
+ *
+ * `data_provenance` was added as the LAST element of the tuple by producer #528 (80dcbbae), 2026-11-23
+ * (tuple as of ba70c92a); it is passed through and drawn verbatim (`ServedProvenance`).
  */
 export const COMPETING_MEASURES_ROW = {
   archetype: "COMPETING_MEASURES",
@@ -30,5 +33,6 @@ export const COMPETING_MEASURES_ROW = {
     "value_unit",
     "value_label",
     "scope_label",
+    "data_provenance",
   ],
 } as const;

@@ -22,6 +22,8 @@ export const COMPETING_MEASURES_ABSENCES = [
   // declares an absence no fixture flips" the moment it existed and before any seal was written
   // for it. That is the instrument working in the direction it was built for.
   "data-completeness-unstated",
+  // #528 (80dcbbae): the producer's source sentence, drawn verbatim by `ServedProvenance`.
+  "data-served-provenance",
 ] as const;
 
 export type CompetingMeasuresAbsence = (typeof COMPETING_MEASURES_ABSENCES)[number];
@@ -58,6 +60,10 @@ const ENVELOPE = {
   value_unit: "USD",
   scope_label: "Notional Program Meridian",
 };
+
+/** TRANSCRIBED from `finance_agent/seed.py::notional_banner` at producer 950b3eb9, as MULTI_SERIES's fixture has it. */
+const NOTIONAL_BANNER =
+  "NOTIONAL DATA — invented program, round figures, public EVM formulas. Not derived from any real program (ADR-0045 Decision 4).";
 
 export const COMPETING_MEASURES_FIXTURES: CompetingMeasuresFixture[] = [
   {
@@ -133,5 +139,11 @@ export const COMPETING_MEASURES_FIXTURES: CompetingMeasuresFixture[] = [
     ],
     envelope: ENVELOPE,
     declares: ["data-secondary-absent"],
+  },
+  {
+    name: "the producer served a data_provenance sentence (the notional banner)",
+    rows: COMPLETE,
+    envelope: { ...ENVELOPE, data_provenance: NOTIONAL_BANNER },
+    declares: ["data-served-provenance"],
   },
 ];

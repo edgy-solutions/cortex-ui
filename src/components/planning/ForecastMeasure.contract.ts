@@ -72,6 +72,8 @@ export const FORECAST_MEASURE_CONTRACT = {
     /** The unit the amounts are in. Absent means silent — see PeriodSeries.contract.ts. */
     value_unit: { type: "string", required: false },
     scope_label: { type: "string", required: false },
+    /** The producer's source sentence (#528), drawn verbatim by `ServedProvenance`. */
+    data_provenance: { type: "string", required: false },
   },
   rowRequirements: FORECAST_MEASURE_ROW_REQUIREMENTS,
   refusalReasons: FORECAST_MEASURE_REFUSAL_REASONS,

@@ -25,6 +25,8 @@ import {
   type ExportProfile,
 } from "@/lib/reviewExport";
 import { readTaskKindsResponse } from "@/lib/taskDeclaration";
+import { readAskableMeasures, readAskableRefusal, type AskableRead } from "@/lib/askableMeasures";
+import type { SendCell } from "@/lib/sendReadiness";
 import { readSeedConflict, type AskBearingRefusal } from "@/lib/askBearingRefusal";
 import { readPolicyRefusal, type PolicyRefusal } from "@/lib/policyRefusal";
 import {
@@ -1081,6 +1083,23 @@ export async function fetchTaskKinds(): Promise<unknown[] | null> {
     return readTaskKindsResponse(data);
   } catch {
     return null;
+  }
+}
+
+/**
+ * What the caller can ask (`GET /askable_measures`, #525), read by `readAskableMeasures`.
+ * null = unreachable (cortex knows nothing), distinct from every served state.
+ */
+export async function fetchAskableMeasures(cell?: SendCell): Promise<AskableRead | null> {
+  try {
+    // The cell is the one the ask sends (src/lib/sendReadiness.ts), both keys together or NEITHER: either one
+    // alone is a 400. A repeated key (`active_domains=a&active_domains=b`), not axios's default `active_domains[]`.
+    const args = cell ? { query: { active_persona: cell.active_persona, active_domains: cell.active_domains } } : {};
+    return readAskableMeasures(await request("GET /askable_measures", args, { paramsSerializer: { indexes: null } }));
+  } catch (e) {
+    // A refusal the server SAID is not "unreachable": the person sees the served reason, never an empty list.
+    const refusal = readAskableRefusal(e);
+    return refusal ? { kind: "refused", refusal } : null;
   }
 }
 

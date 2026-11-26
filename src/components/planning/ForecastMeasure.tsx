@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
 import { showMeasure } from "@/lib/showMeasure";
 import { CellInspector } from "./CellInspector";
+import { ServedProvenance, readServedProvenance } from "@/archetypes/ServedProvenance";
 import {
   validateForecastMeasure,
   type ForecastRow,
@@ -24,9 +25,11 @@ import { ACCENT, ACCENT_DEEP, OVER } from "@/lib/chartPalette";
  * adopted by ADR-0045 so an analyst's phrasing resolves without a translation layer, and read
  * verbatim here.
  */
-function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
+function DeliberateEmpty({ reason, scope, provenance }: { reason: string; scope?: string; provenance?: string }) {
   return (
     <div className="glass-panel p-6 my-4 border-amber-500/20">
+      {/* A refused finance answer still says where its data came from (flow card precedent). */}
+      <ServedProvenance text={provenance} />
       <div className="flex flex-col items-center justify-center gap-2 py-12">
         <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
           {scope ? `${scope} — nothing to draw` : "nothing to draw"}
@@ -98,19 +101,21 @@ export function ForecastMeasure({
   rows,
   value_unit,
   scope_label,
+  data_provenance,
   valid_as_of,
   state_version,
 }: {
   rows: unknown;
   value_unit?: string;
   scope_label?: string;
+  data_provenance?: unknown;
   valid_as_of?: string;
   state_version?: number;
 }) {
   const [inspecting, setInspecting] = useState(false);
   const result = validateForecastMeasure(rows);
   if (result.kind === "empty") {
-    return <DeliberateEmpty reason={result.reason} scope={scope_label} />;
+    return <DeliberateEmpty reason={result.reason} scope={scope_label} provenance={readServedProvenance(data_provenance)} />;
   }
   const row: ForecastRow = result.row;
 
@@ -247,6 +252,12 @@ export function ForecastMeasure({
             ) : null,
           ]}
         />
+      )}
+
+      {readServedProvenance(data_provenance) !== undefined && (
+        <div className="mt-3">
+          <ServedProvenance text={readServedProvenance(data_provenance)} />
+        </div>
       )}
 
       {(valid_as_of || state_version !== undefined) && (

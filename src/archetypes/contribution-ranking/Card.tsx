@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { formatAmount } from "@/lib/formatAmount";
+import { ServedProvenance, readServedProvenance } from "../ServedProvenance";
 import { showMeasure } from "@/lib/showMeasure";
 import { CellInspector } from "@/components/planning/CellInspector";
 import {
@@ -312,9 +313,11 @@ function toneOf(row: ContributionRow) {
   return TONE.unstated;
 }
 
-function DeliberateEmpty({ reason, scope }: { reason: string; scope?: string }) {
+function DeliberateEmpty({ reason, scope, provenance }: { reason: string; scope?: string; provenance?: string }) {
   return (
     <div className="glass-panel p-6 my-4 border-amber-500/20">
+      {/* A refused finance answer still says where its data came from (flow card precedent). */}
+      <ServedProvenance text={provenance} />
       <div className="flex flex-col items-center justify-center gap-2 py-12">
         <p className="font-mono text-[10px] text-amber-400/80 uppercase tracking-widest">
           {scope ? `${scope} — nothing to draw` : "nothing to draw"}
@@ -332,6 +335,7 @@ export function ContributionRanking({
   scope_label,
   threshold,
   threshold_defaulted,
+  data_provenance,
   valid_as_of,
   state_version,
 }: {
@@ -352,13 +356,14 @@ export function ContributionRanking({
    */
   threshold?: string | number;
   threshold_defaulted?: boolean;
+  data_provenance?: unknown;
   valid_as_of?: string;
   state_version?: number;
 }) {
   const [selected, setSelected] = useState<ContributionRow | null>(null);
   const result = validateContributionRanking(rows);
   if (result.kind === "empty") {
-    return <DeliberateEmpty reason={result.reason} scope={scope_label} />;
+    return <DeliberateEmpty reason={result.reason} scope={scope_label} provenance={readServedProvenance(data_provenance)} />;
   }
   const ranked = result.rows;
 
@@ -644,6 +649,12 @@ export function ContributionRanking({
         >
           <InspectorExtras row={selected} />
         </CellInspector>
+      )}
+
+      {readServedProvenance(data_provenance) !== undefined && (
+        <div className="mt-3">
+          <ServedProvenance text={readServedProvenance(data_provenance)} />
+        </div>
       )}
 
       {(valid_as_of || state_version !== undefined) && (

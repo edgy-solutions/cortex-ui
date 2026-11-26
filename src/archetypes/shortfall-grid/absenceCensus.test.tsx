@@ -1,11 +1,13 @@
 /**
- * THE `noAbsence` CLAIM, CHECKED — ADR-0055 §2 as amended by the cortex dispatch of 2026-10-08.
+ * THE ABSENCE CENSUS — ADR-0055 §2. Until #528 (80dcbbae, 2026-11-23) this file checked the package's
+ * `noAbsence` claim; the producer's source sentence made `data-served-provenance` flip, so the package now
+ * declares that one absence, and this census asserts the flipping set EQUALS the declared absences —
+ * no more (an undeclared attribute flipping) and no less (a declared one that never flips here).
  *
- * `index.ts` declares that no `data-*` attribute of this card flips with the payload. This
+ * The census: this
  * renders the WHOLE parity population (the fixtures plus the renderable captures), takes each
  * card's own subtree, and asks `flippingDataAttributes` which names are present under some cards
- * and absent under others. `[]` is the claim; anything else means the card has an absence to
- * declare.
+ * and absent under others.
  *
  * Each card is rendered the way the dispatch renders it (payload key, then `pick(reads)`, then
  * the explicit freshness pair), BARE — not through `SemanticInterpreter` — so the interpreter's
@@ -24,6 +26,7 @@ import pkg from "./index";
 import { pick } from "../defineArchetype";
 import { flippingDataAttributes } from "../noAbsence.testkit";
 import { parityComponents } from "./parityPopulation.testkit";
+import { SHORTFALL_GRID_ABSENCES } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -50,10 +53,10 @@ function cardSubtrees(): Element[] {
   return roots;
 }
 
-describe("SHORTFALL_GRID declares noAbsence — and the population bears it out", () => {
-  it("the declaration is present (this seal is for packages that make it)", () => {
-    expect(pkg.noAbsence, "no noAbsence declared").toBeDefined();
-    expect(pkg.absences).toEqual([]);
+describe("SHORTFALL_GRID's declared absences are exactly what flips across the population", () => {
+  it("the package declares absences and no noAbsence", () => {
+    expect(pkg.noAbsence).toBeUndefined();
+    expect([...pkg.absences]).toEqual([...SHORTFALL_GRID_ABSENCES]);
   });
 
   it("floor: one subtree per population member, and at least one", () => {
@@ -64,11 +67,11 @@ describe("SHORTFALL_GRID declares noAbsence — and the population bears it out"
     expect(roots.every((r) => r.querySelector("*") !== null), "a card rendered nothing").toBe(true);
   });
 
-  it("no data-* attribute flips across the population (interaction-only excepted)", () => {
+  it("the flipping data-* set equals the declared absences (interaction-only excepted)", () => {
     const flipping = flippingDataAttributes(cardSubtrees(), INTERACTION_ONLY);
     expect(
-      flipping,
-      `a payload-flippable attribute appeared: ${flipping.join(", ")} — declare it in absences and drop noAbsence`,
-    ).toEqual([]);
+      [...flipping].sort(),
+      `flipping: ${flipping.join(", ")} — an undeclared one must be declared in absences; a declared one that never flips needs a fixture`,
+    ).toEqual([...SHORTFALL_GRID_ABSENCES].sort());
   });
 });

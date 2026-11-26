@@ -28,6 +28,8 @@ export const CONTRIBUTION_RANKING_ABSENCES = [
   // Payload claims: the producer truncated and declared the tail / the declared tail is inconsistent.
   "data-withheld-tail",
   "data-withheld-disagree",
+  // #528 (80dcbbae): the producer's source sentence, drawn verbatim by `ServedProvenance`.
+  "data-served-provenance",
 ] as const;
 
 export type ContributionRankingAbsence = (typeof CONTRIBUTION_RANKING_ABSENCES)[number];
@@ -40,6 +42,8 @@ export interface ContributionRankingFixture {
   /** Card-level, not row-level — the bound the producer stated and who chose it. */
   threshold?: string | number;
   threshold_defaulted?: boolean;
+  /** The producer's source sentence (#528), drawn verbatim. */
+  data_provenance?: string;
   /** The absences that MUST be declared for this payload. Everything else must NOT be. */
   declares: ContributionRankingAbsence[];
 }
@@ -87,6 +91,10 @@ export const FINANCE_VARIANCE_DRIVERS_ROWS = [
     contribution_exact:"120000.00", bcws_exact:"1200000.00", bcwp_exact:"1200000.00", acwp_exact:"1080000.00",
     share_of_total_exact:"-0.1061946902654867256637168142" },
 ] as unknown as ContributionRow[];
+
+/** TRANSCRIBED from `finance_agent/seed.py::notional_banner` at producer 950b3eb9, as MULTI_SERIES's fixture has it. */
+const NOTIONAL_BANNER =
+  "NOTIONAL DATA — invented program, round figures, public EVM formulas. Not derived from any real program (ADR-0045 Decision 4).";
 
 export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
   {
@@ -252,5 +260,12 @@ export const CONTRIBUTION_RANKING_FIXTURES: ContributionRankingFixture[] = [
     })) as unknown as ContributionRow[],
     value_unit: "USD",
     declares: ["data-extra-columns", "data-withheld-disagree"],
+  },
+  {
+    name: "the producer served a data_provenance sentence (the notional banner)",
+    rows: COMPLETE,
+    value_unit: "USD",
+    data_provenance: NOTIONAL_BANNER,
+    declares: ["data-served-provenance"],
   },
 ];

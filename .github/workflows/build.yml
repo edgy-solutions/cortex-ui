@@ -301,7 +301,13 @@ env:
   #   cortex-bff byte-identical to 0e58ed44 (blob 3919101e; adds /menu_blocks); ingest-v1 1.9.1 -> 1.10.0, re-taken
   #   (ActPromotion.review, PromotionReviewStart). Gate: the full suite against a gh tarball of 950b3eb9 placed as the
   #   sibling invincible-agent.
-  PRODUCER_REF: 950b3eb912e2cbede454eea31ceb23a317c13fcc
+  # 2026-11-25 RE-PIN to f7c3f5e6 (release 0.4.92, rolled 11-25, rev 242; Lane 1 report 2026-11-25 ...rolled-rev-242). Check 1
+  #   NOT read by cortex: cited from that report, no kube context on this box. Check 2: task_kinds and review_shapes diff
+  #   950b3eb9..f7c3f5e6 is EMPTY (control: policy/ whole, 19 files differ). Check 3: iagent_mesh/rows.py and uv.lock
+  #   unchanged across the two shas. docs/api: cortex-bff gains GET /askable_measures (+ its response/params schemas);
+  #   ingest-v1 1.10.0 -> 1.10.1 (HumanTask.task_id required, no longer nullable); mcp.openapi.json also moved (not read here).
+  #   Gate: the full suite against a git-archive export of f7c3f5e6 placed as the sibling invincible-agent.
+  PRODUCER_REF: f7c3f5e617e782c82a90016475f77dc540444b9e
 
 permissions:
   contents: read

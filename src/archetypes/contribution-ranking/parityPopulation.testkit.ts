@@ -26,6 +26,7 @@ export function parityComponents(
       value_unit: f.value_unit,
       threshold: f.threshold,
       threshold_defaulted: f.threshold_defaulted,
+      data_provenance: f.data_provenance,
     };
   }
   for (const file of CAPTURE_FILES) {
