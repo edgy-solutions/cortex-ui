@@ -12,6 +12,16 @@ const WHERE_USED = {
   domain_fit: ["SUSTAINMENT"],
   declared_by: "mesh:whereIsThisPartUsed",
 };
+// A SERVED ROW, from the producer at f7c3f5e6 (release 0.4.92): the `menu:` block of
+// policy/overlays/sample/measure_verbs/fin_flow_cost_variance.yaml (verb finFlowCostVariance) is
+// served as this block, declared_by = "mesh:" + the row verb (menu_blocks._measure_blocks).
+const FIN_COST_VARIANCE = {
+  subject: "fin:DeclaredMeasureSeries",
+  archetype: "mesh:FlowDecomposition",
+  persona_fit: ["PROGRAM_FINANCE_ANALYST"],
+  domain_fit: ["PROGRAM_FINANCE"],
+  declared_by: "mesh:finFlowCostVariance",
+};
 const body = (blocks: unknown, extra: Record<string, unknown> = {}) => ({
   composed: true,
   blocks,
@@ -140,5 +150,19 @@ describe("mergeServedBlocks", () => {
     expect(rows[0].persona_fit).toEqual(WHERE_USED.persona_fit);
     expect(rows[0].domain_fit).toEqual(WHERE_USED.domain_fit);
     expect(report.replaced).toEqual(["mesh:WhereUsedSet -> mesh:InstancesByProperty"]);
+  });
+  it("14 the real finance row: a measure-declared block reads whole and takes its pair over the hand row", () => {
+    const r = readMenuBlocks(body([FIN_COST_VARIANCE]));
+    expect(r.kind).toBe("ready");
+    if (r.kind !== "ready") return;
+    expect(r.skipped).toEqual([]);
+    expect(r.blocks).toEqual([FIN_COST_VARIANCE]);
+    const assembled = assembleCapabilities(CORTEX_UI_CAPABILITIES);
+    const { capabilities, report } = mergeServedBlocks(assembled, r);
+    const rows = pair(capabilities, FIN_COST_VARIANCE.subject, FIN_COST_VARIANCE.archetype);
+    expect(rows.length).toBe(1);
+    expect(rows[0].persona_fit).toEqual(FIN_COST_VARIANCE.persona_fit);
+    expect(rows[0].domain_fit).toEqual(FIN_COST_VARIANCE.domain_fit);
+    expect(report.undrawable).toEqual([]);
   });
 });
