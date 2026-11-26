@@ -27,6 +27,7 @@ export function useAgent() {
 
   return {
     sendMessage: agent.sendMessage,
+    sendAsk: agent.sendAsk,
     isProcessing: isCheckingBackend || agent.isProcessing,
     isConnected: true, // Force true — trust the mesh
     isCheckingConnection: isCheckingBackend,

@@ -1,18 +1,26 @@
 /**
  * "What can I ask?" — the list the server serves at `GET /askable_measures` (#525), drawn on the ask bar.
  * Cortex lists nothing of its own and never filters by cells; the words here are generic on purpose.
- * Ask TYPES the example into the composer (the `/ask?q=` seam); nothing is sent.
+ * The list is for the cell an ask would run under: the SAME resolver as the question send (resolveSendCell), both
+ * persona and domains or neither, so a persona switch re-fetches. Ask SENDS the pick (the entry name as the
+ * label, `askable_pick` beside it) through the normal question send, under that same cell.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { ListChecks } from "lucide-react";
 import { fetchAskableMeasures } from "@/api/client";
-import { groupRows, matchesSearch, type AskableRead, type AskableRow } from "@/lib/askableMeasures";
+import { askablePick, groupRows, matchesSearch, type AskableRead, type AskableRow } from "@/lib/askableMeasures";
 import { deepLinkPath } from "@/lib/deepLink";
-import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
+import { resolveSendCell, type SendCell } from "@/lib/sendReadiness";
 import { usePersonaStore } from "@/store/usePersonaStore";
 
-export function AskableTrigger() {
+/** The Ask action: the same sender the composer uses. Returns what sendMessage returns. */
+export type SendAsk = (
+  message: string,
+  pick: { verb: string; bindings: Record<string, string> },
+) => boolean | { notSent: string };
+
+export function AskableTrigger({ sendAsk }: { sendAsk: SendAsk }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
 
@@ -43,19 +51,30 @@ export function AskableTrigger() {
       >
         <ListChecks className="w-4 h-4" />
       </button>
-      {open && <AskablePanel onClose={() => setOpen(false)} />}
+      {open && <AskablePanel onClose={() => setOpen(false)} sendAsk={sendAsk} />}
     </span>
   );
 }
 
-function AskablePanel({ onClose }: { onClose: () => void }) {
-  // The key is the caller's membership: two callers must never share an entry. The server filters by ALL the
-  // caller's entitled domains, not the active persona; a persona-scoped query is asked of lane/74 — when it
-  // lands, the persona joins this key.
+function AskablePanel({ onClose, sendAsk }: { onClose: () => void; sendAsk: SendAsk }) {
+  // The key is the caller's membership AND the cell: two callers must never share an entry, and a persona
+  // switch is a different list. The cell is resolved by the ask's own resolver; the selectors return
+  // primitives (a JSON string, a message), so the store snapshot stays stable.
   const ownerSub = usePersonaStore((s) => s.ownerSub);
+  const cellJson = usePersonaStore((s) => {
+    const r = resolveSendCell(s);
+    return r.ready ? JSON.stringify(r.cell ?? null) : null;
+  });
+  const blocked = usePersonaStore((s) => {
+    const r = resolveSendCell(s);
+    return r.ready ? null : r.message;
+  });
+  const cell = cellJson === null ? undefined : ((JSON.parse(cellJson) as SendCell | null) ?? undefined);
   const q = useQuery({
-    queryKey: ["askable-measures", ownerSub],
-    queryFn: fetchAskableMeasures,
+    queryKey: ["askable-measures", ownerSub, cell?.active_persona ?? null, cell?.active_domains ?? null],
+    queryFn: () => fetchAskableMeasures(cell),
+    // No list is asked for until the ask itself could be sent: the entitlement matrix has to have loaded.
+    enabled: blocked === null,
     staleTime: 60_000,
     retry: false,
     refetchOnWindowFocus: false,
@@ -66,12 +85,24 @@ function AskablePanel({ onClose }: { onClose: () => void }) {
       data-askable-panel
       className="absolute bottom-full left-0 mb-2 z-50 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto rounded-lg border border-slate-700/60 bg-slate-950/95 backdrop-blur p-3 text-sm shadow-xl"
     >
-      <PanelBody q={q} onClose={onClose} />
+      {blocked !== null ? (
+        <div data-askable-state="not-ready" className="text-slate-400 text-xs">{blocked}</div>
+      ) : (
+        <PanelBody q={q} onClose={onClose} sendAsk={sendAsk} />
+      )}
     </div>
   );
 }
 
-function PanelBody({ q, onClose }: { q: UseQueryResult<AskableRead | null>; onClose: () => void }) {
+function PanelBody({
+  q,
+  onClose,
+  sendAsk,
+}: {
+  q: UseQueryResult<AskableRead | null>;
+  onClose: () => void;
+  sendAsk: SendAsk;
+}) {
   const msg = (state: string, text: string, extra?: ReactNode) => (
     <div data-askable-state={state} className="text-slate-400 text-xs">
       {text}
@@ -95,6 +126,14 @@ function PanelBody({ q, onClose }: { q: UseQueryResult<AskableRead | null>; onCl
     );
   }
   if (d.kind === "unreadable") return msg("unreadable", "The list came back in a shape cortex can't read.");
+  // A refusal the server SAID: its words, never an empty list.
+  if (d.kind === "refused") {
+    return (
+      <div data-askable-state="refused" data-askable-refusal-code={d.refusal.code ?? ""} className="text-amber-400 text-xs">
+        {d.refusal.reason}
+      </div>
+    );
+  }
   const footer = d.invalid.length > 0 && (
     <ul data-askable-invalid className="mt-3 text-[11px] text-slate-500 space-y-0.5">
       {d.invalid.map((e, i) => (
@@ -127,17 +166,32 @@ function PanelBody({ q, onClose }: { q: UseQueryResult<AskableRead | null>; onCl
   }
   return (
     <div data-askable-state="ready">
-      {/* The server filters by every domain the caller holds, not the selected persona (asked of lane/74,
-          11-24), so the list says what it is scoped to and claims no more. */}
-      <div data-askable-scope className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">For your access</div>
-      <ReadyList rows={d.rows} onClose={onClose} />
+      {/* The list names the cell it was filtered for, as served. No persona means no access cell: said plainly,
+          and no persona word is invented. cell_source is drawn verbatim, whatever it says. */}
+      {d.cell.persona === null ? (
+        <div data-askable-scope data-askable-cell-source={d.cell.cellSource} className="text-xs text-slate-400 mb-2">
+          You have no access cell.
+        </div>
+      ) : (
+        <div
+          data-askable-scope
+          data-askable-cell-source={d.cell.cellSource}
+          className="text-[10px] uppercase tracking-wider text-slate-500 mb-2"
+        >
+          {[d.cell.persona, ...d.cell.domains].join(" · ")}
+          <span data-askable-cell-source-label className="ml-2 normal-case tracking-normal text-slate-600">
+            {d.cell.cellSource}
+          </span>
+        </div>
+      )}
+      <ReadyList rows={d.rows} onClose={onClose} sendAsk={sendAsk} />
       {footer}
       {unreadable}
     </div>
   );
 }
 
-function ReadyList({ rows, onClose }: { rows: AskableRow[]; onClose: () => void }) {
+function ReadyList({ rows, onClose, sendAsk }: { rows: AskableRow[]; onClose: () => void; sendAsk: SendAsk }) {
   const [search, setSearch] = useState("");
   const shown = rows.filter((r) => matchesSearch(r, search));
   return (
@@ -167,7 +221,7 @@ function ReadyList({ rows, onClose }: { rows: AskableRow[]; onClose: () => void 
             )}
             <ul className="space-y-2">
               {g.rows.map((r, i) => (
-                <Row key={`${r.verb}-${i}`} row={r} onClose={onClose} />
+                <Row key={`${r.verb}-${i}`} row={r} onClose={onClose} sendAsk={sendAsk} />
               ))}
             </ul>
           </div>
@@ -177,7 +231,8 @@ function ReadyList({ rows, onClose }: { rows: AskableRow[]; onClose: () => void 
   );
 }
 
-function Row({ row, onClose }: { row: AskableRow; onClose: () => void }) {
+function Row({ row, onClose, sendAsk }: { row: AskableRow; onClose: () => void; sendAsk: SendAsk }) {
+  const [notSent, setNotSent] = useState<string | null>(null);
   const [copy, setCopy] = useState<"idle" | "ok" | "fail">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -219,30 +274,36 @@ function Row({ row, onClose }: { row: AskableRow; onClose: () => void }) {
       </div>
       <div className="text-xs text-slate-400">{row.description}</div>
       {ask !== null && (
-        <div className="mt-1">
-          <div data-askable-example className="font-mono text-[11px] text-slate-500">{`"${ask}"`}</div>
-          <div className="mt-1 flex gap-3 text-xs">
-            <button
-              type="button"
-              data-askable-ask
-              onClick={() => {
-                useComposerPrefillStore.getState().offer(ask);
-                onClose();
-              }}
-              className="text-neon-cyan hover:underline"
-            >
-              Ask
-            </button>
-            <button
-              type="button"
-              data-askable-copy
-              onClick={() => onCopy(ask)}
-              className="text-slate-400 hover:text-neon-cyan"
-            >
-              {copy === "ok" ? "Copied" : copy === "fail" ? "Copy failed" : "Copy link"}
-            </button>
-          </div>
-        </div>
+        <div data-askable-example className="mt-1 font-mono text-[11px] text-slate-500">{`"${ask}"`}</div>
+      )}
+      <div className="mt-1 flex gap-3 text-xs">
+        <button
+          type="button"
+          data-askable-ask
+          onClick={() => {
+            // The pick goes through the normal question send. A refusal to send (entitlements not loaded) is
+            // said here and the panel stays open; a send that went closes it.
+            const r = sendAsk(row.name, askablePick(row.verb));
+            if (r === true) onClose();
+            else if (r !== false) setNotSent(r.notSent);
+          }}
+          className="text-neon-cyan hover:underline"
+        >
+          Ask
+        </button>
+        {ask !== null && (
+          <button
+            type="button"
+            data-askable-copy
+            onClick={() => onCopy(ask)}
+            className="text-slate-400 hover:text-neon-cyan"
+          >
+            {copy === "ok" ? "Copied" : copy === "fail" ? "Copy failed" : "Copy link"}
+          </button>
+        )}
+      </div>
+      {notSent !== null && (
+        <div data-askable-notsent className="mt-1 text-[11px] text-amber-400">{notSent}</div>
       )}
     </li>
   );

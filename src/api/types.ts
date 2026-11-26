@@ -987,6 +987,14 @@ export interface InterviewRequest {
    */
   answering_artifact_id?: string;
   /**
+   * A MEASURE PICKED FROM `GET /askable_measures`: `{verb, bindings}`, `verb` as listed. `message` is only a LABEL
+   * for it (the entry display name). The server takes the subject from its OWN list and refuses a verb not on it
+   * (422); it also refuses this beside `seed_panel` or `answering_artifact_id` (422), so a pick sends neither.
+   * Sent with the SAME active_persona / active_domains the list was fetched with, or the pick is checked
+   * against the default cell.
+   */
+  askable_pick?: { verb: string; bindings: Record<string, string> };
+  /**
    * ADR-0033 RESPEAK: THE ANSWER TO AN ASK THAT HAD NO MENU. Two scalars, because such an ask
    * asks about exactly one slot and there is exactly one answer — a dict would reimport the
    * `{}`-versus-absent ambiguity `bound_slots` is careful about, for no gain.

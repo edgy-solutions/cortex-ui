@@ -1,4 +1,5 @@
 import { inScope } from "@/lib/platformDomains";
+import { isMockGroundingEnabled } from "@/lib/mockGroundingEmitter";
 import type { usePersonaStore } from "@/store/usePersonaStore";
 
 /**
@@ -48,4 +49,13 @@ export function sendReadiness(s: SendReadinessSlice): SendReadiness {
         }
       : undefined;
   return { ready: true, cell };
+}
+
+/**
+ * THE ONE RESOLVER of the cell a question runs under, shared by the question send, the Ask action and
+ * the askable list (the architect, 11-24: "the list and the ask must agree, so both resolve the persona
+ * the same way"). Mock mode reaches no server, so it is ready with no cell.
+ */
+export function resolveSendCell(s: SendReadinessSlice): SendReadiness {
+  return isMockGroundingEnabled() ? { ready: true, cell: undefined } : sendReadiness(s);
 }

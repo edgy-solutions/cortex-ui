@@ -16,7 +16,8 @@ import {
 } from "@/store/useInterviewStore";
 
 import { useCanvasStore } from "@/store/useCanvasStore";
-import { sendReadiness, type SendCell } from "@/lib/sendReadiness";
+import { resolveSendCell, type SendCell } from "@/lib/sendReadiness";
+import { refusalFromDetail } from "@/lib/askableMeasures";
 import { readSourcesProvenance } from "@/lib/sourceProvenance";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import {
@@ -147,6 +148,8 @@ interface SendPayload {
   answeringArtifactId?: string;
   /** Decided once at send by sendReadiness; undefined on the legacy path and in mock mode. */
   cell?: SendCell;
+  /** A measure picked from the askable list. Rides beside the label message; see InterviewRequest.askable_pick. */
+  askablePick?: { verb: string; bindings: Record<string, string> };
 }
 
 export function useInterviewAgent() {
@@ -517,7 +520,7 @@ export function useInterviewAgent() {
 
   // Main mutation that handles the streaming request
   const mutation = useMutation({
-    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId, cell }: SendPayload) => {
+    mutationFn: async ({ userInput, boundSlots, spoken, answeredWith, answeringArtifactId, cell, askablePick }: SendPayload) => {
       // ⛔ READ THE DRAWN CARD FIRST — BEFORE ANYTHING IN THIS FUNCTION TOUCHES THE STORE.
       // `createPendingArtifact` below foregrounds THIS turn's own pending row, so the same read
       // taken a few lines later returns the artifact being created rather than the one the
@@ -540,7 +543,9 @@ export function useInterviewAgent() {
       // AN EXPLICIT CLAIM ALWAYS WINS. The ask card names the artifact its question was asked
       // ON, which is deliberately not the drawn one; a default that overrode it would silently
       // re-point every answered ask at whatever happened to be foregrounded.
-      const lineageClaim = answeringArtifactId ?? drawnLineageClaim(drawnAtTurnStart);
+      // A PICK ANSWERS NO ASK: the server 422s askable_pick beside answering_artifact_id, so a pick never
+      // carries the defaulted claim either.
+      const lineageClaim = askablePick ? undefined : (answeringArtifactId ?? drawnLineageClaim(drawnAtTurnStart));
 
       // Cancel any existing stream
       abortController.current?.abort();
@@ -660,6 +665,8 @@ export function useInterviewAgent() {
         // above: explicit from an ask card, else defaulted from the drawn card when that card is a
         // real, durable answer. `answeringArtifactBody` still decides absent-vs-empty.
         ...answeringArtifactBody(lineageClaim),
+        // A pick from the askable list. Never beside seed_panel (this sender has none) or the lineage claim.
+        ...(askablePick ? { askable_pick: askablePick } : {}),
         session_id: sessionId,
         artifact_id: artifactId,
         // The cell was decided once, at send (src/lib/sendReadiness.ts).
@@ -675,9 +682,22 @@ export function useInterviewAgent() {
       setIsProcessing(false);
     },
     retry: false,
-    onError: (error: any) => {
+    onError: (error: any, variables: SendPayload) => {
       setIsProcessing(false);
       console.error("Interview stream error:", error);
+      // A refused PICK (422 askable_pick_verb_not_visible, 503 unreadable list): the server answered, and its
+      // words are the line, not the generic unreachable text.
+      if (variables?.askablePick && typeof Response !== "undefined" && error instanceof Response) {
+        const msgId = currentAgentMsgId.current;
+        const status = error.status;
+        void error
+          .clone()
+          .json()
+          .then((b: { detail?: unknown }) => b?.detail, () => undefined)
+          .then((detail) => {
+            if (msgId) updateMessage(msgId, { isStreaming: false, error: refusalFromDetail(status, detail).reason });
+          });
+      }
       // Mark the message as failed with a specific error
       if (currentAgentMsgId.current) {
         updateMessage(currentAgentMsgId.current, {
@@ -735,12 +755,9 @@ export function useInterviewAgent() {
       if (mutation.isPending || !userInput.trim()) return false;
       // Ruling 2026-11-16: no question goes out until the entitlement list has loaded. Mock mode
       // reaches no server, so the gate does not apply there.
-      let cell: SendCell | undefined;
-      if (!isMockGroundingEnabled()) {
-        const readiness = sendReadiness(usePersonaStore.getState());
-        if (!readiness.ready) return { notSent: readiness.message };
-        cell = readiness.cell;
-      }
+      const readiness = resolveSendCell(usePersonaStore.getState());
+      if (!readiness.ready) return { notSent: readiness.message };
+      const cell = readiness.cell;
       mutation.mutate({
         userInput: userInput.trim(),
         boundSlots,
@@ -754,6 +771,23 @@ export function useInterviewAgent() {
     [mutation]
   );
 
+  /**
+   * THE ASK ACTION: send a measure picked from the askable list through the SAME question send
+   * (POST /interview/stream, the same readiness gate and the same cell resolver as sendMessage).
+   * `message` is the entry display name, a label; the verb rides in `askable_pick`. No lineage
+   * claim and no seed_panel go with it. Returns what sendMessage returns.
+   */
+  const sendAsk = useCallback(
+    (message: string, pick: { verb: string; bindings: Record<string, string> }): boolean | { notSent: string } => {
+      if (mutation.isPending || !message.trim()) return false;
+      const readiness = resolveSendCell(usePersonaStore.getState());
+      if (!readiness.ready) return { notSent: readiness.message };
+      mutation.mutate({ userInput: message.trim(), askablePick: pick, cell: readiness.cell });
+      return true;
+    },
+    [mutation],
+  );
+
   const cancelStream = useCallback(() => {
     abortController.current?.abort();
     mockGroundingHandle.current?.cancel();
@@ -762,6 +796,7 @@ export function useInterviewAgent() {
 
   return {
     sendMessage,
+    sendAsk,
     cancelStream,
     isProcessing: mutation.isPending,
     error: mutation.error,

@@ -29,7 +29,7 @@ export function InputBar() {
   // Draft-backed instead of plain useState: a failed silent renew unmounts this whole
   // surface and bounces to Keycloak, and the typed prompt used to die with it.
   const { value, setValue, clearDraft } = useComposerDraft();
-  const { sendMessage, isConnected, isProcessing } = useAgent();
+  const { sendMessage, sendAsk, isConnected, isProcessing } = useAgent();
   const textInputRef = useRef<HTMLInputElement>(null);
 
   // A gate-started sign-in is a full-page redirect: the debounced composer draft may not have flushed. The gate
@@ -265,7 +265,7 @@ export function InputBar() {
                 two-column palette opening upward. Replaces the former
                 static Zap glyph + the exposed dropdown row. */}
               <PersonaPicker />
-              <AskableTrigger />
+              <AskableTrigger sendAsk={sendAsk} />
               {ingestEnabled && (
                 <span className="relative inline-flex">
                   <button
