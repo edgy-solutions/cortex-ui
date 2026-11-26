@@ -287,9 +287,9 @@ describe("the cell the list is for", () => {
     open();
     await screen.findByText("Row");
     expect(mock).toHaveBeenLastCalledWith({ active_persona: "pa", active_domains: ["da"] });
-    withCell("pb", "db");
+    withCell("pb", "da");
     await waitFor(() => expect(mock).toHaveBeenCalledTimes(2));
-    expect(mock).toHaveBeenLastCalledWith({ active_persona: "pb", active_domains: ["db"] });
+    expect(mock).toHaveBeenLastCalledWith({ active_persona: "pb", active_domains: ["da"] });
   });
   it("no cell resolved: the list is fetched with none", async () => {
     mock.mockResolvedValue(ready([R()]));
