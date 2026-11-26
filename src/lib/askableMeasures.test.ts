@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { ASKABLE_MEASURE_FIELDS, groupRows, matchesSearch, readAskableMeasures, type AskableRow } from "./askableMeasures";
+import { ASKABLE_MEASURE_FIELDS, askablePick, groupRows, matchesSearch, readAskableMeasures, readAskableRefusal, type AskableRow } from "./askableMeasures";
 
 const row = (o: Record<string, unknown> = {}) => ({ verb: "v1", name: "N1", description: "d1", phrasings: ["p1"], cells: ["x"], ...o });
-const env = (o: Record<string, unknown> = {}) => ({ composed: true, invalid: [], measures: [row()], ...o });
+const env = (o: Record<string, unknown> = {}) => ({
+  composed: true, invalid: [], measures: [row()], persona: "P", domains: ["D"], cell_source: "picker", ...o,
+});
 const R = (o: Partial<AskableRow> = {}): AskableRow => ({
   verb: "v", name: "Name", description: "Desc", phrasings: [], shape: null, unit: null, exampleAsk: null, groupLabel: null, ...o,
 });
@@ -26,8 +28,27 @@ describe("readAskableMeasures envelope", () => {
     const r = readAskableMeasures(env({ composed: false, invalid: [{ source: "s", reason: "r" }, { source: 1 }] }));
     expect(r).toEqual({ kind: "not-composed", invalid: [{ source: "s", reason: "r" }] });
   });
+  it("the served cell is carried: persona, domains, cell_source verbatim", () => {
+    const r = readAskableMeasures(env({ persona: "p", domains: ["a", "b"], cell_source: "Anything Served" }));
+    expect(r.kind === "ready" && r.cell).toEqual({ persona: "p", domains: ["a", "b"], cellSource: "Anything Served" });
+  });
+  it("a null persona is a legal cell (no access cell)", () => {
+    const r = readAskableMeasures(env({ persona: null, domains: [] }));
+    expect(r.kind === "ready" && r.cell.persona).toBeNull();
+  });
+  it("a served key that is ABSENT or the wrong type is unreadable", () => {
+    for (const k of ["persona", "domains", "cell_source"]) {
+      const e = env() as Record<string, unknown>;
+      delete e[k];
+      expect(readAskableMeasures(e), "absent " + k).toEqual({ kind: "unreadable" });
+    }
+    expect(readAskableMeasures(env({ persona: 3 }))).toEqual({ kind: "unreadable" });
+    expect(readAskableMeasures(env({ domains: ["a", 2] }))).toEqual({ kind: "unreadable" });
+    expect(readAskableMeasures(env({ domains: "a" }))).toEqual({ kind: "unreadable" });
+    expect(readAskableMeasures(env({ cell_source: "" }))).toEqual({ kind: "unreadable" });
+  });
   it("ready, invalid absent is []", () => {
-    const r = readAskableMeasures({ composed: true, measures: [row()] });
+    const r = readAskableMeasures(env({ invalid: undefined }));
     expect(r.kind).toBe("ready");
     if (r.kind === "ready") expect(r.invalid).toEqual([]);
   });
@@ -87,5 +108,24 @@ describe("population tie", () => {
     const served = Object.keys(spec.components.schemas.AskableMeasure.properties).sort();
     expect(served.length).toBeGreaterThan(0);
     expect(served).toEqual([...ASKABLE_MEASURE_FIELDS].sort());
+  });
+});
+
+describe("refusals and the pick", () => {
+  const err = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
+  it("a string detail is the reason, verbatim", () => {
+    expect(readAskableRefusal(err(400, "active_persona and active_domains go together"))).toEqual({
+      status: 400, code: null, reason: "active_persona and active_domains go together",
+    });
+  });
+  it("an object detail takes its code and its words", () => {
+    const r = readAskableRefusal(err(403, { error: "persona_not_held", message: "You do not hold p." }));
+    expect(r).toMatchObject({ status: 403, code: "persona_not_held", reason: "You do not hold p." });
+  });
+  it("no response is not a refusal", () => {
+    expect(readAskableRefusal(new Error("network"))).toBeNull();
+  });
+  it("the pick is the verb with empty bindings", () => {
+    expect(askablePick("v")).toEqual({ verb: "v", bindings: {} });
   });
 });

@@ -944,6 +944,50 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     expect(lineageClaimVerdict(body)).toBe("ownership_decides");
   });
 
+  it("an ASKABLE PICK posts askable_pick under the SAME cell, with no lineage claim and no seed_panel", async () => {
+    // A drawn answer is foregrounded, so a composer turn WOULD claim it (arm above). A pick must not:
+    // the server refuses askable_pick beside answering_artifact_id or seed_panel.
+    foreground(drawn());
+    usePersonaStore.setState({
+      entitlements: { user_id: "u", source: "topaz", default: null, cells: [{ persona: "P1", domain: "D1" }] },
+      selectedPersona: "P1",
+      selectedDomains: ["D1"],
+    } as never);
+    const r = mount();
+    let out: unknown;
+    await act(async () => {
+      out = r.result.current.sendAsk("Row name", { verb: "the.verb", bindings: {} });
+      await flush();
+    });
+    expect(out).toBe(true);
+    const req = transport.request!;
+    expect(req.message).toBe("Row name");
+    expect(req.askable_pick).toEqual({ verb: "the.verb", bindings: {} });
+    expect(req.active_persona).toBe("P1");
+    expect(req.active_domains).toEqual(["D1"]);
+    expect(req).not.toHaveProperty("seed_panel");
+    expect(req).not.toHaveProperty("answering_artifact_id");
+    expect(req).not.toHaveProperty("bound_slots");
+  });
+
+  it("an ordinary composer turn carries no askable_pick", async () => {
+    const r = mount();
+    await composerTurn(r);
+    expect(transport.request).not.toHaveProperty("askable_pick");
+  });
+
+  it("sendAsk is refused, like any send, while the entitlements are loading", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: null, entitlementsLoading: true } as never);
+    const r = mount();
+    let out: unknown;
+    await act(async () => {
+      out = r.result.current.sendAsk("Row", { verb: "v", bindings: {} });
+      await flush();
+    });
+    expect(out).toEqual({ notSent: expect.stringMatching(/still loading/) });
+    expect(transport.calls).toBe(0);
+  });
+
   it("an answered ask IS honoured, so the refusal above is about the composer and not the field", async () => {
     // The contrasting half. Without it "refused" reads as the field never working anywhere, and
     // the two ask-card paths — which is where every menu answer goes — are honoured today.

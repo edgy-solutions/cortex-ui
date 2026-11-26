@@ -7,7 +7,6 @@ vi.mock("@/api/client", () => ({ fetchAskableMeasures: vi.fn() }));
 
 import { fetchAskableMeasures } from "@/api/client";
 import { AskableTrigger } from "./AskableMeasures";
-import { useComposerPrefillStore } from "@/store/useComposerPrefillStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
 
 const mock = vi.mocked(fetchAskableMeasures);
@@ -15,14 +14,15 @@ const R = (o: Partial<AskableRow> = {}): AskableRow => ({
   verb: "v", name: "Row", description: "Desc", phrasings: [], shape: null, unit: null, exampleAsk: null, groupLabel: null, ...o,
 });
 const ready = (rows: AskableRow[], extra: Partial<Extract<AskableRead, { kind: "ready" }>> = {}): AskableRead => ({
-  kind: "ready", rows, unreadableRows: 0, invalid: [], ...extra,
+  kind: "ready", rows, unreadableRows: 0, invalid: [], cell: { persona: "P", domains: ["D"], cellSource: "picker" }, ...extra,
 });
 
 let qc: QueryClient;
+let sendAsk: ReturnType<typeof vi.fn>;
 const mount = () =>
   render(
     <QueryClientProvider client={qc}>
-      <AskableTrigger />
+      <AskableTrigger sendAsk={sendAsk as never} />
     </QueryClientProvider>,
   );
 const open = () => fireEvent.click(document.querySelector("[data-askable-trigger]")!);
@@ -31,11 +31,13 @@ const state = () => document.querySelector("[data-askable-state]");
 beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mock.mockReset();
-  useComposerPrefillStore.setState({ text: null });
+  sendAsk = vi.fn(() => true);
+  // A LOADED matrix with no cells: the ask is ready, with no cell.
+  usePersonaStore.setState({ entitlements: { user_id: "u", source: "topaz", default: null, cells: [] }, entitlementsError: null, entitlementsLoading: false, selectedPersona: null, selectedDomains: [] } as never);
 });
 afterEach(() => {
   cleanup();
-  usePersonaStore.setState({ ownerSub: null });
+  usePersonaStore.setState({ ownerSub: null, entitlements: null } as never);
   vi.unstubAllGlobals();
 });
 
@@ -87,24 +89,34 @@ describe("states", () => {
 });
 
 describe("rows", () => {
-  it("Ask types the example, sends nothing, closes the panel", async () => {
-    mock.mockResolvedValue(ready([R({ exampleAsk: "Why is X?" })]));
+  it("Ask SENDS the pick (name as label, verb, empty bindings) and closes the panel", async () => {
+    mock.mockResolvedValue(ready([R({ verb: "vv", name: "Row", exampleAsk: "Why is X?" })]));
     mount();
     open();
     await screen.findByText("Row");
     expect(document.querySelector("[data-askable-example]")?.textContent).toBe('"Why is X?"');
     fireEvent.click(document.querySelector("[data-askable-ask]")!);
-    expect(useComposerPrefillStore.getState().text).toBe("Why is X?");
+    expect(sendAsk).toHaveBeenCalledWith("Row", { verb: "vv", bindings: {} });
     expect(document.querySelector("[data-askable-panel]")).toBeNull();
   });
-  it("a row without an example is drawn with no actions", async () => {
+  it("a row without an example still has Ask, and no Copy link", async () => {
     mock.mockResolvedValue(ready([R()]));
     mount();
     open();
     await screen.findByText("Row");
-    expect(document.querySelector("[data-askable-row]")).not.toBeNull();
-    expect(document.querySelector("[data-askable-ask]")).toBeNull();
+    expect(document.querySelector("[data-askable-ask]")).not.toBeNull();
     expect(document.querySelector("[data-askable-copy]")).toBeNull();
+    expect(document.querySelector("[data-askable-example]")).toBeNull();
+  });
+  it("a send that did not go says why and keeps the panel open", async () => {
+    sendAsk.mockReturnValue({ notSent: "Your entitlements are still loading." } as never);
+    mock.mockResolvedValue(ready([R()]));
+    mount();
+    open();
+    await screen.findByText("Row");
+    fireEvent.click(document.querySelector("[data-askable-ask]")!);
+    expect(document.querySelector("[data-askable-notsent]")?.textContent).toBe("Your entitlements are still loading.");
+    expect(document.querySelector("[data-askable-panel]")).not.toBeNull();
   });
   it("unit and shape tags only when served", async () => {
     mock.mockResolvedValue(ready([R({ verb: "a", name: "With", unit: "U!", shape: "S!" }), R({ verb: "b", name: "Without" })]));
@@ -227,7 +239,7 @@ describe("inside the ask bar's form", () => {
     render(
       <QueryClientProvider client={qc}>
         <form onSubmit={onSubmit}>
-          <AskableTrigger />
+          <AskableTrigger sendAsk={sendAsk as never} />
         </form>
       </QueryClientProvider>,
     );
@@ -242,11 +254,66 @@ describe("inside the ask bar's form", () => {
     search.dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(true);
   });
-  it("the ready list says it is scoped to the caller's access, not a persona", async () => {
+});
+
+describe("the cell the list is for", () => {
+  const withCell = (persona: string, domain: string) =>
+    usePersonaStore.setState({
+      entitlements: { user_id: "u", source: "topaz", default: null, cells: [{ persona, domain }] },
+      selectedPersona: persona,
+      selectedDomains: [domain],
+    } as never);
+  it("names the served persona, domains and cell_source verbatim", async () => {
+    mock.mockResolvedValue(ready([R()], { cell: { persona: "analyst", domains: ["MESH", "DOCS"], cellSource: "WhatEverServed" } }));
+    mount();
+    open();
+    await screen.findByText("Row");
+    const s = document.querySelector("[data-askable-scope]")!;
+    expect(s.textContent).toContain("analyst · MESH · DOCS");
+    expect(s.textContent).toContain("WhatEverServed");
+    expect(s.getAttribute("data-askable-cell-source")).toBe("WhatEverServed");
+  });
+  it("a null persona says there is no access cell, and invents no persona word", async () => {
+    mock.mockResolvedValue(ready([R()], { cell: { persona: null, domains: [], cellSource: "none" } }));
+    mount();
+    open();
+    await screen.findByText("Row");
+    expect(document.querySelector("[data-askable-scope]")?.textContent).toBe("You have no access cell.");
+  });
+  it("fetches with the SAME cell the ask resolves, and refetches on a persona switch", async () => {
+    withCell("pa", "da");
     mock.mockResolvedValue(ready([R()]));
     mount();
     open();
     await screen.findByText("Row");
-    expect(document.querySelector("[data-askable-scope]")?.textContent).toBe("For your access");
+    expect(mock).toHaveBeenLastCalledWith({ active_persona: "pa", active_domains: ["da"] });
+    withCell("pb", "db");
+    await waitFor(() => expect(mock).toHaveBeenCalledTimes(2));
+    expect(mock).toHaveBeenLastCalledWith({ active_persona: "pb", active_domains: ["db"] });
+  });
+  it("no cell resolved: the list is fetched with none", async () => {
+    mock.mockResolvedValue(ready([R()]));
+    mount();
+    open();
+    await screen.findByText("Row");
+    expect(mock).toHaveBeenLastCalledWith(undefined);
+  });
+  it("entitlements not loaded: no fetch, the readiness message is shown", async () => {
+    usePersonaStore.setState({ entitlements: null, entitlementsError: null, entitlementsLoading: true } as never);
+    mount();
+    open();
+    expect(document.querySelector("[data-askable-state]")?.getAttribute("data-askable-state")).toBe("not-ready");
+    expect(screen.getByText(/still loading/)).toBeTruthy();
+    expect(mock).not.toHaveBeenCalled();
+  });
+  it("a served refusal is drawn with the served reason, never an empty list", async () => {
+    mock.mockResolvedValue({ kind: "refused", refusal: { status: 403, code: "persona_not_held", reason: "You do not hold that persona." } });
+    mount();
+    open();
+    await screen.findByText("You do not hold that persona.");
+    const s = document.querySelector("[data-askable-state]")!;
+    expect(s.getAttribute("data-askable-state")).toBe("refused");
+    expect(s.getAttribute("data-askable-refusal-code")).toBe("persona_not_held");
+    expect(screen.queryByText("Nothing is declared for your access.")).toBeNull();
   });
 });

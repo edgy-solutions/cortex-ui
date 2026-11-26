@@ -265,6 +265,7 @@ const CALLS: Record<string, Case[]> = {
             answering_artifact_id: "a2",
             spoken_slot: "slot",
             spoken_answer: "ans",
+            askable_pick: { verb: "v", bindings: { k: "v" } },
           } as never,
           noop as never,
         ),
@@ -310,7 +311,10 @@ const CALLS: Record<string, Case[]> = {
   fetchTemplates: [{ name: "plain", op: "GET /templates", run: () => (client as any).fetchTemplates() }],
   fetchMenuBlocks: [{ name: "plain", op: "GET /menu_blocks", run: () => (client as any).fetchMenuBlocks() }],
   fetchTaskKinds: [{ name: "plain", op: "GET /task_kinds", run: () => (client as any).fetchTaskKinds() }],
-  fetchAskableMeasures: [{ name: "plain", op: "GET /askable_measures", run: () => (client as any).fetchAskableMeasures() }],
+  fetchAskableMeasures: [
+    { name: "plain", op: "GET /askable_measures", run: () => (client as any).fetchAskableMeasures() },
+    { name: "with the cell (both keys, repeated domains)", op: "GET /askable_measures", run: () => (client as any).fetchAskableMeasures({ active_persona: "p", active_domains: ["a", "b"] }) },
+  ],
   fetchExportRecipients: [{ name: "plain", op: "GET /export/package/recipients", run: () => (client as any).fetchExportRecipients() }],
   offerExportRecipients: [{ name: "plain", op: "POST /export/package/recipients", run: () => (client as any).offerExportRecipients(["a", "b"]) }],
   startCanvasExport: [
