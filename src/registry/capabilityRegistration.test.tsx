@@ -40,6 +40,7 @@ vi.mock("react-oidc-context", () => ({
 vi.mock("@/api/client", () => ({
   registerFrontendCapabilities: (...args: unknown[]) => registerFrontendCapabilities(...args),
   fetchBffVersion: vi.fn().mockResolvedValue({ kind: "unreachable" }),
+  fetchMenuBlocks: vi.fn().mockResolvedValue(null),
   fetchEntitlements: vi.fn().mockResolvedValue({}),
   fetchLineageEdges: vi.fn().mockResolvedValue([]),
   fetchCanvases: vi.fn().mockResolvedValue([]),

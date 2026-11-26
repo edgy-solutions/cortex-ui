@@ -32,8 +32,12 @@ const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 /**
  * Fields whose enum is a DIFFERENT vocabulary in each schema that carries it, so no shared constant exists.
  * `error`: two refusal bodies (#303, invincible-agent), each discriminating its own refusals.
+ * `status`: a canvas seed's ask state and a promotion review's start outcome (PromotionReviewStart, invincible-agent 0e58ed44), unrelated vocabularies.
  */
-export const DECLARED_SPLITS = { error: ["AuthorizationUnavailableDetail", "StructuralRefusalDetail"] };
+export const DECLARED_SPLITS = {
+  error: ["AuthorizationUnavailableDetail", "StructuralRefusalDetail"],
+  status: ["CanvasSeedAsk", "PromotionReviewStart"],
+};
 
 const key = (k) => (IDENT.test(k) ? k : JSON.stringify(k));
 const lit = (v) => JSON.stringify(v);

@@ -1,16 +1,16 @@
 {
   "cortex-bff.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "2c69d256b6fd0fc69470af4d9c852b50f3ffe582",
-    "branch": "master (merge of PR 386)",
+    "sha": "950b3eb912e2cbede454eea31ceb23a317c13fcc",
+    "branch": "release 0.4.91 (deployed 2026-11-23; byte-identical to 0e58ed44, after PR 427, /menu_blocks)",
     "path": "docs/api/cortex-bff.openapi.json",
-    "sha256": "f96cfb28b82a9a67dbea5c9c5fefc947ab9df725cf13fe84fbc74e423ed94721"
+    "sha256": "be1fb6dc160f024653979f850f5f6bfae8ab4ffc0376504dc6e1b097e3bffb7a"
   },
   "ingest-v1.openapi.json": {
     "repo": "invincible-agent",
-    "sha": "2c69d256b6fd0fc69470af4d9c852b50f3ffe582",
-    "branch": "master (merge of PR 386)",
+    "sha": "950b3eb912e2cbede454eea31ceb23a317c13fcc",
+    "branch": "release 0.4.91 (deployed 2026-11-23)",
     "path": "docs/api/ingest-v1.openapi.json",
-    "sha256": "4dbe0310fdf4c66202998da4d5392011d1e399695a07bcf5044feb381c29a01e"
+    "sha256": "22522b43898f4dd53fe85c12afbe6e10f130e3df24d3f3e07c992ea2b19cb76f"
   }
 }

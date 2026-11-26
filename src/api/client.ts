@@ -1030,6 +1030,29 @@ export async function fetchTemplates(): Promise<unknown | null> {
 }
 
 /**
+ * The menu placements the producer declares, from `GET /menu_blocks`. Returns the raw body: the
+ * reader (`src/lib/menuBlocks.ts`) owns the states.
+ *
+ * FOUR STATES, kept distinct:
+ *   composed true,  blocks non-empty   the served placements
+ *   composed true,  blocks empty       genuinely none declared
+ *   composed FALSE                     the registry was NOT read, which is not an empty menu
+ *   null                               unreachable: cortex knows nothing
+ *
+ * Never throws, so registration proceeds with the hand rows when this fails. Producer:
+ * invincible-agent `src/iagent/gateway.py` (GET /menu_blocks) and `src/iagent/menu_blocks.py`.
+ * DRAFT until finance's blocks are served (architect 2026-11-22).
+ */
+export async function fetchMenuBlocks(): Promise<unknown | null> {
+  try {
+    const data = await request("GET /menu_blocks", {});
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Every declared task species, from `GET /task_kinds`.
  *
  * THE WHOLE MENU, FETCHED ONCE, rather than a declaration threaded onto each row. The
