@@ -749,8 +749,11 @@ describe("Promote is offered only on what the steward can see", () => {
     fetchIngestSource.mockRejectedValue({ response: { status: 404, data: { detail: { error: "source_absent" } } } });
     await mount();
     await waitFor(() => expect(document.querySelector('[data-pdf-state="failed"]')).not.toBeNull());
+    // The pane draws "failed" before the card sees the source state, so the hold can lag the pane by a
+    // render. Under full-suite load that render was not in yet (11-26). Wait for the hold itself, as the
+    // sibling arms below do.
+    await waitFor(() => expect(hold()).toBe("no-source"));
     expect(promoteBtn().disabled).toBe(true);
-    expect(hold()).toBe("no-source");
     expect(document.querySelector('[data-promote-held="no-source"]')!.textContent).toContain("cannot vet what they cannot see");
     expect(rejectBtn().disabled).toBe(false);
   });
