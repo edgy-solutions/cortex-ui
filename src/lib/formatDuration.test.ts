@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { formatDuration, artifactDuration } from "./formatDuration";
+import { formatDuration, artifactDuration, formatClock } from "./formatDuration";
 import { rowToArtifact, ANSWER_SUMMARY_COLUMNS } from "./electric";
 
 describe("formatDuration", () => {
@@ -29,6 +29,26 @@ describe("formatDuration", () => {
     // "1m 13s" at different widths make a scannable column jitter.
     expect(formatDuration(63000)).toBe("1m 03s");
     expect(formatDuration(73000)).toBe("1m 13s");
+  });
+});
+
+describe("formatClock reads a running time as m:ss", () => {
+  it("the approved wording's own times", () => {
+    expect(formatClock(42_000)).toBe("0:42");
+    expect(formatClock(130_000)).toBe("2:10");
+    expect(formatClock(303_000)).toBe("5:03");
+    expect(formatClock(900_000)).toBe("15:00");
+  });
+
+  it("whole seconds, floored, never rounded up past where the clock is", () => {
+    expect(formatClock(0)).toBe("0:00");
+    expect(formatClock(999)).toBe("0:00");
+    expect(formatClock(59_999)).toBe("0:59");
+    expect(formatClock(60_000)).toBe("1:00");
+  });
+
+  it("a clock that has not started reads 0:00, never a negative time", () => {
+    expect(formatClock(-5_000)).toBe("0:00");
   });
 });
 

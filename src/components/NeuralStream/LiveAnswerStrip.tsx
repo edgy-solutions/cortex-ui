@@ -1,18 +1,20 @@
 import { Loader2 } from "lucide-react";
 import { useLiveStages } from "./useLiveStages";
+import { formatClock } from "@/lib/formatDuration";
 
 /**
  * LiveAnswerStrip — the in-list placeholder for the answer in flight,
  * pinned at the TOP of the answer list (the mock's live strip). Shows a
- * status bar (progress), STAGE n/5, and the originating question, so the
- * user sees WHERE the answer will land. The finished answer replaces it
- * as a normal row at the top when composing completes.
+ * status bar (progress), STAGE n/5, the elapsed time (m:ss), and the
+ * originating question, so the user sees WHERE the answer will land and
+ * that it is still running. The finished answer replaces it as a normal
+ * row at the top when composing completes.
  *
  * Renders nothing when idle. Pending artifacts are suppressed from the
  * list rows while this is showing — this strip IS their placeholder.
  */
 export function LiveAnswerStrip() {
-  const { active, currentIndex, currentLabel, question, progress, total } =
+  const { active, currentIndex, currentLabel, elapsedMs, question, progress, total } =
     useLiveStages();
 
   if (!active) return null;
@@ -23,6 +25,16 @@ export function LiveAnswerStrip() {
         <Loader2 className="w-3 h-3 text-neon-blue animate-spin flex-shrink-0" />
         <span className="text-[10px] font-mono text-slate-200 truncate">
           {currentLabel}
+        </span>
+        {/* How long the answer has been running, on useLiveStages' clock. Without it a stalled
+            answer was a spinner and nothing else (sandbox, 2026-11-27: five minutes at "Locating
+            the subject"). Elapsed only: "longer than usual" needs a served expected_ms, and cortex
+            never infers one (architect, 2026-11-27). */}
+        <span
+          className="text-[10px] font-mono text-slate-400 tabular-nums flex-shrink-0"
+          data-live-elapsed
+        >
+          · {formatClock(elapsedMs)}
         </span>
         <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-neon-blue/70 tabular-nums flex-shrink-0">
           Stage {currentIndex + 1}/{total}

@@ -38,3 +38,21 @@ export function artifactDuration(duration_ms: number | null | undefined): string
   if (!Number.isFinite(duration_ms) || duration_ms < 0) return null;
   return formatDuration(duration_ms);
 }
+
+/**
+ * A running time as m:ss ("0:42", "2:10", "15:00"), for a clock that is still counting.
+ *
+ * The stalled-answer wording the architect approved on 2026-11-27 reads times as m:ss, so the
+ * answers-panel strip and the lines that will compare it with the producer's expected time all
+ * speak one form. Whole seconds only: a clock that ticks tenths reads as busier than the answer is.
+ * Minutes do not roll into hours; the server stops waiting at 15:00.
+ *
+ * Not `formatDuration`: that one is a finished measurement in a list ("42s", "2m 10s"), and the
+ * capsule above the prompt still uses it. The two strips reading differently is filed, not fixed.
+ */
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
