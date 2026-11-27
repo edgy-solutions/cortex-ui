@@ -1,3 +1,4 @@
+import { signInLine } from "@/auth/authGate";
 import { boundSlotsBody } from "@/api/boundSlots";
 import { answeringArtifactBody } from "@/api/answeringArtifact";
 import { drawnLineageClaim } from "@/lib/drawnLineage";
@@ -695,7 +696,7 @@ export function useInterviewAgent() {
           .json()
           .then((b: { detail?: unknown }) => b?.detail, () => undefined)
           .then((detail) => {
-            if (msgId) updateMessage(msgId, { isStreaming: false, error: refusalFromDetail(status, detail).reason });
+            if (msgId) updateMessage(msgId, { isStreaming: false, error: signInLine(error) ?? refusalFromDetail(status, detail).reason });
           });
       }
       // Mark the message as failed with a specific error

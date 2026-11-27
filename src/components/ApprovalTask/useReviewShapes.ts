@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { fetchReviewShapes } from "@/lib/ingestTransport";
 import { readReviewShapes, type ShapeRow } from "@/lib/reviewShapes";
+import { signInLine } from "@/auth/authGate";
 
 export type ReviewShapesState =
   | { phase: "loading" }
@@ -15,6 +16,8 @@ export type ReviewShapesState =
 
 /** The sentence for a failed fetch (`reviewRouteFailure` names only the extraction and source routes). */
 function failure(err: unknown): string {
+  const signIn = signInLine(err);
+  if (signIn !== null) return signIn;
   const res = typeof err === "object" && err !== null ? (err as { response?: { status?: unknown } }).response : undefined;
   const status = res && typeof res.status === "number" ? res.status : null;
   return status !== null

@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE } from "@/auth/authGate";
 import { CheckCircle2, XCircle, ClipboardCheck } from "lucide-react";
 import type { TaskState } from "@/api/types";
 import { formatRequestedBy } from "@/lib/requestedBy";
@@ -208,8 +209,8 @@ function DocumentReviewGate({ task, review }: { task: ApprovalTaskPayload; revie
 /** The one line that says the section review card was not drawn, and why. */
 function DocumentCardRefused({ why }: { why: string }) {
   return (
-    <p className="text-[11px] font-mono text-amber-400/90" data-document-card-refused>
-      The section review card is not drawn: {why}
+    <p className="text-[11px] font-mono text-amber-400/90" data-document-card-refused {...(why === SIGN_IN_LINE ? { "data-signin": "" } : {})}>
+      {why === SIGN_IN_LINE ? why : `The section review card is not drawn: ${why}`}
     </p>
   );
 }

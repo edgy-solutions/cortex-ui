@@ -1,6 +1,7 @@
 import { readRuntimeConfig } from "@/config";
 import type { HeaderEdit, RowEdits } from "@/api/client";
 import { HeaderEdit_field } from "@/api/generated/bff";
+import { signInLine } from "@/auth/authGate";
 
 /**
  * Grouped-review ROW EDITS (delete / add / correct an MPN) and the Reject control.
@@ -149,6 +150,8 @@ const str = (v: unknown): v is string => typeof v === "string" && v.trim() !== "
  * Returns null for anything else, so the caller keeps its status-specific lines.
  */
 export function actRefusal(err: unknown): ActRefusal | null {
+  const signIn = signInLine(err);
+  if (signIn !== null) return { title: signIn };
   const resp = (err as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response;
   const detail = resp?.data?.detail;
   if (Array.isArray(detail)) {
@@ -184,6 +187,8 @@ export function actRefusal(err: unknown): ActRefusal | null {
 
 /** The last resort, which still names what happened: the HTTP status, or that no answer came. */
 export function actFailureFallback(verb: "Resolve" | "Reject", err: unknown): string {
+  const signIn = signInLine(err);
+  if (signIn !== null) return signIn;
   const status = (err as { response?: { status?: number } } | null)?.response?.status;
   if (typeof status === "number") return `${verb} failed (HTTP ${status})`;
   const msg = (err as { message?: unknown } | null)?.message;

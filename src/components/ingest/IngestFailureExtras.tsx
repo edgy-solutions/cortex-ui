@@ -1,3 +1,4 @@
+import { signInAttr } from "@/auth/authGate";
 /**
  * IngestFailureExtras — what a drop's `failure` adds beside its reason line, shared by the rail
  * entry (AnswersPanel) and IngestStatusCard so the two cannot drift:
@@ -79,7 +80,7 @@ export function IngestFailureExtras({ stage, ingestId, reasonCode, attempt, retr
         </p>
       )}
       {message !== null && (
-        <p className="text-[10px] font-mono text-amber-400 leading-snug mt-0.5" role="alert" data-ingest-retry-message>
+        <p className="text-[10px] font-mono text-amber-400 leading-snug mt-0.5" role="alert" data-ingest-retry-message {...signInAttr(message)}>
           {message}
         </p>
       )}

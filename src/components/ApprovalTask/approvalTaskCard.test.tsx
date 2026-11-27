@@ -58,6 +58,7 @@ import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
 import { fixtureDocumentReviewPayload } from "@/lib/documentReviewFixture";
 import { fixturePromotionPayload } from "@/lib/promotionReviewFixture";
 import { StructuralRefusalDetail_error } from "@/api/generated/bff";
+import { SignInRequiredError, SIGN_IN_LINE } from "@/auth/authGate";
 
 // The kinds these tests treat as served-declared (their own list, NOT cortex's display table: 2026-10-30 the
 // card no longer reads that table). A declared kind is handed the declaration the server would serve for it: with none, the card fails closed
@@ -1387,6 +1388,14 @@ describe("the document card is chosen from the served review-shape list", () => 
     expect(q("[data-document-card-refused]")!.textContent).toBe("The section review card is not drawn: The review shapes could not be loaded (503).");
     expect(q("[data-document-review]")).toBeNull();
     expect(q("[data-verb]")).not.toBeNull();
+  });
+
+  it("a 401 on the shapes fetch: the refusal is the sign-in sentence alone, never a status", async () => {
+    fetchReviewShapes.mockRejectedValue(new SignInRequiredError(401));
+    render(<ApprovalTaskCard task={docTask()} />);
+    await waitFor(() => expect(q("[data-document-card-refused]")).not.toBeNull());
+    expect(q("[data-document-card-refused]")!.textContent).toBe(SIGN_IN_LINE);
+    expect(q("[data-document-card-refused]")!.hasAttribute("data-signin")).toBe(true);
   });
 
   it("a document payload that also names ingest_id, with no row, falls to the promotion card", async () => {

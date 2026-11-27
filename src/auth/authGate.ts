@@ -31,6 +31,27 @@ export function isSignInRequired(err: unknown): err is SignInRequiredError {
   return err instanceof SignInRequiredError;
 }
 
+/** The one sentence a person reads when their sign-in lapsed (the message of every SignInRequiredError). */
+export const SIGN_IN_LINE = new SignInRequiredError().message;
+
+/**
+ * The sign-in sentence for a failed call, or null when the failure is anything else. A site that builds a line from a
+ * failed call to an authenticated route asks this FIRST: a 401 is the person being sent to sign in, never "Refused (401)".
+ * True for a SignInRequiredError (what the transports throw), a bare 401 `Response` and an axios-style
+ * `response.status === 401`. A raw-fetch site also calls `onUnauthorized()` once (idempotent) before it shows the line.
+ */
+export function signInLine(err: unknown): string | null {
+  if (isSignInRequired(err)) return err.message;
+  if (typeof Response !== "undefined" && err instanceof Response) return err.status === 401 ? SIGN_IN_LINE : null;
+  const status = (err as { response?: { status?: unknown } } | null | undefined)?.response?.status;
+  return status === 401 ? SIGN_IN_LINE : null;
+}
+
+/** The `data-signin` marker for a rendered line: present exactly when the line is the sign-in sentence. */
+export function signInAttr(line: string | null | undefined): { "data-signin"?: "" } {
+  return line === SIGN_IN_LINE ? { "data-signin": "" } : {};
+}
+
 type User = { access_token?: string } | null | undefined;
 
 let starter: (() => Promise<unknown>) | null = null;

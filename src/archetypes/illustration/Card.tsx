@@ -1,3 +1,4 @@
+import { signInAttr, signInLine } from "@/auth/authGate";
 import { useEffect, useRef, useState } from "react";
 import { fetchIllustrationContent } from "@/api/client";
 import { gatewayRelativePath } from "@/lib/illustrationPath";
@@ -112,6 +113,7 @@ export function Illustration({ illustration }: IllustrationProps) {
   const [sanitized, setSanitized] = useState<SanitizedSvg | null>(null);
   const [hotspot, setHotspot] = useState<HotspotResult | null>(null);
   const [fetchStatus, setFetchStatus] = useState<number | null>(null);
+  const [signIn, setSignIn] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -121,6 +123,7 @@ export function Illustration({ illustration }: IllustrationProps) {
     setSanitized(null);
     setHotspot(null);
     setFetchStatus(null);
+    setSignIn(null);
 
     fetchIllustrationContent(contentPath)
       .then((text) => {
@@ -137,7 +140,9 @@ export function Illustration({ illustration }: IllustrationProps) {
       .catch((err: unknown) => {
         if (cancelled) return;
         const status = (err as { response?: { status?: number } } | null)?.response?.status;
-        setFetchStatus(typeof status === "number" ? status : null);
+        const line = signInLine(err);
+        setSignIn(line);
+        setFetchStatus(line === null && typeof status === "number" ? status : null);
         setPhase("fetch-failed");
       });
 
@@ -189,7 +194,9 @@ export function Illustration({ illustration }: IllustrationProps) {
       break;
     case "fetch-failed":
       stateText =
-        fetchStatus !== null
+        signIn !== null
+          ? signIn
+          : fetchStatus !== null
           ? `Failed to fetch ${icn}'s content (HTTP ${fetchStatus}).`
           : `Failed to fetch ${icn}'s content.`;
       break;
@@ -220,7 +227,11 @@ export function Illustration({ illustration }: IllustrationProps) {
         )}
       </div>
 
-      {stateText && <p className="font-mono text-[10px] text-slate-400">{stateText}</p>}
+      {stateText && (
+        <p className="font-mono text-[10px] text-slate-400" {...signInAttr(state === "fetch-failed" ? stateText : null)}>
+          {stateText}
+        </p>
+      )}
 
       {state === "drawn" && (
         <>

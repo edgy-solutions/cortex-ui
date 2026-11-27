@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE, signInAttr } from "@/auth/authGate";
 /**
  * FiguresSlideIn — figure-view panel triggered from a Source card click.
  *
@@ -145,8 +146,8 @@ export function FiguresSlideIn({ sourceUri, sourceLabel, onClose }: Props) {
               )}
               {error && (
                 <div className="rounded-md border border-rose-500/40 bg-rose-500/5 p-3">
-                  <p className="text-xs font-mono text-rose-300">
-                    Could not load figures: {error}
+                  <p className="text-xs font-mono text-rose-300" {...signInAttr(error)}>
+                    {error === SIGN_IN_LINE ? error : `Could not load figures: ${error}`}
                   </p>
                 </div>
               )}

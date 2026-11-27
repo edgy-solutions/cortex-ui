@@ -1,3 +1,4 @@
+import { signInLine } from "@/auth/authGate";
 /**
  * useIngestStatusStore — the ONE poller for `GET /ingest/{id}/status`.
  *
@@ -215,7 +216,7 @@ export const useIngestStatusStore = create<State>()((set, get) => ({
         return { ok: false, message: "It moved since it was read — refreshed." };
       }
       if (refusal?.status === 403) return { ok: false, message: "This drop can’t be retried from here." };
-      return { ok: false, message: readIngestErrorMessage(err) ?? "Retry failed." };
+      return { ok: false, message: signInLine(err) ?? readIngestErrorMessage(err) ?? "Retry failed." };
     }
   },
   reset: () => {

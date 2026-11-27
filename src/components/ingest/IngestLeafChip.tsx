@@ -1,3 +1,4 @@
+import { signInAttr, signInLine } from "@/auth/authGate";
 /**
  * IngestLeafChip — which LEAF (PCN or PDN) a drop was read as, and who said so.
  *
@@ -113,7 +114,7 @@ export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedB
       if (parsed) onRow?.(parsed);
       setOpen(false);
     } catch (err) {
-      setError(readActRefusal(err)?.message ?? readIngestErrorMessage(err) ?? "Change failed.");
+      setError(signInLine(err) ?? readActRefusal(err)?.message ?? readIngestErrorMessage(err) ?? "Change failed.");
     } finally {
       setPosting(false);
     }
@@ -200,7 +201,7 @@ export function LeafChip({ ingestId, stage, leaf, leafSource: source, correctedB
         </div>
       )}
       {error && (
-        <p className="text-[10px] font-mono text-rose-400" role="alert" data-leaf-error>
+        <p className="text-[10px] font-mono text-rose-400" role="alert" data-leaf-error {...signInAttr(error)}>
           {error}
         </p>
       )}

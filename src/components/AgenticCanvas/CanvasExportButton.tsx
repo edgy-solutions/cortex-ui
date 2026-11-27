@@ -1,3 +1,4 @@
+import { signInAttr, signInLine } from "@/auth/authGate";
 import { useCallback, useState } from "react";
 import axios from "axios";
 import { Download } from "lucide-react";
@@ -112,8 +113,8 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
         setRecipients(await fetchExportRecipients());
       }
       setLoadedFor(boardKey);
-    } catch {
-      setErrorText("Could not load recipients.");
+    } catch (err) {
+      setErrorText(signInLine(err) ?? "Could not load recipients.");
     } finally {
       setLoadingRecipients(false);
     }
@@ -135,7 +136,10 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
       }
       setExportRow(row);
     } catch (err) {
-      if (axios.isAxiosError(err)) {
+      const signIn = signInLine(err);
+      if (signIn !== null) {
+        setErrorText(signIn);
+      } else if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;
         const status = err.response?.status;
         // `readRecipientRequired` is `null` on a malformed 409 (the reason present but garbage
@@ -176,8 +180,8 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
     try {
       const blob = await downloadExportArtifact(link.href);
       saveBlob(blob, link.filename ?? "export");
-    } catch {
-      setErrorText("Download failed.");
+    } catch (err) {
+      setErrorText(signInLine(err) ?? "Download failed.");
     } finally {
       setDownloading(null);
     }
@@ -307,7 +311,7 @@ export function CanvasExportButton({ board }: CanvasExportButtonProps) {
           )}
 
           {errorText && (
-            <div data-export-error className="text-[9px] font-mono text-rose-400 mb-2">
+            <div data-export-error {...signInAttr(errorText)} className="text-[9px] font-mono text-rose-400 mb-2">
               {errorText}
             </div>
           )}

@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE } from "@/auth/authGate";
 import { useEffect, useImperativeHandle, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import { PageNavigator } from "./PageNavigator";
 import { fetchIngestSource } from "@/lib/ingestTransport";
@@ -352,8 +353,8 @@ export function PdfEvidencePane({
         data-pdf-scroller
       >
         {state.phase === "failed" ? (
-          <p className="p-4 text-[11px] text-slate-700" role="alert" data-pdf-failed>
-            {state.why} The rows on the left are still the extraction to vet.
+          <p className="p-4 text-[11px] text-slate-700" role="alert" data-pdf-failed {...(state.why === SIGN_IN_LINE ? { "data-signin": "" } : {})}>
+            {state.why === SIGN_IN_LINE ? state.why : `${state.why} The rows on the left are still the extraction to vet.`}
           </p>
         ) : state.phase === "loading" ? (
           <p className="p-4 text-[11px] text-slate-500">loading source…</p>

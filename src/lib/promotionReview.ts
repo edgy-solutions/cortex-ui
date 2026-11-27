@@ -57,6 +57,7 @@ import type { Bbox, PageDims } from "./bboxScale";
 import { FRACTION_PAGE, isFractionBox } from "./evidenceRef";
 import { HumanTaskActRequest_reason_code, Notice_mfr_source } from "../api/generated/bff";
 import { readCorrectedBy, readLeafSource, type IngestLeafSource } from "./ingestWire";
+import { signInLine } from "../auth/authGate";
 
 export interface EvidenceRef {
   /** 1-based page number in the source PDF. */
@@ -464,6 +465,8 @@ function errorBody(data: unknown): unknown {
  * is shown after the code when it sent one.
  */
 export function reviewRouteFailure(err: unknown, route: "extraction" | "source"): string {
+  const signIn = signInLine(err);
+  if (signIn !== null) return signIn;
   const res = isObj(err) && isObj(err.response) ? err.response : null;
   const status = res && typeof res.status === "number" ? res.status : null;
   const body = res ? errorBody(res.data) : null;

@@ -1,3 +1,4 @@
+import { signInAttr } from "@/auth/authGate";
 /**
  * "What can I ask?" — the list the server serves at `GET /askable_measures` (#525), drawn on the ask bar.
  * Cortex lists nothing of its own and never filters by cells; the words here are generic on purpose.
@@ -129,7 +130,7 @@ function PanelBody({
   // A refusal the server SAID: its words, never an empty list.
   if (d.kind === "refused") {
     return (
-      <div data-askable-state="refused" data-askable-refusal-code={d.refusal.code ?? ""} className="text-amber-400 text-xs">
+      <div data-askable-state="refused" data-askable-refusal-code={d.refusal.code ?? ""} {...signInAttr(d.refusal.reason)} className="text-amber-400 text-xs">
         {d.refusal.reason}
       </div>
     );

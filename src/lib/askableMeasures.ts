@@ -1,3 +1,4 @@
+import { signInLine } from "@/auth/authGate";
 /**
  * Reader for `GET /askable_measures` (invincible-agent #525, merged ba70c92a). Plan:
  * `invincible-agent/sessions/2026-11-22-plan-to-architect-cc-lane-fin-lane-74-lane-01-from-cortex-how-a-served-measure-list-appears.md`.
@@ -113,6 +114,9 @@ export function groupRows(rows: AskableRow[]): { label: string | null; rows: Ask
  * Null when the error carries no HTTP response (unreachable), which is not a refusal.
  */
 export function readAskableRefusal(err: unknown): AskableRefusal | null {
+  // A 401 is the person being sent to sign in: the sentence is the reason, never "The server refused this (401)".
+  const signIn = signInLine(err);
+  if (signIn !== null) return { status: 401, code: null, reason: signIn };
   const r = isObj(err) && isObj(err.response) ? err.response : null;
   if (!r || typeof r.status !== "number") return null;
   const served = servedRefusal(r.status, isObj(r.data) ? r.data.detail : undefined);

@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE } from "@/auth/authGate";
 import { useEffect, useRef, useState } from "react";
 import { readDeepLink } from "@/lib/deepLink";
 import { fetchCase, type FetchCaseResult } from "@/lib/cases";
@@ -201,6 +202,13 @@ function CaseBody({ caseId, result }: { caseId: string; result: FetchCaseResult 
           artifactId={undefined}
         />
       </div>
+    );
+  }
+  if (result.reason === "sign_in_required") {
+    return (
+      <p className="font-mono text-[11px] text-amber-400" data-case-link="signin" data-signin>
+        {SIGN_IN_LINE}
+      </p>
     );
   }
   if (result.reason === "not_found") {

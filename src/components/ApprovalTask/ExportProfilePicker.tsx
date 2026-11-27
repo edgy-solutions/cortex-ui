@@ -1,4 +1,4 @@
-import { isSignInRequired } from "@/auth/authGate";
+import { signInLine } from "@/auth/authGate";
 import { profileLabel, refusalCode, type ExportProfile } from "@/lib/reviewExport";
 
 /** One toggle button per SERVED profile, in served order. Nothing is hard-coded here. */
@@ -37,7 +37,7 @@ export type ExportFailure = { kind: "signin" } | { kind: "refused"; status: numb
 
 /** A refusal (the server answered with a status) is `refused`; anything else is `failed`. */
 export function classifyExportError(err: unknown): ExportFailure {
-  if (isSignInRequired(err)) return { kind: "signin" };
+  if (signInLine(err) !== null) return { kind: "signin" };
   const { status, code } = refusalCode(err);
   if (status !== null) return { kind: "refused", status, code };
   return { kind: "failed", message: err instanceof Error ? err.message : "export failed" };

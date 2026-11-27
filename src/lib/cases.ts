@@ -8,6 +8,7 @@
  * OUTCOMES (`fetchCase`), the whole closed set:
  *   200 + a body `readWorkflowCasePayload` accepts  → `{ ok: true, payload }`
  *   200 + a body it refuses                         → `{ ok: false, reason: "invalid_case_payload", detail }`
+ *   401 / a SignInRequiredError                     → `{ ok: false, reason: "sign_in_required" }`
  *   404                                             → `{ ok: false, reason: "not_found" }`
  *   503                                             → `{ ok: false, reason: "runner_unavailable" }`
  *   anything else (or a transport failure)          → `{ ok: false, reason: "http_<status>" }`
@@ -26,9 +27,10 @@
  * is therefore a structural guard over exactly what the card dereferences — not a new schema.
  */
 import { fetchCaseResponse } from "@/api/client";
+import { onUnauthorized, signInLine } from "@/auth/authGate";
 import type { WorkflowCasePayload } from "@/archetypes/workflow-case/contract";
 
-export type CaseFailureReason = "invalid_case_payload" | "not_found" | "runner_unavailable" | `http_${number}`;
+export type CaseFailureReason = "invalid_case_payload" | "sign_in_required" | "not_found" | "runner_unavailable" | `http_${number}`;
 
 export type FetchCaseResult =
   | { ok: true; payload: WorkflowCasePayload }
@@ -118,10 +120,17 @@ export async function fetchCase(caseId: string): Promise<FetchCaseResult> {
   let resp: Response;
   try {
     resp = await fetchCaseResponse(caseId);
-  } catch {
+  } catch (err) {
+    // A sign-in lapse is not "no response": the person is being sent to sign in (the transport started it).
+    if (signInLine(err) !== null) return { ok: false, reason: "sign_in_required" };
     // The request never produced a status. There is no `http_<status>` to name, and inventing
     // one would be a claim about the wire — `http_0` is the browser's own spelling of "no response".
     return { ok: false, reason: "http_0" };
+  }
+  // A bare 401 Response (the gate was not active when it was sent): start sign-in once and say so, never `http_401`.
+  if (resp.status === 401) {
+    onUnauthorized();
+    return { ok: false, reason: "sign_in_required" };
   }
   if (resp.status === 404) return { ok: false, reason: "not_found" };
   if (resp.status === 503) return { ok: false, reason: "runner_unavailable" };

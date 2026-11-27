@@ -986,6 +986,19 @@ describe("what a composer turn posts — the defaulted lineage claim", () => {
     expect(agentMsg().error).not.toBe("NETWORK_OR_BACKEND_UNREACHABLE");
   });
 
+  it("a pick that is answered 401 shows the sign-in sentence, not 'the server refused this (401)' (2026-11-26)", async () => {
+    const r = mount();
+    await act(async () => {
+      r.result.current.sendAsk("Row", { verb: "v", bindings: {} });
+      await flush();
+    });
+    await act(async () => {
+      transport.settle!.reject(new Response(JSON.stringify({ detail: "Not authenticated" }), { status: 401 }));
+      await flush();
+    });
+    await waitFor(() => expect(agentMsg().error).toBe("Your sign-in expired — signing you in again."));
+  });
+
   it("an ordinary question refused the same way keeps the generic unreachable text", async () => {
     const r = mount();
     await startTurn(r);

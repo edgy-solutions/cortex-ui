@@ -155,11 +155,14 @@ describe("DeepLinkLanding /case", () => {
     [{ ok: false, reason: "not_found" }, "absent", "No case case-1 that you can see."],
     [{ ok: false, reason: "runner_unavailable" }, "unavailable", "The case service is unavailable. Try the link again shortly."],
     [{ ok: false, reason: "http_500" }, "error", "Could not read case case-1 (http_500)."],
+    [{ ok: false, reason: "sign_in_required" }, "signin", "Your sign-in expired — signing you in again."],
   ])("e: %j", async (res, attr, text) => {
     fetchCase.mockResolvedValue(res);
     await land();
     const el = document.querySelector(`[data-case-link="${attr}"]`);
     expect(el?.textContent).toBe(text);
+    // only the sign-in line carries the marker
+    expect(el?.hasAttribute("data-signin")).toBe(attr === "signin");
   });
 });
 

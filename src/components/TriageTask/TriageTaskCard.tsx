@@ -8,6 +8,7 @@ import { markTaskResolvedByTaskId } from "@/lib/useTaskArtifactSync";
 import { WarningLines } from "@/components/ExtractionWarning/WarningLines";
 import { boundWarnings } from "@/lib/boundedWarning";
 import { formatRequestedBy } from "@/lib/requestedBy";
+import { signInLine } from "@/auth/authGate";
 
 /**
  * TRIAGE_TASK archetype — a notice the pipeline could NOT prepare for review.
@@ -97,6 +98,11 @@ export function TriageTaskCard({ task }: { task: TriageTaskPayload }) {
         decision === "acknowledged" ? "Acknowledged" : "Re-drive requested — re-extraction will re-fire the review"
       );
     } catch (err) {
+      const signIn = signInLine(err);
+      if (signIn !== null) {
+        toast.error(signIn);
+        return;
+      }
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(
         status === 403

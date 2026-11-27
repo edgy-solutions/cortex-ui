@@ -9,6 +9,7 @@ import { StructuralRefusalDetail_error } from "@/api/generated/bff";
 import { readTaskDeclaration, verbLabel, audienceKindContradiction, offeredVerbs } from "@/lib/taskDeclaration";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
+import { signInLine } from "@/auth/authGate";
 import type { ApprovalTaskPayload } from "./ApprovalTaskCard";
 
 /**
@@ -177,6 +178,12 @@ export function useTaskAct(task: ApprovalTaskPayload) {
         (resumed ? verbLabel(decision) : `Recorded: ${verbLabel(decision)} — workflow not resumed`) + filed,
       );
     } catch (err) {
+      // A 401 is the person being sent to sign in, not a refusal of this task.
+      const signIn = signInLine(err);
+      if (signIn !== null) {
+        toast.error(signIn);
+        return;
+      }
       const res = (err as { response?: { status?: number; data?: unknown } })?.response;
       const status = res?.status;
       // THE REFUSAL CARRIES THE MENU. 422 `invalid_decision_for_kind` names the verbs this

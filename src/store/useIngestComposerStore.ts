@@ -1,3 +1,4 @@
+import { signInLine } from "@/auth/authGate";
 /**
  * useIngestComposerStore — "the drop is the prompt" (architect ruling 2026-10-09).
  *
@@ -174,8 +175,10 @@ export const useIngestComposerStore = create<State>()((set, get) => ({
     } catch (err) {
       // 4xx with a readable body is the producer REFUSING the drop (400 kind_unregistered /
       // content_kind_required, 403, 413, 422): drawn as a refusal on the rail entry.
-      const refusal = readIngestRefusal(err);
-      if (refusal) patch({ phase: "refused", error: refusal.message, refusal });
+      const signIn = signInLine(err);
+      const refusal = signIn === null ? readIngestRefusal(err) : null;
+      if (signIn !== null) patch({ phase: "error", error: signIn });
+      else if (refusal) patch({ phase: "refused", error: refusal.message, refusal });
       else patch({ phase: "error", error: readIngestErrorMessage(err) ?? "Upload failed." });
     }
   },

@@ -70,13 +70,21 @@ describe("a response is an answer, whatever its status", () => {
   });
 
   it("another status is neither, and carries the status", async () => {
-    // 401 and 500 are different problems, and a caller that flattened them into "no endpoint"
+    // 403 and 500 are different problems, and a caller that flattened them into "no endpoint"
     // would send somebody to roll a backend over an auth failure.
     const fetchBffVersion = await load();
-    for (const status of [401, 403, 500, 503]) {
+    for (const status of [403, 500, 503]) {
       get.mockRejectedValue(httpError(status));
       expect(await fetchBffVersion()).toEqual({ kind: "error", status });
     }
+  });
+
+  it("a 401 is the expired sign-in, never a status line", async () => {
+    // The stamp must not print "HTTP 401" while the sign-in redirect is landing; it reads the
+    // same sentence every other card does. 403 stays an error (the arm above).
+    const fetchBffVersion = await load();
+    get.mockRejectedValue(httpError(401));
+    expect(await fetchBffVersion()).toEqual({ kind: "signin" });
   });
 
   it("a plain throw with no shape is unreachable, not a silent success", async () => {

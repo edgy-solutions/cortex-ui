@@ -18,6 +18,7 @@ vi.mock("@/api/client", () => ({
 import { CanvasExportButton } from "./CanvasExportButton";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { TASK_ARTIFACT_PREFIX } from "@/lib/taskArtifact";
+import { SignInRequiredError } from "@/auth/authGate";
 
 const FLAG_KEY = "cortex.canvasExport";
 const GOOD_SHA = "sha256:" + "b".repeat(64);
@@ -821,5 +822,63 @@ describe("export offer (POST /export/package/recipients)", () => {
       answers: [{ artifact_id: "a1" }, { artifact_id: "a2" }, { artifact_id: "a3" }],
       recipient_scope: "GAMMA",
     });
+  });
+});
+
+describe("a 401 reads as sign-in, not as a failed export (2026-11-26)", () => {
+  const SENTENCE = "Your sign-in expired — signing you in again.";
+  const errorEl = () => document.querySelector("[data-export-error]");
+  beforeEach(() => window.localStorage.setItem(FLAG_KEY, "1"));
+
+  it("a start the interceptor rejects with SignInRequiredError shows the sentence with data-signin", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockRejectedValue(new SignInRequiredError(401));
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(errorEl()?.textContent).toBe(SENTENCE));
+    expect(errorEl()?.hasAttribute("data-signin")).toBe(true);
+  });
+
+  it("a bare axios 401 on start is the same sentence", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockRejectedValue(axiosError(401, "Not authenticated"));
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(errorEl()?.textContent).toBe(SENTENCE));
+  });
+
+  it("a recipients load that is 401 says so instead of 'Could not load recipients.'", async () => {
+    offerExportRecipients.mockRejectedValue(new SignInRequiredError(401));
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
+    fireEvent.click(document.querySelector("[data-canvas-export]")!);
+    await waitFor(() => expect(errorEl()?.textContent).toBe(SENTENCE));
+    expect(errorEl()?.hasAttribute("data-signin")).toBe(true);
+  });
+
+  it("a 403 on start keeps its words and carries no sign-in marker", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockRejectedValue(axiosError(403, { reason: "not_a_recipient_you_may_export_to", recipient_scope: "legal" }));
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(errorEl()?.textContent).toContain("legal"));
+    expect(errorEl()?.hasAttribute("data-signin")).toBe(false);
+  });
+
+  it("a download that is 401 says so instead of 'Download failed.'", async () => {
+    fetchExportRecipients.mockResolvedValue([{ value: "legal", label: "Legal" }]);
+    startCanvasExport.mockResolvedValue({
+      export_id: GOOD_SHA, status: "exists", recipient_scope: "legal",
+      artifact_uri: GOOD_URI, artifact_sha256: GOOD_SHA, artifact_filename: "legal.zip",
+    });
+    downloadExportArtifact.mockRejectedValue(new SignInRequiredError(401));
+    render(<CanvasExportButton board={useCanvasStore.getState().artifacts} />);
+    await openAndPickLegal();
+    fireEvent.click(screen.getByText("Start export"));
+    await waitFor(() => expect(document.querySelector("[data-export-artifact]")).not.toBeNull());
+    fireEvent.click(document.querySelector("[data-export-artifact]")!);
+    await waitFor(() => expect(errorEl()?.textContent).toBe(SENTENCE));
   });
 });

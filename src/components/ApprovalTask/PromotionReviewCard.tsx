@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE } from "@/auth/authGate";
 import { scrollWithinPane } from "@/lib/scrollWithinPane";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCircle2, XCircle, FileSearch } from "lucide-react";
@@ -943,8 +944,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
             </p>
           )}
           {extraction.phase === "failed" && (
-            <p className="px-2 py-3 text-[11px] text-amber-400/90" role="alert" data-extraction-failed>
-              {extraction.why} There are no rows to vet against the source.
+            <p className="px-2 py-3 text-[11px] text-amber-400/90" role="alert" data-extraction-failed {...(extraction.why === SIGN_IN_LINE ? { "data-signin": "" } : {})}>
+              {extraction.why === SIGN_IN_LINE ? extraction.why : `${extraction.why} There are no rows to vet against the source.`}
             </p>
           )}
           {ex && ex.rows.length === 0 && (
@@ -1228,8 +1229,8 @@ export function PromotionReviewCard({ task, ingestId }: { task: ApprovalTaskPayl
               </p>
             )}
             {runsOn && coverageUnsent !== null && (
-              <p className="text-[10px] font-mono text-slate-500" data-coverage-unsent>
-                Coverage is not sent: {coverageUnsent}
+              <p className="text-[10px] font-mono text-slate-500" data-coverage-unsent {...(coverageUnsent === SIGN_IN_LINE ? { "data-signin": "" } : {})}>
+                {coverageUnsent === SIGN_IN_LINE ? coverageUnsent : `Coverage is not sent: ${coverageUnsent}`}
               </p>
             )}
             {runsOn && plan && record && (

@@ -1,3 +1,4 @@
+import { signInLine } from "@/auth/authGate";
 import { useEffect, useState } from 'react';
 import { X, Database } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
@@ -39,7 +40,8 @@ export const NodeInspector = () => {
       .catch((err) => {
         if (isMounted) {
           console.error("Failed to fetch graph node:", err);
-          setNodeData({ error: "Failed to connect to backend", details: String(err) });
+          const signIn = signInLine(err);
+          setNodeData(signIn !== null ? { error: signIn } : { error: "Failed to connect to backend", details: String(err) });
           setIsLoading(false);
         }
       });

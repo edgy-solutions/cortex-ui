@@ -9,6 +9,7 @@ import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { readTaskDeclaration } from "@/lib/taskDeclaration";
 import { promotionIngestId, INGEST_STAGES, type IngestStatusRow } from "@/lib/ingestWire";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
+import { SignInRequiredError } from "@/auth/authGate";
 
 const fetchIngestStatus = vi.fn();
 const retryIngest = vi.fn();
@@ -398,5 +399,37 @@ describe("out-of-band document statuses (defect: the card froze at extracting)",
   it("awaiting_kind draws its waiting line", () => {
     render(<SeededCard ingestId={INGEST_ID} seed={row({ stage: "awaiting_kind" })} />);
     expect(document.querySelector('[data-ingest-awaiting="awaiting_kind"]')?.textContent).toBe("Waiting for its kind — pick PCN or PDN");
+  });
+});
+
+describe("an act that is 401 reads as sign-in, not 'Refused' (2026-11-26)", () => {
+  const SENTENCE = "Your sign-in expired — signing you in again.";
+  const press = async (err: unknown) => {
+    actOnHumanTask.mockReset();
+    actOnHumanTask.mockRejectedValue(err);
+    const r = row({ stage: "review" });
+    useHumanTaskStore.setState({ tasks: [promotionTask(r, { taskId: "task-9" })] });
+    render(<SeededCard ingestId={r.ingest_id} seed={r} />);
+    fireEvent.click(document.querySelector('[data-ingest-verb="promoted"]')!);
+    await waitFor(() => expect(document.querySelector("[data-ingest-act-error]")).not.toBeNull());
+    return document.querySelector("[data-ingest-act-error]")!;
+  };
+
+  it("the interceptor's SignInRequiredError draws the sentence with data-signin and no refusal code", async () => {
+    const el = await press(new SignInRequiredError(401));
+    expect(el.textContent).toBe(SENTENCE);
+    expect(el.hasAttribute("data-signin")).toBe(true);
+    expect(el.hasAttribute("data-ingest-act-refusal")).toBe(false);
+  });
+
+  it("an axios 401 is the same sentence", async () => {
+    const el = await press({ response: { status: 401, data: { detail: "Not authenticated" } } });
+    expect(el.textContent).toBe(SENTENCE);
+  });
+
+  it("a 403 refusal still reads Refused (<error>) and carries no sign-in marker", async () => {
+    const el = await press({ response: { status: 403, data: { detail: { error: "not_entitled", task_id: "task-9", message: "no" } } } });
+    expect(el.textContent).toMatch(/Refused \(not_entitled\): no/);
+    expect(el.hasAttribute("data-signin")).toBe(false);
   });
 });

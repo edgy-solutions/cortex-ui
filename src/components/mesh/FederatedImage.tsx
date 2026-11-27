@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE, signInAttr, signInLine } from "@/auth/authGate";
 /**
  * FederatedImage — render an image whose `src` is an `s3://bucket/key`
  * URI (typically emitted by Engine E when a Neo4j node has an attached
@@ -59,6 +60,11 @@ export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, classN
         try {
           blob = await fetchFederatedImage(src);
         } catch (e) {
+          const signIn = signInLine(e);
+          if (signIn !== null) {
+            setError(signIn);
+            return;
+          }
           const status = (e as { response?: { status?: number } })?.response?.status;
           if (typeof status !== "number") throw e;
           setError(status === 403 ? "not entitled" : `bff ${status}`);
@@ -93,8 +99,8 @@ export const FederatedImage: React.FC<FederatedImageProps> = ({ src, alt, classN
         style={{ minHeight: "200px" }}
       >
         <AlertCircle className="w-8 h-8 text-red-500/50 mb-2" />
-        <span className="text-xs font-mono">
-          {error === "not entitled" ? "Not Entitled" : "Image Unavailable"}
+        <span className="text-xs font-mono" {...signInAttr(error)}>
+          {error === SIGN_IN_LINE ? error : error === "not entitled" ? "Not Entitled" : "Image Unavailable"}
         </span>
       </div>
     );

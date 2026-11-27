@@ -5,6 +5,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { IngestLeafChip, LeafChip, leafLabel } from "./IngestLeafChip";
+import { SignInRequiredError } from "@/auth/authGate";
 import { readIngestStatusRow, type IngestStatusRow } from "@/lib/ingestWire";
 
 const correctIngestLeaf = vi.fn();
@@ -281,5 +282,31 @@ describe("IngestLeafChip", () => {
       expect(q('[data-leaf-candidate-show="pcn"]'), "the picker is open again").not.toBeNull();
       expect(q("[data-leaf-crop]"), "a reopened picker shows no crop until one is asked for").toBeNull();
     });
+  });
+});
+
+describe("a leaf change that is 401 reads as sign-in (2026-11-26)", () => {
+  const pickPdn = async () => {
+    render(<IngestLeafChip row={row()} />);
+    fireEvent.click(q('[data-leaf-verb="change"]')!);
+    fireEvent.click(q('[data-leaf-pick="pdn"]')!);
+    await waitFor(() => expect(q("[data-leaf-error]")).not.toBeNull());
+    return q("[data-leaf-error]")!;
+  };
+  it("a SignInRequiredError draws the sentence with data-signin, not 'Change failed.'", async () => {
+    correctIngestLeaf.mockRejectedValue(new SignInRequiredError(401));
+    const el = await pickPdn();
+    expect(el.textContent).toBe("Your sign-in expired — signing you in again.");
+    expect(el.hasAttribute("data-signin")).toBe(true);
+  });
+  it("an axios 401 carrying a served message is still the sentence", async () => {
+    correctIngestLeaf.mockRejectedValue({ response: { status: 401, data: { detail: { error: "x", message: "Not authenticated" } } } });
+    expect((await pickPdn()).textContent).toBe("Your sign-in expired — signing you in again.");
+  });
+  it("a 403 keeps the served message and no marker", async () => {
+    correctIngestLeaf.mockRejectedValue({ response: { status: 403, data: { detail: { error: "x", message: "not yours" } } } });
+    const el = await pickPdn();
+    expect(el.textContent).toBe("not yours");
+    expect(el.hasAttribute("data-signin")).toBe(false);
   });
 });

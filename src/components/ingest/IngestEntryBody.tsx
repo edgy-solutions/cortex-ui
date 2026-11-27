@@ -1,3 +1,4 @@
+import { signInAttr } from "@/auth/authGate";
 /**
  * The opened body of a drop's rail entry (`INGEST` archetype, `src/lib/ingestArtifact.ts`).
  *
@@ -39,7 +40,7 @@ export function IngestEntryBody({ ingest }: { ingest: IngestComponent }) {
         </p>
       )}
       {ingest.error && (
-        <p className="mt-2 text-[10px] font-mono text-rose-400" data-ingest-upload-error>
+        <p className="mt-2 text-[10px] font-mono text-rose-400" data-ingest-upload-error {...signInAttr(ingest.error)}>
           {ingest.error}
         </p>
       )}

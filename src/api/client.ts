@@ -3,7 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { reportForbidden } from "./forbidden";
 import { reportActed } from "./acted";
 import { config } from "@/config";
-import { currentToken, gateActive, onUnauthorized, waitForToken } from "@/auth/authGate";
+import { currentToken, gateActive, onUnauthorized, isSignInRequired, signInLine, SignInRequiredError, waitForToken } from "@/auth/authGate";
 import { CORTEX_UI_FRONTEND_ID } from "@/registry/frontendCapabilities";
 import { isSendFrontendVersionEnabled, loadFrontendVersion } from "@/lib/frontendVersion";
 import type { ItemReviewCoverageWire } from "@/lib/reviewCoverage";
@@ -197,6 +197,8 @@ export async function request<K extends OpKey>(
 
 /** axios throws on non-2xx where fetch did not; callers that showed `${status} ${statusText}` keep that line. */
 function throwStatusLine(e: unknown): never {
+  // A 401 is the person being sent to sign in: the sentence, never "401 Unauthorized".
+  if (signInLine(e) !== null) throw isSignInRequired(e) ? e : new SignInRequiredError(401);
   const r = (e as { response?: { status?: number; statusText?: string } })?.response;
   if (r && typeof r.status === "number") throw new Error(`${r.status} ${r.statusText ?? ""}`.trimEnd());
   throw e;
@@ -950,6 +952,8 @@ export type BffVersionResult =
   /** It answered, and the call failed for some other reason. The status is carried because
    *  401 and 500 are different problems and neither is "no endpoint". */
   | { kind: "error"; status: number }
+  /** A 401: the person is being sent to sign in (the sentence is the sign-in gate's). */
+  | { kind: "signin" }
   /** Nothing came back at all — DNS, connection refused, timeout, offline. */
   | { kind: "unreachable" };
 
@@ -960,6 +964,7 @@ export async function fetchBffVersion(): Promise<BffVersionResult> {
     const data = (await request("GET /fleet/version", {})) as FleetVersionResponse;
     return { kind: "ok", version: data?.self ?? {} };
   } catch (err: unknown) {
+    if (signInLine(err) !== null) return { kind: "signin" };
     const status = (err as { response?: { status?: number } })?.response?.status;
     // NO `response` MEANS NOTHING ANSWERED. With one, the service replied — it is up, and the
     // reply is the finding.

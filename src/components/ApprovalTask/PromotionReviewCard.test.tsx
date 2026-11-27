@@ -57,6 +57,7 @@ import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
 import { useIngestStatusStore } from "@/store/useIngestStatusStore";
 import type { IngestStatusRow } from "@/lib/ingestWire";
+import { SignInRequiredError, SIGN_IN_LINE } from "@/auth/authGate";
 
 const SHA = `sha256:${"5b15f205".padEnd(64, "a")}`;
 const DECL = {
@@ -457,6 +458,15 @@ describe("rows and the source", () => {
     await waitFor(() => expect(document.querySelector('[data-pdf-state="ready"]')).not.toBeNull());
     expect(promoteBtn().disabled).toBe(true);
     expect(rejectBtn().disabled).toBe(false);
+  });
+
+  it("an extraction refused for sign-in (401) is the sign-in sentence alone, with no row tail", async () => {
+    fetchIngestExtraction.mockRejectedValue(new SignInRequiredError(401));
+    render(<ApprovalTaskCard task={task()} />);
+    await waitFor(() => expect(document.querySelector("[data-extraction-failed]")).not.toBeNull());
+    const el = document.querySelector("[data-extraction-failed]")!;
+    expect(el.textContent).toBe(SIGN_IN_LINE);
+    expect(el.hasAttribute("data-signin")).toBe(true);
   });
 
   it("an extraction refused with a code names it (403 not_entitled)", async () => {

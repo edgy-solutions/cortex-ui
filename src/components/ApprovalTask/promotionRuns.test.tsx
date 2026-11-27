@@ -48,6 +48,7 @@ import { REVIEW_SHAPES_FIXTURE } from "@/lib/reviewShapesFixture";
 import { resetReviewShapesCache } from "./useReviewShapes";
 import { useTaskKindStore } from "@/store/useTaskKindStore";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { SignInRequiredError, SIGN_IN_LINE } from "@/auth/authGate";
 
 const SHA = `sha256:${"7c0de".padEnd(64, "b")}`;
 const DIMS = { width: 612, height: 792 };
@@ -573,6 +574,14 @@ describe("no registry row for the extraction: no coverage is sent, and Promote i
     const { unsent, sent } = await promoteWith({ shapes: () => Promise.reject(Object.assign(new Error("boom"), { response: { status: 503 } })) });
     expect(Object.hasOwn(sent, "review_coverage")).toBe(false);
     expect(unsent).toContain("could not be loaded (503)");
+  });
+
+  it("the shapes fetch is a 401: the line is the sign-in sentence alone, no coverage prefix", async () => {
+    fetchReviewShapes.mockImplementation(() => Promise.reject(new SignInRequiredError(401)));
+    await mountRuns();
+    await waitFor(() => expect(q("[data-coverage-unsent]")).not.toBeNull());
+    expect(q("[data-coverage-unsent]")!.textContent).toBe(SIGN_IN_LINE);
+    expect(q("[data-coverage-unsent]")!.hasAttribute("data-signin")).toBe(true);
   });
 
   it("a served row says item_kind section where the extraction says part: no key sent, the line names both", async () => {

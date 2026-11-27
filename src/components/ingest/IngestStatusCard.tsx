@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE, signInAttr, signInLine } from "@/auth/authGate";
 /**
  * IngestStatusCard — one ingest's progress, keyed by `row.ingest_id`.
  *
@@ -116,6 +117,13 @@ function EventCase({ caseId }: { caseId: string }) {
           artifactId={undefined}
         />
       </div>
+    );
+  }
+  if (result.reason === "sign_in_required") {
+    return (
+      <p className="mt-2 text-[11px] font-mono text-amber-400" data-case-state="signin" data-signin>
+        {SIGN_IN_LINE}
+      </p>
     );
   }
   if (result.reason === "not_found") {
@@ -240,6 +248,12 @@ export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: Ing
       // A refusal (e.g. 409 ingest_node_absent, 503 promotion_store_unavailable) is shown; the
       // task is never rendered as done — nothing about `reviewTask` changes here, and there is NO
       // automatic retry: the button stays available, but only for a deliberate press.
+      const signIn = signInLine(err);
+      if (signIn !== null) {
+        setActionError(signIn);
+        setActionErrorCode(null);
+        return;
+      }
       const refusal = readActRefusal(err);
       setActionError(
         refusal ? `Refused (${refusal.error}): ${refusal.message} — ingest ${row.ingest_id}` : "Action failed.",
@@ -366,6 +380,7 @@ export function IngestStatusCard({ ingestId, duplicatePhraseDrawn = false }: Ing
                   role="alert"
                   data-ingest-act-error
                   data-ingest-act-refusal={actionErrorCode ?? undefined}
+                  {...signInAttr(actionError)}
                 >
                   {actionError}
                 </p>

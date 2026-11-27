@@ -1,3 +1,4 @@
+import { SIGN_IN_LINE } from "@/auth/authGate";
 import { useEffect, useState } from "react";
 import { buildVersion, shortSha } from "@/lib/buildVersion";
 import { fetchBffVersion, type BffVersionResult } from "@/api/client";
@@ -56,6 +57,8 @@ export function bffLabel(r: BffVersionResult | null): string {
       // Neither down nor missing: it replied, and the reply was a failure. The status is the
       // only actionable thing there is, so the status is what is shown.
       return `/version ${r.status}`;
+    case "signin":
+      return "signing in";
     case "unreachable":
       return "unreachable";
   }
@@ -71,6 +74,8 @@ function bffDetail(r: BffVersionResult | null): string {
       return "answered, but has no /version endpoint yet — roll the backend";
     case "error":
       return `answered with HTTP ${r.status}`;
+    case "signin":
+      return SIGN_IN_LINE;
     case "unreachable":
       return "did not answer at all";
   }
@@ -106,7 +111,7 @@ export function BuildStamp() {
     >
       <span data-build-stamp-ui>ui {ui ?? "no sha"}</span>
       <span className="text-slate-700"> · </span>
-      <span data-build-stamp-bff>bff {bffLabel(bff)}</span>
+      <span data-build-stamp-bff {...(bff?.kind === "signin" ? { "data-signin": "" } : {})}>bff {bffLabel(bff)}</span>
     </span>
   );
 }
