@@ -40,13 +40,17 @@ const FIXTURE = JSON.parse(
     path.join(__dirname, "../../../fixtures/captures/2026-11-27-sse-answer-timing-pr595-3efeaea4.json"),
     "utf8",
   ),
-) as { sse: Record<"run_path" | "queued_then_admitted" | "admission_queue" | "nothing_served", string> };
+) as {
+  sse: Record<"run_path" | "queued_then_admitted" | "admission_queue" | "nothing_served", string>;
+  pr_body: Record<"run_path" | "queued_then_admitted", string>;
+};
 
-/** Split SSE text into (event, data) blocks, as the wire frames them. */
+/** Split SSE text into (event, data) blocks, as the wire frames them. A block with no event line
+ *  (the PR body's `: ...` elisions, which are SSE comments) is not an event, and is skipped. */
 function blocks(text: string): { event: string; data: string }[] {
   return text
     .split("\n\n")
-    .filter((b) => b.trim())
+    .filter((b) => b.split("\n").some((l) => l.startsWith("event: ")))
     .map((b) => {
       const line = (k: string) =>
         b.split("\n").find((l) => l.startsWith(`${k}: `))!.slice(k.length + 2);
@@ -74,6 +78,9 @@ async function startTurn() {
 
 function feed(text: string, upTo = Infinity) {
   blocks(text)
+    // The PR body elides the answer (`{...the answer...}` is not JSON), and an answer would end the
+    // turn and stop the clock. Every arm here reads the strip while the turn is live.
+    .filter(({ event }) => event !== "final_payload")
     .slice(0, upTo)
     .forEach(({ event, data }) => {
       const parsed = parseSSE(event, data);
@@ -201,5 +208,33 @@ describe("the admission queue: waiting comes first, understanding starts after",
     expect(c.textContent).toContain("Understanding your question");
     expect(c.textContent).toContain("Stage 2/6");
     expect(drawn().slice(0, 2)).toEqual(["waiting", "understanding"]);
+  });
+});
+
+describe("#595's PR body, the SSE text the architect named, verbatim", () => {
+  it("the run path: a served 0 restarts the clock at 0:00, and every stage draws in order", async () => {
+    const c = await startTurn();
+    tick(5_000);
+    expect(q(c, "[data-live-elapsed]")).toBe("· 0:05");
+    feed(FIXTURE.pr_body.run_path); // elapsed 0 (the seal's test clock), E 42 s, D 900 s
+    // 0 is a time, not "not served": a falsy check would leave the client's 0:05 running.
+    expect(q(c, "[data-live-elapsed]")).toBe("· 0:00");
+    expect(drawn()).toEqual(["understanding", "waiting", "locating", "choosing_action", "retrieving", "composing"]);
+    tick(42_000);
+    expect(q(c, '[data-live-timing="long"]')).toBe("— longer than usual (usually under 0:50)");
+    tick(42_000);
+    expect(q(c, '[data-live-timing="stalled"]')).toBe(
+      "Still working after 1:24. Answers usually finish in under 0:50, so this one may be stuck. The server stops waiting at 15:00.",
+    );
+  });
+
+  it("queued then admitted: the second timing's 200 s and moved deadline win", async () => {
+    const c = await startTurn();
+    feed(FIXTURE.pr_body.queued_then_admitted); // second timing: elapsed 200 s, D 1 099.75 s
+    expect(q(c, "[data-live-elapsed]")).toBe("· 3:20");
+    expect(q(c, '[data-live-timing="stalled"]')).toBe(
+      "Still working after 3:20. Answers usually finish in under 0:50, so this one may be stuck. The server stops waiting at 18:19.",
+    );
+    expect(drawn().slice(0, 3)).toEqual(["understanding", "waiting", "locating"]);
   });
 });
