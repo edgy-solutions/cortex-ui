@@ -178,3 +178,34 @@ describe("the count is never assumed", () => {
     expect(deriveStages([])).toHaveLength(PIPELINE_STAGES.length);
   });
 });
+
+describe("an ARRIVED-ONLY stage (`waiting`) is drawn once it arrives, and never before", () => {
+  // Approved 2026-11-27 (architect). `waiting` is known but never seeded: a seeded row is one the
+  // server must complete, and a server without lane 74's PR never would. Known, so it must not flip
+  // the turn to arrival order either, which would drop the rows still to come (Stage 2/2, not 2/6).
+  const CANON = PIPELINE_STAGES.map((s) => s.kind);
+
+  it("a server that never sends it shows the canonical five and no waiting row", () => {
+    const rows = deriveStages(seed());
+    expect(rows.map((r) => r.kind)).toEqual(CANON);
+  });
+
+  it("once it arrives it is drawn FIRST, labelled, and the five still to come are kept", () => {
+    seed();
+    const rows = deriveStages(report("waiting", "Waiting to start", "loading"));
+    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
+    expect(rows[0]).toMatchObject({ label: "Waiting to start", status: "loading" });
+    // The first LOADING row is what the strip names: the wait, not the seeded "understanding".
+    expect(rows.findIndex((r) => r.status === "loading")).toBe(0);
+  });
+
+  it("completed, it stays drawn as done while the run's stages report", () => {
+    seed();
+    report("waiting", "Waiting to start", "loading");
+    report("waiting", "Waiting to start", "done");
+    const rows = deriveStages(report("locating", "Locating the subject", "loading"));
+    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
+    expect(rows[0].status).toBe("done");
+    expect(rows.find((r) => r.kind === "locating")?.status).toBe("loading");
+  });
+});

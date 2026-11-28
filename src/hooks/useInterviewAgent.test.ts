@@ -1186,3 +1186,34 @@ describe("the send gate — no question until the entitlement list has loaded (r
     }
   });
 });
+
+describe("useInterviewAgent — a stage is called by its own name, never another stage's", () => {
+  // The handler used to fall through to "Composing the answer" for any kind it did not know, so the
+  // first stage of a path cortex had not heard of claimed to be the LAST stage. Architect,
+  // 2026-11-27: an unknown stage shows its own name, or a neutral "Working".
+  const labelOf = (kind: string) => steps().find((s) => s.kind === kind)?.label;
+
+  it("`waiting` (lane 74) reads \"Waiting to start\"", async () => {
+    const r = mount();
+    await startTurn(r);
+    emit({ type: "pipeline_stage", kind: "waiting" as never, status: "started" });
+    expect(labelOf("waiting")).toBe("Waiting to start");
+  });
+
+  it("an unknown kind shows its own name, and no known stage's label", async () => {
+    const r = mount();
+    await startTurn(r);
+    emit({ type: "pipeline_stage", kind: "route_confirm" as never, status: "started" });
+    expect(labelOf("route_confirm")).toBe("Route confirm");
+    expect(labelOf("route_confirm")).not.toBe("Composing the answer");
+  });
+
+  it("the canonical five keep their labels", async () => {
+    const r = mount();
+    await startTurn(r);
+    emit({ type: "pipeline_stage", kind: "composing", status: "started" });
+    emit({ type: "pipeline_stage", kind: "locating", status: "started" });
+    expect(labelOf("composing")).toBe("Composing the answer");
+    expect(labelOf("locating")).toBe("Locating the subject");
+  });
+});

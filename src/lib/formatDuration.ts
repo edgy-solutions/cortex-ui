@@ -3,8 +3,8 @@
  *
  * Lifted out of `useLiveStages` when the answers list became its second consumer —
  * the same move `formatAmount` made when ShortfallGrid became ChartWidget's neighbour.
- * `useLiveStages` re-exports it, so the live ticker and a finished answer's stamp
- * cannot drift apart in a way a reader would notice.
+ * It is for FINISHED measurements only. Both live clocks (the capsule and the answers-panel
+ * strip) use `formatClock` since 2026-11-27, and `useLiveStages` no longer re-exports this.
  *
  * KNOWN DIVERGENCE, deliberately not fixed here: `ThinkingCard` carries its own
  * private `formatElapsed` with different rules — 2500ms reads "2s" there and "2.5s"
@@ -47,8 +47,9 @@ export function artifactDuration(duration_ms: number | null | undefined): string
  * speak one form. Whole seconds only: a clock that ticks tenths reads as busier than the answer is.
  * Minutes do not roll into hours; the server stops waiting at 15:00.
  *
- * Not `formatDuration`: that one is a finished measurement in a list ("42s", "2m 10s"), and the
- * capsule above the prompt still uses it. The two strips reading differently is filed, not fixed.
+ * Not `formatDuration`: that one is a finished measurement in a list ("42s", "2m 10s"). Both live
+ * clocks, the capsule above the prompt and the answers-panel strip, read this one, because two
+ * clocks in different formats on one screen is a defect (architect, 2026-11-27).
  */
 export function formatClock(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));

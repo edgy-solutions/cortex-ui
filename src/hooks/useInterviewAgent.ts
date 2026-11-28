@@ -21,6 +21,7 @@ import { resolveSendCell, type SendCell } from "@/lib/sendReadiness";
 import { refusalFromDetail } from "@/lib/askableMeasures";
 import { readSourcesProvenance } from "@/lib/sourceProvenance";
 import { usePersonaStore } from "@/store/usePersonaStore";
+import { stageLabel } from "@/lib/stageLabel";
 import {
   isMockGroundingEnabled,
   runMockGroundingFor,
@@ -302,22 +303,13 @@ export function useInterviewAgent() {
               : event.status === "failed"
               ? ("error" as const)
               : ("loading" as const);
-          // Friendly label from PIPELINE_STAGES; the typed event itself
-          // doesn't carry a label, by design (label is UI concern,
-          // event is contract concern).
-          const stageLabel =
-            event.kind === "understanding"
-              ? "Understanding your question"
-              : event.kind === "locating"
-              ? "Locating the subject"
-              : event.kind === "choosing_action"
-              ? "Choosing how to answer"
-              : event.kind === "retrieving"
-              ? "Retrieving evidence"
-              : "Composing the answer";
+          // The label comes from the stage table (@/lib/stageLabel); the typed event itself
+          // doesn't carry a label, by design (label is UI concern, event is contract concern).
+          // An unknown kind shows its own name or "Working", never another stage's label. This
+          // used to fall through to "Composing the answer" (architect, 2026-11-27).
           upsertThinkingStep(agentId, {
             kind: event.kind,
-            label: stageLabel,
+            label: stageLabel(event.kind),
             status,
             elapsedMs: event.elapsed_ms,
           });

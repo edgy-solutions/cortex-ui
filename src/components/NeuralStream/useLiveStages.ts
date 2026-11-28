@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import type { ThinkingStep } from "@/store/useInterviewStore";
-import { PIPELINE_STAGES } from "@/api/types";
+import { KNOWN_STAGES } from "@/lib/stageLabel";
 
 /**
  * useLiveStages — the ONE source of live-turn feedback, shared by the
@@ -28,7 +28,9 @@ export interface LiveStageInfo {
   total: number;
 }
 
-const CANONICAL_KINDS: ReadonlySet<string> = new Set(PIPELINE_STAGES.map((s) => s.kind));
+/** The canonical five PLUS the arrived-only stages (`waiting`): a known stage never flips the turn
+ *  to arrival order. See `@/lib/stageLabel`. */
+const CANONICAL_KINDS: ReadonlySet<string> = new Set(KNOWN_STAGES.map((s) => s.kind));
 
 /**
  * The rows to draw for a turn — WHAT ARRIVED, not what we expected to arrive.
@@ -72,8 +74,10 @@ export function deriveStages(
   const offPath = steps.some((s) => !CANONICAL_KINDS.has(s.kind));
 
   if (!offPath) {
-    const byKind = new Map(steps.map((s) => [s.kind, s]));
-    return PIPELINE_STAGES.map((st) => ({
+    const byKind = new Map<string, ThinkingStep>(steps.map((s) => [s.kind, s]));
+    // An arrived-only stage is drawn once the server reports it, and never as "pending" before:
+    // a server that does not send it would otherwise show a stage that never happens.
+    return KNOWN_STAGES.filter((st) => !st.arrivedOnly || byKind.has(st.kind)).map((st) => ({
       kind: st.kind,
       label: st.label,
       status: byKind.get(st.kind)?.status ?? "pending",
@@ -153,12 +157,3 @@ export function useLiveStages(): LiveStageInfo {
     total,
   };
 }
-
-/**
- * Compact elapsed formatter: "2.5s" under 10s, "12s" under 60s, "1m 03s".
- *
- * MOVED to `@/lib/formatDuration` when the answers list became a second consumer.
- * Re-exported under the old name so the live ticker and a finished answer`s stamp
- * are the same function rather than two that agree today.
- */
-export { formatDuration as formatElapsed } from "@/lib/formatDuration";

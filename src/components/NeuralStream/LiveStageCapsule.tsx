@@ -1,4 +1,5 @@
-import { useLiveStages, formatElapsed } from "./useLiveStages";
+import { useLiveStages } from "./useLiveStages";
+import { formatClock } from "@/lib/formatDuration";
 
 /**
  * LiveStageCapsule — the COMPACT current-state indicator pinned just
@@ -48,8 +49,10 @@ export function LiveStageCapsule() {
 
       {/* Elapsed seconds + stage position */}
       <span className="ml-auto flex items-center gap-2 flex-shrink-0">
-        <span className="text-[10px] font-mono text-neon-cyan/70 tabular-nums">
-          {formatElapsed(elapsedMs)}
+        {/* m:ss, the same formatter as the answers-panel strip: two clocks in different formats on
+            one screen is a defect (architect, 2026-11-27). */}
+        <span className="text-[10px] font-mono text-neon-cyan/70 tabular-nums" data-capsule-elapsed>
+          {formatClock(elapsedMs)}
         </span>
         <span className="text-[9px] font-mono text-slate-500 tabular-nums">
           {currentIndex + 1}/{total}

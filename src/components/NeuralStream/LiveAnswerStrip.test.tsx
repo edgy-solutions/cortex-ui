@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act, cleanup } from "@testing-library/react";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import { LiveAnswerStrip } from "./LiveAnswerStrip";
+import { LiveStageCapsule } from "./LiveStageCapsule";
 
 const MSG = "agent-1";
 
@@ -68,5 +69,25 @@ describe("LiveAnswerStrip shows the elapsed time", () => {
     });
     expect(container.querySelector("[data-live-elapsed]")).toBeNull();
     expect(container.textContent).toBe("");
+  });
+});
+
+describe("the capsule above the prompt reads the same clock, in the same form", () => {
+  // Two clocks in different formats on one screen is a defect (architect, 2026-11-27). The capsule
+  // read "42s" / "5m 03s" while the strip read "0:42" / "5:03".
+  it("both read m:ss, and read the same", () => {
+    useInterviewStore.getState().setIsProcessing(true);
+    const { container } = render(
+      <>
+        <LiveAnswerStrip />
+        <LiveStageCapsule />
+      </>,
+    );
+    act(() => {
+      vi.advanceTimersByTime(303_000);
+    });
+    const capsule = container.querySelector("[data-capsule-elapsed]")?.textContent ?? null;
+    expect(capsule).toBe("5:03");
+    expect(elapsed(container)).toBe(`· ${capsule}`);
   });
 });
