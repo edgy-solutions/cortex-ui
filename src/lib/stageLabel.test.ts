@@ -28,10 +28,10 @@ describe("stageLabel", () => {
 });
 
 describe("the stage table", () => {
-  it("draws the arrived-only stages first, then the canonical five in their order", () => {
+  it("knows the canonical five in their order, and waiting as arrived-only", () => {
     expect(KNOWN_STAGES.map((s) => s.kind)).toEqual([
-      ...ARRIVED_ONLY_STAGES.map((s) => s.kind),
       ...PIPELINE_STAGES.map((s) => s.kind),
+      ...ARRIVED_ONLY_STAGES.map((s) => s.kind),
     ]);
     expect(KNOWN_STAGES.filter((s) => s.arrivedOnly).map((s) => s.kind)).toEqual(["waiting"]);
   });

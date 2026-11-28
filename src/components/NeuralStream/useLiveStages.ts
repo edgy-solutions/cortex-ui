@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useInterviewStore } from "@/store/useInterviewStore";
 import type { ThinkingStep } from "@/store/useInterviewStore";
 import { KNOWN_STAGES } from "@/lib/stageLabel";
+import { timingLine, type TimingLine } from "@/lib/answerTiming";
 
 /**
  * useLiveStages — the ONE source of live-turn feedback, shared by the
@@ -23,6 +24,9 @@ export interface LiveStageInfo {
   currentLabel: string;
   question: string;
   elapsedMs: number;
+  /** What the strip says about the time: nothing, "longer than usual", or the stalled line.
+   *  Judged only against a producer-served expected time (#595's `answer_timing`). */
+  timing: TimingLine;
   /** 0..1 fill for the progress bar. */
   progress: number;
   total: number;
@@ -74,14 +78,38 @@ export function deriveStages(
   const offPath = steps.some((s) => !CANONICAL_KINDS.has(s.kind));
 
   if (!offPath) {
+    // Every kind is known. The canonical stages are drawn in table order, reported or not, as
+    // they always were. An arrived-only stage (`waiting`) is drawn only once reported, so a
+    // server that does not send it never shows it, and it is placed by WHEN it was reported:
+    // ahead of the first canonical stage the server had not yet reported at that point.
+    //
+    // Placed by report, not given a fixed slot, because #595 sends `waiting` in two places: after
+    // `understanding` completes on the run path, and AHEAD of it on the admission queue, where
+    // `understanding` starts only once the answer is admitted. Any one slot is wrong for one path.
     const byKind = new Map<string, ThinkingStep>(steps.map((s) => [s.kind, s]));
-    // An arrived-only stage is drawn once the server reports it, and never as "pending" before:
-    // a server that does not send it would otherwise show a stage that never happens.
-    return KNOWN_STAGES.filter((st) => !st.arrivedOnly || byKind.has(st.kind)).map((st) => ({
-      kind: st.kind,
-      label: st.label,
-      status: byKind.get(st.kind)?.status ?? "pending",
-    }));
+    const reportedAt = (kind: string): number => {
+      const s = byKind.get(kind);
+      return s && !s.seeded && s.reportedOrder !== undefined ? s.reportedOrder : Infinity;
+    };
+    const anyReported = steps.some((s) => !s.seeded);
+    const canonical = KNOWN_STAGES.filter((st) => !st.arrivedOnly).map((st) => {
+      const status = byKind.get(st.kind)?.status ?? "pending";
+      // The seed sets its first row `loading` with no signal behind it. Once the server has
+      // reported anything, that guess is answered: on the admission queue the seeded
+      // "understanding" would otherwise spin beside the real `waiting`.
+      const shown = anyReported && byKind.get(st.kind)?.seeded && status === "loading" ? "pending" : status;
+      return { kind: st.kind, label: st.label, status: shown };
+    });
+    const out = canonical.slice();
+    for (const st of KNOWN_STAGES.filter((k) => k.arrivedOnly && byKind.has(k.kind))) {
+      const at = reportedAt(st.kind);
+      const before = out.findIndex(
+        (row) => !KNOWN_STAGES.find((k) => k.kind === row.kind)?.arrivedOnly && reportedAt(row.kind) > at,
+      );
+      const row = { kind: st.kind, label: st.label, status: byKind.get(st.kind)!.status };
+      out.splice(before < 0 ? out.length : before, 0, row);
+    }
+    return out;
   }
 
   // A stage outside the canonical set arrived, so the seed guessed a path this turn did not
@@ -97,12 +125,14 @@ export function useLiveStages(): LiveStageInfo {
   const isProcessing = useInterviewStore((s) => s.isProcessing);
   const [now, setNow] = useState(() => Date.now());
 
-  const steps = useMemo(() => {
+  const latestAgent = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "agent") return messages[i].thinkingSteps ?? [];
+      if (messages[i].role === "agent") return messages[i];
     }
-    return [];
+    return undefined;
   }, [messages]);
+  const steps = useMemo(() => latestAgent?.thinkingSteps ?? [], [latestAgent]);
+  const served = latestAgent?.answerTiming;
 
   const question = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -138,7 +168,24 @@ export function useLiveStages(): LiveStageInfo {
     return () => window.clearInterval(id);
   }, [active]);
 
-  const elapsedMs = active && startedAt ? Math.max(0, now - startedAt) : 0;
+  // Before `answer_timing` arrives the clock is the client's, from the first stage. Once it
+  // arrives the clock restarts from the server's `elapsed_ms` and counts on locally, so the
+  // time shown and the expected time and deadline it is judged against share one origin (as
+  // cortex told lane 74 it would, 2026-11-27). Each later event restarts it again.
+  const elapsedMs = !active
+    ? 0
+    : served
+      ? Math.max(0, served.elapsedMs + (now - served.receivedAt))
+      : startedAt
+        ? Math.max(0, now - startedAt)
+        : 0;
+  const timing = useMemo(
+    () =>
+      active
+        ? timingLine(elapsedMs, { expectedMs: served?.expectedMs, deadlineMs: served?.deadlineMs })
+        : ({ state: "normal" } as const),
+    [active, elapsedMs, served],
+  );
   const total = stages.length;
   const doneCount = stages.filter((s) => s.status === "done").length;
   // Fill: completed stages + a half-step credit for the in-flight one.
@@ -153,6 +200,7 @@ export function useLiveStages(): LiveStageInfo {
     currentLabel: stages[currentIndex]?.label ?? "",
     question,
     elapsedMs,
+    timing,
     progress,
     total,
   };

@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { useLiveStages } from "./useLiveStages";
 import { formatClock } from "@/lib/formatDuration";
 
@@ -14,7 +14,7 @@ import { formatClock } from "@/lib/formatDuration";
  * list rows while this is showing — this strip IS their placeholder.
  */
 export function LiveAnswerStrip() {
-  const { active, currentIndex, currentLabel, elapsedMs, question, progress, total } =
+  const { active, currentIndex, currentLabel, elapsedMs, timing, question, progress, total } =
     useLiveStages();
 
   if (!active) return null;
@@ -28,18 +28,40 @@ export function LiveAnswerStrip() {
         </span>
         {/* How long the answer has been running, on useLiveStages' clock. Without it a stalled
             answer was a spinner and nothing else (sandbox, 2026-11-27: five minutes at "Locating
-            the subject"). Elapsed only: "longer than usual" needs a served expected_ms, and cortex
-            never infers one (architect, 2026-11-27). */}
+            the subject"). "Longer than usual" and the stalled line need a served expected_ms
+            (#595's answer_timing), and cortex never infers one (architect, 2026-11-27). */}
         <span
           className="text-[10px] font-mono text-slate-400 tabular-nums flex-shrink-0"
           data-live-elapsed
         >
           · {formatClock(elapsedMs)}
         </span>
+        {timing.state === "long" && (
+          <span
+            className="text-[10px] font-mono text-amber-300/80 truncate min-w-0"
+            data-live-timing="long"
+          >
+            {timing.suffix}
+          </span>
+        )}
         <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-neon-blue/70 tabular-nums flex-shrink-0">
           Stage {currentIndex + 1}/{total}
         </span>
       </div>
+
+      {timing.state === "stalled" && (
+        <p
+          className="flex items-start gap-1.5 text-[10px] font-mono text-amber-300 mb-1.5"
+          data-live-timing="stalled"
+          role="status"
+        >
+          <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-px" aria-hidden />
+          <span>
+            {timing.sentence}
+            {timing.deadline && <> {timing.deadline}</>}
+          </span>
+        </p>
+      )}
 
       {/* Status bar */}
       <div className="h-1 rounded-full bg-slate-800/70 overflow-hidden mb-1.5">

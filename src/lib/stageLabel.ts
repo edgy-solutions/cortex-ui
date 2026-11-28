@@ -6,7 +6,7 @@
  * - The canonical five (`PIPELINE_STAGES`). The client SEEDS them before any event arrives, so
  *   the strip can show "Stage 1/5" from the first frame.
  * - ARRIVED-ONLY stages. Known by name, but never seeded: they are drawn only once the server
- *   reports them. `waiting` ("Waiting to start", lane 74's PR) is the first. A seeded row is one
+ *   reports them. `waiting` ("Waiting to start", lane 74's #595) is the first. A seeded row is one
  *   the server must complete. A server without that PR never would, and every answer on it would
  *   read "Waiting to start" throughout. Approved by the architect, 2026-11-27.
  *
@@ -16,15 +16,20 @@
  */
 import { PIPELINE_STAGES } from "@/api/types";
 
-/** Known stages drawn only once they arrive, in the order they are placed AHEAD of the canonical five. */
+/**
+ * Known stages drawn only once they arrive. WHERE one is drawn is not declared here: it is drawn
+ * where it was reported (see `deriveStages`), because #595 sends `waiting` in two places. On the
+ * run path it follows `understanding`; on the admission queue it comes first and `understanding`
+ * starts only once the answer is admitted. A fixed position would be wrong for one of them.
+ */
 export const ARRIVED_ONLY_STAGES: readonly { kind: string; label: string }[] = [
   { kind: "waiting", label: "Waiting to start" },
 ];
 
-/** Every known stage, in drawing order: the arrived-only rows first, then the canonical five. */
+/** Every known stage: the canonical five in their order, then the arrived-only rows. */
 export const KNOWN_STAGES: readonly { kind: string; label: string; arrivedOnly: boolean }[] = [
+  ...PIPELINE_STAGES.map((s) => ({ kind: s.kind as string, label: s.label, arrivedOnly: false })),
   ...ARRIVED_ONLY_STAGES.map((s) => ({ ...s, arrivedOnly: true })),
-  ...PIPELINE_STAGES.map((s) => ({ kind: s.kind, label: s.label, arrivedOnly: false })),
 ];
 
 const LABELS: ReadonlyMap<string, string> = new Map(KNOWN_STAGES.map((s) => [s.kind, s.label]));

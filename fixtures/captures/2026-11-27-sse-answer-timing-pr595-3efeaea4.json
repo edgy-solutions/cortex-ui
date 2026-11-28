@@ -1,0 +1,21 @@
+{
+  "origin": {
+    "pr": "edgy-solutions/invincible-agent#595",
+    "head": "3efeaea4fd29f5b383cd7800325bb961ee97a012",
+    "status_when_taken": "open, approved (architect via Chris, 2026-11-27: its event shapes are final)",
+    "how": "Composed, not captured from a running server. Each line is what #595's emitters write: _sse (gateway.py:7827, 'event: {event}\ndata: {data}\n\n'), _stage (gateway.py:7905, keys kind,status[,detail]), _answer_timing (gateway.py:11620-11627, keys run_id,elapsed_ms,expected_ms,deadline_ms), answer_queued/answer_admitted (gateway.py:10977-10984), all through json.dumps with its default separators. The ORDER of each stream is the one #595's tests assert (tests/perf/test_the_answer_says_how_long_it_waits.py). The times are illustrative; EXPECTED 42000 and the 900000 ceiling are the test's own constants.",
+    "replace_when": "a sandbox capture of the same three paths exists; extract it here and keep this file's arms"
+  },
+  "streams": {
+    "run_path": "test_waiting_is_the_first_stage_after_understanding_and_locating_waits_for_a_step + test_answer_timing_follows_the_launch_with_the_deadline_and_the_expected_time",
+    "queued_then_admitted": "test_a_run_queued_then_admitted_moves_the_deadline_by_the_queue_time",
+    "admission_queue": "test_an_answer_queued_for_admission_shows_waiting_from_the_queue_to_its_admission",
+    "nothing_served": "expected_ms null (too few recorded answers) and deadline_ms null (no ceiling), gateway.py:11620-11627"
+  },
+  "sse": {
+    "run_path": "event: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"started\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"started\"}\n\nevent: answer_timing\ndata: {\"run_id\": \"run-fail-1\", \"elapsed_ms\": 1800, \"expected_ms\": 42000, \"deadline_ms\": 901800}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"locating\", \"status\": \"started\"}\n\n",
+    "queued_then_admitted": "event: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"started\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"started\"}\n\nevent: answer_timing\ndata: {\"run_id\": \"run-fail-1\", \"elapsed_ms\": 1800, \"expected_ms\": 42000, \"deadline_ms\": 901800}\n\nevent: answer_queued\ndata: {\"run_id\": \"run-fail-1\", \"position\": 2, \"ahead\": 1}\n\nevent: answer_admitted\ndata: {\"run_id\": \"run-fail-1\", \"waited_ms\": 120000}\n\nevent: answer_timing\ndata: {\"run_id\": \"run-fail-1\", \"elapsed_ms\": 122300, \"expected_ms\": 42000, \"deadline_ms\": 1021800}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"locating\", \"status\": \"started\"}\n\n",
+    "admission_queue": "event: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"started\", \"detail\": {\"reason\": \"queued\"}}\n\nevent: answer_queued\ndata: {\"run_id\": \"ans-1\", \"position\": 1, \"ahead\": 0}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"completed\", \"detail\": {\"reason\": \"queued\"}}\n\nevent: answer_admitted\ndata: {\"run_id\": \"ans-1\", \"waited_ms\": 30000}\n\nevent: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"started\"}\n\n",
+    "nothing_served": "event: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"started\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"understanding\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"started\"}\n\nevent: answer_timing\ndata: {\"run_id\": \"run-fail-1\", \"elapsed_ms\": 1800, \"expected_ms\": null, \"deadline_ms\": null}\n\nevent: pipeline_stage\ndata: {\"kind\": \"waiting\", \"status\": \"completed\"}\n\nevent: pipeline_stage\ndata: {\"kind\": \"locating\", \"status\": \"started\"}\n\n"
+  }
+}

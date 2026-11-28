@@ -17,8 +17,8 @@
  * "Usually under" rounds E UP to the next 10 s. E is an upper figure, so rounding it down would
  * promise an answer sooner than the producer measured: a p90 of 1:43 reads "under 1:50".
  *
- * Pure, so every threshold is tested without a stream. The stream reader (lane 74's
- * `answer_timing` event) is wired to this once a capture from the wire exists.
+ * Pure, so every threshold is tested without a stream. `useLiveStages` feeds it from lane 74's
+ * `answer_timing` event (#595), and `LiveAnswerStrip` draws what it returns.
  */
 import { formatClock } from "@/lib/formatDuration";
 

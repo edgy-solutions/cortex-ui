@@ -395,6 +395,18 @@ export type StreamEvent =
           engine_5xx, etc. — for downstream telemetry / diagnostics. */
       cause?: string;
     }
+  | {
+      /** How long the answer is expected to take, and when the server stops waiting (lane 74's
+       *  #595). Sent once after the run is launched, and again whenever the deadline moves (queue
+       *  admission, resume after a pause). All three times are ms on the server's clock, from the
+       *  answer's birth. `expected_ms` is the p90 of the caller's recorded complete answers, null
+       *  when too few are recorded; `deadline_ms` is null when there is no ceiling. */
+      type: "answer_timing";
+      run_id: string;
+      elapsed_ms: number;
+      expected_ms: number | null;
+      deadline_ms: number | null;
+    }
   | { type: "route_decision"; decision: RouteDecision }
   | { type: "sources"; sources: Source[]; provenance_floor?: ProvenanceFloor | null }
   | { type: "graph_trace"; nodes: GraphTraceNode[]; alternates?: GraphTraceNode[] }

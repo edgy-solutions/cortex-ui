@@ -190,22 +190,49 @@ describe("an ARRIVED-ONLY stage (`waiting`) is drawn once it arrives, and never 
     expect(rows.map((r) => r.kind)).toEqual(CANON);
   });
 
-  it("once it arrives it is drawn FIRST, labelled, and the five still to come are kept", () => {
+  // Drawn where #595 (3efeaea4) sends it: understanding completed → waiting started → waiting
+  // completed → locating started.
+  const IN_ORDER = ["understanding", "waiting", ...CANON.slice(1)];
+
+  it("once it arrives it is drawn after understanding, labelled, and the stages still to come are kept", () => {
     seed();
+    report("understanding", "Understanding your question", "done");
     const rows = deriveStages(report("waiting", "Waiting to start", "loading"));
-    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
-    expect(rows[0]).toMatchObject({ label: "Waiting to start", status: "loading" });
-    // The first LOADING row is what the strip names: the wait, not the seeded "understanding".
-    expect(rows.findIndex((r) => r.status === "loading")).toBe(0);
+    expect(rows.map((r) => r.kind)).toEqual(IN_ORDER);
+    expect(rows[1]).toMatchObject({ label: "Waiting to start", status: "loading" });
+    // The first LOADING row is what the strip names: the wait, not a seeded "locating".
+    expect(rows.findIndex((r) => r.status === "loading")).toBe(1);
   });
 
   it("completed, it stays drawn as done while the run's stages report", () => {
     seed();
+    report("understanding", "Understanding your question", "done");
     report("waiting", "Waiting to start", "loading");
     report("waiting", "Waiting to start", "done");
     const rows = deriveStages(report("locating", "Locating the subject", "loading"));
-    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
-    expect(rows[0].status).toBe("done");
+    expect(rows.map((r) => r.kind)).toEqual(IN_ORDER);
+    expect(rows[1].status).toBe("done");
     expect(rows.find((r) => r.kind === "locating")?.status).toBe("loading");
+  });
+
+  // #595's admission queue (test_an_answer_queued_for_admission_shows_waiting_from_the_queue_to_
+  // its_admission): waiting started → answer_queued → waiting completed → answer_admitted, and
+  // `understanding` starts only after. A fixed slot after understanding read this one wrong.
+  it("on the admission queue it is drawn FIRST, and the seed's spinning understanding stands down", () => {
+    seed();
+    const rows = deriveStages(report("waiting", "Waiting to start", "loading"));
+    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
+    // The strip names the first loading row: the wait, not the seeded guess at understanding.
+    expect(rows.filter((r) => r.status === "loading").map((r) => r.kind)).toEqual(["waiting"]);
+    expect(rows[1]).toMatchObject({ kind: "understanding", status: "pending" });
+  });
+
+  it("admitted, understanding starts behind it and the wait does not move", () => {
+    seed();
+    report("waiting", "Waiting to start", "loading");
+    report("waiting", "Waiting to start", "done");
+    const rows = deriveStages(report("understanding", "Understanding your question", "loading"));
+    expect(rows.map((r) => r.kind)).toEqual(["waiting", ...CANON]);
+    expect(rows.slice(0, 2).map((r) => r.status)).toEqual(["done", "loading"]);
   });
 });

@@ -496,6 +496,20 @@ export function parseSSE(eventType: string, dataStr: string): StreamEvent | null
           cause: parsed.cause,
         };
       }
+      case "answer_timing": {
+        // #595. A missing time reads as null ("not served"), never as zero.
+        const num = (v: unknown): number | null =>
+          typeof v === "number" && Number.isFinite(v) ? v : null;
+        const elapsed = num(parsed.elapsed_ms);
+        if (elapsed === null) return null;
+        return {
+          type: "answer_timing",
+          run_id: typeof parsed.run_id === "string" ? parsed.run_id : "",
+          elapsed_ms: elapsed,
+          expected_ms: num(parsed.expected_ms),
+          deadline_ms: num(parsed.deadline_ms),
+        };
+      }
       case "route_decision": {
         return { type: "route_decision", decision: parsed };
       }

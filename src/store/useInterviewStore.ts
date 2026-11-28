@@ -65,10 +65,25 @@ export interface ThinkingStep {
    * Marking it is what lets a renderer drop the un-taken path instead of drawing it as stuck.
    */
   seeded?: boolean;
+  /**
+   * The order in which the server FIRST reported this stage, across the session (ascending, not
+   * contiguous). Absent on a seeded row until its first signal. A stage is drawn where it was
+   * reported, so a stage the server sends in more than one place (`waiting`, lane 74's #595: after
+   * `understanding` on the run path, ahead of it on the admission queue) needs no fixed position.
+   */
+  reportedOrder?: number;
   /** Set when the step entered `loading` (used for elapsed-time display). */
   startedAt?: number;
   /** Reported by event; if absent, ThinkingCard derives from startedAt. */
   elapsedMs?: number;
+}
+
+export interface AnswerTimingReceived {
+  elapsedMs: number;
+  expectedMs: number | null;
+  deadlineMs: number | null;
+  /** Client clock (Date.now()) when the event arrived. */
+  receivedAt: number;
 }
 
 export interface Message {
@@ -79,6 +94,12 @@ export interface Message {
   isStreaming: boolean;
   /** Optional thinking steps shown before the message body */
   thinkingSteps?: ThinkingStep[];
+  /**
+   * The latest `answer_timing` for this turn (lane 74's #595), and when the client received it.
+   * The live clock restarts from `elapsedMs` at `receivedAt` and counts on locally, so the shown
+   * time, the expected time and the deadline share the server's origin.
+   */
+  answerTiming?: AnswerTimingReceived;
   /** Optional network or backend error message */
   error?: string;
   /** True if this message should render as a subtle receipt card */
@@ -235,6 +256,7 @@ const initialState = {
 // Stable id-generator for ThinkingSteps so we can keep React-key stability
 // even when the same step is upserted multiple times.
 let _stepIdSeq = 0;
+let _reportSeq = 0;
 const _nextStepId = (kind: ThinkingStepKind) =>
   `step-${kind}-${++_stepIdSeq}-${Date.now()}`;
 
@@ -283,6 +305,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
             // explicitly: the spread above carries `seeded` forward from prev, and a row that
             // stayed marked after reporting would be dropped by a renderer as an un-taken path.
             seeded: undefined,
+            reportedOrder: prev.reportedOrder ?? ++_reportSeq,
             startedAt:
               partial.startedAt ??
               prev.startedAt ??
@@ -302,6 +325,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
             partial.startedAt ??
             (partial.status === "loading" ? Date.now() : undefined),
           elapsedMs: partial.elapsedMs,
+          reportedOrder: ++_reportSeq,
         };
         return { ...m, thinkingSteps: [...existing, fresh] };
       }),

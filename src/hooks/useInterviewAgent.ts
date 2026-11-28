@@ -234,6 +234,7 @@ export function useInterviewAgent() {
         event.type === "stream_end" ||
         event.type === "pipeline_stage" ||
         event.type === "pipeline_error" ||
+        event.type === "answer_timing" ||
         event.type === "route_decision" ||
         event.type === "sources" ||
         event.type === "graph_trace" ||
@@ -312,6 +313,20 @@ export function useInterviewAgent() {
             label: stageLabel(event.kind),
             status,
             elapsedMs: event.elapsed_ms,
+          });
+          break;
+        }
+
+        case "answer_timing": {
+          // #595. The latest one wins: a later event means the deadline moved.
+          if (!agentId) break;
+          updateMessage(agentId, {
+            answerTiming: {
+              elapsedMs: event.elapsed_ms,
+              expectedMs: event.expected_ms,
+              deadlineMs: event.deadline_ms,
+              receivedAt: Date.now(),
+            },
           });
           break;
         }
